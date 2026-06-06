@@ -1,0 +1,332 @@
+<h2>Revised Manpower Tree: Roles, Not Activities</h2>
+<p class="subtitle">
+  Manpower progression should unlock better people and capacity. Map actions stay separate:
+  survey, seismic, roads, drilling, and production are actions that consume the right manpower.
+</p>
+
+<div class="mockup">
+  <div class="mockup-header">Clean Separation</div>
+  <div class="mockup-body">
+    <div class="separation-grid">
+      <div class="do-card">
+        <h3>Manpower Tree</h3>
+        <p>Who your company can hire, train, and deploy.</p>
+        <div class="chip-row">
+          <span>Junior Geoscientist</span>
+          <span>Senior Geoscientist</span>
+          <span>Rig Supervisor</span>
+          <span>Plant Operator</span>
+        </div>
+      </div>
+      <div class="do-card action">
+        <h3>Action System</h3>
+        <p>What the player does on the map using those people.</p>
+        <div class="chip-row">
+          <span>Survey Block</span>
+          <span>Run Seismic</span>
+          <span>Build Road</span>
+          <span>Drill Well</span>
+        </div>
+      </div>
+    </div>
+    <p class="clear-rule">
+      Rule: manpower nodes are worker types or ranks. Activity names do not appear as manpower nodes.
+    </p>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-header">Manpower Role Tree</div>
+  <div class="mockup-body">
+    <div class="role-tree">
+      <div class="era-labels">
+        <span>Basic Staff</span>
+        <span>Specialist Staff</span>
+        <span>Senior Staff</span>
+        <span>Lead / Expert Staff</span>
+      </div>
+
+      <div class="role-row geoscience">
+        <div class="role-family">Geoscience</div>
+        <div class="role-node">Field Assistant<br><small>basic survey support</small></div>
+        <div class="arrow"></div>
+        <div class="role-node">Geoscientist<br><small>interprets land clues</small></div>
+        <div class="arrow"></div>
+        <div class="role-node">Senior Geoscientist<br><small>better prospect confidence</small></div>
+        <div class="arrow"></div>
+        <div class="role-node expert">Chief Geoscientist<br><small>boosts discovery strategy</small></div>
+      </div>
+
+      <div class="role-row engineering">
+        <div class="role-family">Engineering</div>
+        <div class="role-node">Field Engineer<br><small>supports technical work</small></div>
+        <div class="arrow"></div>
+        <div class="role-node">Drilling Engineer<br><small>well planning capacity</small></div>
+        <div class="arrow"></div>
+        <div class="role-node">Senior Drilling Engineer<br><small>lower drill risk and cost</small></div>
+        <div class="arrow"></div>
+        <div class="role-node expert">Engineering Manager<br><small>multi-project efficiency</small></div>
+      </div>
+
+      <div class="role-row operations">
+        <div class="role-family">Operations</div>
+        <div class="role-node">Field Worker<br><small>basic labor capacity</small></div>
+        <div class="arrow"></div>
+        <div class="role-node">Equipment Operator<br><small>handles heavy equipment</small></div>
+        <div class="arrow"></div>
+        <div class="role-node">Rig Supervisor<br><small>coordinates rig teams</small></div>
+        <div class="arrow"></div>
+        <div class="role-node expert">Operations Superintendent<br><small>large field throughput</small></div>
+      </div>
+
+      <div class="role-row facilities">
+        <div class="role-family">Facilities</div>
+        <div class="role-node">Maintenance Tech<br><small>keeps assets online</small></div>
+        <div class="arrow"></div>
+        <div class="role-node">Plant Operator<br><small>supports production sites</small></div>
+        <div class="arrow"></div>
+        <div class="role-node">Facilities Engineer<br><small>improves processing output</small></div>
+        <div class="arrow"></div>
+        <div class="role-node expert">Asset Manager<br><small>optimizes producing fields</small></div>
+      </div>
+
+      <div class="role-row hse">
+        <div class="role-family">HSE</div>
+        <div class="role-node">Safety Officer<br><small>basic accident reduction</small></div>
+        <div class="arrow"></div>
+        <div class="role-node">Environmental Specialist<br><small>reduces penalty risk</small></div>
+        <div class="arrow"></div>
+        <div class="role-node">HSE Lead<br><small>reduces shutdown chance</small></div>
+        <div class="arrow"></div>
+        <div class="role-node expert">Sustainability Director<br><small>late-game pressure control</small></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-header">How Actions Use Manpower</div>
+  <div class="mockup-body">
+    <div class="action-use-grid">
+      <div class="use-card">
+        <h3>Survey Block</h3>
+        <p><strong>Needs:</strong> 1 Geoscience manpower.</p>
+        <p><strong>Better with:</strong> Senior Geoscientist or Chief Geoscientist.</p>
+      </div>
+      <div class="use-card">
+        <h3>Build Road / Pad</h3>
+        <p><strong>Needs:</strong> Operations manpower + equipment.</p>
+        <p><strong>Better with:</strong> Equipment Operator or Operations Superintendent.</p>
+      </div>
+      <div class="use-card">
+        <h3>Drill Well</h3>
+        <p><strong>Needs:</strong> Engineering manpower + Operations manpower + rig.</p>
+        <p><strong>Better with:</strong> Senior Drilling Engineer and Rig Supervisor.</p>
+      </div>
+      <div class="use-card">
+        <h3>Operate Field</h3>
+        <p><strong>Needs:</strong> Facilities manpower + Operations manpower.</p>
+        <p><strong>Better with:</strong> Facilities Engineer and Asset Manager.</p>
+      </div>
+      <div class="use-card">
+        <h3>Reduce Environmental Pressure</h3>
+        <p><strong>Needs:</strong> HSE manpower.</p>
+        <p><strong>Better with:</strong> Environmental Specialist, HSE Lead, Sustainability Director.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-header">Simple Gameplay Rule</div>
+  <div class="mockup-body">
+    <div class="formula">
+      <span>Action available</span>
+      <strong>=</strong>
+      <span>required tech</span>
+      <strong>+</strong>
+      <span>required manpower type</span>
+      <strong>+</strong>
+      <span>cash/equipment</span>
+      <strong>+</strong>
+      <span>owned land</span>
+    </div>
+    <p class="formula-note">
+      Example: <strong>Drill Well</strong> is not a manpower node. It is a map action that requires
+      Exploration Wells tech, Engineering manpower, Operations manpower, a rig, cash, and an owned block.
+    </p>
+  </div>
+</div>
+
+<style>
+  .separation-grid {
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:14px;
+  }
+  .do-card,
+  .use-card {
+    border:1px solid #334155;
+    background:#101923;
+    border-radius:7px;
+    padding:14px;
+  }
+  .do-card { border-color:#60a5fa; }
+  .do-card.action { border-color:#f59e0b; }
+  .do-card h3,
+  .use-card h3 {
+    margin-top:0;
+  }
+  .do-card p,
+  .use-card p,
+  .formula-note {
+    color:#cbd5e1;
+  }
+  .chip-row {
+    display:flex;
+    flex-wrap:wrap;
+    gap:8px;
+    margin-top:10px;
+  }
+  .chip-row span {
+    background:#1e293b;
+    color:#e5e7eb;
+    border-radius:999px;
+    padding:5px 8px;
+    font-size:12px;
+  }
+  .clear-rule {
+    margin:14px 0 0;
+    color:#fde68a;
+    border:1px solid #92400e;
+    background:#1f1708;
+    border-radius:7px;
+    padding:10px 12px;
+  }
+  .role-tree {
+    display:grid;
+    gap:10px;
+  }
+  .era-labels {
+    display:grid;
+    grid-template-columns:150px repeat(4, 1fr);
+    gap:8px;
+  }
+  .era-labels:before {
+    content:"";
+  }
+  .era-labels span {
+    background:#1f2937;
+    color:#fde68a;
+    border:1px solid #475569;
+    border-radius:7px;
+    padding:8px;
+    text-align:center;
+    font-weight:800;
+    font-size:12px;
+  }
+  .role-row {
+    display:grid;
+    grid-template-columns:150px 1fr 24px 1fr 24px 1fr 24px 1fr;
+    gap:8px;
+    align-items:center;
+    border:1px solid #334155;
+    background:#0f172a;
+    border-radius:7px;
+    padding:10px;
+  }
+  .role-family {
+    color:#f8fafc;
+    font-weight:900;
+    font-size:13px;
+  }
+  .role-node {
+    min-height:62px;
+    border:1px solid #64748b;
+    background:#111827;
+    border-radius:7px;
+    padding:9px;
+    text-align:center;
+    color:#f8fafc;
+    font-weight:900;
+    display:grid;
+    align-content:center;
+    gap:3px;
+  }
+  .role-node small {
+    color:#cbd5e1;
+    font-weight:400;
+    line-height:1.25;
+  }
+  .role-node.expert {
+    border-color:#f59e0b;
+  }
+  .geoscience .role-node { box-shadow:inset 0 0 0 1px rgba(96, 165, 250, .22); }
+  .engineering .role-node { box-shadow:inset 0 0 0 1px rgba(168, 85, 247, .22); }
+  .operations .role-node { box-shadow:inset 0 0 0 1px rgba(34, 197, 94, .22); }
+  .facilities .role-node { box-shadow:inset 0 0 0 1px rgba(245, 158, 11, .22); }
+  .hse .role-node { box-shadow:inset 0 0 0 1px rgba(239, 68, 68, .22); }
+  .arrow {
+    height:2px;
+    background:#64748b;
+    position:relative;
+  }
+  .arrow:after {
+    content:"";
+    position:absolute;
+    right:-1px;
+    top:-4px;
+    border-left:8px solid #64748b;
+    border-top:5px solid transparent;
+    border-bottom:5px solid transparent;
+  }
+  .action-use-grid {
+    display:grid;
+    grid-template-columns:repeat(5, minmax(0, 1fr));
+    gap:10px;
+  }
+  .use-card {
+    min-height:150px;
+  }
+  .use-card strong,
+  .formula-note strong {
+    color:#fde68a;
+  }
+  .formula {
+    display:flex;
+    flex-wrap:wrap;
+    align-items:center;
+    gap:10px;
+    border:1px solid #334155;
+    border-radius:7px;
+    background:#111827;
+    padding:14px;
+  }
+  .formula span {
+    background:#1e293b;
+    border-radius:999px;
+    color:#e5e7eb;
+    padding:7px 10px;
+    font-weight:800;
+  }
+  .formula strong {
+    color:#93c5fd;
+  }
+</style>
+
+<div class="options">
+  <div class="option" data-choice="approve-role-manpower-tree" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>Approve Role-Based Manpower Tree</h3>
+      <p>Use workforce families and rank progression; keep activities as separate map actions.</p>
+    </div>
+  </div>
+  <div class="option" data-choice="revise-role-families" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>Revise Role Families</h3>
+      <p>Change the workforce branches, ranks, names, or action requirements.</p>
+    </div>
+  </div>
+</div>

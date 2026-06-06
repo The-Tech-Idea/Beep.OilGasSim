@@ -1,0 +1,511 @@
+<h2>Competition + Fun Oil Discovery Model</h2>
+<p class="subtitle">
+  Human and AI players use the same rules. The fun comes from racing for land, reading clues,
+  taking drilling risks, building connected production networks, and out-scaling rivals.
+</p>
+
+<div class="mockup">
+  <div class="mockup-header">Core Multiplayer Rule</div>
+  <div class="mockup-body">
+    <div class="core-rule">
+      <div class="player-card human">
+        <strong>Human Player</strong>
+        <span>Research, buy land, assign manpower, acquire equipment, build routes, drill, produce.</span>
+      </div>
+      <strong class="same">same rules</strong>
+      <div class="player-card ai">
+        <strong>AI Company</strong>
+        <span>Uses the same actions and objects, but chooses by strategy personality.</span>
+      </div>
+    </div>
+    <p class="clear-rule">
+      No separate AI-only magic. AI wins by the same things the player does: reserves, production,
+      cash, technology, routes, and facility capacity.
+    </p>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-header">How Players Compete</div>
+  <div class="mockup-body">
+    <div class="competition-grid">
+      <div>
+        <strong>Land Race</strong>
+        <span>First player to buy a block controls its wells, routes, and facility placement.</span>
+      </div>
+      <div>
+        <strong>Information Race</strong>
+        <span>Survey and seismic clues are private until a player reveals or drills the area.</span>
+      </div>
+      <div>
+        <strong>Route Race</strong>
+        <span>Roads and pipelines need connected tiles. Rival land can force longer routes.</span>
+      </div>
+      <div>
+        <strong>Capacity Race</strong>
+        <span>Rivals who build gathering/tank capacity faster can monetize discoveries earlier.</span>
+      </div>
+      <div>
+        <strong>Market Race</strong>
+        <span>Early producers sell at better prices; oversupply can reduce price for everyone.</span>
+      </div>
+      <div>
+        <strong>Tech Race</strong>
+        <span>Better tech improves discovery odds, drilling cost, production rate, and environment control.</span>
+      </div>
+      <div>
+        <strong>Environmental Pressure</strong>
+        <span>Overbuilding causes taxes, cleanup costs, shutdown events, or land-buy restrictions.</span>
+      </div>
+      <div>
+        <strong>Victory Race</strong>
+        <span>Players compete on cash, company value, production, reserves, or technology.</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-header">Turn Flow For Human Or AI Matches</div>
+  <div class="mockup-body">
+    <div class="turn-flow">
+      <div class="turn-step">
+        <strong>1. Plan</strong>
+        <span>Choose research, buy land, assign crews, queue builds, pick drill targets.</span>
+      </div>
+      <div class="turn-step">
+        <strong>2. Resolve</strong>
+        <span>Actions spend turns, routes build tile by tile, wells drill, production flows.</span>
+      </div>
+      <div class="turn-step">
+        <strong>3. Reveal</strong>
+        <span>New clues, drilling results, rival discoveries, events, and market changes appear.</span>
+      </div>
+      <div class="turn-step">
+        <strong>4. Score</strong>
+        <span>Cash, reserves, production, tech, environment, and company value update.</span>
+      </div>
+    </div>
+    <p class="clear-rule">
+      For solo: player turn then AI turn. For online later: simultaneous planning, then one shared resolution step.
+    </p>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-header">AI Company Personalities</div>
+  <div class="mockup-body">
+    <table class="ai-table">
+      <thead>
+        <tr>
+          <th>AI Type</th>
+          <th>What It Prioritizes</th>
+          <th>How It Pressures Player</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Explorer</td>
+          <td>buys wide land, surveys many blocks, drills many cheap wells</td>
+          <td>finds discoveries before the player and reveals hot zones</td>
+        </tr>
+        <tr>
+          <td>Infrastructure Builder</td>
+          <td>roads, pipelines, gathering centers, tank farms</td>
+          <td>controls efficient routes and scales production faster</td>
+        </tr>
+        <tr>
+          <td>Tech Investor</td>
+          <td>research, expert manpower, better equipment</td>
+          <td>starts slower but outperforms in mid and late game</td>
+        </tr>
+        <tr>
+          <td>Fast Producer</td>
+          <td>turning small discoveries into cash quickly</td>
+          <td>wins early market money and forces the player to keep up</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-header">How Finding Oil Becomes Fun</div>
+  <div class="mockup-body">
+    <div class="discovery-layout">
+      <div class="clue-ladder">
+        <div class="clue hidden">
+          <strong>Hidden Basin</strong>
+          <span>oil potential exists but is unknown</span>
+        </div>
+        <div class="arrow-down"></div>
+        <div class="clue">
+          <strong>Surface Clue</strong>
+          <span>survey finds seep, structure, rock clue, or nothing</span>
+        </div>
+        <div class="arrow-down"></div>
+        <div class="clue">
+          <strong>Seismic Clue</strong>
+          <span>confidence ring shows low / medium / high prospect</span>
+        </div>
+        <div class="arrow-down"></div>
+        <div class="clue">
+          <strong>Drill Decision</strong>
+          <span>player sees risk, cost, chance, and possible prize</span>
+        </div>
+        <div class="arrow-down"></div>
+        <div class="clue result">
+          <strong>Reveal Result</strong>
+          <span>dry hole, oil show, gas, discovery, or giant field</span>
+        </div>
+      </div>
+
+      <div class="prospect-card">
+        <h3>Prospect Preview Example</h3>
+        <div class="chance-meter">
+          <span style="width:46%"></span>
+        </div>
+        <p><strong>Discovery chance:</strong> 46%</p>
+        <p><strong>Possible reward:</strong> 20-90 flow / turn after completion.</p>
+        <p><strong>Risk:</strong> dry hole still gives basin data and research boost.</p>
+        <p><strong>Rival pressure:</strong> AI owns nearby land and may block the short pipeline route.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-header">Drilling Result Should Feel Like A Reveal</div>
+  <div class="mockup-body">
+    <table class="result-table">
+      <thead>
+        <tr>
+          <th>Result</th>
+          <th>Player Feels</th>
+          <th>Game Reward Even If Bad</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Dry Hole</td>
+          <td>bad outcome, but not pointless</td>
+          <td>reveals basin data, boosts geology/seismic research, improves nearby odds</td>
+        </tr>
+        <tr>
+          <td>Oil Show</td>
+          <td>almost found it</td>
+          <td>creates stronger clue and may justify appraisal nearby</td>
+        </tr>
+        <tr>
+          <td>Gas Discovery</td>
+          <td>different strategy</td>
+          <td>needs compressor/gathering route but can produce strong cash</td>
+        </tr>
+        <tr>
+          <td>Commercial Oil</td>
+          <td>main success moment</td>
+          <td>creates well object with flow and reserve estimate</td>
+        </tr>
+        <tr>
+          <td>Giant Field</td>
+          <td>big celebration moment</td>
+          <td>high reserves, rival attention, requires serious infrastructure</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-header">Shared Map Example</div>
+  <div class="mockup-body">
+    <div class="map-layout">
+      <div class="mini-map">
+        <div class="tile player">You<br>Land</div>
+        <div class="tile clue">Clue</div>
+        <div class="tile empty"></div>
+        <div class="tile rival">AI<br>Land</div>
+        <div class="tile export">Export</div>
+
+        <div class="tile player">You<br>Road</div>
+        <div class="tile prospect">High<br>Prospect</div>
+        <div class="tile pipe"></div>
+        <div class="tile rival">AI<br>Well</div>
+        <div class="tile pipe"></div>
+
+        <div class="tile empty"></div>
+        <div class="tile well">Your<br>Well</div>
+        <div class="tile pipe"></div>
+        <div class="tile hub">Hub</div>
+        <div class="tile pipe"></div>
+
+        <div class="tile rough">Dune</div>
+        <div class="tile empty"></div>
+        <div class="tile rival">AI<br>Block</div>
+        <div class="tile empty"></div>
+        <div class="tile tank">Tank</div>
+      </div>
+
+      <div class="map-notes">
+        <h3>Why This Is Interesting</h3>
+        <ul>
+          <li>You can see a good prospect, but the AI may own the easiest route.</li>
+          <li>You can buy around the rival, but that costs more turns and cash.</li>
+          <li>You can drill early with weak evidence, or wait for better seismic and risk losing land.</li>
+          <li>You can build capacity first, or chase another discovery.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+  .core-rule {
+    display:grid;
+    grid-template-columns:1fr auto 1fr;
+    gap:14px;
+    align-items:center;
+  }
+  .player-card,
+  .competition-grid > div,
+  .turn-step,
+  .prospect-card,
+  .map-notes {
+    border:1px solid #334155;
+    background:#101923;
+    border-radius:7px;
+    padding:14px;
+  }
+  .player-card {
+    display:grid;
+    gap:6px;
+  }
+  .player-card.human { border-color:#60a5fa; }
+  .player-card.ai { border-color:#f59e0b; }
+  .player-card strong,
+  .competition-grid strong,
+  .turn-step strong {
+    color:#fde68a;
+  }
+  .player-card span,
+  .competition-grid span,
+  .turn-step span,
+  .prospect-card p,
+  .map-notes {
+    color:#cbd5e1;
+  }
+  .same {
+    color:#f8fafc;
+    background:#1e293b;
+    border:1px solid #334155;
+    border-radius:999px;
+    padding:8px 11px;
+    white-space:nowrap;
+  }
+  .clear-rule {
+    margin:14px 0 0;
+    color:#fde68a;
+    border:1px solid #92400e;
+    background:#1f1708;
+    border-radius:7px;
+    padding:10px 12px;
+  }
+  .competition-grid {
+    display:grid;
+    grid-template-columns:repeat(4, minmax(0, 1fr));
+    gap:12px;
+  }
+  .competition-grid > div,
+  .turn-step {
+    display:grid;
+    gap:6px;
+  }
+  .turn-flow {
+    display:grid;
+    grid-template-columns:repeat(4, minmax(0, 1fr));
+    gap:12px;
+  }
+  table {
+    width:100%;
+    border-collapse:collapse;
+    font-size:13px;
+  }
+  th,
+  td {
+    border:1px solid #334155;
+    padding:8px;
+    vertical-align:top;
+  }
+  th {
+    background:#1f2937;
+    color:#fde68a;
+    text-align:left;
+  }
+  td {
+    background:#101923;
+    color:#e5e7eb;
+  }
+  .ai-table td:first-child,
+  .result-table td:first-child {
+    color:#93c5fd;
+    font-weight:900;
+  }
+  .discovery-layout {
+    display:grid;
+    grid-template-columns:minmax(0, 1fr) 320px;
+    gap:16px;
+    align-items:stretch;
+  }
+  .clue-ladder {
+    display:grid;
+    justify-items:center;
+    gap:7px;
+  }
+  .clue {
+    width:80%;
+    border:1px solid #60a5fa;
+    background:#0f172a;
+    border-radius:7px;
+    padding:11px;
+    text-align:center;
+    display:grid;
+    gap:4px;
+  }
+  .clue strong {
+    color:#f8fafc;
+  }
+  .clue span {
+    color:#cbd5e1;
+  }
+  .clue.hidden {
+    border-color:#64748b;
+    filter:saturate(.7);
+  }
+  .clue.result {
+    border-color:#f59e0b;
+  }
+  .arrow-down {
+    width:2px;
+    height:18px;
+    background:#64748b;
+    position:relative;
+  }
+  .arrow-down:after {
+    content:"";
+    position:absolute;
+    left:-4px;
+    bottom:-1px;
+    border-top:8px solid #64748b;
+    border-left:5px solid transparent;
+    border-right:5px solid transparent;
+  }
+  .prospect-card h3,
+  .map-notes h3 {
+    margin-top:0;
+  }
+  .chance-meter {
+    height:14px;
+    border-radius:999px;
+    background:#1f2937;
+    overflow:hidden;
+    margin:8px 0 12px;
+  }
+  .chance-meter span {
+    display:block;
+    height:100%;
+    background:linear-gradient(90deg, #ef4444, #f59e0b, #22c55e);
+  }
+  .map-layout {
+    display:grid;
+    grid-template-columns:minmax(0, 1fr) 340px;
+    gap:16px;
+  }
+  .mini-map {
+    display:grid;
+    grid-template-columns:repeat(5, 1fr);
+    gap:7px;
+    padding:14px;
+    background:#7c4a1c;
+    border:1px solid #b45309;
+    border-radius:7px;
+  }
+  .tile {
+    min-height:68px;
+    border:1px solid #9a6a2f;
+    background:#c98a38;
+    border-radius:6px;
+    display:grid;
+    place-items:center;
+    text-align:center;
+    color:#27170a;
+    font-weight:900;
+    font-size:12px;
+    position:relative;
+  }
+  .tile.empty {
+    background:#b7792b;
+  }
+  .tile.player {
+    background:#60a5fa;
+    color:#082f49;
+  }
+  .tile.rival {
+    background:#f97316;
+    color:#27170a;
+  }
+  .tile.clue {
+    background:#93c5fd;
+    color:#082f49;
+    width:auto;
+    padding:0;
+  }
+  .tile.prospect {
+    background:#a78bfa;
+    color:#21103d;
+  }
+  .tile.well {
+    background:#eab308;
+  }
+  .tile.hub {
+    background:#22c55e;
+    color:#042f14;
+  }
+  .tile.tank {
+    background:#34d399;
+    color:#042f14;
+  }
+  .tile.export {
+    background:#fde047;
+  }
+  .tile.rough {
+    background:#8a6b43;
+    color:#fef3c7;
+  }
+  .tile.pipe:before {
+    content:"";
+    width:80%;
+    height:8px;
+    background:#334155;
+    border-radius:999px;
+  }
+  .map-notes li {
+    margin-bottom:7px;
+  }
+</style>
+
+<div class="options">
+  <div class="option" data-choice="approve-competition-discovery" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>Approve Competition + Discovery Model</h3>
+      <p>Use shared-rule AI/human competition, private clues, risk drilling, and connected economy pressure.</p>
+    </div>
+  </div>
+  <div class="option" data-choice="revise-competition-discovery" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>Revise Competition / Discovery</h3>
+      <p>Change AI behavior, multiplayer rules, oil-finding clues, or drilling results before the spec.</p>
+    </div>
+  </div>
+</div>

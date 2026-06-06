@@ -1,0 +1,514 @@
+<h2>Game-Friendly Equipment + Tile Pipeline Builder</h2>
+<p class="subtitle">
+  Equipment should be simple upgradeable tools. Pipelines are not bought as one object:
+  they are connected tile segments from a source to a destination.
+</p>
+
+<div class="mockup">
+  <div class="mockup-header">Corrected Rule</div>
+  <div class="mockup-body">
+    <div class="rule-grid">
+      <div class="rule-card good">
+        <h3>Equipment Tree</h3>
+        <p>Unlocks field capability: move, scan, build, drill, produce, connect.</p>
+      </div>
+      <div class="rule-card good">
+        <h3>Activity System</h3>
+        <p>Player chooses a map action: survey, drill, build road, build pipeline route.</p>
+      </div>
+      <div class="rule-card bad">
+        <h3>Not This</h3>
+        <p>No abstract "buy pipeline" object. No table-only pipeline gameplay.</p>
+      </div>
+      <div class="rule-card pipeline">
+        <h3>Pipeline Rule</h3>
+        <p>Pick source tile, pick target tile, preview path, build connected segments.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-header">Simplified Equipment Tree</div>
+  <div class="mockup-body">
+    <div class="equipment-tree">
+      <div class="tier-labels">
+        <span>Basic</span>
+        <span>Improved</span>
+        <span>Advanced</span>
+      </div>
+
+      <div class="equip-row">
+        <div class="family">Transport</div>
+        <div class="equip-node">
+          <strong>Pickup</strong>
+          <small>$2M / 1 turn</small>
+          <em>move staff on owned/open tiles</em>
+        </div>
+        <div class="arrow"></div>
+        <div class="equip-node">
+          <strong>Crew Truck</strong>
+          <small>$5M / 2 turns</small>
+          <em>move larger manpower groups</em>
+        </div>
+        <div class="arrow"></div>
+        <div class="equip-node elite">
+          <strong>Heavy Hauler</strong>
+          <small>$10M / 3 turns</small>
+          <em>move rigs and heavy kits faster</em>
+        </div>
+      </div>
+
+      <div class="equip-row">
+        <div class="family">Survey</div>
+        <div class="equip-node">
+          <strong>Survey Kit</strong>
+          <small>$3M / 1 turn</small>
+          <em>basic prospect clues</em>
+        </div>
+        <div class="arrow"></div>
+        <div class="equip-node">
+          <strong>Seismic Kit</strong>
+          <small>$12M / 3 turns</small>
+          <em>reveals prospect confidence</em>
+        </div>
+        <div class="arrow"></div>
+        <div class="equip-node elite">
+          <strong>Drone Scan Kit</strong>
+          <small>$18M / 3 turns</small>
+          <em>fast scouting and map reveal</em>
+        </div>
+      </div>
+
+      <div class="equip-row">
+        <div class="family">Construction</div>
+        <div class="equip-node">
+          <strong>Dozer</strong>
+          <small>$4M / 1 turn</small>
+          <em>roads and simple pads</em>
+        </div>
+        <div class="arrow"></div>
+        <div class="equip-node">
+          <strong>Grader</strong>
+          <small>$8M / 2 turns</small>
+          <em>faster roads and pads</em>
+        </div>
+        <div class="arrow"></div>
+        <div class="equip-node elite">
+          <strong>Crane</strong>
+          <small>$11M / 2 turns</small>
+          <em>plants, gathering centers, heavy objects</em>
+        </div>
+      </div>
+
+      <div class="equip-row">
+        <div class="family">Drilling</div>
+        <div class="equip-node">
+          <strong>Small Rig</strong>
+          <small>$24M / 4 turns</small>
+          <em>shallow exploration wells</em>
+        </div>
+        <div class="arrow"></div>
+        <div class="equip-node">
+          <strong>Land Rig</strong>
+          <small>$42M / 5 turns</small>
+          <em>deeper wells and better success</em>
+        </div>
+        <div class="arrow"></div>
+        <div class="equip-node elite">
+          <strong>Directional Rig</strong>
+          <small>$62M / 6 turns</small>
+          <em>late-game high-yield wells</em>
+        </div>
+      </div>
+
+      <div class="equip-row">
+        <div class="family">Production</div>
+        <div class="equip-node">
+          <strong>Wellhead Kit</strong>
+          <small>$5M / 1 turn</small>
+          <em>complete successful wells</em>
+        </div>
+        <div class="arrow"></div>
+        <div class="equip-node">
+          <strong>Separator Kit</strong>
+          <small>$14M / 3 turns</small>
+          <em>gathering center requirement</em>
+        </div>
+        <div class="arrow"></div>
+        <div class="equip-node elite">
+          <strong>Compressor Kit</strong>
+          <small>$24M / 4 turns</small>
+          <em>boost gas pipeline flow</em>
+        </div>
+      </div>
+
+      <div class="equip-row">
+        <div class="family">Pipeline</div>
+        <div class="equip-node">
+          <strong>Pipe Stock</strong>
+          <small>$2M / segment</small>
+          <em>material spent per pipeline tile</em>
+        </div>
+        <div class="arrow"></div>
+        <div class="equip-node">
+          <strong>Pipe Crew Kit</strong>
+          <small>$10M / 2 turns</small>
+          <em>unlocks route build mode</em>
+        </div>
+        <div class="arrow"></div>
+        <div class="equip-node elite">
+          <strong>Pump Station Kit</strong>
+          <small>$18M / 3 turns</small>
+          <em>extends route range and flow</em>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-header">Pipeline Route Builder</div>
+  <div class="mockup-body">
+    <div class="route-layout">
+      <div class="iso-board">
+        <div class="tile empty"></div>
+        <div class="tile source">Well A</div>
+        <div class="tile pipe"></div>
+        <div class="tile pipe"></div>
+        <div class="tile empty"></div>
+        <div class="tile rough">Dune</div>
+
+        <div class="tile empty"></div>
+        <div class="tile empty"></div>
+        <div class="tile pipe turn"></div>
+        <div class="tile pipe"></div>
+        <div class="tile pump">Pump</div>
+        <div class="tile empty"></div>
+
+        <div class="tile rough">Rock</div>
+        <div class="tile empty"></div>
+        <div class="tile empty"></div>
+        <div class="tile empty"></div>
+        <div class="tile pipe"></div>
+        <div class="tile target">Gathering</div>
+      </div>
+
+      <div class="route-panel">
+        <h3>Build Pipeline</h3>
+        <ol>
+          <li>Select a producing well or gathering center.</li>
+          <li>Select a target gathering center or export edge.</li>
+          <li>Preview route across valid tiles.</li>
+          <li>Pay per segment and build over turns.</li>
+        </ol>
+        <div class="route-cost">
+          <span>Route length: 7 tiles</span>
+          <span>Cost: $14M pipe + $4M terrain</span>
+          <span>Turns: 4</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-header">Tile Rules For Pipelines</div>
+  <div class="mockup-body">
+    <div class="tile-rules">
+      <div>
+        <strong>Valid Start</strong>
+        <span>Producing Well, Gathering Center, Processing Plant.</span>
+      </div>
+      <div>
+        <strong>Valid End</strong>
+        <span>Gathering Center, Processing Plant, export edge.</span>
+      </div>
+      <div>
+        <strong>Per-Tile Cost</strong>
+        <span>Flat desert $2M, dunes $3M, rocky tile $4M.</span>
+      </div>
+      <div>
+        <strong>Connection Rule</strong>
+        <span>Every segment must touch the previous segment by tile edge.</span>
+      </div>
+      <div>
+        <strong>Flow Rule</strong>
+        <span>Connected wells feed the nearest gathering center until capacity is full.</span>
+      </div>
+      <div>
+        <strong>Upgrade Rule</strong>
+        <span>Pump Station Kit extends range and increases throughput.</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-header">Activities Create Objects</div>
+  <div class="mockup-body">
+    <table class="activity-table">
+      <thead>
+        <tr>
+          <th>Activity</th>
+          <th>Player Input</th>
+          <th>Needs</th>
+          <th>Turns</th>
+          <th>Object Created</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td>Buy Land</td><td>click block</td><td>cash</td><td>0</td><td>Owned Block</td></tr>
+        <tr><td>Survey</td><td>click owned tile</td><td>Geoscience + Survey Kit</td><td>1</td><td>Survey Marker</td></tr>
+        <tr><td>Run Seismic</td><td>drag survey line</td><td>Geoscience + Seismic Kit + tech</td><td>2</td><td>Seismic Line / Prospect Map</td></tr>
+        <tr><td>Build Road</td><td>draw route</td><td>Operations + Dozer</td><td>1 per 2 tiles</td><td>Road Segments</td></tr>
+        <tr><td>Build Well Pad</td><td>click prospect tile</td><td>Operations + Grader</td><td>2</td><td>Well Pad</td></tr>
+        <tr><td>Drill Well</td><td>click well pad</td><td>Engineering + Operations + Rig</td><td>4-6</td><td>Well Object</td></tr>
+        <tr><td>Complete Well</td><td>click successful well</td><td>Facilities + Wellhead Kit</td><td>2</td><td>Completed Well</td></tr>
+        <tr><td>Build Pipeline</td><td>select from tile, select to tile</td><td>Operations + Pipe Crew Kit + Pipe Stock</td><td>based on length</td><td>Connected Pipeline Segments</td></tr>
+        <tr><td>Build Gathering Center</td><td>click owned hub tile</td><td>Facilities + Separator Kit + Crane</td><td>5</td><td>Gathering Center</td></tr>
+        <tr><td>Add Pump Station</td><td>click pipeline tile</td><td>Facilities + Pump Station Kit</td><td>3</td><td>Pump Station</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<style>
+  .rule-grid,
+  .tile-rules {
+    display:grid;
+    grid-template-columns:repeat(4, minmax(0, 1fr));
+    gap:12px;
+  }
+  .tile-rules {
+    grid-template-columns:repeat(3, minmax(0, 1fr));
+  }
+  .rule-card,
+  .tile-rules > div {
+    border:1px solid #334155;
+    background:#101923;
+    border-radius:7px;
+    padding:14px;
+  }
+  .rule-card h3 {
+    margin-top:0;
+  }
+  .rule-card p,
+  .tile-rules span {
+    color:#cbd5e1;
+  }
+  .rule-card.good { border-color:#22c55e; }
+  .rule-card.bad { border-color:#ef4444; }
+  .rule-card.pipeline { border-color:#60a5fa; }
+  .tile-rules strong {
+    display:block;
+    color:#fde68a;
+    margin-bottom:6px;
+  }
+  .equipment-tree {
+    display:grid;
+    gap:10px;
+  }
+  .tier-labels {
+    display:grid;
+    grid-template-columns:140px repeat(3, minmax(0, 1fr));
+    gap:8px;
+  }
+  .tier-labels:before {
+    content:"";
+  }
+  .tier-labels span {
+    background:#1f2937;
+    color:#fde68a;
+    border:1px solid #475569;
+    border-radius:7px;
+    padding:8px;
+    text-align:center;
+    font-weight:800;
+    font-size:12px;
+  }
+  .equip-row {
+    display:grid;
+    grid-template-columns:140px minmax(0, 1fr) 24px minmax(0, 1fr) 24px minmax(0, 1fr);
+    gap:8px;
+    align-items:center;
+    border:1px solid #334155;
+    background:#0f172a;
+    border-radius:7px;
+    padding:10px;
+  }
+  .family {
+    color:#f8fafc;
+    font-weight:900;
+    font-size:13px;
+  }
+  .equip-node {
+    min-height:78px;
+    border:1px solid #64748b;
+    background:#111827;
+    border-radius:7px;
+    padding:9px;
+    display:grid;
+    gap:4px;
+    align-content:center;
+  }
+  .equip-node strong {
+    color:#f8fafc;
+  }
+  .equip-node small {
+    color:#fde68a;
+    font-weight:800;
+  }
+  .equip-node em {
+    color:#cbd5e1;
+    font-style:normal;
+    font-size:12px;
+    line-height:1.25;
+  }
+  .equip-node.elite {
+    border-color:#f59e0b;
+  }
+  .arrow {
+    height:2px;
+    background:#64748b;
+    position:relative;
+  }
+  .arrow:after {
+    content:"";
+    position:absolute;
+    right:-1px;
+    top:-4px;
+    border-left:8px solid #64748b;
+    border-top:5px solid transparent;
+    border-bottom:5px solid transparent;
+  }
+  .route-layout {
+    display:grid;
+    grid-template-columns:minmax(0, 1fr) 310px;
+    gap:16px;
+    align-items:stretch;
+  }
+  .iso-board {
+    display:grid;
+    grid-template-columns:repeat(6, 1fr);
+    gap:6px;
+    padding:14px;
+    background:#7c4a1c;
+    border:1px solid #b45309;
+    border-radius:7px;
+  }
+  .tile {
+    min-height:58px;
+    border:1px solid #9a6a2f;
+    background:#d69b4a;
+    border-radius:6px;
+    display:grid;
+    place-items:center;
+    color:#27170a;
+    font-weight:900;
+    font-size:12px;
+    position:relative;
+  }
+  .tile.empty {
+    background:#c98a38;
+  }
+  .tile.rough {
+    background:#8a6b43;
+    color:#fef3c7;
+  }
+  .tile.source {
+    background:#eab308;
+  }
+  .tile.target {
+    background:#22c55e;
+    color:#042f14;
+  }
+  .tile.pump {
+    background:#60a5fa;
+    color:#082f49;
+  }
+  .tile.pipe {
+    background:#c98a38;
+  }
+  .tile.pipe:before,
+  .tile.pipe.turn:before {
+    content:"";
+    width:80%;
+    height:8px;
+    background:#334155;
+    border-radius:999px;
+  }
+  .tile.pipe.turn:after {
+    content:"";
+    position:absolute;
+    width:8px;
+    height:70%;
+    background:#334155;
+    border-radius:999px;
+  }
+  .route-panel {
+    border:1px solid #334155;
+    background:#111827;
+    border-radius:7px;
+    padding:14px;
+  }
+  .route-panel h3 {
+    margin-top:0;
+  }
+  .route-panel li {
+    margin-bottom:8px;
+  }
+  .route-cost {
+    display:grid;
+    gap:6px;
+    margin-top:12px;
+  }
+  .route-cost span {
+    background:#1e293b;
+    border-radius:6px;
+    padding:7px 9px;
+    color:#fde68a;
+    font-weight:800;
+  }
+  table {
+    width:100%;
+    border-collapse:collapse;
+    font-size:13px;
+  }
+  th,
+  td {
+    border:1px solid #334155;
+    padding:8px;
+    vertical-align:top;
+  }
+  th {
+    background:#1f2937;
+    color:#fde68a;
+    text-align:left;
+  }
+  td {
+    background:#101923;
+    color:#e5e7eb;
+  }
+  .activity-table td:last-child {
+    color:#93c5fd;
+    font-weight:800;
+  }
+</style>
+
+<div class="options">
+  <div class="option" data-choice="approve-tile-pipeline-equipment" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>Approve Tile Pipeline Model</h3>
+      <p>Use simple equipment, route-based roads/pipelines, and connected segment objects.</p>
+    </div>
+  </div>
+  <div class="option" data-choice="revise-pipeline-rules" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>Revise Pipeline Rules</h3>
+      <p>Change route costs, valid endpoints, tile rules, or equipment names.</p>
+    </div>
+  </div>
+</div>

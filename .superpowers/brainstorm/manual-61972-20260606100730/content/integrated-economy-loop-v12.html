@@ -1,0 +1,492 @@
+<h2>Integrated Game Loop: Build Facilities To Generate Money</h2>
+<p class="subtitle">
+  Everything links into one strategy loop: research unlocks actions, manpower operates them,
+  equipment enables them, map activities create objects, and connected production objects generate cash.
+</p>
+
+<div class="mockup">
+  <div class="mockup-header">Main Player Loop</div>
+  <div class="mockup-body">
+    <div class="loop-chain">
+      <div class="loop-node land">Buy Land<br><small>own a desert block</small></div>
+      <strong>-></strong>
+      <div class="loop-node explore">Survey / Seismic<br><small>find prospects</small></div>
+      <strong>-></strong>
+      <div class="loop-node build">Road + Pad<br><small>prepare tile</small></div>
+      <strong>-></strong>
+      <div class="loop-node drill">Drill Well<br><small>discover reserves</small></div>
+      <strong>-></strong>
+      <div class="loop-node facility">Connect Facilities<br><small>pipeline, gathering, tanks</small></div>
+      <strong>-></strong>
+      <div class="loop-node money">Sell Production<br><small>cash per turn</small></div>
+    </div>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-header">How The Three Trees Link To Map Actions</div>
+  <div class="mockup-body">
+    <table class="link-table">
+      <thead>
+        <tr>
+          <th>Map Action</th>
+          <th>Needs Tech Tree</th>
+          <th>Needs Manpower Tree</th>
+          <th>Needs Equipment Tree</th>
+          <th>Creates Object</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Survey Block</td>
+          <td>Field Geology</td>
+          <td>Geoscience role</td>
+          <td>Survey Kit / Pickup</td>
+          <td>Survey Marker</td>
+        </tr>
+        <tr>
+          <td>Run Seismic</td>
+          <td>2D Seismic</td>
+          <td>Senior Geoscience role</td>
+          <td>Seismic Kit</td>
+          <td>Prospect Map</td>
+        </tr>
+        <tr>
+          <td>Build Road</td>
+          <td>Desert Logistics</td>
+          <td>Operations role</td>
+          <td>Dozer / Grader</td>
+          <td>Road Segments</td>
+        </tr>
+        <tr>
+          <td>Build Well Pad</td>
+          <td>Well Pad Construction</td>
+          <td>Operations role</td>
+          <td>Grader</td>
+          <td>Well Pad</td>
+        </tr>
+        <tr>
+          <td>Drill Well</td>
+          <td>Exploration Wells</td>
+          <td>Engineering + Operations roles</td>
+          <td>Small Rig / Land Rig</td>
+          <td>Well Object</td>
+        </tr>
+        <tr>
+          <td>Complete Well</td>
+          <td>Well Completion</td>
+          <td>Facilities role</td>
+          <td>Wellhead Kit</td>
+          <td>Completed Well</td>
+        </tr>
+        <tr>
+          <td>Build Pipeline Route</td>
+          <td>Pipeline Engineering</td>
+          <td>Operations role</td>
+          <td>Pipe Stock + Pipe Crew Kit</td>
+          <td>Connected Pipeline Segments</td>
+        </tr>
+        <tr>
+          <td>Build Gathering Center</td>
+          <td>Surface Processing</td>
+          <td>Facilities role</td>
+          <td>Separator Kit + Crane</td>
+          <td>Gathering Center</td>
+        </tr>
+        <tr>
+          <td>Build Tank Farm</td>
+          <td>Storage Systems</td>
+          <td>Facilities + HSE roles</td>
+          <td>Tank Kit + HSE Response Unit</td>
+          <td>Tank Farm</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-header">Production Network: Objects Must Be Connected</div>
+  <div class="mockup-body">
+    <div class="network-layout">
+      <div class="field-map">
+        <div class="tile block">Owned<br>Block</div>
+        <div class="tile survey">Survey<br>Marker</div>
+        <div class="tile road">Road</div>
+        <div class="tile pad">Pad</div>
+        <div class="tile well">Well<br><small>24 flow</small></div>
+
+        <div class="tile empty"></div>
+        <div class="tile empty"></div>
+        <div class="tile road">Road</div>
+        <div class="tile pipe"></div>
+        <div class="tile pipe"></div>
+
+        <div class="tile empty"></div>
+        <div class="tile prospect">Prospect</div>
+        <div class="tile empty"></div>
+        <div class="tile pipe turn"></div>
+        <div class="tile hub">Gathering<br><small>40 cap</small></div>
+
+        <div class="tile empty"></div>
+        <div class="tile empty"></div>
+        <div class="tile empty"></div>
+        <div class="tile pipe"></div>
+        <div class="tile tank">Tank Farm<br><small>120 cap</small></div>
+
+        <div class="tile empty"></div>
+        <div class="tile rough">Dune</div>
+        <div class="tile empty"></div>
+        <div class="tile pipe"></div>
+        <div class="tile export">Export</div>
+      </div>
+
+      <div class="network-panel">
+        <h3>Money Requires A Complete Chain</h3>
+        <ol>
+          <li>Well produces flow.</li>
+          <li>Pipeline route connects well to gathering center.</li>
+          <li>Gathering center has enough throughput.</li>
+          <li>Tank farm buffers overflow or export delay.</li>
+          <li>Export/sales converts production into cash per turn.</li>
+        </ol>
+        <div class="status-box">
+          <span>Well flow: 24 / turn</span>
+          <span>Gathering capacity: 40 / turn</span>
+          <span>Tank storage: 120</span>
+          <span>Revenue status: Connected</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-header">Cash Formula</div>
+  <div class="mockup-body">
+    <div class="formula">
+      <span>cash per turn</span>
+      <strong>=</strong>
+      <span>sold production</span>
+      <strong>x</strong>
+      <span>market price</span>
+      <strong>-</strong>
+      <span>staff upkeep</span>
+      <strong>-</strong>
+      <span>equipment upkeep</span>
+      <strong>-</strong>
+      <span>facility upkeep</span>
+      <strong>-</strong>
+      <span>environment tax / penalty</span>
+    </div>
+    <div class="example-row">
+      <div><strong>Example</strong><span>24 flow sold x $2M price = $48M gross</span></div>
+      <div><strong>Costs</strong><span>$5M staff + $4M equipment + $3M facilities + $2M environment</span></div>
+      <div><strong>Net</strong><span>$34M cash this turn</span></div>
+    </div>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-header">Bottlenecks Make It A Game</div>
+  <div class="mockup-body">
+    <div class="bottleneck-grid">
+      <div>
+        <strong>No Tech</strong>
+        <span>Action is locked until researched.</span>
+      </div>
+      <div>
+        <strong>No Manpower</strong>
+        <span>Action is available but cannot be staffed.</span>
+      </div>
+      <div>
+        <strong>No Equipment</strong>
+        <span>Action cannot start until asset is acquired.</span>
+      </div>
+      <div>
+        <strong>No Route</strong>
+        <span>Well exists but production cannot reach a hub.</span>
+      </div>
+      <div>
+        <strong>Low Capacity</strong>
+        <span>Gathering center chokes wells.</span>
+      </div>
+      <div>
+        <strong>No Storage</strong>
+        <span>Production is wasted or shut in during market/export events.</span>
+      </div>
+      <div>
+        <strong>High Environment Pressure</strong>
+        <span>More tax, cleanup cost, or temporary land-buy ban.</span>
+      </div>
+      <div>
+        <strong>Rival Expansion</strong>
+        <span>Opponent buys nearby blocks and blocks better routes.</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-header">Game Objectives</div>
+  <div class="mockup-body">
+    <div class="objective-grid">
+      <div class="objective primary">
+        <strong>Economic Victory</strong>
+        <span>Reach $1B company value or highest cash score after final turn.</span>
+      </div>
+      <div class="objective">
+        <strong>Production Victory</strong>
+        <span>Connect and sustain 300 flow / turn across your fields.</span>
+      </div>
+      <div class="objective">
+        <strong>Reserve Victory</strong>
+        <span>Discover the largest proven reserve base through exploration.</span>
+      </div>
+      <div class="objective">
+        <strong>Technology Victory</strong>
+        <span>Complete late-game recovery and automation techs first.</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+  .loop-chain {
+    display:flex;
+    flex-wrap:wrap;
+    gap:10px;
+    align-items:center;
+    justify-content:center;
+  }
+  .loop-chain strong,
+  .formula strong {
+    color:#fde68a;
+  }
+  .loop-node {
+    min-width:138px;
+    border:1px solid #334155;
+    background:#101923;
+    border-radius:7px;
+    padding:12px;
+    text-align:center;
+    color:#f8fafc;
+    font-weight:900;
+  }
+  .loop-node small {
+    display:block;
+    color:#cbd5e1;
+    font-weight:400;
+    margin-top:4px;
+  }
+  .loop-node.land { border-color:#f59e0b; }
+  .loop-node.explore { border-color:#60a5fa; }
+  .loop-node.build { border-color:#22c55e; }
+  .loop-node.drill { border-color:#a78bfa; }
+  .loop-node.facility { border-color:#34d399; }
+  .loop-node.money { border-color:#fde047; }
+  table {
+    width:100%;
+    border-collapse:collapse;
+    font-size:13px;
+  }
+  th,
+  td {
+    border:1px solid #334155;
+    padding:8px;
+    vertical-align:top;
+  }
+  th {
+    background:#1f2937;
+    color:#fde68a;
+    text-align:left;
+  }
+  td {
+    background:#101923;
+    color:#e5e7eb;
+  }
+  .link-table td:last-child {
+    color:#93c5fd;
+    font-weight:800;
+  }
+  .network-layout {
+    display:grid;
+    grid-template-columns:minmax(0, 1fr) 330px;
+    gap:16px;
+  }
+  .field-map {
+    display:grid;
+    grid-template-columns:repeat(5, 1fr);
+    gap:7px;
+    padding:14px;
+    background:#7c4a1c;
+    border:1px solid #b45309;
+    border-radius:7px;
+  }
+  .tile {
+    min-height:66px;
+    border:1px solid #9a6a2f;
+    background:#c98a38;
+    border-radius:6px;
+    display:grid;
+    place-items:center;
+    text-align:center;
+    color:#27170a;
+    font-weight:900;
+    font-size:12px;
+    position:relative;
+  }
+  .tile small {
+    font-size:11px;
+  }
+  .tile.empty {
+    background:#b7792b;
+  }
+  .tile.block {
+    background:#fbbf24;
+  }
+  .tile.survey {
+    background:#93c5fd;
+    color:#082f49;
+  }
+  .tile.prospect {
+    background:#a78bfa;
+    color:#21103d;
+  }
+  .tile.road {
+    background:#d97706;
+    color:#fff7ed;
+  }
+  .tile.pad {
+    background:#78716c;
+    color:#fafaf9;
+  }
+  .tile.well {
+    background:#eab308;
+  }
+  .tile.hub {
+    background:#60a5fa;
+    color:#082f49;
+  }
+  .tile.tank {
+    background:#22c55e;
+    color:#042f14;
+  }
+  .tile.export {
+    background:#fde047;
+  }
+  .tile.rough {
+    background:#8a6b43;
+    color:#fef3c7;
+  }
+  .tile.pipe:before,
+  .tile.pipe.turn:before {
+    content:"";
+    width:80%;
+    height:8px;
+    background:#334155;
+    border-radius:999px;
+  }
+  .tile.pipe.turn:after {
+    content:"";
+    position:absolute;
+    width:8px;
+    height:70%;
+    background:#334155;
+    border-radius:999px;
+  }
+  .network-panel {
+    border:1px solid #334155;
+    background:#111827;
+    border-radius:7px;
+    padding:14px;
+  }
+  .network-panel h3 {
+    margin-top:0;
+  }
+  .network-panel li {
+    margin-bottom:7px;
+  }
+  .status-box,
+  .example-row,
+  .bottleneck-grid,
+  .objective-grid {
+    display:grid;
+    gap:10px;
+  }
+  .status-box span {
+    background:#1e293b;
+    color:#fde68a;
+    border-radius:6px;
+    padding:7px 9px;
+    font-weight:800;
+  }
+  .formula {
+    display:flex;
+    flex-wrap:wrap;
+    align-items:center;
+    gap:10px;
+    border:1px solid #334155;
+    background:#111827;
+    border-radius:7px;
+    padding:14px;
+  }
+  .formula span {
+    background:#1e293b;
+    color:#e5e7eb;
+    border-radius:999px;
+    padding:7px 10px;
+    font-weight:800;
+  }
+  .example-row {
+    grid-template-columns:repeat(3, minmax(0, 1fr));
+    margin-top:12px;
+  }
+  .example-row > div,
+  .bottleneck-grid > div,
+  .objective {
+    border:1px solid #334155;
+    background:#101923;
+    border-radius:7px;
+    padding:12px;
+    display:grid;
+    gap:6px;
+  }
+  .example-row strong,
+  .bottleneck-grid strong,
+  .objective strong {
+    color:#fde68a;
+  }
+  .example-row span,
+  .bottleneck-grid span,
+  .objective span,
+  .network-panel {
+    color:#cbd5e1;
+  }
+  .bottleneck-grid {
+    grid-template-columns:repeat(4, minmax(0, 1fr));
+  }
+  .objective-grid {
+    grid-template-columns:repeat(4, minmax(0, 1fr));
+  }
+  .objective.primary {
+    border-color:#facc15;
+  }
+</style>
+
+<div class="options">
+  <div class="option" data-choice="approve-integrated-economy-loop" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>Approve Integrated Economy Loop</h3>
+      <p>Use this linked chain for the spec: trees unlock actions, actions create objects, objects generate cash.</p>
+    </div>
+  </div>
+  <div class="option" data-choice="revise-economy-loop" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>Revise Economy Loop</h3>
+      <p>Change dependencies, money formula, bottlenecks, or victory objectives before the spec.</p>
+    </div>
+  </div>
+</div>

@@ -1,0 +1,11 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="Game/src/Beep.OilGasSim.AI/Beep.OilGasSim.AI.csproj" />
+    <Project Path="Game/src/Beep.OilGasSim.Api/Beep.OilGasSim.Api.csproj" />
+    <Project Path="Game/src/Beep.OilGasSim.Application/Beep.OilGasSim.Application.csproj" />
+    <Project Path="Game/src/Beep.OilGasSim.Domain/Beep.OilGasSim.Domain.csproj" />
+    <Project Path="Game/src/Beep.OilGasSim.Infrastructure/Beep.OilGasSim.Infrastructure.csproj" />
+    <Project Path="Game/src/Beep.OilGasSim.Simulation/Beep.OilGasSim.Simulation.csproj" />
+    <Project Path="Game/src/Beep.OilGasSim.Tests/Beep.OilGasSim.Tests.csproj" />
+  </Folder>
+</Solution>

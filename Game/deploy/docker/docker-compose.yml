@@ -1,0 +1,24 @@
+services:
+  api:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile.api
+    ports:
+      - "5080:8080"
+    environment:
+      ASPNETCORE_URLS: http://+:8080
+      ASPNETCORE_ENVIRONMENT: Development
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: beep
+      POSTGRES_PASSWORD: beep
+      POSTGRES_DB: beepoilgas
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+volumes:
+  pgdata:

@@ -1,0 +1,490 @@
+<h2>Vehicle & Equipment Tree + Activity Objects</h2>
+<p class="subtitle">
+  Equipment progression unlocks machines and field packages. Activities stay separate and produce
+  map objects such as wells, roads, pipelines, and gathering centers.
+</p>
+
+<div class="mockup">
+  <div class="mockup-header">Balance Assumption</div>
+  <div class="mockup-body">
+    <div class="assumption-grid">
+      <div>
+        <strong>Costs</strong>
+        <span>Game cash in millions. Example: $8M means 8 million in game money.</span>
+      </div>
+      <div>
+        <strong>Turns</strong>
+        <span>Standard game speed. These are acquisition/build prep turns, not real calendar time.</span>
+      </div>
+      <div>
+        <strong>Rule</strong>
+        <span>Equipment nodes are assets. Activities like drilling or building pipeline are not equipment nodes.</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-header">Vehicle & Equipment Tree</div>
+  <div class="mockup-body">
+    <div class="equipment-tree">
+      <div class="tier-labels">
+        <span>Tier 1 - Field Basics</span>
+        <span>Tier 2 - Survey & Construction</span>
+        <span>Tier 3 - Drilling & Flow</span>
+        <span>Tier 4 - Field Development</span>
+      </div>
+
+      <div class="equip-row survey">
+        <div class="family">Mobility / Survey</div>
+        <div class="equip-node">
+          <strong>Pickup Fleet</strong>
+          <small>$2M / 1 turn</small>
+          <em>basic movement and survey support</em>
+        </div>
+        <div class="arrow"></div>
+        <div class="equip-node">
+          <strong>Field Truck Fleet</strong>
+          <small>$5M / 2 turns</small>
+          <em>moves crews farther in desert</em>
+        </div>
+        <div class="arrow"></div>
+        <div class="equip-node">
+          <strong>Vibroseis Unit</strong>
+          <small>$12M / 3 turns</small>
+          <em>supports seismic actions</em>
+        </div>
+        <div class="arrow"></div>
+        <div class="equip-node elite">
+          <strong>Sensor Drone Network</strong>
+          <small>$18M / 3 turns</small>
+          <em>faster scouting and lower survey risk</em>
+        </div>
+      </div>
+
+      <div class="equip-row earth">
+        <div class="family">Earthworks</div>
+        <div class="equip-node">
+          <strong>Utility Dozer</strong>
+          <small>$4M / 1 turn</small>
+          <em>basic road and pad work</em>
+        </div>
+        <div class="arrow"></div>
+        <div class="equip-node">
+          <strong>Grader + Excavator</strong>
+          <small>$8M / 2 turns</small>
+          <em>better road and pad speed</em>
+        </div>
+        <div class="arrow"></div>
+        <div class="equip-node">
+          <strong>Crane Package</strong>
+          <small>$10M / 2 turns</small>
+          <em>heavy equipment placement</em>
+        </div>
+        <div class="arrow"></div>
+        <div class="equip-node elite">
+          <strong>Pipe Layer Fleet</strong>
+          <small>$16M / 3 turns</small>
+          <em>pipeline and gathering build support</em>
+        </div>
+      </div>
+
+      <div class="equip-row drilling">
+        <div class="family">Drilling Package</div>
+        <div class="equip-node">
+          <strong>Mud + Pump Package</strong>
+          <small>$6M / 2 turns</small>
+          <em>required drill support</em>
+        </div>
+        <div class="arrow"></div>
+        <div class="equip-node">
+          <strong>Mobile Drilling Rig</strong>
+          <small>$28M / 4 turns</small>
+          <em>shallow and wildcat wells</em>
+        </div>
+        <div class="arrow"></div>
+        <div class="equip-node">
+          <strong>Deep Land Rig</strong>
+          <small>$45M / 5 turns</small>
+          <em>deeper prospects and higher pressure</em>
+        </div>
+        <div class="arrow"></div>
+        <div class="equip-node elite">
+          <strong>Horizontal Rig Kit</strong>
+          <small>$65M / 6 turns</small>
+          <em>late-game high-yield wells</em>
+        </div>
+      </div>
+
+      <div class="equip-row production">
+        <div class="family">Production / Processing</div>
+        <div class="equip-node">
+          <strong>Wellhead Kit</strong>
+          <small>$5M / 1 turn</small>
+          <em>turns discovery into controlled well</em>
+        </div>
+        <div class="arrow"></div>
+        <div class="equip-node">
+          <strong>Artificial Lift Set</strong>
+          <small>$9M / 2 turns</small>
+          <em>improves low-pressure wells</em>
+        </div>
+        <div class="arrow"></div>
+        <div class="equip-node">
+          <strong>Separator Skid</strong>
+          <small>$14M / 3 turns</small>
+          <em>starts local fluid handling</em>
+        </div>
+        <div class="arrow"></div>
+        <div class="equip-node elite">
+          <strong>Compressor Package</strong>
+          <small>$24M / 4 turns</small>
+          <em>gas handling and gathering center boost</em>
+        </div>
+      </div>
+
+      <div class="equip-row utility">
+        <div class="family">Utility / Safety</div>
+        <div class="equip-node">
+          <strong>Water Truck</strong>
+          <small>$3M / 1 turn</small>
+          <em>supports roads, pads, and drilling</em>
+        </div>
+        <div class="arrow"></div>
+        <div class="equip-node">
+          <strong>Fuel Bowser</strong>
+          <small>$4M / 1 turn</small>
+          <em>keeps remote operations running</em>
+        </div>
+        <div class="arrow"></div>
+        <div class="equip-node">
+          <strong>Power Generator Set</strong>
+          <small>$7M / 2 turns</small>
+          <em>required for field facilities</em>
+        </div>
+        <div class="arrow"></div>
+        <div class="equip-node elite">
+          <strong>HSE Response Unit</strong>
+          <small>$10M / 2 turns</small>
+          <em>reduces accidents and penalties</em>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-header">Equipment Unlock Summary</div>
+  <div class="mockup-body">
+    <table class="cost-table">
+      <thead>
+        <tr>
+          <th>Equipment</th>
+          <th>Cost</th>
+          <th>Turns</th>
+          <th>Main Use</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td>Pickup Fleet</td><td>$2M</td><td>1</td><td>basic crew movement and survey support</td></tr>
+        <tr><td>Vibroseis Unit</td><td>$12M</td><td>3</td><td>seismic activity requirement</td></tr>
+        <tr><td>Utility Dozer</td><td>$4M</td><td>1</td><td>roads and basic pads</td></tr>
+        <tr><td>Pipe Layer Fleet</td><td>$16M</td><td>3</td><td>pipeline and gathering network builds</td></tr>
+        <tr><td>Mobile Drilling Rig</td><td>$28M</td><td>4</td><td>wildcat and shallow wells</td></tr>
+        <tr><td>Deep Land Rig</td><td>$45M</td><td>5</td><td>deep prospects</td></tr>
+        <tr><td>Wellhead Kit</td><td>$5M</td><td>1</td><td>well completion requirement</td></tr>
+        <tr><td>Separator Skid</td><td>$14M</td><td>3</td><td>gathering center requirement</td></tr>
+        <tr><td>Compressor Package</td><td>$24M</td><td>4</td><td>gas gathering and production boost</td></tr>
+        <tr><td>HSE Response Unit</td><td>$10M</td><td>2</td><td>environment and accident mitigation</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-header">Activities Create Goal Objects</div>
+  <div class="mockup-body">
+    <table class="activity-table">
+      <thead>
+        <tr>
+          <th>Activity</th>
+          <th>Needs</th>
+          <th>Cost</th>
+          <th>Turns</th>
+          <th>Goal Object Created</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Buy Land</td>
+          <td>cash</td>
+          <td>$6M-$18M</td>
+          <td>0</td>
+          <td>Owned Block</td>
+        </tr>
+        <tr>
+          <td>Survey Block</td>
+          <td>Geoscience manpower + Pickup Fleet</td>
+          <td>$1M</td>
+          <td>1</td>
+          <td>Surveyed Block</td>
+        </tr>
+        <tr>
+          <td>Run Seismic</td>
+          <td>Geoscience manpower + Vibroseis Unit + 2D Seismic tech</td>
+          <td>$8M</td>
+          <td>2</td>
+          <td>Prospect Map</td>
+        </tr>
+        <tr>
+          <td>Build Access Road</td>
+          <td>Operations manpower + Utility Dozer</td>
+          <td>$4M</td>
+          <td>2</td>
+          <td>Road Segment</td>
+        </tr>
+        <tr>
+          <td>Build Well Pad</td>
+          <td>Operations manpower + Grader/Excavator + Water Truck</td>
+          <td>$6M</td>
+          <td>2</td>
+          <td>Well Pad</td>
+        </tr>
+        <tr>
+          <td>Drill Exploration Well</td>
+          <td>Engineering + Operations + Mobile Rig + Mud/Pump Package</td>
+          <td>$35M</td>
+          <td>4</td>
+          <td>Wildcat Well</td>
+        </tr>
+        <tr>
+          <td>Complete Well</td>
+          <td>Facilities manpower + Wellhead Kit + completion tech</td>
+          <td>$12M</td>
+          <td>2</td>
+          <td>Completed Well</td>
+        </tr>
+        <tr>
+          <td>Start Production</td>
+          <td>Facilities + Operations + Wellhead Kit</td>
+          <td>$5M</td>
+          <td>1</td>
+          <td>Producing Well</td>
+        </tr>
+        <tr>
+          <td>Build Gathering Pipeline</td>
+          <td>Operations + Pipe Layer Fleet + pipe tech</td>
+          <td>$10M per segment</td>
+          <td>3</td>
+          <td>Pipeline Segment</td>
+        </tr>
+        <tr>
+          <td>Build Gathering Center</td>
+          <td>Facilities + Separator Skid + Generator Set</td>
+          <td>$35M</td>
+          <td>5</td>
+          <td>Gathering Center</td>
+        </tr>
+        <tr>
+          <td>Upgrade Gathering Center</td>
+          <td>Facilities + Compressor Package</td>
+          <td>$22M</td>
+          <td>4</td>
+          <td>Compression Upgrade</td>
+        </tr>
+        <tr>
+          <td>Environmental Response</td>
+          <td>HSE manpower + HSE Response Unit</td>
+          <td>$6M-$18M</td>
+          <td>1-3</td>
+          <td>Mitigation Project</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-header">Object Chain Example</div>
+  <div class="mockup-body">
+    <div class="object-chain">
+      <span>Owned Block</span>
+      <strong>+</strong>
+      <span>Prospect Map</span>
+      <strong>+</strong>
+      <span>Road Segment</span>
+      <strong>+</strong>
+      <span>Well Pad</span>
+      <strong>+</strong>
+      <span>Wildcat Well</span>
+      <strong>-></strong>
+      <span>Producing Well</span>
+      <strong>-></strong>
+      <span>Pipeline Segment</span>
+      <strong>-></strong>
+      <span>Gathering Center</span>
+    </div>
+  </div>
+</div>
+
+<style>
+  .assumption-grid {
+    display:grid;
+    grid-template-columns:repeat(3, minmax(0, 1fr));
+    gap:12px;
+  }
+  .assumption-grid > div {
+    border:1px solid #334155;
+    border-radius:7px;
+    background:#101923;
+    padding:14px;
+    display:grid;
+    gap:6px;
+  }
+  .assumption-grid strong {
+    color:#fde68a;
+  }
+  .assumption-grid span {
+    color:#cbd5e1;
+  }
+  .equipment-tree {
+    display:grid;
+    gap:10px;
+  }
+  .tier-labels {
+    display:grid;
+    grid-template-columns:150px repeat(4, minmax(0, 1fr));
+    gap:8px;
+  }
+  .tier-labels:before {
+    content:"";
+  }
+  .tier-labels span {
+    background:#1f2937;
+    color:#fde68a;
+    border:1px solid #475569;
+    border-radius:7px;
+    padding:8px;
+    text-align:center;
+    font-weight:800;
+    font-size:12px;
+  }
+  .equip-row {
+    display:grid;
+    grid-template-columns:150px minmax(0, 1fr) 24px minmax(0, 1fr) 24px minmax(0, 1fr) 24px minmax(0, 1fr);
+    gap:8px;
+    align-items:center;
+    border:1px solid #334155;
+    background:#0f172a;
+    border-radius:7px;
+    padding:10px;
+  }
+  .family {
+    color:#f8fafc;
+    font-weight:900;
+    font-size:13px;
+  }
+  .equip-node {
+    min-height:86px;
+    border:1px solid #64748b;
+    background:#111827;
+    border-radius:7px;
+    padding:9px;
+    display:grid;
+    gap:4px;
+    align-content:center;
+  }
+  .equip-node strong {
+    color:#f8fafc;
+  }
+  .equip-node small {
+    color:#fde68a;
+    font-weight:800;
+  }
+  .equip-node em {
+    color:#cbd5e1;
+    font-style:normal;
+    font-size:12px;
+    line-height:1.25;
+  }
+  .equip-node.elite {
+    border-color:#f59e0b;
+  }
+  .survey .equip-node { box-shadow:inset 0 0 0 1px rgba(96, 165, 250, .22); }
+  .earth .equip-node { box-shadow:inset 0 0 0 1px rgba(34, 197, 94, .22); }
+  .drilling .equip-node { box-shadow:inset 0 0 0 1px rgba(168, 85, 247, .22); }
+  .production .equip-node { box-shadow:inset 0 0 0 1px rgba(245, 158, 11, .22); }
+  .utility .equip-node { box-shadow:inset 0 0 0 1px rgba(239, 68, 68, .22); }
+  .arrow {
+    height:2px;
+    background:#64748b;
+    position:relative;
+  }
+  .arrow:after {
+    content:"";
+    position:absolute;
+    right:-1px;
+    top:-4px;
+    border-left:8px solid #64748b;
+    border-top:5px solid transparent;
+    border-bottom:5px solid transparent;
+  }
+  table {
+    width:100%;
+    border-collapse:collapse;
+    font-size:13px;
+  }
+  th,
+  td {
+    border:1px solid #334155;
+    padding:8px;
+    vertical-align:top;
+  }
+  th {
+    background:#1f2937;
+    color:#fde68a;
+    text-align:left;
+  }
+  td {
+    background:#101923;
+    color:#e5e7eb;
+  }
+  .activity-table td:last-child {
+    color:#93c5fd;
+    font-weight:800;
+  }
+  .object-chain {
+    display:flex;
+    flex-wrap:wrap;
+    gap:9px;
+    align-items:center;
+  }
+  .object-chain span {
+    background:#1e293b;
+    color:#e5e7eb;
+    border:1px solid #334155;
+    border-radius:999px;
+    padding:7px 10px;
+    font-weight:800;
+  }
+  .object-chain strong {
+    color:#fde68a;
+  }
+</style>
+
+<div class="options">
+  <div class="option" data-choice="approve-equipment-activity-model" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>Approve Equipment + Activity Model</h3>
+      <p>Use this equipment tree, costs, turns, and activity-to-object chain in the design spec.</p>
+    </div>
+  </div>
+  <div class="option" data-choice="revise-costs-turns-objects" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>Revise Costs / Objects</h3>
+      <p>Change equipment names, costs, turns, activities, or goal objects before the spec.</p>
+    </div>
+  </div>
+</div>

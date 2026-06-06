@@ -1,0 +1,260 @@
+<h2>Revised: Actual Technology Tree Hierarchy</h2>
+<p class="subtitle">
+  This version shows prerequisite flow from left to right. Each node has parent techs, cost,
+  research duration, resource needs, and gameplay unlocks.
+</p>
+
+<div class="mockup">
+  <div class="mockup-header">Preview: Civilization-Style Oil & Gas Tech Tree</div>
+  <div class="mockup-body">
+    <div style="overflow:auto;padding-bottom:12px">
+      <div style="min-width:1180px;position:relative;padding:18px 8px 26px">
+        <svg style="position:absolute;inset:0;width:1180px;height:610px;pointer-events:none" viewBox="0 0 1180 610">
+          <defs>
+            <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+              <path d="M0,0 L0,6 L9,3 z" fill="#8fb6d8"></path>
+            </marker>
+          </defs>
+          <path d="M145 116 C185 116 188 116 225 116" stroke="#8fb6d8" stroke-width="2" fill="none" marker-end="url(#arrow)"/>
+          <path d="M145 116 C185 116 188 204 225 204" stroke="#8fb6d8" stroke-width="2" fill="none" marker-end="url(#arrow)"/>
+          <path d="M145 292 C185 292 188 292 225 292" stroke="#8fb6d8" stroke-width="2" fill="none" marker-end="url(#arrow)"/>
+          <path d="M145 292 C185 292 188 380 225 380" stroke="#8fb6d8" stroke-width="2" fill="none" marker-end="url(#arrow)"/>
+          <path d="M145 468 C185 468 188 468 225 468" stroke="#8fb6d8" stroke-width="2" fill="none" marker-end="url(#arrow)"/>
+
+          <path d="M365 116 C405 116 408 116 445 116" stroke="#8fb6d8" stroke-width="2" fill="none" marker-end="url(#arrow)"/>
+          <path d="M365 204 C405 204 408 204 445 204" stroke="#8fb6d8" stroke-width="2" fill="none" marker-end="url(#arrow)"/>
+          <path d="M365 292 C405 292 408 292 445 292" stroke="#8fb6d8" stroke-width="2" fill="none" marker-end="url(#arrow)"/>
+          <path d="M365 380 C405 380 408 380 445 380" stroke="#8fb6d8" stroke-width="2" fill="none" marker-end="url(#arrow)"/>
+          <path d="M365 468 C405 468 408 468 445 468" stroke="#8fb6d8" stroke-width="2" fill="none" marker-end="url(#arrow)"/>
+
+          <path d="M585 116 C625 116 628 204 665 204" stroke="#8fb6d8" stroke-width="2" fill="none" marker-end="url(#arrow)"/>
+          <path d="M585 204 C625 204 628 204 665 204" stroke="#8fb6d8" stroke-width="2" fill="none" marker-end="url(#arrow)"/>
+          <path d="M585 292 C625 292 628 292 665 292" stroke="#8fb6d8" stroke-width="2" fill="none" marker-end="url(#arrow)"/>
+          <path d="M585 380 C625 380 628 292 665 292" stroke="#8fb6d8" stroke-width="2" fill="none" marker-end="url(#arrow)"/>
+          <path d="M585 468 C625 468 628 468 665 468" stroke="#8fb6d8" stroke-width="2" fill="none" marker-end="url(#arrow)"/>
+
+          <path d="M805 204 C845 204 848 204 885 204" stroke="#8fb6d8" stroke-width="2" fill="none" marker-end="url(#arrow)"/>
+          <path d="M805 292 C845 292 848 204 885 204" stroke="#8fb6d8" stroke-width="2" fill="none" marker-end="url(#arrow)"/>
+          <path d="M805 292 C845 292 848 380 885 380" stroke="#8fb6d8" stroke-width="2" fill="none" marker-end="url(#arrow)"/>
+          <path d="M805 468 C845 468 848 380 885 380" stroke="#8fb6d8" stroke-width="2" fill="none" marker-end="url(#arrow)"/>
+
+          <path d="M1025 204 C1060 204 1064 292 1098 292" stroke="#8fb6d8" stroke-width="2" fill="none" marker-end="url(#arrow)"/>
+          <path d="M1025 380 C1060 380 1064 292 1098 292" stroke="#8fb6d8" stroke-width="2" fill="none" marker-end="url(#arrow)"/>
+        </svg>
+
+        <div style="display:grid;grid-template-columns:150px 150px 150px 150px 150px 150px;gap:70px;position:relative;z-index:1">
+          <div>
+            <div class="label">Tier 0: Start</div>
+            <div style="height:68px"></div>
+            <div class="tech-node root">
+              <strong>Base Camp</strong>
+              <span>Starting company</span>
+              <em>Unlocks first crews</em>
+            </div>
+          </div>
+
+          <div>
+            <div class="label">Tier 1: Basics</div>
+            <div class="tech-node survey">
+              <strong>Field Geology</strong>
+              <span>1 turn · $5M</span>
+              <em>Need: 1 geologist</em>
+              <small>Unlocks: Send Geologist</small>
+            </div>
+            <div class="tech-node survey">
+              <strong>Surface Mapping</strong>
+              <span>1 turn · $6M</span>
+              <em>Need: geologist</em>
+              <small>Reveals: folds, faults, outcrops</small>
+            </div>
+            <div class="tech-node infra">
+              <strong>Desert Access</strong>
+              <span>1 turn · $8M</span>
+              <em>Need: 1 crew</em>
+              <small>Unlocks: survey tracks</small>
+            </div>
+            <div class="tech-node infra">
+              <strong>Camp Logistics</strong>
+              <span>1 turn · $10M</span>
+              <em>Need: fuel</em>
+              <small>Unlocks: field camps</small>
+            </div>
+            <div class="tech-node business">
+              <strong>Land Permits</strong>
+              <span>1 turn · $4M</span>
+              <em>Need: admin</em>
+              <small>Unlocks: restricted blocks</small>
+            </div>
+          </div>
+
+          <div>
+            <div class="label">Tier 2: Prospecting</div>
+            <div class="tech-node survey">
+              <strong>Basin Mapping</strong>
+              <span>2 turns · $12M</span>
+              <em>Requires: Field Geology</em>
+              <small>Reveals play fairways</small>
+            </div>
+            <div class="tech-node survey">
+              <strong>Rock Sampling</strong>
+              <span>1 turn · $8M</span>
+              <em>Requires: Surface Mapping</em>
+              <small>Improves prospect chance</small>
+            </div>
+            <div class="tech-node infra">
+              <strong>Desert Roads</strong>
+              <span>2 turns · $18M</span>
+              <em>Requires: Desert Access</em>
+              <small>Faster crew travel</small>
+            </div>
+            <div class="tech-node infra">
+              <strong>Supply Convoys</strong>
+              <span>1 turn · $12M</span>
+              <em>Requires: Camp Logistics</em>
+              <small>Rig movement consumes less fuel</small>
+            </div>
+            <div class="tech-node business">
+              <strong>License Office</strong>
+              <span>1 turn · $10M</span>
+              <em>Requires: Land Permits</em>
+              <small>Cheaper bids, fewer delays</small>
+            </div>
+          </div>
+
+          <div>
+            <div class="label">Tier 3: Survey + Rig</div>
+            <div class="tech-node survey">
+              <strong>2D Seismic</strong>
+              <span>2 turns · $25M</span>
+              <em>Requires: Basin Mapping</em>
+              <small>Unlocks: seismic crew action</small>
+            </div>
+            <div class="tech-node survey locked">
+              <strong>Prospect Ranking</strong>
+              <span>2 turns · $20M</span>
+              <em>Requires: Rock Sampling</em>
+              <small>Shows best drill targets</small>
+            </div>
+            <div class="tech-node drill">
+              <strong>Rig Logistics</strong>
+              <span>1 turn · $15M</span>
+              <em>Requires: Desert Roads</em>
+              <small>Unlocks: move rig crew</small>
+            </div>
+            <div class="tech-node infra locked">
+              <strong>Remote Camps</strong>
+              <span>2 turns · $22M</span>
+              <em>Requires: Supply Convoys</em>
+              <small>Crews operate farther away</small>
+            </div>
+            <div class="tech-node business">
+              <strong>Joint Ventures</strong>
+              <span>2 turns · $10M</span>
+              <em>Requires: License Office</em>
+              <small>Deals with human players</small>
+            </div>
+          </div>
+
+          <div>
+            <div class="label">Tier 4: Drilling + Build</div>
+            <div style="height:88px"></div>
+            <div class="tech-node drill">
+              <strong>Exploration Wells</strong>
+              <span>2 turns · $60M</span>
+              <em>Requires: 2D Seismic + Rig Logistics</em>
+              <small>Unlocks: Drill Well</small>
+            </div>
+            <div class="tech-node infra">
+              <strong>Pipeline Tie-In</strong>
+              <span>2 turns · $45M</span>
+              <em>Requires: Rig Logistics</em>
+              <small>Unlocks: connect field to terminal</small>
+            </div>
+          </div>
+
+          <div>
+            <div class="label">Tier 5: Advanced</div>
+            <div style="height:180px"></div>
+            <div class="tech-node advanced">
+              <strong>3D Seismic</strong>
+              <span>3 turns · $80M</span>
+              <em>Requires: Exploration Wells</em>
+              <small>Better discovery confidence</small>
+            </div>
+            <div class="tech-node advanced">
+              <strong>Processing Plant</strong>
+              <span>3 turns · $130M</span>
+              <em>Requires: Pipeline Tie-In</em>
+              <small>Improves field revenue</small>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:12px">
+      <div style="padding:12px;border:1px solid #334155;border-radius:6px;background:#101923">
+        <h3 style="margin-top:0">How Research Feels In Game</h3>
+        <ol style="margin-bottom:0">
+          <li>Pick one research node each turn.</li>
+          <li>Node starts only if prerequisites and resources are available.</li>
+          <li>During research, specialists are busy and unavailable for field actions.</li>
+          <li>Completed tech unlocks visible map actions, new crews, or cheaper/faster operations.</li>
+        </ol>
+      </div>
+      <div style="padding:12px;border:1px solid #334155;border-radius:6px;background:#101923">
+        <h3 style="margin-top:0">Hierarchy Rules</h3>
+        <ul style="margin-bottom:0">
+          <li><strong>Solid nodes</strong> are available or already unlocked.</li>
+          <li><strong>Dim nodes</strong> are locked behind prerequisite tech.</li>
+          <li>Some nodes require multiple parents, e.g. Exploration Wells needs 2D Seismic and Rig Logistics.</li>
+          <li>Human players can specialize: survey-first, drilling-first, infrastructure-first, or business-first.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+  .tech-node {
+    width:150px;
+    min-height:76px;
+    margin:12px 0;
+    padding:9px;
+    border-radius:7px;
+    border:1px solid #475569;
+    background:#111827;
+    box-shadow:0 6px 18px rgba(0,0,0,.25);
+    display:grid;
+    gap:3px;
+    font-size:12px;
+  }
+  .tech-node strong { color:#f8fafc; font-size:13px; }
+  .tech-node span { color:#cbd5e1; }
+  .tech-node em { color:#93c5fd; font-style:normal; font-size:11px; }
+  .tech-node small { color:#94a3b8; line-height:1.25; }
+  .tech-node.root { border-color:#eab308; background:#27220f; }
+  .tech-node.survey { border-color:#2f8f5b; background:#102018; }
+  .tech-node.infra { border-color:#4b83b9; background:#111d2a; }
+  .tech-node.drill { border-color:#b18437; background:#241b0e; }
+  .tech-node.business { border-color:#8b5cc5; background:#1d142a; }
+  .tech-node.advanced { border-color:#38bdf8; background:#0d2530; }
+  .tech-node.locked { opacity:.56; filter:saturate(.7); }
+</style>
+
+<div class="options">
+  <div class="option" data-choice="approve-hierarchy-tree" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>This Is The Right Tree Shape</h3>
+      <p>Use this hierarchy/prerequisite model for the design spec.</p>
+    </div>
+  </div>
+  <div class="option" data-choice="revise-hierarchy-tree" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>Revise The Tree Again</h3>
+      <p>Change the tiers, branches, prerequisites, or resources before writing the spec.</p>
+    </div>
+  </div>
+</div>

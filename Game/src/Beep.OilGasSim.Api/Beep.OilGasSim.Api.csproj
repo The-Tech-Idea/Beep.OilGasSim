@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="9.0.16" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Beep.OilGasSim.Application\Beep.OilGasSim.Application.csproj" />
+    <ProjectReference Include="..\Beep.OilGasSim.Infrastructure\Beep.OilGasSim.Infrastructure.csproj" />
+    <ProjectReference Include="..\Beep.OilGasSim.Simulation\Beep.OilGasSim.Simulation.csproj" />
+    <ProjectReference Include="..\Beep.OilGasSim.AI\Beep.OilGasSim.AI.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="..\..\content\**\*" LinkBase="content" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

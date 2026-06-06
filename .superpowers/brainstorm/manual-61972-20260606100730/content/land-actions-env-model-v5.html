@@ -1,0 +1,316 @@
+<h2>Corrected Model: Tech Tree, Land Buying, Environment</h2>
+<p class="subtitle">
+  The tech tree should unlock capability. Land, contracts, and environmental pressure should be
+  gameplay systems on top of the map, not research nodes.
+</p>
+
+<div class="mockup">
+  <div class="mockup-header">Core Rule Separation</div>
+  <div class="mockup-body">
+    <div class="system-grid">
+      <div class="system-card tech">
+        <h3>Engineering Tech Tree</h3>
+        <p>Research turns unlock better actions, crews, facilities, and production methods.</p>
+        <div class="chip-row">
+          <span>Field Geology</span>
+          <span>2D Seismic</span>
+          <span>Directional Drilling</span>
+          <span>Enhanced Recovery</span>
+        </div>
+      </div>
+
+      <div class="system-card land">
+        <h3>Land Buying</h3>
+        <p>Click a tile or block and buy it if you have cash. This is a market/map action.</p>
+        <div class="button-preview">Buy Block - $12M</div>
+      </div>
+
+      <div class="system-card contract">
+        <h3>Contracts And Access</h3>
+        <p>Commercial deals unlock routes, offtake, storage, or shared infrastructure.</p>
+        <div class="chip-row">
+          <span>Pipeline Access</span>
+          <span>JV Farm-in</span>
+          <span>Service Contract</span>
+        </div>
+      </div>
+
+      <div class="system-card env">
+        <h3>Environmental Pressure</h3>
+        <p>Like Civ-style strategic pressure: budget drain, events, restrictions, and planning risk.</p>
+        <div class="meter"><span style="width:62%"></span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-header">Example: Click A Desert Block</div>
+  <div class="mockup-body">
+    <div class="tile-flow">
+      <div class="desert-tile">
+        <div class="tile-top">Unowned Basin Block</div>
+        <div class="tile-grid">
+          <span></span><span class="rock"></span><span></span>
+          <span class="track"></span><span></span><span></span>
+          <span></span><span></span><span class="rock small"></span>
+        </div>
+      </div>
+      <div class="action-panel">
+        <h3>Available Actions</h3>
+        <button>Buy Land</button>
+        <button class="disabled">Send Geologist</button>
+        <button class="disabled">Run 2D Seismic</button>
+        <p>
+          Buying land is one click if the player has enough cash. After ownership,
+          crews and researched actions become available on that block.
+        </p>
+      </div>
+      <div class="owned-panel">
+        <h3>After Purchase</h3>
+        <ol>
+          <li>Send Geologist to map surface clues.</li>
+          <li>Run seismic to reveal prospect confidence.</li>
+          <li>Build road and pad with crews.</li>
+          <li>Send rig crew to drill.</li>
+        </ol>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-header">Environment As Civ-Style Pressure</div>
+  <div class="mockup-body">
+    <div class="pressure-grid">
+      <div class="pressure-card">
+        <strong>What Adds Pressure</strong>
+        <span>Roads, pads, wells, flaring, water use, spills, overbuilding.</span>
+      </div>
+      <div class="pressure-card">
+        <strong>What Reduces Pressure</strong>
+        <span>Waste handling, cleaner power, monitoring, remediation crews, better tech.</span>
+      </div>
+      <div class="pressure-card warning">
+        <strong>Budget Consequence</strong>
+        <span>Carbon tax, cleanup costs, insurance, operating surcharge per turn.</span>
+      </div>
+      <div class="pressure-card danger">
+        <strong>Strategic Punishment</strong>
+        <span>Fine, forced shutdown, reputation loss, or land-buy moratorium for 2-5 turns.</span>
+      </div>
+    </div>
+
+    <div class="turn-event">
+      <div>
+        <strong>Event Example</strong>
+        <p>
+          Environmental load is too high near a sensitive basin. Pay $18M cleanup now,
+          or accept a 3-turn ban on buying new land plus higher operating tax.
+        </p>
+      </div>
+      <div class="event-buttons">
+        <button>Pay Cleanup</button>
+        <button>Delay And Risk</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-header">How This Feels Like AoE + Civilization</div>
+  <div class="mockup-body">
+    <div class="compare-grid">
+      <div>
+        <h3>AoE Feel</h3>
+        <ul>
+          <li>Race rivals for valuable land blocks.</li>
+          <li>Send crews across the desert map.</li>
+          <li>Build camps, roads, rig yards, pipelines, and defenses.</li>
+          <li>Opponent pressure comes from expansion timing and infrastructure control.</li>
+        </ul>
+      </div>
+      <div>
+        <h3>Civ Feel</h3>
+        <ul>
+          <li>Research choices unlock future strategy.</li>
+          <li>Environmental and economic consequences shape long-term planning.</li>
+          <li>Field actions can boost related research.</li>
+          <li>Players can win by production, reserves, market control, or technology lead.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+  .system-grid,
+  .pressure-grid,
+  .compare-grid {
+    display:grid;
+    grid-template-columns:repeat(2, minmax(0, 1fr));
+    gap:14px;
+  }
+  .system-card,
+  .pressure-card {
+    border:1px solid #334155;
+    background:#101923;
+    border-radius:7px;
+    padding:14px;
+  }
+  .system-card h3 {
+    margin:0 0 8px;
+  }
+  .system-card p,
+  .pressure-card span,
+  .turn-event p {
+    color:#cbd5e1;
+  }
+  .system-card.tech { border-color:#60a5fa; }
+  .system-card.land { border-color:#f59e0b; }
+  .system-card.contract { border-color:#22c55e; }
+  .system-card.env { border-color:#ef4444; }
+  .chip-row {
+    display:flex;
+    flex-wrap:wrap;
+    gap:8px;
+    margin-top:10px;
+  }
+  .chip-row span {
+    background:#1e293b;
+    color:#e5e7eb;
+    border-radius:999px;
+    padding:5px 8px;
+    font-size:12px;
+  }
+  .button-preview,
+  .action-panel button,
+  .event-buttons button {
+    width:max-content;
+    border:1px solid #d97706;
+    background:#92400e;
+    color:#fff7ed;
+    border-radius:6px;
+    padding:8px 12px;
+    font-weight:700;
+  }
+  .meter {
+    height:12px;
+    background:#1f2937;
+    border-radius:999px;
+    overflow:hidden;
+    margin-top:12px;
+  }
+  .meter span {
+    display:block;
+    height:100%;
+    background:linear-gradient(90deg, #22c55e, #f59e0b, #ef4444);
+  }
+  .tile-flow {
+    display:grid;
+    grid-template-columns:180px minmax(0, 1fr) minmax(0, 1fr);
+    gap:14px;
+    align-items:stretch;
+  }
+  .desert-tile {
+    border:1px solid #b45309;
+    border-radius:7px;
+    background:#b7792b;
+    color:#27170a;
+    overflow:hidden;
+  }
+  .tile-top {
+    padding:9px;
+    background:#e7bd70;
+    font-weight:800;
+    font-size:13px;
+  }
+  .tile-grid {
+    display:grid;
+    grid-template-columns:repeat(3, 1fr);
+    grid-template-rows:repeat(3, 44px);
+    gap:3px;
+    padding:8px;
+    background:#9b641f;
+  }
+  .tile-grid span {
+    background:#d69b4a;
+    border-radius:4px;
+  }
+  .tile-grid .rock { background:#7c5a35; }
+  .tile-grid .rock.small { background:#8a6b43; }
+  .tile-grid .track { background:#c0842f; box-shadow:inset 0 0 0 2px #8a5a1f; }
+  .action-panel,
+  .owned-panel {
+    border:1px solid #334155;
+    background:#111827;
+    border-radius:7px;
+    padding:14px;
+  }
+  .action-panel h3,
+  .owned-panel h3,
+  .compare-grid h3 {
+    margin-top:0;
+  }
+  .action-panel button {
+    display:block;
+    margin:7px 0;
+  }
+  .action-panel button.disabled {
+    border-color:#475569;
+    background:#1f2937;
+    color:#94a3b8;
+  }
+  .owned-panel li,
+  .compare-grid li {
+    margin-bottom:6px;
+  }
+  .pressure-card {
+    display:grid;
+    gap:6px;
+  }
+  .pressure-card strong { color:#bfdbfe; }
+  .pressure-card.warning { border-color:#f59e0b; }
+  .pressure-card.danger { border-color:#ef4444; }
+  .turn-event {
+    margin-top:14px;
+    border:1px solid #ef4444;
+    background:#1f1111;
+    border-radius:7px;
+    padding:14px;
+    display:grid;
+    grid-template-columns:minmax(0, 1fr) auto;
+    gap:14px;
+    align-items:center;
+  }
+  .turn-event p {
+    margin-bottom:0;
+  }
+  .event-buttons {
+    display:grid;
+    gap:8px;
+  }
+  .compare-grid > div {
+    border:1px solid #334155;
+    background:#111827;
+    border-radius:7px;
+    padding:14px;
+  }
+</style>
+
+<div class="options">
+  <div class="option" data-choice="approve-corrected-systems" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>Approve Corrected Systems</h3>
+      <p>Use tech for capability, one-click land buying, contracts as business access, and environment as pressure.</p>
+    </div>
+  </div>
+  <div class="option" data-choice="revise-environment-model" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>Revise Environment Model</h3>
+      <p>Change how taxes, bans, fines, cleanup, or environmental events affect the player.</p>
+    </div>
+  </div>
+</div>
