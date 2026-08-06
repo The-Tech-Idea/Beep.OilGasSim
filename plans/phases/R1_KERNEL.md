@@ -208,6 +208,50 @@ layering is real.**
 
 ---
 
+## 5b. Architecture suite coverage — what R1.12 mechanises, and what it cannot yet
+
+[12](../design/12_VERIFICATION.md) §2 lists 23 checks "running against every
+assembly". Two engine assemblies exist, so a third of the list has no subject.
+**Those checks are recorded here rather than written as tests that assert
+nothing** — a passing test over an empty set reads as coverage and is worse than
+an honest gap (non-negotiable 1).
+
+**Enforced now** (`OGSim.Architecture.Tests`, 18 checks): L1 cross-module
+concrete dependency · L2 static mutable state / `Instance` / optional contract
+parameter · L3 stub bodies and `NotImplementedException` · L4 every `catch`
+routes to the fault policy · layering direction · no presentation vocabulary ·
+EM1 no subscription surface · the closed effect vocabulary · N3 contract naming ·
+determinism rules D-2, D-3, D-5, D-6, D-7, D-8 · F-2's citation half.
+
+**Deferred, with the phase that gives each a subject:**
+
+| Check ([12](../design/12_VERIFICATION.md) §2) | Waiting on | Interim guard |
+|---|---|---|
+| No two modules register one state key | first two modules (R2/R3) | `ModuleComposer` check 3 + `StateRegistry`, at runtime |
+| No module assembly references another's implementation | second module assembly | project references |
+| Truth model unreachable outside `OGSim.Information` | R14 | — |
+| Flow solver branches on no material identity | R4 | — |
+| No event payload holds a formatted display string | first concrete event (R2+) | `EngineEvent` carries `LocId`, not text |
+| Objectives cannot reference the command bus | R24 | — |
+| Objective predicates cannot reach truth types | R24 | — |
+| Barrier strength derived from condition | R23 | — |
+| Every P5/P6 coupling has a leading indicator | R20 (needs a coupling registry) | — |
+| Every >2-year loop publishes a standing indicator | R20 | — |
+| Every downward loop has an entry event ≥ `W` | R20 | `IEventBus.Publish` enforces IR4 per event |
+| Every C/D event carries a cause chain | first concrete events (R2+) | `IEventBus.Publish` enforces INV12 per event |
+
+**F-2's literal scan is deferred to R5**, and that is a finding rather than a
+convenience. Implemented literally over the kernel it produced 38 violations of
+which **every one was a false positive**: enum member values, `Year * 12`,
+`vertices.Length < 3`, the shoelace `0.5`. None is a physical claim, which is
+what F-2 exists to catch. A check with that false-positive rate does not get
+tightened, it gets switched off. [SDD-000](../sdd/SDD-000_ENGINEERING_STANDARDS.md)
+§8 now scopes the rule to formula-bearing code; the citation half of F-2 —
+every `PhysicalConstants` entry carries its SDD reference and unit — is enforced
+from today.
+
+---
+
 ## 6. Risks
 
 | Risk | Mitigation |

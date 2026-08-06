@@ -6,7 +6,15 @@ namespace OGSim.Kernel;
 
 public readonly record struct ModuleName(string Value);
 
-public readonly record struct StateKey(string Value);
+/// <summary>
+/// A module's state block name. Comparable so registries can order by it:
+/// capture and restore must visit owners in a fixed sequence or two runs
+/// produce different bytes and the PV1 digest is meaningless (R1.11).
+/// </summary>
+public readonly record struct StateKey(string Value) : IComparable<StateKey>
+{
+    public int CompareTo(StateKey other) => string.CompareOrdinal(Value, other.Value);
+}
 
 /// <summary>
 /// Where in the tick a module works, and in what position within that stage.
