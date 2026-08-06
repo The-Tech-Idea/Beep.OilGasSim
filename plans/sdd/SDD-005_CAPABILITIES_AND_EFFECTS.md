@@ -64,21 +64,49 @@ Every gated thing — operation template, equipment tier, well command — decla
 a `Requirements` block in content, and **exactly one** validator evaluates it:
 
 ```csharp
+public sealed record EnvelopeCheck(EnvelopeKind Kind, double RequiredValue);
+
 public sealed record Requirements(
     IReadOnlyList<TechnologyId> Tech,            // all must be held or rented
     DetectClass? MinDetectClass,                 // surveys: spawn threshold (06 §2.3)
     IReadOnlyList<EnvelopeCheck> Envelopes);     // e.g. rig depth >= well TD (§4)
 
-public static class Gating
+// MissingItem names the SPECIFIC tech, tier or envelope — the domain reason of
+// R17 §2.6b, renderable straight to the player rather than "requirements not met".
+public abstract record MissingItem;
+public sealed record MissingTechnology(TechnologyId Tech) : MissingItem;
+public sealed record MissingDetectTier(DetectClass Required, DetectClass Held) : MissingItem;
+public sealed record EnvelopeExceeded(EnvelopeKind Kind, double Required, double Effective) : MissingItem;
+
+// ALL misses are reported, never just the first (the R3-V2 principle).
+public abstract record GateResult;
+public sealed record GatePass : GateResult;
+public sealed record GateFail(IReadOnlyList<MissingItem> Missing) : GateResult;
+
+public interface IGatingValidator
 {
-    public static GateResult Check(in Requirements req, ICapabilitySet caps,
-                                   IReadOnlyList<ServiceRental> rentals,
-                                   in EnvelopeContext ctx);
-    // GateResult = Pass | Fail(IReadOnlyList<MissingItem>)
-    // MissingItem names the SPECIFIC tech/tier/envelope — the domain reason of
-    // R17 §2.6b. ALL misses are reported, not the first (the R3-V2 principle).
+    GateResult Check(
+        Requirements requirements,
+        ICapabilitySet capabilities,
+        IReadOnlyList<ServiceRental> rentals,
+        IEffectState effects);                   // §4.2 — envelopes compare EFFECTIVE values
 }
 ```
+
+> **Contract pass 10 — two corrections here, one of them architectural.**
+>
+> - **`public static class Gating` → `interface IGatingValidator`.** A static
+>   class cannot be supplied at construction, so nothing could substitute it and
+>   nothing could see that a module depended on it — law L1 says a collaborator
+>   is an interface handed over, and L2 says omitting one must not compile. A
+>   static gate satisfies neither. It would also have put the "exactly one
+>   validator" rule beyond the reach of the architecture test that now checks it.
+> - **`in EnvelopeContext ctx` → `IEffectState effects`.** `EnvelopeContext`
+>   existed in no SDD and no code; the pass-2 amendment directly above this block
+>   already said `IEffectState`, and the block was never updated to match — the
+>   same amendment-versus-block drift found in SDD-002 §6 and SDD-004 §5.
+> - `EnvelopeCheck`, the `MissingItem` family and the `GateResult` family were
+>   all referenced by this signature and declared nowhere.
 
 **Two timing rules, both architectural:**
 1. Gating runs at **command validation / operation scheduling only** — never at
@@ -93,14 +121,40 @@ public static class Gating
 The shared vocabulary (07 §1 = 13 §2.1), as data:
 
 ```csharp
+public readonly record struct ModelSlot(string Name);      // a rebindable model slot (03 §3.2)
+public readonly record struct ParameterKey(string Name);
+
+public enum EnvelopeKind
+{
+    MaxDrillingDepth, MaxWaterDepth, MaxWaveHeight, MaxAmbientTemperature,
+    MaxH2SFraction, MaxCompressionRatio, ArcticOperability, MaxLoadBearing
+}
+
+// Extension raises the base; Restriction caps the result (§4.1).
+public enum EnvelopeContributionKind { Extension, Restriction }
+
 public abstract record Effect;
 public sealed record UnlockOption(ContentId What) : Effect;          // catalogue entry, activity template, drive mechanism…
-public sealed record MoveEnvelope(EnvelopeKind Kind, double Value) : Effect;
+public sealed record MoveEnvelope(
+    EnvelopeKind Kind,
+    EnvelopeContributionKind Contribution,
+    double Value) : Effect;
 public sealed record SetModelSelection(ModelSlot Slot, ContentId Plugin) : Effect;   // swap the registered implementation
 public sealed record SetModelParameter(ModelSlot Slot, ParameterKey Key, double Value) : Effect;
 // THERE IS NO MULTIPLIER RECORD. Architecture test: the Effect hierarchy is
 // sealed to these four (R17-V13, 13 §2.1).
 ```
+
+> **Contract pass 10 — this block contradicted §4.1 below it.** `MoveEnvelope`
+> was declared as `(EnvelopeKind, double)`, with no contribution kind. But §4.1
+> settles the combination rule as
+> `Min( Max(base, Extensions…), Restrictions… )`, which is only computable if
+> each contribution says *which* it is. As declared, a winterisation extension
+> and an ice-season restriction were the same shape, and the combinator had
+> nothing to dispatch on — the rule §4.1 calls "the rule that had to be pinned"
+> could not be implemented from the type that carries it. `EnvelopeKind`,
+> `EnvelopeContributionKind`, `ModelSlot` and `ParameterKey` were likewise used
+> throughout §4 and declared nowhere.
 
 ### 4.0b Slots and scoped effects (07 §4b.3b)
 
@@ -165,9 +219,27 @@ contradiction.
 - Technology effects: applied when acquisition completes (a stage-11
   state change), taking effect **next tick** — technology never creates a
   segment boundary (R17 §2.7).
-- Both land in one `EffectState` the models read; provenance kept per
+- Both land in one effect state the models read; provenance kept per
   contribution so the audit can answer *"why is my max depth 4,200 m?"* with
   the list.
+
+```csharp
+// The combined state, in the Kernel so every module can read it without
+// depending on the technology or environment modules that write it.
+// DERIVED — never saved (SDD-013 §4): it is rebuilt at stage 2 from the
+// profile and weather, and on acquisition for technology.
+public interface IEffectState
+{
+    double EffectiveEnvelope(EnvelopeKind kind);        // §4.1's combination, already applied
+    ContentId SelectedPlugin(ModelSlot slot);
+    double Parameter(ModelSlot slot, ParameterKey key);
+}
+```
+
+**The three readers are the whole surface**, and that is what keeps models
+capability-blind (§3 rule 2): a model asks what its effective envelope, plugin
+or parameter *is*, and has no way to ask who contributed it or whether the
+company owns a technology.
 
 ## 5. Detectability consumption
 
