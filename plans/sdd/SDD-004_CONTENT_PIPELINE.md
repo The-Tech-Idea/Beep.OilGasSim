@@ -211,6 +211,23 @@ in diagnostics.
 > reporting everything it can honestly see — rather than one round reporting a
 > true error and five false ones.
 
+> **R3.7 — `property-kind` is a BOOTSTRAP kind, loaded in its own pass first.**
+> Stage 3 binds a quantity string against the dimension its property kind
+> declares (`"850 kg/m3"` is a density because `density` says so). But stage 3
+> runs before stage 4, so it cannot resolve a reference to reach that dimension —
+> the ordering is not an oversight, it is what stops unit binding depending on
+> arbitrary other content.
+>
+> Property kinds are the vocabulary everything else is *written in*, which makes
+> them schema rather than data: loading schema before data is the normal shape,
+> and property kinds have no references of their own by construction, so the
+> bootstrap pass can never itself need a second one.
+>
+> Concretely: load `property-kind` alone, build the id → dimension map, then load
+> every other kind with that map in hand. Two `LoadAll` calls, and the loader
+> stays type-agnostic — it is the *caller* that knows property kinds come first,
+> not the loader.
+
 > **Pass-3 amendment (finding 69):** the surface of this section now exists in
 > `OGSim.Contracts/ContentContracts.cs`: `ContentDefinition`, `GatedDefinition`,
 > `Era`, `ICatalog<TDef>`, `ICatalogSet.Of<TDef>()`, `IContentSource`

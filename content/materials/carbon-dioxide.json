@@ -1,0 +1,10 @@
+{
+  "kind": "material",
+  "id": "carbon-dioxide",
+  "phase": "Gas",
+  "sold": false,
+  "properties": {
+    "density": "1.87 kg/m3",
+    "viscosity": "0.015 cP"
+  }
+}

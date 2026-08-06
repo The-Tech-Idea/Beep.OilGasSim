@@ -1,0 +1,7 @@
+{
+  "kind": "rock-type",
+  "id": "carbonate",
+  "typicalPorosity": "14 pct",
+  "typicalPermeability": "40 mD",
+  "netToGross": "65 pct"
+}

@@ -235,8 +235,11 @@ public class SourceRules
                 // accepts no culture to get wrong. Exempted by RECEIVER rather
                 // than by an allowlist of call sites, so the exemption cannot
                 // drift into covering a real numeric parse.
+                // Enum.TryParse is the same case: enum member names are ordinal
+                // identifiers, not culture-sensitive text, and the overload
+                // accepts no culture to get wrong.
                 if (access.Expression.ToString() is "JsonDocument" or "JsonSerializer"
-                    or "JsonNode" or "JsonElement") continue;
+                    or "JsonNode" or "JsonElement" or "Enum") continue;
 
                 string arguments = invocation.ArgumentList.ToString();
                 bool hasFormatOrParse =

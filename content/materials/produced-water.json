@@ -1,0 +1,10 @@
+{
+  "kind": "material",
+  "id": "produced-water",
+  "phase": "Aqueous",
+  "sold": false,
+  "properties": {
+    "density": "1045 kg/m3",
+    "viscosity": "0.5 cP"
+  }
+}

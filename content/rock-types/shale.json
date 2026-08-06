@@ -1,0 +1,7 @@
+{
+  "kind": "rock-type",
+  "id": "shale",
+  "typicalPorosity": "6 pct",
+  "typicalPermeability": "0.002 mD",
+  "netToGross": "40 pct"
+}

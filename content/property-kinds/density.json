@@ -1,0 +1,8 @@
+{
+  "kind": "property-kind",
+  "id": "density",
+  "dimension": "Density",
+  "space": "Linear",
+  "minimumValid": 0.05,
+  "maximumValid": 2500.0
+}

@@ -1,0 +1,11 @@
+{
+  "kind": "material",
+  "id": "crude-oil",
+  "phase": "Liquid",
+  "sold": true,
+  "properties": {
+    "density": "850 kg/m3",
+    "viscosity": "3.2 cP",
+    "heating-value": "42.7 MJ/kg"
+  }
+}
