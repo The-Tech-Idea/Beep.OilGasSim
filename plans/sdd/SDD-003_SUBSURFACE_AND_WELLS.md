@@ -25,6 +25,34 @@ display conversion only. MX-class tests verify each SI form against worked
 examples computed independently in field units, which catches a wrong constant
 immediately.
 
+> **R2.7 amendment — the rule holds for DIMENSIONAL formulas and cannot hold for
+> EMPIRICAL correlations.** The two are different things and this section
+> previously treated them as one.
+>
+> Darcy's law, the hydrostatic head and Darcy-Weisbach are *dimensional*: their
+> constants are unit conversions, so an SI form exists, is exact, and is the
+> honest thing to implement. 7758 genuinely does not belong in engine code.
+>
+> Standing, Vazquez-Beggs, Beggs-Robinson, Lee et al. and Dranchuk-Abou-Kassem
+> are *empirical*: their constants are **regression coefficients fitted to
+> field-unit data** (18.2, 0.0125, 1.2048, 3.0324…). They are not conversions and
+> there is no SI form of them. Algebraically absorbing the unit conversions into
+> new coefficients would produce numbers that appear in no paper, cannot be
+> checked against the source, and would silently become unverifiable the moment
+> anyone made an arithmetic slip doing it — which is precisely the failure rule
+> F-3 exists to prevent.
+>
+> **So §4's correlations evaluate in field units, at one declared boundary.**
+> Inputs convert SI → field on entry, the published correlation is transcribed
+> verbatim so a reader can check it line by line against the paper, and the
+> result converts field → SI on exit. The conversion factors live in the
+> quantity types (SDD-001 §1) where they already are. The engine's *interfaces*
+> remain SI throughout; only the inside of a correlation body is field.
+>
+> This is a narrowing of the rule, not an exception to it: a field-unit constant
+> may appear **only** inside a function implementing a named published
+> correlation, and only where the paper's own constant is being transcribed.
+
 ## 3. The compartment
 
 ```csharp
@@ -175,8 +203,96 @@ public interface IFluidPropertyModel
 
 Standard implementation: the correlation set of [05](../design/05_SIMULATION_MODELS.md)
 §2, each function carrying its published validity range. **Every correlation is
-implemented against `DetMath` only** and pinned by an MX test to reference
-values computed from the published papers.
+implemented against `DetMath` only.**
+
+### 4.1 The correlation forms, transcribed (R2.7)
+
+[05](../design/05_SIMULATION_MODELS.md) §2 names these five by author and states
+none of their formulas; F-3 requires a formula cite the SDD section stating its
+form, so this is that section. **Field units inside, per §2's amendment:**
+p psia · T °F (°R where noted) · Rs scf/STB · μ cp · ρ g/cm³.
+
+```text
+STANDING (1947) — solution GOR and bubble point
+  Rs(p) = γg · [ (p/18.2 + 1.4) · 10^(0.0125·API − 0.00091·T) ]^1.2048
+  Pb    = 18.2 · [ (Rsb/γg)^0.83 · 10^(0.00091·T − 0.0125·API) − 1.4 ]
+  Above Pb: Rs is CONSTANT — the undersaturated plateau (05 §2's table) — and
+  the plateau value is Rs(Pb) BY THE FORWARD FORM, not the declared Rsb.
+  Validity: 130–7000 psia, 100–258 °F, 16.5–63.8 °API, γg 0.59–0.95.
+
+  WHY THE PLATEAU IS NOT Rsb (R2.7, found by the continuity test). Standing's
+  two forms are only APPROXIMATE inverses: the Pb form's exponent 0.83 is a
+  rounding of 1/1.2048 = 0.8299468. Round-tripping Rsb → Pb → Rs lands ~1e-4
+  low, so anchoring the plateau to the declared Rsb would put a step
+  discontinuity in dissolved gas exactly at the bubble point — crossing Pb would
+  create or destroy solution gas, in the one place the design most wants to be
+  trustworthy (05 §2's "bubble-point cliff" is a steep gradient, never a jump).
+  Continuity is a physical requirement; agreeing with the declared input to five
+  digits is not. The deviation is far inside the correlation's own scatter.
+
+VAZQUEZ-BEGGS (1980) — oil formation volume factor, saturated
+  Bo = 1 + C1·Rs + (T − 60)·(API/γgs)·(C2 + C3·Rs)
+    API ≤ 30:  C1 = 4.677e-4   C2 = 1.751e-5   C3 = −1.811e-8
+    API >  30: C1 = 4.670e-4   C2 = 1.100e-5   C3 =  1.337e-9
+  γgs is γg corrected to 100 psig separator conditions; where a fluid system
+  declares no separator, γgs = γg (content flag, pinned default).
+
+UNDERSATURATED (above Pb) — isothermal compressibility
+  co = (−1433 + 5·Rsb + 17.2·T − 1180·γgs + 12.61·API) / (1e5 · p)
+  Bo(p) = Bob · exp( co · (Pb − p) )        // p > Pb ⇒ Bo FALLS below Bob
+  This is why Bo PEAKS at Pb (05 §2): it rises with Rs below, shrinks by
+  compression above.
+
+BEGGS-ROBINSON (1975) — oil viscosity
+  dead:       z = 3.0324 − 0.02023·API ; y = 10^z ; x = y·T^(−1.163)
+              μod = 10^x − 1
+  saturated:  A = 10.715·(Rs + 100)^(−0.515) ; B = 5.44·(Rs + 150)^(−0.338)
+              μob = A · μod^B
+  undersat.:  m = 2.6·p^1.187 · exp(−11.513 − 8.98e-5·p)
+              μo = μob · (p/Pb)^m
+  Validity: 0–2070 psig, 70–295 °F, 16–58 °API. The RISE below Pb (05 §2) is
+  not special-cased: it falls out of μob climbing as Rs drops.
+
+LEE-GONZALEZ-EAKIN (1966) — gas viscosity        [T in °R, M lb/lbmol]
+  K = (9.4 + 0.02·M)·T^1.5 / (209 + 19·M + T)
+  X = 3.5 + 986/T + 0.01·M
+  Y = 2.4 − 0.2·X
+  μg = 1e-4 · K · exp( X · ρg^Y )
+
+DRANCHUK-ABOU-KASSEM (1975) — Z factor            [T in °R]
+  Standing pseudo-criticals:  Tpc = 168 + 325·γg − 12.5·γg²
+                              Ppc = 677 + 15.0·γg − 37.5·γg²
+  Tpr = T/Tpc ; Ppr = p/Ppc ; ρr = 0.27·Ppr / (Z·Tpr)
+  Z = 1 + (A1 + A2/Tpr + A3/Tpr³ + A4/Tpr⁴ + A5/Tpr⁵)·ρr
+        + (A6 + A7/Tpr + A8/Tpr²)·ρr²
+        − A9·(A7/Tpr + A8/Tpr²)·ρr⁵
+        + A10·(1 + A11·ρr²)·(ρr²/Tpr³)·exp(−A11·ρr²)
+  A1..A11 = 0.3265, −1.0700, −0.5339, 0.01569, −0.05165, 0.5475,
+            −0.7361, 0.1844, 0.1056, 0.6134, 0.7210
+  Implicit in Z. Solved by BISECTION on Z ∈ [0.2, 2.0], 60 iterations,
+  tolerance 1e-10 — bisection not Newton, for the same reason §3.1 gives:
+  it cannot diverge and needs no derivative. Validity: 1 ≤ Tpr ≤ 3,
+  0.2 ≤ Ppr ≤ 30.
+
+Bg — from Z, exactly, no correlation:
+  Bg = (Z · T · p_sc) / (p · T_sc)          [rm³/sm³ once both p in the same unit]
+  p_sc = 101 325 Pa, T_sc = 288.706 K (60 °F) — standard conditions, SDD-004.
+```
+
+**What the MX tests can honestly pin, and what they cannot.** F-3 asks for
+pinning against "reference values computed from the published papers". Values
+recomputed from the same formula this file transcribes are **not independent**
+and pinning to them would only test that arithmetic is repeatable. Recorded
+plainly so no later reader mistakes the coverage for verification:
+
+| Pinned by | Which properties |
+|---|---|
+| **Physical invariants** — genuinely independent of the formulas | `Bo ≥ 1`; `Bo` peaks at `Pb`; `Rs` flat above `Pb`; `μo` rises below `Pb`; `Z → 1` as `p → 0`; `Bg` falls monotonically with pressure |
+| **Continuity** at the `Pb` boundary | every property, both branches, to 1e-9 relative |
+| **Round-trip** | `Pb(Rs(Pb)) = Pb` — Standing's two forms are algebraic inverses |
+| **Published worked examples** | **deferred to R5 model tests** (open item S003-4): a worked example must be transcribed from the paper by someone holding it, not reconstructed |
+
+
 
 ### 4.1 The two subsurface plugin slots
 
@@ -416,3 +532,4 @@ CAL2/CAL4/CAL6 bands run on this stack end-to-end.
 | S003-1 | Two-pass ρ_mix vs full pressure-traverse integration for deep gassy wells — revisit if CAL6 bands fail on gas condensate | R6 model tests |
 | S003-2 | Coning constants (Meyer-Garder simplification) — content defaults need calibration against CAL3's S-curve | R10 |
 | S003-3 | Drainage-area assignment when several completions share a compartment (equal split vs kh-weighted Voronoi) | R6.10 review — recommend kh-weighted equal-pressure (tank ⇒ shared Pr makes this second-order) |
+| S003-4 | **§4.1's correlations are pinned by invariants, continuity and round-trip — not yet against published worked examples.** Each of the five papers prints at least one; transcribing them requires the paper in hand, and a value reconstructed from the same formula the code implements verifies nothing. Until then a transcription error that preserves monotonicity would survive | R5 model tests (MX-class), before any CAL band is trusted |

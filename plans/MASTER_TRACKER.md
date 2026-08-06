@@ -11,9 +11,9 @@ next.** Updated at the close of every phase.
 
 | | |
 |---|---|
-| **Phase** | R0 ✅ closed · R1-C (contract layer) ✅ complete · R1 ✅ tasks complete (gate open on deferred verification) · **R2 🟦 in progress — 7 of 8; only R2.7 (black-oil model) remains** |
+| **Phase** | R0 ✅ closed · R1-C (contract layer) ✅ complete · R1 ✅ tasks complete (gate open on deferred verification) · **R2 ✅ all 8 tasks complete** |
 | **Design docs** | 24 design + 1 research + 25 phase docs, 17 catalogue sheets ([C16 terrain](catalog/C16_TERRAIN_CLASSES.md) newest) + tech tree, 18 SDDs (000–017). Coherence log: **81 findings**, 61–81 from the code passes. |
-| **Code status** | Contract layer complete and **the kernel is implemented behind it**: quantities + `DetMath` + spatial, entity registry, clock, PCG64 streams, log, audit trail, fault policies, event bus, command bus, module composition, state registration, segmentation and the 14-stage tick pipeline. 0 warnings, 0 errors, **190/190 tests** (15 contract + 156 kernel + 19 architecture). Every implemented member traces to a pinned SDD section (F-1). |
+| **Code status** | Contract layer complete and **the kernel is implemented behind it**: quantities + `DetMath` + spatial, entity registry, clock, PCG64 streams, log, audit trail, fault policies, event bus, command bus, module composition, state registration, segmentation and the 14-stage tick pipeline. 0 warnings, 0 errors, **203/203 tests** (28 contract + 156 kernel + 19 architecture). Every implemented member traces to a pinned SDD section (F-1). |
 | **Repository** | `The-Tech-Idea/Beep.OilGasSim`, branch `master`. The OGSim tree was copied in from the workspace it was authored in and the prior occupant of this repo removed in the same commit; work lands directly on `master`, one task per commit. |
 | **Next** | **R2 — materials, properties, streams**, once R1’s gate closes. R1’s tasks are all done; four verification items are not, and none can be closed by writing kernel code: **R1-V2** (the compile-failure corpus needs a Roslyn negative-compilation harness), **R1-V6** (cross-platform byte identity needs the CI matrix of [SDD-000](sdd/SDD-000_ENGINEERING_STANDARDS.md) §6), and **R1-V14/V20/V22** (11 architecture checks whose subject assemblies do not exist — [R1 §5b](phases/R1_KERNEL.md)). Laws L1–L5 and determinism rules D-2…D-8 are now **mechanically enforced** on every build. Commit style `R<n>.<m>: <what>` |
 
@@ -171,7 +171,7 @@ design is wrong, that is discovered in Arc I and not in Arc III.
 | R2.4 | `IMaterial`, `IMaterialCatalog` — ordinals assigned from the id sort and nowhere else, so two runs of the same content index `Composition` identically | ✅ |
 | R2.5 | `MaterialStream` — composition, P, T, provenance; **no cached phase split** (elements ask the fluid model at (composition, P, T)); `Split` preserves conditions and provenance | ✅ |
 | R2.6 | Stream algebra — `Composition` Plus/Scaled/Split, `Allocation.Blend`; split-then-mix round-trips **to the bit** (R2-V3), randomised sequences conserve mass (R2-V4) | ✅ |
-| R2.7 | Black-oil property model (`IFluidPropertyModel`) | ⬜ |
+| R2.7 | Black-oil property model (`IFluidPropertyModel`) — Standing, Vazquez-Beggs, Beggs-Robinson, Lee-Gonzalez-Eakin, Dranchuk-Abou-Kassem, all forms now pinned in [SDD-003 §4.1](sdd/SDD-003_SUBSURFACE_AND_WELLS.md). **Field units inside one declared boundary** — §2 amended: empirical correlations have no SI form, their constants are fitted coefficients. Pinned by invariants, continuity and round-trip; **published worked examples deferred to R5 (S003-4)** | ✅ |
 | R2.8 | Volume-condition types: rb / stb / scf, non-interchangeable — delivered at R1.1 with the rate family; gas bridges to `StandardGasVolume`, never stock-tank | ✅ |
 
 ### Phase R3 — Content pipeline ⬜
