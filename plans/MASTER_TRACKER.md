@@ -141,7 +141,7 @@ design is wrong, that is discovered in Arc I and not in Arc III.
 | R1.1 | Dimensions, units, `IQuantity`; conversion; nonlinear scales — **plus `DetMath`** (§1.3), the `Area` dimension, the volumetric rate family, the §1.4 spatial algorithms and the §11 fault carriers. 37 kernel tests | ✅ |
 | R1.2 | `IEntityId<T>`, `IEntityRegistry`; resolution faults — **F-4: the interface had no `Register`**, so `Resolve` could never return and the registry was unimplementable as declared. Ids begin at 1; registration is write-once | ✅ |
 | R1.3 | `ISimulationClock` — read-only interface, `Advance()` on the concrete type only; 30/360 `AddMonths`/`MonthsUntil`; `GameDate` month validated | ✅ |
-| R1.4 | `IRandomSource` with independent per-subsystem streams | ⬜ |
+| R1.4 | `IRandomSource` with independent per-subsystem streams — PCG64 XSL-RR, eight streams seeded by **name** not ordinal, closed-form `Seek`, Marsaglia polar `NextNormal`, rejection-sampled `NextInt`. R1-V5 proven byte-identical | ✅ |
 | R1.5 | `ILog` — structured, levelled, nested correlation scopes | ⬜ |
 | R1.6 | `IAuditTrail` — append-only, queryable, bounded | ⬜ |
 | R1.7 | `IFaultPolicy` — classification, strict and resilient implementations | ⬜ |
