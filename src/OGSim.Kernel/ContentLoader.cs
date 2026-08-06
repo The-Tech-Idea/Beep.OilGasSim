@@ -234,12 +234,18 @@ public sealed class ContentLoader
         foreach (KeyValuePair<string, LoadedEntry> pair in entries)
         {
             LoadedEntry entry = pair.Value;
-            if (entry.Definition is not GatedDefinition gated) continue;
-            if (gated.Fits != SlotKind.ModelSlot) continue;
+            IContentKind kind = _kinds[entry.Kind];
 
-            if (!_plugins.CanBind(gated.Id, typeof(object)))
-                failures.Add(new LoadFailure(entry.SourceName, entry.File, "$.id",
-                    LoadStage.Binding, $"no plugin registered for model slot '{gated.Id}'"));
+            IReadOnlyList<PluginBinding> bindings = kind.PluginsOf(entry.Definition);
+            for (int b = 0; b < bindings.Count; b++)
+            {
+                PluginBinding binding = bindings[b];
+                if (_plugins.CanBind(binding.Plugin, binding.Contract)) continue;
+
+                failures.Add(new LoadFailure(entry.SourceName, entry.File, binding.JsonPath,
+                    LoadStage.Binding,
+                    $"no plugin '{binding.Plugin}' registered for {binding.Contract.Name}"));
+            }
         }
     }
 

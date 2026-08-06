@@ -55,6 +55,31 @@ public class ContentLoaderTests
             }
             return problems;
         }
+
+        public IReadOnlyList<PluginBinding> PluginsOf(ContentDefinition definition) => [];
+    }
+
+    /// <summary>A kind that names a model plugin, for the stage-6 tests.</summary>
+    private sealed record DriveDefinition(ContentId Id, ContentId Plugin) : ContentDefinition(Id);
+
+    private interface IFakeDriveModel;
+
+    private sealed class DriveKind : IContentKind
+    {
+        public string Name => "drive-mechanism";
+
+        public ContentDefinition Read(JsonElement element) =>
+            new DriveDefinition(
+                new ContentId(element.GetProperty("id").GetString()!),
+                new ContentId(element.GetProperty("model").GetString()!));
+
+        public IReadOnlyList<ContentReference> ReferencesOf(ContentDefinition d) => [];
+        public IReadOnlyList<string> ConsistencyProblems(ContentDefinition d) => [];
+
+        public IReadOnlyList<PluginBinding> PluginsOf(ContentDefinition definition) =>
+            definition is DriveDefinition drive
+                ? [new PluginBinding(drive.Plugin, typeof(IFakeDriveModel), "$.model")]
+                : [];
     }
 
     private sealed record FluidSystemDefinition(ContentId Id) : ContentDefinition(Id);
@@ -66,6 +91,7 @@ public class ContentLoaderTests
             new FluidSystemDefinition(new ContentId(element.GetProperty("id").GetString()!));
         public IReadOnlyList<ContentReference> ReferencesOf(ContentDefinition d) => [];
         public IReadOnlyList<string> ConsistencyProblems(ContentDefinition d) => [];
+        public IReadOnlyList<PluginBinding> PluginsOf(ContentDefinition d) => [];
     }
 
     private sealed class Source(string name, int order, params (string Path, string Json)[] files)
@@ -297,4 +323,76 @@ public class ContentLoaderTests
         var loaded = Assert.IsType<ContentLoaded>(Loader().LoadAll([new Source("base", 0)]));
         Assert.Empty(loaded.Catalogues.Of<RockTypeDefinition>().All);
     }
+
+    // ------------------------------------------------------------- R3.5 stage 6
+
+    private const string DriveJson =
+        """{ "kind": "drive-mechanism", "id": "waterflood", "model": "tank-mb" }""";
+
+    private static ContentLoader WithDrives(PluginRegistry plugins) =>
+        new([new RockTypeKind(), new FluidSystemKind(), new DriveKind()], plugins);
+
+    [Fact] // Non-negotiable 11: new behaviour is a plugin PLUS the JSON naming it
+    public void R3V12_a_named_plugin_binds_when_a_module_registered_it()
+    {
+        var plugins = new PluginRegistry();
+        plugins.Register<IFakeDriveModel>(new ContentId("tank-mb"), () => new FakeDrive());
+
+        Assert.IsType<ContentLoaded>(
+            WithDrives(plugins).LoadAll([new Source("base", 0, ("d.json", DriveJson))]));
+    }
+
+    [Fact] // An unbound name fails at LOAD, not on the tick that first needed it
+    public void R3V12_an_unregistered_plugin_name_fails_at_stage_six()
+    {
+        var failures = Assert.IsType<ContentFailures>(
+            WithDrives(new PluginRegistry())
+                .LoadAll([new Source("base", 0, ("d.json", DriveJson))])).Failures;
+
+        LoadFailure failure = Assert.Single(failures);
+        Assert.Equal(LoadStage.Binding, failure.Stage);
+        Assert.Equal("$.model", failure.JsonPath);
+        Assert.Contains("tank-mb", failure.Message);
+    }
+
+    [Fact] // The CONTRACT is part of the binding, which is why the name alone is not enough
+    public void R3V12_a_plugin_registered_for_another_contract_does_not_satisfy_the_binding()
+    {
+        var plugins = new PluginRegistry();
+        // Right name, wrong contract — a price model where a drive belongs.
+        plugins.Register<IPriceLike>(new ContentId("tank-mb"), () => new FakePrice());
+
+        var failures = Assert.IsType<ContentFailures>(
+            WithDrives(plugins).LoadAll([new Source("base", 0, ("d.json", DriveJson))])).Failures;
+
+        Assert.Equal(LoadStage.Binding, Assert.Single(failures).Stage);
+    }
+
+    [Fact] // One name may serve two contracts; two modules may not claim one pair
+    public void L5_a_plugin_name_is_unique_per_contract()
+    {
+        var plugins = new PluginRegistry();
+        plugins.Register<IFakeDriveModel>(new ContentId("simple"), () => new FakeDrive());
+
+        // Same name, different contract — legitimate.
+        plugins.Register<IPriceLike>(new ContentId("simple"), () => new FakePrice());
+
+        // Same name, same contract — refused.
+        Assert.Throws<InvariantFault>(
+            () => plugins.Register<IFakeDriveModel>(new ContentId("simple"), () => new FakeDrive()));
+
+        Assert.True(plugins.CanBind(new ContentId("simple"), typeof(IFakeDriveModel)));
+        Assert.IsType<FakeDrive>(plugins.Bind<IFakeDriveModel>(new ContentId("simple")));
+    }
+
+    [Fact] // Binding an unregistered plugin is an invariant fault, never a null
+    public void R3V12_binding_past_stage_six_is_an_invariant_fault()
+    {
+        Assert.Throws<InvariantFault>(
+            () => new PluginRegistry().Bind<IFakeDriveModel>(new ContentId("nope")));
+    }
+
+    private interface IPriceLike;
+    private sealed class FakeDrive : IFakeDriveModel;
+    private sealed class FakePrice : IPriceLike;
 }

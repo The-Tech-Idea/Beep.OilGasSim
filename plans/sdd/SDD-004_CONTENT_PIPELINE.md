@@ -131,6 +131,12 @@ public sealed record ContentFailures(IReadOnlyList<LoadFailure> Failures) : Cont
 // rather than a promise. All 27 kinds of design 10 §2 arrive this way.
 public readonly record struct ContentReference(string Kind, ContentId Id, string JsonPath);
 
+// Stage 6. The CONTRACT is part of the binding because a plugin name alone
+// cannot be checked usefully: "is anything registered under this name" would
+// pass a price model named where a separation model belongs, and only fail at
+// the tick that first used it — with a saved game already built on it.
+public readonly record struct PluginBinding(ContentId Plugin, Type Contract, string JsonPath);
+
 public interface IContentKind
 {
     string Name { get; }                                    // the JSON "kind" value
@@ -145,6 +151,11 @@ public interface IContentKind
     // Stage 5: per-kind rules — ranges, monotone curves, DAG membership.
     // Returns EVERY problem, not the first.
     IReadOnlyList<string> ConsistencyProblems(ContentDefinition definition);
+
+    // Stage 6: which model plugins this entry names, and against what contract.
+    // The KIND reports these because only it knows its own datasheet — the
+    // loader must not learn what a lift-method's plugin field is called.
+    IReadOnlyList<PluginBinding> PluginsOf(ContentDefinition definition);
 }
 
 public sealed class ContentLoader   // one public entry point

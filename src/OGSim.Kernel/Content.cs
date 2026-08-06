@@ -70,7 +70,23 @@ public interface IContentKind
 
     /// <summary>Stage 5: EVERY problem, never just the first.</summary>
     IReadOnlyList<string> ConsistencyProblems(ContentDefinition definition);
+
+    /// <summary>
+    /// Stage 6: which model plugins this entry names, and against what contract.
+    /// The KIND reports these because only it knows its own datasheet — the
+    /// loader must never learn what a lift-method's plugin field is called.
+    /// </summary>
+    IReadOnlyList<PluginBinding> PluginsOf(ContentDefinition definition);
 }
+
+/// <summary>
+/// A model-plugin name and the contract it must satisfy (SDD-004 §5 stage 6).
+/// The contract is part of the binding because a name alone cannot be checked
+/// usefully: "is anything registered under this name" would accept a price model
+/// named where a separation model belongs, and fail only on the tick that first
+/// used it — with a saved game already built on top of it.
+/// </summary>
+public readonly record struct PluginBinding(ContentId Plugin, Type Contract, string JsonPath);
 
 /// <summary>
 /// Base content is order 0; mods declare order. Two sources overriding one

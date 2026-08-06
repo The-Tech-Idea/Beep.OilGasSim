@@ -11,9 +11,9 @@ next.** Updated at the close of every phase.
 
 | | |
 |---|---|
-| **Phase** | R0 ✅ closed · R1-C (contract layer) ✅ complete · R1 ✅ tasks complete (gate open on deferred verification) · R2 ✅ complete · **R3 🟦 in progress — R3.1–R3.4, R3.6 done** |
+| **Phase** | R0 ✅ closed · R1-C (contract layer) ✅ complete · R1 ✅ tasks complete (gate open on deferred verification) · R2 ✅ complete · **R3 🟦 in progress — 6 of 7; only R3.7 (shipped content) remains** |
 | **Design docs** | 24 design + 1 research + 25 phase docs, 17 catalogue sheets ([C16 terrain](catalog/C16_TERRAIN_CLASSES.md) newest) + tech tree, 18 SDDs (000–017). Coherence log: **81 findings**, 61–81 from the code passes. |
-| **Code status** | Contract layer complete and **the kernel is implemented behind it**: quantities + `DetMath` + spatial, entity registry, clock, PCG64 streams, log, audit trail, fault policies, event bus, command bus, module composition, state registration, segmentation and the 14-stage tick pipeline. 0 warnings, 0 errors, **225/225 tests** (28 contract + 178 kernel + 19 architecture). Every implemented member traces to a pinned SDD section (F-1). |
+| **Code status** | Contract layer complete and **the kernel is implemented behind it**: quantities + `DetMath` + spatial, entity registry, clock, PCG64 streams, log, audit trail, fault policies, event bus, command bus, module composition, state registration, segmentation and the 14-stage tick pipeline. 0 warnings, 0 errors, **230/230 tests** (28 contract + 183 kernel + 19 architecture). Every implemented member traces to a pinned SDD section (F-1). |
 | **Repository** | `The-Tech-Idea/Beep.OilGasSim`, branch `master`. The OGSim tree was copied in from the workspace it was authored in and the prior occupant of this repo removed in the same commit; work lands directly on `master`, one task per commit. |
 | **Next** | **R2 — materials, properties, streams**, once R1’s gate closes. R1’s tasks are all done; four verification items are not, and none can be closed by writing kernel code: **R1-V2** (the compile-failure corpus needs a Roslyn negative-compilation harness), **R1-V6** (cross-platform byte identity needs the CI matrix of [SDD-000](sdd/SDD-000_ENGINEERING_STANDARDS.md) §6), and **R1-V14/V20/V22** (11 architecture checks whose subject assemblies do not exist — [R1 §5b](phases/R1_KERNEL.md)). Laws L1–L5 and determinism rules D-2…D-8 are now **mechanically enforced** on every build. Commit style `R<n>.<m>: <what>` |
 
@@ -183,7 +183,7 @@ design is wrong, that is discovered in Arc I and not in Arc III.
 | R3.2 | Six-stage validation — stages 1–3 per-file and unconditional, 4–6 cross-file and gated on a complete index (**a parse failure would otherwise cascade into spurious dangling references**) | ✅ |
 | R3.3 | Load report — every failure in the batch, each naming source, file, JSON path and stage; catalogues on success or failures otherwise, **never both** | ✅ |
 | R3.4 | `ICatalog<T>` and typed indices — catalogues keyed by the definition’s runtime type, id-sorted so ordinals are save-stable | ✅ |
-| R3.5 | Model plugin binding by name | ⬜ |
+| R3.5 | Model plugin binding by name — `PluginRegistry` keyed by **(name, contract)**, so a price model named where a drive belongs fails at load rather than on the tick that first used it. Stage 6 asks the KIND which plugins its datasheet names (`PluginsOf`), so the loader never learns a field name | ✅ |
 | R3.6 | Mod loading through the identical path; a later source replaces an entry **whole**, and two sources at one declared order is a failure naming both | ✅ |
 | R3.7 | Shipped catalogues: materials, property kinds, rock types, fluid systems | ⬜ |
 
