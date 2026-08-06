@@ -167,11 +167,15 @@ public readonly struct MaterialStream
 ```csharp
 public readonly record struct PortId(int Index);          // element-local, 0-based
 
-public sealed record PortSpec(
-    PortId Id, PortDirection Direction,
-    PortRole Role);                                       // Main | Gas | Liquid | Water | Reject
-    // Reject: where spec-failing mass is routed (e.g. to a flare element).
-    // An element with a spec gate MUST declare a Reject port — checked at network build.
+// Reject: where spec-failing mass is routed (e.g. to a flare element). An
+// element with a spec gate MUST declare a Reject port — checked at network
+// build (§6), because a spec that can refuse mass with nowhere to send it is a
+// network that cannot conserve.
+public enum PortRole { Main, Gas, Liquid, Water, Reject }
+
+public sealed record PortSpec(PortId Id, PortDirection Direction, PortRole Role);
+
+public enum PortDirection { Inlet, Outlet }
 
 public interface IFlowElement
 {
@@ -180,41 +184,42 @@ public interface IFlowElement
 
     // Called with proposed inlet streams for a segment. Must be PURE:
     // no state mutation — commit happens at stage 6 via ICommitTarget.
-    TransformResult Transform(in TransformInput input);
+    TransformResult Transform(TransformInput input);
 
-    // Constraints evaluated against the same proposal.
-    void EvaluateConstraints(in TransformInput input, ref ConstraintWriter constraints);
+    // Constraints evaluated against the same proposal, returned rather than
+    // written into a caller's buffer.
+    IReadOnlyList<ConstraintEvaluation> EvaluateConstraints(TransformInput input);
 }
 
-public readonly record struct TransformInput(
-    ReadOnlySpan<Stream> Inlets,          // by inlet PortId.Index
-    SegmentContext Segment);              // duration fraction, ambient conditions (from R22)
+public sealed record TransformInput(
+    IReadOnlyList<MaterialStream> Inlets,  // by inlet PortId.Index
+    SegmentContext Segment);
 
-public readonly struct TransformResult
-{
-    public ReadOnlySpan<Stream> Outlets { get; }          // by outlet PortId.Index
-    public Composition Sourced { get; }                   // SOURCE elements only: mass entering the
-                                                          // network (completion withdrawal, purchased CO₂)
-    public Composition FuelConsumed { get; }              // the fuel term of 04 §7
-    public DisposedMass Disposed { get; }                 // kind-tagged: Flared | Vented | Discharged —
-                                                          // the flare/VRU/water-outfall terms of 04 §7
-    public Power PowerDraw { get; }                       // recorded for stage-4 duty next tick
+public sealed record SegmentContext(
+    int DurationDays,                      // /30ths grid, SDD-001 §9
+    Temperature Ambient,
+    double WeatherSeverity);               // from R22 (SDD-016)
+
+public sealed record ConstraintEvaluation(ConstraintKind Kind, double Capacity, double Load);
+
+public sealed record TransformResult(
+    IReadOnlyList<MaterialStream> Outlets, // by outlet PortId.Index
+    Composition Sourced,                   // SOURCE elements only: mass entering the network
+    Composition FuelConsumed,              // the fuel term of 04 §7
+    DisposedMass Disposed,                 // Flared | Vented | Discharged — 04 §7's disposal terms
+    Power PowerDraw);                      // recorded for stage-4 duty next tick
     // ELEMENT-LEVEL CONSERVATION, the complete form (an earlier draft omitted
     // Sourced and Disposed, so a flare or a completion could not pass its own
     // check):  Σ inlets + Sourced == Σ outlets + FuelConsumed + Disposed
     // per material, |error| <= max(1e-12 · massTotal, 1e-9 kg/s). Checked after
-    // EVERY transform — what makes an INV1 breakdown attributable to one
-    // element. Each Disposed kind rolls up into its own 04 §7 term.
-}
+    // EVERY transform — what makes an INV1 breakdown attributable to one element.
 
-public readonly struct DisposedMass        // referenced by TransformResult; defined:
-{
-    public Composition Flared { get; }      // combusted per the flare's efficiency
-    public Composition Vented { get; }      // uncombusted release (fugitives, boil-off without VRU)
-    public Composition Discharged { get; }  // permitted outfall (treated water)
+public sealed record DisposedMass(
+    Composition Flared,                    // combusted per the flare's efficiency
+    Composition Vented,                    // uncombusted release (fugitives, boil-off without VRU)
+    Composition Discharged);               // permitted outfall (treated water)
     // Each maps 1:1 onto its 04 §7 conservation term; Vented and Flared also
     // post to the emissions ledger at stage 9 (Flared via combustion products).
-}
 
 public enum ConstraintKind
 {
@@ -222,6 +227,29 @@ public enum ConstraintKind
     Power, ErosionalVelocity, SpecGate, BerthOccupancy, Injectivity
 }
 ```
+
+> **Contract pass 10 — §5 brought to the committed shape.** Four divergences,
+> three of them forced by the language rather than by design:
+>
+> - **`Stream` → `MaterialStream`** throughout. §4 above records the rename
+>   (finding 61) and this section was never updated with it — the same
+>   back-annotation miss that left §6 and §7 disagreeing below.
+> - **`ReadOnlySpan<Stream>` → `IReadOnlyList<MaterialStream>`**, and
+>   `TransformResult`/`DisposedMass` from `readonly struct` to `sealed record`.
+>   A `ref struct` field cannot live in a record, and the transform results are
+>   held across the solver's iterations rather than consumed within one stack
+>   frame, so the span form was not implementable. The allocation is per element
+>   per segment — four segments of a few hundred elements — not per solver
+>   iteration, so D-4's per-tick-path concern does not bite here.
+> - **`void EvaluateConstraints(in TransformInput, ref ConstraintWriter)` →
+>   `IReadOnlyList<ConstraintEvaluation> EvaluateConstraints(TransformInput)`**.
+>   `ConstraintWriter` was named here and declared in no SDD and no code, so the
+>   signature could not be implemented as written. Returning the evaluations also
+>   keeps `EvaluateConstraints` as pure as `Transform` — a caller-supplied
+>   writer is a mutable output parameter, which is the one shape that could have
+>   let an element smuggle state out of a pure call.
+> - **`in` dropped from both parameters.** `TransformInput` is a record — a
+>   reference type — so `in` bought nothing and read as though it were a struct.
 
 **Availability is not on the element.** The segment plan lists available
 elements; an unavailable element is absent from the network
@@ -231,24 +259,53 @@ makes per-segment solving and whole-tick abandonment cheap.
 ## 6. Network
 
 ```csharp
-public sealed class FlowNetwork
+// An edge: who feeds whom, port to port. The state behind it is owned by the
+// modules that create it (a flowline laid, a tie-in made) — the topology is a
+// per-segment VIEW, never the owner of the connection (law L5).
+public sealed record FlowConnection(
+    EntityId<IFlowElement> From, PortId FromPort,
+    EntityId<IFlowElement> To,   PortId ToPort);
+
+// What the solver actually receives. Built per segment from
+// (all elements) ∩ (segment availability set), with the connections among them.
+public sealed record FlowTopology(
+    IReadOnlyList<IFlowElement> Elements,
+    IReadOnlyList<FlowConnection> Connections);
+
+public interface IFlowSolver
 {
-    // Built per segment from (all elements) ∩ (segment availability set).
-    // Topology: TREE toward each sink (FD4). Validated at build:
-    //   - every non-source element has exactly one downstream edge per outlet role path
-    //   - no cycles; parallel loops modelled as one combined element (R11 §6 risk note)
-    //   - RECYCLE STREAMS (gas lift; any future recycle) are closed with a
-    //     ONE-TICK LAG, never as in-tick cycles: tick t's lift-gas rate is
-    //     tick t-1's committed value — a fixed SINK at the compression side
-    //     and an equal fixed SOURCE at the completion in t. Same shape as the
-    //     genset fuel sink (SDD-006 §3b). FD4's tree stays a tree, the lag is
-    //     one month of lift-gas ramp (physically fine), and conservation holds
-    //     per tick with the lagged pair audited as a matched entry.
-    //     Lift-gas provenance: the compression point's blend at t-1.
-    // Element order: topological, ties broken by ascending EntityId — the single
-    // deterministic order every pass uses.
+    SolveReport Solve(SegmentContext segment, FlowTopology topology);   // §7, §8
 }
 ```
+
+**Validated at build** — a network that fails any of these is a composition
+fault and the engine refuses to start (§10):
+
+- every non-source element has exactly one downstream edge per outlet role path;
+- no cycles — topology is a **tree toward each sink** (FD4); parallel loops are
+  modelled as one combined element (R11 §6 risk note);
+- an element with a spec gate declares a `Reject` port (§5).
+
+**Recycle streams — gas lift, and any future recycle — are closed with a
+one-tick lag and never as in-tick cycles.** Tick *t*'s lift-gas rate is tick
+*t−1*'s committed value: a fixed sink at the compression side and an equal fixed
+source at the completion in *t*, the same shape as the genset fuel sink
+(SDD-006 §3b). FD4's tree stays a tree, the lag is one month of lift-gas ramp
+(physically fine), and conservation holds per tick with the lagged pair audited
+as a matched entry. Lift-gas provenance is the compression point's blend at
+*t−1*.
+
+**Element order is topological, ties broken by ascending `EntityId`** — the
+single deterministic order every pass uses.
+
+> **Contract pass 10 — §6 was the SDD contradicting itself.** This section
+> declared `public sealed class FlowNetwork` while §7's pass-2 amendment and the
+> committed code both say `FlowTopology(Elements, Connections)`. Two names for
+> one concept inside one document is the exact failure glossary rule N1 exists to
+> prevent, and it survived because §6's declaration was a class whose body was
+> entirely comments — nothing to implement against, so nothing to notice. The
+> rules those comments carried are real and are kept above as prose, where they
+> belong: they are constraints on *building* a topology, not members of it.
 
 ## 7. The solve — the algorithm, pinned
 
@@ -312,6 +369,12 @@ through chokes — not a solver default. Open item S002-1 keeps the door open.
 public sealed record ElementSolution(EntityId<IFlowElement> Element, TransformResult Converged);
 public sealed record CompletionState(EntityId<IFlowElement> Completion, ReservoirRate Rate, Pressure WellheadBackpressure);
 
+// Pass 10: SolveReport carried these and nothing declared them. A completion the
+// ladder shut in is not a fault by itself (§10) — it is a physical action the
+// solver took — so the residual it was carrying when it went is recorded, and
+// that number is what tells a second consecutive shut-in from a first (04 §4.0b).
+public sealed record ForcedShutIn(EntityId<IFlowElement> Completion, double RelativeResidual);
+
 public sealed record SolveReport(
     IReadOnlyList<ElementSolution> Solutions,
     IReadOnlyList<CompletionState> CompletionStates,
@@ -326,11 +389,39 @@ deferred-by-element projection verbatim — the UI never re-derives them.
 
 ## 9. Commit and conservation
 
-> **Pass-3 amendment (finding 67):** the commit family is pinned:
-> `ICommitTarget { EntityRef Target }` with `IWithdrawalTarget.CommitWithdrawal(Composition)`,
-> `IReceiptTarget.CommitReceipt(Composition, Allocation)` and
-> `ICustodyRecorder.RecordDelivery(Composition, Allocation)`. Injection commits
-> as a receipt targeting the compartment. Nothing else mutates from a solve.
+> **Pass-3 amendment (finding 67):** the commit family is pinned. **Pass 10**
+> promotes it from this note into a declaration — it is the only mutation path
+> out of a solve, which is too load-bearing to live in prose.
+
+```csharp
+// The ONLY way a solve changes anything. Transform is pure; at stage 6, after
+// ALL segments have solved, duration-weighted masses commit through these and
+// nothing else. Injection commits as a RECEIPT targeting the compartment —
+// there is deliberately no separate injection target, because injection and
+// tank receipt are the same act against different inventories.
+public interface ICommitTarget          { EntityRef Target { get; } }
+
+public interface IWithdrawalTarget : ICommitTarget
+{
+    void CommitWithdrawal(Composition mass);                        // SDD-003 §3
+}
+
+public interface IReceiptTarget : ICommitTarget
+{
+    void CommitReceipt(Composition mass, Allocation provenance);    // tanks, line fill, injection
+}
+
+public interface ICustodyRecorder : ICommitTarget
+{
+    void RecordDelivery(Composition mass, Allocation provenance);   // stage 8 prices it; never here
+}
+```
+
+Provenance travels with a receipt and not with a withdrawal, and that asymmetry
+is the point: a compartment is where provenance is *created*, so there is nothing
+to carry in; an inventory is where provenance is *blended* (§3), so it must be
+carried and merged. `RecordDelivery` takes it because royalty and working
+interest are settled per source compartment.
 
 Stage 6, after **all** segments have solved (FV13 atomicity):
 
