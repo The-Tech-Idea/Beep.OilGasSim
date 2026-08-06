@@ -91,13 +91,38 @@ unit       = token , { ("/" | "." ) , token } , [ "^" , digit ] ;   // "kg/m^3",
 ## 5. The six stages, as code
 
 ```csharp
-public sealed class ContentLoader   // one public entry point
+public enum LoadStage { Parse = 1, Shape, Units, References, Consistency, Binding }
+
+public sealed record LoadFailure(
+    string Source,
+    string File,
+    string JsonPath,
+    LoadStage Stage,
+    string Message);
+
+// Catalogues on success, failures otherwise — NEVER both. Any failure at all
+// means the engine does not start (10 §3, G2), which is why this is a closed
+// choice and not a result with an errors list hanging off it.
+public abstract record ContentLoadResult;
+public sealed record ContentLoaded(ICatalogSet Catalogues) : ContentLoadResult;
+public sealed record ContentFailures(IReadOnlyList<LoadFailure> Failures) : ContentLoadResult;
+
+public sealed class ContentLoader   // one public entry point; R3 implementation
 {
-    public LoadResult LoadAll(IReadOnlyList<IContentSource> sources);
-    // LoadResult = Catalogues(success) | Failures(IReadOnlyList<LoadFailure>)
-    // NEVER both. Any failure -> engine does not start (10 §3, G2).
+    public ContentLoadResult LoadAll(IReadOnlyList<IContentSource> sources);
 }
 ```
+
+> **Contract pass 10.** This block declared the return as `LoadResult` while the
+> pass-3 amendment below it — and the committed code — say `ContentLoadResult`.
+> One document, two names for its own load result, exactly as SDD-002 §6 named
+> `FlowNetwork` against its own §7. The pattern in both cases is an amendment
+> appended beneath a code block that was never edited to agree with it.
+>
+> `LoadStage` and `LoadFailure` are declared here rather than left to the table
+> below, because the stage numbers are load-bearing: failures are reported in
+> stage order, and `Parse = 1` fixes that ordering against the enum rather than
+> against declaration accident.
 
 | Stage | Implementation | Failure carries |
 |---|---|---|
@@ -124,11 +149,31 @@ in diagnostics.
 ## 6. Catalogues
 
 ```csharp
+public enum Era { E1, E2, E3, E4 }                 // the four technology eras (07 §2)
+
+// Every content entry derives from this: one id, one kind-specific record shape.
+public abstract record ContentDefinition(ContentId Id);
+
+// Base of every unlockable equipment kind. `Fits` is REQUIRED on every one of
+// them (SDD-005 §4.0b) — it is how the system knows where a new device or
+// material plugs in without anyone branching on what it is.
+public abstract record GatedDefinition(
+    ContentId Id,
+    ContentId? RequiresTech,
+    Era AvailableFromEra,
+    SlotKind Fits) : ContentDefinition(Id);        // SlotKind: SDD-005 §4.0b
+
 public interface ICatalog<TDef> where TDef : ContentDefinition
 {
     TDef this[ContentId id] { get; }               // missing -> content fault (never null)
     IReadOnlyList<TDef> All { get; }               // ordinal-sorted by id string — save-stable
     bool TryGet(ContentId id, out TDef def);
+}
+
+// What a successful load produces: catalogues addressed by definition type.
+public interface ICatalogSet
+{
+    ICatalog<TDef> Of<TDef>() where TDef : ContentDefinition;
 }
 ```
 
@@ -152,8 +197,19 @@ public interface ICatalog<TDef> where TDef : ContentDefinition
 ## 7. Mods
 
 ```csharp
-public interface IContentSource { string Name { get; } int DeclaredOrder { get; } ... }
+public sealed record ContentFile(string RelativePath, string Json);
+
+public interface IContentSource
+{
+    string Name { get; }
+    int DeclaredOrder { get; }                     // base content is 0
+    IReadOnlyList<ContentFile> Files { get; }
+}
 ```
+
+**A source carries its files rather than a directory path**, which is what lets
+base content, a mod folder, a zip and a test fixture all be the same thing to
+the loader — and is why the six stages need no file-system access at all.
 
 Base content is source order 0. Mods declare order; **two sources overriding one
 `kind:id` at the same order → load failure naming both** (10 §4). An override
