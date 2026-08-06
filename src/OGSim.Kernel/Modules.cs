@@ -8,7 +8,15 @@ public readonly record struct ModuleName(string Value);
 
 public readonly record struct StateKey(string Value);
 
-public sealed record StageParticipation(StageId Stage);
+/// <summary>
+/// Where in the tick a module works, and in what position within that stage.
+///
+/// R1.10: <c>Order</c> was added because two modules acting in the same stage
+/// need a FIXED relative order or the tick is non-deterministic, and design 03
+/// §6 requires the order be declared rather than emergent. Ordering by module
+/// name instead would make execution order a consequence of spelling.
+/// </summary>
+public sealed record StageParticipation(StageId Stage, int Order);
 
 /// <summary>Design 03 §3.1 — what a module declares before it is constructed.</summary>
 public sealed record ModuleManifest(

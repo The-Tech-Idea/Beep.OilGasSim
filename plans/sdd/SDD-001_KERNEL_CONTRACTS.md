@@ -365,6 +365,39 @@ public interface ICommandBus
 }
 ```
 
+> **R1.9 review corrections.** Three, all forced by walking design 03 §5's
+> sequence against the declared types:
+>
+> ```csharp
+> public sealed record Rejected(IReadOnlyList<RejectionReason> Reasons) : CommandResult;
+> public sealed record Applied(AuditId Audit, IReadOnlyList<EngineEvent> Raised);
+>
+> public interface ICommandApplier<in TCommand> where TCommand : Command
+> {
+>     Applied Apply(TCommand command, AuditId submission);   // cannot fail
+> }
+> ```
+>
+> - **`Rejected` carries ALL reasons**, not one. The block above still said
+>   `Rejected(RejectionReason Reason)` while the committed record already took a
+>   list — the same "report every problem, not the first" rule the module
+>   registry and the content loader both follow.
+> - **`Apply` returns the events it raised.** `Accepted.Immediate` is a list of
+>   events with no source: `Apply` returned only an `AuditId`, and the bus cannot
+>   construct a domain event. Returning them puts publication on the bus exactly
+>   where 03 §5's sequence draws it (`B->>E: publish`), and keeps the applier
+>   free of an `IEventBus` dependency it would otherwise need.
+> - **`Apply` receives the submission `AuditId`.** Without it an applier cannot
+>   set `Cause` on the events it raises, so *any* `Critical` or `Decision` event
+>   raised by a command would be unpublishable under INV12 — the rule the event
+>   bus enforces one section up. This is also what chains the applied audit entry
+>   to the submission that caused it (03 §5 records both).
+>
+> Registration (`Register<TCommand>(validator, applier)`) lives on the concrete
+> `CommandBus`, not on `ICommandBus`: modules register at composition time, and a
+> module handed the interface must be able to submit without being able to
+> re-point another module's handler.
+
 ### 7.1 The command inventory — derived, not invented
 
 Naming: `VerbNounCommand` (`ProposeWellCommand`, `InstallTierCommand`,
@@ -436,6 +469,41 @@ public sealed record SegmentPlan(IReadOnlyList<Segment> Segments);    // built a
 > INV9 as "durations sum to 1.0 exactly" — contradicting its own next paragraph,
 > which requires whole days so that INV9 *is* integer arithmetic. `AvailabilitySet`
 > was also a type no SDD ever declared. The shape above is the committed one.
+
+> **R1.10 review corrections.** Two naming/shape problems and the types the
+> five checks need:
+>
+> ```csharp
+> public sealed record StageParticipation(StageId Stage, int Order);
+>
+> public enum CompositionProblemKind
+> { UnmetRequirement, DuplicateProvider, DuplicateStateKey, DependencyCycle, StageConflict }
+>
+> public sealed record CompositionProblem(CompositionProblemKind Kind, ModuleName Module, string Detail);
+> public abstract record CompositionResult;
+> public sealed record Composed(IReadOnlyList<IModule> OrderedModules) : CompositionResult;
+> public sealed record CompositionRefused(IReadOnlyList<CompositionProblem> Problems) : CompositionResult;
+> ```
+>
+> - **`IModuleRegistry` names two different things.** Design 03 §3.1's diagram
+>   uses it for the *composition validator*; §9 here and the committed code use
+>   it for *content plugin binding* (SDD-004 §5). Glossary rule N1 is one concept
+>   one name, so the plugin binder keeps `IModuleRegistry` — it is the one with
+>   code — and the validator is `ModuleComposer`, a concrete kernel type. It is
+>   concrete deliberately: composition is where concrete types are named (03 §2
+>   layer 4), so there is nothing for it to sit behind.
+> - **Check 5 had nothing to check.** R1 §2.9's fifth validation is "tick-stage
+>   participation has no ordering conflict", but `StageParticipation` carried
+>   only a `StageId` — there was no ordering to conflict, so the check was
+>   vacuous. It cannot simply be dropped: two modules acting in the same stage
+>   need a *fixed* relative order or the tick is non-deterministic, and 03 §6
+>   insists the order be declared rather than emergent. `StageParticipation`
+>   therefore gains `int Order`, and check 5 becomes: no two modules may claim
+>   the same `(Stage, Order)`. Ordering by module name instead would have made
+>   execution order a consequence of spelling.
+> - **Composition reports every problem, not the first** (R1 §2.9), which is why
+>   the refusal carries a list. A developer fixing composition one error per run
+>   is the failure mode that rule exists to prevent.
 
 Segment boundaries live on a **/30ths-of-a-tick grid** (whole days) rather than
 raw doubles — INV9's "sums to exactly one tick" becomes integer arithmetic, and

@@ -33,8 +33,24 @@ public interface ICommandValidator<in TCommand> where TCommand : Command
     IReadOnlyList<RejectionReason> Validate(TCommand command);
 }
 
-/// <summary>May not fail — a command that reaches application has been proven applicable (R1 §2.5).</summary>
+/// <summary>
+/// What application produced: the audit entry recording it, and the events it
+/// raised. The events come BACK rather than being published by the applier, so
+/// publication sits on the bus exactly where design 03 §5 draws it, and an
+/// applier needs no IEventBus of its own (R1.9).
+/// </summary>
+public sealed record Applied(AuditId Audit, IReadOnlyList<EngineEvent> Raised);
+
+/// <summary>
+/// May not fail — a command that reaches application has been proven applicable
+/// (R1 §2.5).
+///
+/// <paramref name="submission"/> is the bus's accepted-audit entry. It is passed
+/// in because the applier must have a cause id to stamp on the events it raises:
+/// without one, any Critical or Decision event a command produces would be
+/// unpublishable under INV12.
+/// </summary>
 public interface ICommandApplier<in TCommand> where TCommand : Command
 {
-    AuditId Apply(TCommand command);
+    Applied Apply(TCommand command, AuditId submission);
 }
