@@ -134,11 +134,27 @@ public readonly record struct EntityId<T>(ulong Value); // T: marker type, e.g. 
 public interface IEntityRegistry
 {
     EntityId<T> Issue<T>();                       // monotonic per T, save-stable
+    void Register<T>(EntityId<T> id, T entity);    // completes the id issued above
     T Resolve<T>(EntityId<T> id);                  // unresolvable → INV3 invariant fault
     bool TryResolve<T>(EntityId<T> id, out T entity); // for the *few* places absence is a state
     IReadOnlyList<T> All<T>();                     // ordered by id — D-5 safe enumeration
 }
 ```
+
+> **R1.2 review correction:** the interface had no member that associated an
+> entity with an id, so `Resolve` could never return anything and `All` was
+> always empty — the registry was unimplementable as declared. `Register` closes
+> it. Issue and register are deliberately **two** steps rather than one
+> `Issue<T>(T entity)`: an entity carries its own `EntityId<T>` (`IFlowElement.Id`
+> and every PPDM-shaped record), so the id must exist before the entity that
+> holds it can be constructed. The window between them is not a silent hazard —
+> resolving an issued-but-unregistered id is exactly the INV3 fault above.
+>
+> Two further pins the implementation needs and the SDD did not state:
+> **ids begin at 1**, so `default(EntityId<T>)` is a detectably invalid id rather
+> than a valid reference to the first entity ever issued; and **`Register` is
+> write-once** — re-registering an id is an INV3 fault, because law L5 (one owner
+> per fact) is worth nothing if a reference can be repointed.
 
 No `Guid` (banned, D-6): ids are sequential `ulong` per entity type, issued by
 the registry, part of saved state. `Resolve` throwing on a dangling id is the

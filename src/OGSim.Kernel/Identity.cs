@@ -60,10 +60,19 @@ public readonly record struct EntityRef(EntityKind Kind, ulong Value) : ICompara
 /// SDD-001 §2. Resolve throws on a dangling id (invariant fault INV3 — never
 /// null); TryResolve exists for the few places absence is a legitimate state.
 /// All() is ordered by id — the D-5 safe enumeration.
+///
+/// Issue and Register are two steps because an entity carries its own
+/// EntityId&lt;T&gt;, so the id must exist before the entity holding it can be
+/// constructed (R1.2 review). Ids begin at 1, so default(EntityId&lt;T&gt;) is
+/// detectably invalid rather than a reference to the first entity issued.
 /// </summary>
 public interface IEntityRegistry
 {
     EntityId<T> Issue<T>() where T : class;
+
+    /// <summary>Completes an issued id. Write-once: re-registering is an INV3 fault.</summary>
+    void Register<T>(EntityId<T> id, T entity) where T : class;
+
     T Resolve<T>(EntityId<T> id) where T : class;
     bool TryResolve<T>(EntityId<T> id, out T? entity) where T : class;
     IReadOnlyList<T> All<T>() where T : class;

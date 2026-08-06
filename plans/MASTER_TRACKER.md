@@ -139,7 +139,7 @@ design is wrong, that is discovered in Arc I and not in Arc III.
 |---|---|---|
 | R1.0 | **SDD review** ([SDD_INDEX](sdd/SDD_INDEX.md) §1) — SDD-001 and the R1 phase doc read against the committed contract layer. Five drifts corrected under rule F-4 *before* any code: the missing `weather` RNG stream, R1-V19's "across leap years" against a 30/360 calendar, §9's `Segment(double…)`/`AvailabilitySet` block, the undeclared `Area` dimension, and `ILog`'s phantom `EventName`/`LogFields` | ✅ |
 | R1.1 | Dimensions, units, `IQuantity`; conversion; nonlinear scales — **plus `DetMath`** (§1.3), the `Area` dimension, the volumetric rate family, the §1.4 spatial algorithms and the §11 fault carriers. 37 kernel tests | ✅ |
-| R1.2 | `IEntityId<T>`, `IEntityRegistry`; resolution faults | ⬜ |
+| R1.2 | `IEntityId<T>`, `IEntityRegistry`; resolution faults — **F-4: the interface had no `Register`**, so `Resolve` could never return and the registry was unimplementable as declared. Ids begin at 1; registration is write-once | ✅ |
 | R1.3 | `ISimulationClock` | ⬜ |
 | R1.4 | `IRandomSource` with independent per-subsystem streams | ⬜ |
 | R1.5 | `ILog` — structured, levelled, nested correlation scopes | ⬜ |
