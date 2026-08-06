@@ -17,10 +17,9 @@ public sealed record WorldView(
     IReadOnlyList<ClimateRegion> ClimateRegions,
     IReadOnlyList<Jurisdiction> Jurisdictions);
 
-public abstract record TickResult;
-public sealed record TickCompleted : TickResult;
-/// <summary>Invariant fault only — non-convergence never reaches this surface (the shut-in ladder, 04 §4.0b).</summary>
-public sealed record TickHalted(Fault Fault) : TickResult;
+// TickResult moved to OGSim.Kernel at R1.13: SDD-001 §3 pins it, and the tick
+// pipeline that produces it is a kernel type which cannot reference Contracts.
+// It is still the return of AdvanceTick below — Contracts depends on the kernel.
 
 /// <summary>The whole surface (SDD-017 §1) — the interface's single owner.</summary>
 public interface IEngine

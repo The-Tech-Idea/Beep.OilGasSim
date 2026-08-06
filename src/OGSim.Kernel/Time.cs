@@ -49,6 +49,24 @@ public readonly record struct GameDate(int Year, int Month)
         return new GameDate(year, total - year * 12 + 1);
     }
 
+    // R1.15 — calendar boundaries. Quarter, year and season closes are when
+    // reporting, licence clocks, reserves booking and seasonal access windows
+    // fire, so "did this tick cross one?" is asked every tick by several
+    // subsystems and is answered in exactly one place.
+
+    /// <summary>This tick opens a new quarter (design 15 §9).</summary>
+    public bool StartsQuarter => Guarded() is 1 or 4 or 7 or 10;
+
+    /// <summary>This tick opens a new year — the reporting and reserves boundary.</summary>
+    public bool StartsYear => Guarded() == 1;
+
+    /// <summary>
+    /// This tick opens a new meteorological season. The boundary months are the
+    /// same in both hemispheres — only the season's NAME flips — so this needs no
+    /// hemisphere argument and deliberately does not take one.
+    /// </summary>
+    public bool StartsSeason => Guarded() is 12 or 3 or 6 or 9;
+
     /// <summary>Whole months from this date to another — the inverse of AddMonths.</summary>
     public int MonthsUntil(GameDate other) =>
         (other.Year * 12 + other.Guarded() - 1) - (Year * 12 + Guarded() - 1);

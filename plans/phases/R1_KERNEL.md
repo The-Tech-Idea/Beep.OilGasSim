@@ -239,6 +239,7 @@ determinism rules D-2, D-3, D-5, D-6, D-7, D-8 · F-2's citation half.
 | Every >2-year loop publishes a standing indicator | R20 | — |
 | Every downward loop has an entry event ≥ `W` | R20 | `IEventBus.Publish` enforces IR4 per event |
 | Every C/D event carries a cause chain | first concrete events (R2+) | `IEventBus.Publish` enforces INV12 per event |
+| **D-4** — no LINQ in per-tick paths | R4 | needs a *per-tick path* designation to check against; the solver is where one first exists. Banning LINQ engine-wide instead would be stricter than the rule and would fire on composition and query code the rule was never aimed at |
 
 **F-2's literal scan is deferred to R5**, and that is a finding rather than a
 convenience. Implemented literally over the kernel it produced 38 violations of

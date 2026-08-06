@@ -196,6 +196,33 @@ public interface IEngine   // FULL surface owned by SDD-017 §1 — kernel pins 
 the host's pacing loop ([15](../design/15_TIME_AND_EXECUTION.md) §4) a plain
 loop; the shut-in ladder means non-convergence never reaches this surface.
 
+> **R1.13/R1.17 review corrections.** Two, both found by trying to build the
+> pipeline the tick contract implies:
+>
+> ```csharp
+> // in OGSim.Kernel, not OGSim.Contracts
+> public abstract record TickResult;
+> public sealed record TickCompleted : TickResult;
+> public sealed record TickAbandoned(Fault Fault) : TickResult;
+> public sealed record TickHalted(Fault Fault) : TickResult;
+> ```
+>
+> - **`TickResult` belongs to the kernel.** It was declared in
+>   `OGSim.Contracts/EngineSurface.cs`, but this section pins it and the tick
+>   pipeline that produces it is a kernel type (R1.17) — and the kernel cannot
+>   reference Contracts, because layering runs Contracts → Kernel one way only.
+>   Moved; `IEngine.AdvanceTick()` still returns it, since Contracts already
+>   depends on the kernel.
+> - **`AbandonTick` had nowhere to land.** `FaultResolution` carries three
+>   outcomes — `Continue`, `AbandonTick`, `Halt` — and `TickResult` carried two.
+>   A model fault abandons the tick whole ([09](../design/09_DIAGNOSTICS.md)
+>   §5.1 C4) while the game continues, which is a *different* answer from both
+>   "the tick happened" and "the engine has stopped": 09 §5.2 argues the
+>   distinction at length. Mapping it onto `Halted` would end a run on a
+>   recoverable fault; mapping it onto `Completed` would tell the host a
+>   discarded tick had happened. `TickAbandoned` is the third outcome the fault
+>   policy already implies.
+
 ## 4. Randomness — R1.4
 
 ```csharp

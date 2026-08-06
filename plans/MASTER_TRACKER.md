@@ -11,11 +11,11 @@ next.** Updated at the close of every phase.
 
 | | |
 |---|---|
-| **Phase** | R0 ✅ closed · R1-C (contract layer) ✅ complete · **R1 🟦 in progress — 14 of 18** |
+| **Phase** | R0 ✅ closed · R1-C (contract layer) ✅ complete · **R1 🟦 all 18 tasks done — phase gate pending the deferred verification items below** |
 | **Design docs** | 24 design + 1 research + 25 phase docs, 17 catalogue sheets ([C16 terrain](catalog/C16_TERRAIN_CLASSES.md) newest) + tech tree, 18 SDDs (000–017). Coherence log: **81 findings**, 61–81 from the code passes. |
-| **Code status** | Contract layer complete, and **the first seven kernel services are implemented behind it**: quantities + `DetMath` + spatial, entity registry, clock, PCG64 streams, log, audit trail, fault policies. 0 warnings, 0 errors, **142/142 tests** (15 contract + 109 kernel + 18 architecture). Every implemented member traces to a pinned SDD section (F-1). |
+| **Code status** | Contract layer complete and **the kernel is implemented behind it**: quantities + `DetMath` + spatial, entity registry, clock, PCG64 streams, log, audit trail, fault policies, event bus, command bus, module composition, state registration, segmentation and the 14-stage tick pipeline. 0 warnings, 0 errors, **156/156 tests** (15 contract + 123 kernel + 18 architecture). Every implemented member traces to a pinned SDD section (F-1). |
 | **Repository** | `The-Tech-Idea/Beep.OilGasSim`, branch `master`. The OGSim tree was copied in from the workspace it was authored in and the prior occupant of this repo removed in the same commit; work lands directly on `master`, one task per commit. |
-| **Next** | **R1.13, R1.14, R1.15, R1.17** — `AdvanceTick`, sub-tick segmentation, calendar boundaries and the 14-stage pipeline that wires the fourteen finished services together. Laws L1–L5 and determinism rules D-2…D-8 are now **mechanically enforced** on every build. Commit style `R<n>.<m>: <what>` |
+| **Next** | **R2 — materials, properties, streams**, once R1’s gate closes. R1’s tasks are all done; four verification items are not, and none can be closed by writing kernel code: **R1-V2** (the compile-failure corpus needs a Roslyn negative-compilation harness), **R1-V6** (cross-platform byte identity needs the CI matrix of [SDD-000](sdd/SDD-000_ENGINEERING_STANDARDS.md) §6), and **R1-V14/V20/V22** (11 architecture checks whose subject assemblies do not exist — [R1 §5b](phases/R1_KERNEL.md)). Laws L1–L5 and determinism rules D-2…D-8 are now **mechanically enforced** on every build. Commit style `R<n>.<m>: <what>` |
 
 > **Phase numbers are stable identifiers, not execution order.** They are assigned
 > in the order phases are designed; §"Execution order" below is authoritative for
@@ -132,7 +132,7 @@ design is wrong, that is discovered in Arc I and not in Arc III.
 
 ## Arc I — Foundation
 
-### Phase R1 — Kernel 🟦
+### Phase R1 — Kernel 🟦  *(all 18 tasks done; gate open on deferred verification)*
 > 📄 [phases/R1_KERNEL.md](phases/R1_KERNEL.md)
 
 | # | Task | Status |
@@ -150,11 +150,11 @@ design is wrong, that is discovered in Arc I and not in Arc III.
 | R1.10 | `IModule` + **`ModuleComposer`** — all five R1 §2.9 checks, every problem reported. **F-4: `IModuleRegistry` named two different things** (03 §3.1 validator vs the content plugin binder); `StageParticipation` gained `Order` because check 5 had no data to check | ✅ |
 | R1.11 | `IStateOwner` registration only — exclusive ownership (L5) + fixed key-order visiting. **There is no `IStateSerializer`**: SDD-001 §10 declares none and the serializer proper is SDD-013/R19; the name was not invented here | ✅ |
 | R1.12 | Architecture test suite — **18 checks live**, reflection + Roslyn (closes open item S000-2: both, chosen per rule). 11 deferred with their trigger phase, listed in [R1 §5b](phases/R1_KERNEL.md) rather than written as tests asserting nothing | ✅ |
-| R1.13 | **`AdvanceTick()` — the turn-based engine surface**; no wall-clock anywhere | ⬜ |
-| R1.14 | **Sub-tick segmentation** — fractional positions and durations, 4-segment budget, audited merges | ⬜ |
-| R1.15 | Calendar — month, quarter, year, season boundaries; real dates | ⬜ |
+| R1.13 | **`AdvanceTick()` — the turn-based engine surface**; no wall-clock anywhere. **F-4: `TickResult` moved to the kernel** (the pipeline cannot reference Contracts) and gained **`TickAbandoned`** — `FaultResolution` had three outcomes where `TickResult` had two | ✅ |
+| R1.14 | **Sub-tick segmentation** — whole-day /30ths positions (INV9 as integer arithmetic), 4-segment budget, merges ranked by the pinned estimator and **every merge audited** | ✅ |
+| R1.15 | Calendar — month, quarter, year, season boundaries; real labels over 30/360 | ✅ |
 | R1.16 | Event taxonomy — categories, severity, stage, loop role, segment-boundary flag, cause chain, **no-subscriber rule**. INV12/IR6 and IR4 enforced at publish; the no-subscriber rule is an absence, architecture-tested at R1.12 | ✅ |
-| R1.17 | Tick pipeline — the 14 stages of [03](design/03_ARCHITECTURE.md) §6, with per-stage read isolation | ⬜ |
+| R1.17 | Tick pipeline — the 14 stages of [03](design/03_ARCHITECTURE.md) §6, order declared in one place and walked; fault resolutions obeyed (continue / abandon whole / halt) | ✅ |
 | R1.18 | Deterministic event ordering — `(stage, day, subject, event id)`; **F-4: SDD-001 §6 still said `double SubTickPosition`** against the committed /30ths-grid `int Day` | ✅ |
 
 ### Phase R2 — Materials, properties, streams ⬜
