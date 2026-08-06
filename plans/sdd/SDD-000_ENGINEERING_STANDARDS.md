@@ -113,9 +113,26 @@ awkward*. Four binding rules:
 | F-3 | **Every formula implementation cites the SDD section stating its form** (`// SDD-003 §6.1 — SI Darcy`), and an MX test pins it to an independently computed value. A formula without a pinned test is unreviewable and does not merge | Review + the MX suite |
 | F-4 | **If implementation shows an SDD is wrong, stop.** Update the SDD (and the design doc if the conflict reaches it — [22](../design/22_DESIGN_COHERENCE.md) §6 rule 6), re-review, then code. The alternative — "fixing it in the code" — is how a design set and its codebase divorce | Process; deviations found later are coherence-log findings |
 
-These four are the practical answer to "how do we avoid code hallucinations":
+| F-5 | **An amendment EDITS the block it corrects; it never sits beneath it.** A correction appended as a note leaves two contradictory statements in one document with nothing saying which wins, and the reader implements whichever they reach first. Write the correction into the declaration, and keep the *reasoning* as the note | Review; the pass-10 audit found five instances (see below) |
+| F-6 | **Identity is `EntityId<T>` over a marker interface. There are no per-entity id types.** `CompartmentId`, `PerforationId`, `OperationId` were each invented in an SDD, used across sections, and declared nowhere — a second identity scheme that no code ever had | Architecture test: no public type name ends in `Id` except `EntityId<T>`, `ContentId`, `AuditId`, `EventId`, `MaterialId`, `PortId` |
+
+These six are the practical answer to "how do we avoid code hallucinations":
 the coder is never the author of a contract, a constant, or a formula — only of
 their implementation, against a pinned test.
+
+**F-5 and F-6 were added at contract pass 10**, after a full SDD-versus-code
+audit found each defect recurring across independent documents rather than once:
+
+| Pattern | Where |
+|---|---|
+| Amendment beneath the block it corrects, block never edited | SDD-002 §6 (`FlowNetwork`/`FlowTopology`), SDD-004 §5 (`LoadResult`/`ContentLoadResult`), SDD-005 §3 (`EnvelopeContext`/`IEffectState`), SDD-010 §4 (two amendments disagreeing in one section), SDD-017 §1b (SDD-010's amendment never propagated across documents) |
+| Phantom `XxxId` identity scheme | SDD-003 ×2, SDD-007 |
+
+A third, subtler one is worth naming without a rule: **a claim that asserts its
+own correctness stops anyone checking it.** SDD-017 §2 said "the exact
+16-section ⇔ R21 §2.4b correspondence (V11)" above a record listing fourteen
+members and omitting `FinanceView`. The note is what made the mismatch
+invisible.
 
 ## 9. Open items
 

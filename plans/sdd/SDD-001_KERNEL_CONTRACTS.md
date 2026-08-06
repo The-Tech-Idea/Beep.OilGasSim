@@ -37,6 +37,57 @@ not `TimeSpan`), `Pressure`, `Temperature`, `MassRate`, `Power`, `Energy`,
 Written by hand, not generated — 18 small structs is an afternoon, and the
 declared-operator surface *is* the design.
 
+**The set, by canonical unit.** Each follows the `Pressure` exemplar above:
+`+`, `−`, the like-over-like `/` returning a dimensionless `double`, comparison
+operators and `IComparable<T>`. Only the *cross-dimension* operators are listed
+here, because those are the ones that carry design information — every omission
+is deliberate, and a missing line means the operation does not exist.
+
+```csharp
+public readonly record struct Length(double Metres);              // × Length → Area
+public readonly record struct Area(double SquareMetres);          // ÷ Length → Length
+public readonly record struct Mass(double Kilograms);
+public readonly record struct Duration(double Days);              // DaysPerTick = 30 (§3)
+public readonly record struct Temperature(double Kelvin);         // − Temperature → TemperatureDelta
+public readonly record struct TemperatureDelta(double Kelvin);    // ± with Temperature
+public readonly record struct MassRate(double KgPerSecond);       // × Duration → Mass
+public readonly record struct Power(double Watts);
+public readonly record struct Energy(double Joules);
+public readonly record struct Permeability(double SquareMetres);       // FromMillidarcy
+public readonly record struct Viscosity(double PascalSeconds);         // FromCentipoise
+public readonly record struct Density(double KgPerCubicMetre);         // ↔ SpecificGravity
+public readonly record struct HeatingValue(double JoulesPerKg);
+
+// Runtime dimension tag — needed where a dimension is DATA rather than code:
+// content binding "3200 psi" to a quantity (SDD-004 §4), and IPropertyKind
+// declaring what it measures (SDD-002 §2b).
+public enum Dimension
+{
+    Dimensionless,
+    Length, Area, Mass, Duration, Pressure, Temperature, TemperatureDelta,
+    MassRate, Power, Energy, Permeability, Viscosity, Density, HeatingValue,
+    ReservoirVolume, SurfaceVolume, StandardGasVolume,
+    ReservoirRate, SurfaceRate, StandardGasRate,
+    Money,
+}
+
+// Rule F-2's home: every constant here carries its citation and its unit, and
+// simulation code may use no other numeric literal (SDD-000 §8).
+public static class PhysicalConstants
+{
+    public const double WaterDensityKgPerM3 = 1000.0;          // SDD-001 §1
+    public const double GravityMPerS2 = 9.80665;               // SDD-003 §6.2
+    public const double GasConstantJPerMolK = 8.31446261815324;// SDD-006 §3, §6
+    public const double NormalZ10 = 1.281552;                  // SDD-008 §2
+    public const double DefaultChokeCriticalRatio = 0.55;      // SDD-003 §6.3
+}
+```
+
+> **Contract pass 10.** The dimension set was named in the prose above and
+> declared nowhere but `Pressure`. `Dimension` and `PhysicalConstants` likewise —
+> and `PhysicalConstants` is the *subject* of rule F-2, so leaving it undeclared
+> meant the rule pointed at a type no document defined.
+
 > **R1.0 review correction:** `Area` (canonical m²) was used by §1.4's
 > `Polygon.Area` but appeared in no dimension list and in no code — licence
 > polygons, footprints and drainage areas all need it. Added here, count 17 → 18.
@@ -57,6 +108,22 @@ public readonly record struct FormationVolumeFactor(double RbPerStb)
     public SurfaceVolume Shrink(ReservoirVolume v) => new(v.CubicMetres / RbPerStb);
     public ReservoirVolume Swell(SurfaceVolume v)  => new(v.CubicMetres * RbPerStb);
 }
+
+// Bg, rm³/sm³ — gas has its OWN bridge (pass-6 amendment below). Mixing the two
+// factors is a compile error, which is the entire point of two types.
+public readonly record struct GasFormationVolumeFactor(double Rm3PerSm3)
+{
+    public StandardGasVolume Shrink(ReservoirVolume v) => new(v.CubicMetres / Rm3PerSm3);
+    public ReservoirVolume Swell(StandardGasVolume v)  => new(v.CubicMetres * Rm3PerSm3);
+}
+
+// One volumetric RATE per volume condition, for the same reason there is one
+// volume type per condition: a reservoir rate and a surface rate are not
+// interchangeable, and `× Duration → the matching volume` keeps them apart
+// through integration as well as through addition.
+public readonly record struct ReservoirRate(double CubicMetresPerSecond);    // × Duration → ReservoirVolume
+public readonly record struct SurfaceRate(double CubicMetresPerSecond);      // × Duration → SurfaceVolume
+public readonly record struct StandardGasRate(double CubicMetresPerSecond);  // × Duration → StandardGasVolume
 ```
 
 `reservoir + surface` is a compile error. Conversion **requires** an FVF in
@@ -131,6 +198,22 @@ footprints never need robust intersection: `Overlaps` may be conservative
 ```csharp
 public readonly record struct EntityId<T>(ulong Value); // T: marker type, e.g. EntityId<IWell>
 
+// The type-ERASED reference, for events, audit entries and read-model views —
+// places that must name an entity without depending on its module. One struct
+// with a kind tag rather than an interface, because an interface would box on
+// every event and audit entry ever written (S001-3, decided).
+public enum EntityKind
+{
+    Well, Wellbore, Completion, Perforation, Compartment, Reservoir, Field,
+    Facility, FacilityUnit, Pipeline, Tank, Berth, Cargo, CustodyPoint,
+    Licence, Company, Operation, Rig, Prospect, Play, Basin, Settlement,
+    FlowElement, Objective, Barrier, Threat
+}
+
+// Ordering is (Kind, Value) and is TOTAL — it is the tiebreaker in the event
+// order of design 21 §5.3, so two runs cannot seal a tick differently.
+public readonly record struct EntityRef(EntityKind Kind, ulong Value) : IComparable<EntityRef>;
+
 public interface IEntityRegistry
 {
     EntityId<T> Issue<T>();                       // monotonic per T, save-stable
@@ -170,10 +253,27 @@ public readonly record struct Tick(int Value);              // 0-based, monotoni
 // (§9) exact for EVERY tick — real month lengths (28-31) would break grid
 // uniformity, day-rate arithmetic and TM11. GameDate labels remain real
 // (year, month names, eras); day arithmetic is 30/360; leap years do not exist.
+public readonly record struct TickRange(Tick From, Tick To);   // inclusive, for queries
+
+public enum Quarter { Q1 = 1, Q2 = 2, Q3 = 3, Q4 = 4 }
+public enum Season { Winter, Spring, Summer, Autumn }
+public enum ClimateHemisphere { Northern, Southern }
+
 public readonly record struct GameDate(int Year, int Month) // real labels, 30/360 arithmetic (TM-D5)
 {
     public Quarter Quarter { get; }
     public Season SeasonAt(ClimateHemisphere h);
+
+    public GameDate AddMonths(int months);      // floor division: −3 months crosses the year DOWN
+    public int MonthsUntil(GameDate other);     // the exact inverse — licence and commitment clocks
+
+    // R1.15 calendar boundaries. Reporting, licence clocks, reserves booking and
+    // seasonal access all ask "did this tick cross one?", so it is answered once.
+    public bool StartsQuarter { get; }          // months 1, 4, 7, 10
+    public bool StartsYear { get; }             // month 1
+    public bool StartsSeason { get; }           // months 12, 3, 6, 9 — SAME in both
+                                                // hemispheres; only the NAME flips,
+                                                // which is why this takes no hemisphere
 }
 
 public interface ISimulationClock
@@ -267,10 +367,33 @@ public interface ILog
     IDisposable Scope(ScopeKind kind, string id);                    // Session→Tick→Stage→Element nesting
 }
 
+public enum LogLevel { Trace, Debug, Info, Warning, Error, Critical }
+public enum ScopeKind { Session, Tick, Stage, Element, Operation }
+public readonly record struct LogField(string Name, string Value);
+
+public readonly record struct AuditId(ulong Value) : IComparable<AuditId>;
+
+// Design 09 §4.1's table, as a closed set. Closed because §4.4's retention rule
+// partitions on it: ConstraintBinding, InvariantCheck and Merge are the
+// per-tick per-element detail that may be pruned; everything else is durable.
+public enum AuditCategory
+{
+    Command, StateTransition, ConstraintBinding, Rejection, Financial,
+    StochasticOutcome, BeliefUpdate, Fault, InvariantCheck, ForcedShutIn, Merge
+}
+
+// A typed audit value — never a formatted display string (the EM4 rule, applied
+// to the trail as well as to events).
+public readonly record struct AuditValue(string Value);
+
 public sealed record AuditEntry(
     AuditId Id, Tick Tick, AuditCategory Category,
     EntityRef? Subject, AuditId? Cause,             // Cause: the chain of 21 §7
     IReadOnlyDictionary<string, AuditValue> Data);
+
+public sealed record AuditQuery(
+    EntityRef? Subject, AuditCategory? Category,
+    TickRange? Range, AuditId? CauseChainLeaf);     // all optional: unset means unfiltered
 
 public interface IAuditTrail
 {
@@ -281,12 +404,28 @@ public interface IAuditTrail
 
 public enum FaultClass { Content, Composition, Command, Model, Invariant, Host }
 
+public sealed record Fault(
+    FaultClass Class,
+    string Rule,                       // "INV1", "R2-V10", "SDD-003 §3.1 voidage limit"
+    EntityRef? Subject,
+    string Detail);
+
+// The CALLER obeys this; the policy only decides (design 09 §5.1).
+public enum FaultResolution { Continue, AbandonTick, Halt }
+
 public interface IFaultPolicy
 {
-    FaultResolution Report(in Fault fault);
+    FaultResolution Report(Fault fault);
     // Strict impl: throws on everything. Resilient impl: per 09 §5.1 table.
-    // FaultResolution: Continue | AbandonTick | Halt — the CALLER obeys it; the policy only decides.
 }
+
+// §11's carriers. Named in that table and declared nowhere until pass 10 — so
+// DetMath's domain rule, INV3 and the save-load rule each had a specified
+// behaviour and no type to raise.
+public abstract class FaultException : Exception { public Fault Fault { get; } }
+public sealed class ModelFault     : FaultException { }   // 09 §5.1 C4 — abandon the tick
+public sealed class InvariantFault : FaultException { }   // 09 §5.1 C5 — halt
+public sealed class SaveDataFault  : FaultException { }   // §11 — content-class on load
 ```
 
 `catch` blocks in the engine call `Report` and obey the resolution — the L4
@@ -332,6 +471,24 @@ the *handler*) keeps stack context where the fault happened.
 > pin, the total order's tiebreaker was a number no module could know.
 
 ```csharp
+public readonly record struct EventId(ulong Value);   // per-tick sequence, stamped by the bus
+
+// Design 16 §5. Loop-entry events are at least Warning (rule IR4, enforced at
+// publish); Decision means the tick pauses for the player (auto-pause, 15 §5).
+public enum Severity { Info, Notice, Warning, Critical, Decision }
+
+public enum EventCategory
+{
+    Time, Command, Operation, Discovery, Production, Reservoir, Equipment,
+    Hse, Environment, Regulatory, Financial, Market, Licence, Technology,
+    Objective, Diagnostic
+}
+
+// Design 21 §6 — severity is assigned by LOOP POSITION, not by consequence size:
+// an entry event is loud because it is still cheap to act on, not because what
+// just happened was large.
+public enum LoopRole { None, Entry, MidLoop, Consequence }
+
 public abstract record EngineEvent(
     EventId Id, EventCategory Category, StageId Stage,
     Tick Tick, int Day,                             // /30ths grid — see the R1.8 note
@@ -380,15 +537,23 @@ EM4 "no formatted strings" rule falls out of the type system.
 ```csharp
 public abstract record Command(EntityRef? Subject);
 
+// Domain-typed and host-renderable (R21-V5): LocId is a localisation key, never
+// a formatted sentence; Detail is diagnostic and is not shown to the player.
+public sealed record RejectionReason(string LocId, string Detail);
+
 public abstract record CommandResult;
 public sealed record Accepted(AuditId Audit, IReadOnlyList<EngineEvent> Immediate) : CommandResult;
-public sealed record Rejected(RejectionReason Reason) : CommandResult;   // domain-typed, host-renderable (R21-V5)
+public sealed record Rejected(IReadOnlyList<RejectionReason> Reasons) : CommandResult;
 
 public interface ICommandBus
 {
     CommandResult Submit(Command command);
-    // Two-phase inside (R1 §2.5): ICommandValidator<T>.Validate is pure;
-    // ICommandApplier<T>.Apply cannot fail. Registered per command type by modules.
+}
+
+// Phase one — PURE, may not mutate. An empty list means valid (R1 §2.5).
+public interface ICommandValidator<in TCommand> where TCommand : Command
+{
+    IReadOnlyList<RejectionReason> Validate(TCommand command);
 }
 ```
 
@@ -464,6 +629,18 @@ which is why money is not a `double`.
 
 
 ```csharp
+public readonly record struct ModuleName(string Value);
+
+// Comparable so registries order by it: capture and restore must visit owners in
+// a fixed sequence or two runs produce different save bytes (R1.11).
+public readonly record struct StateKey(string Value) : IComparable<StateKey>;
+
+// Order is why this is not just a StageId: two modules in one stage need a FIXED
+// relative order or the tick is non-deterministic, and 03 §6 requires that order
+// be declared rather than emergent. Composition check 5 forbids a duplicate
+// (Stage, Order).
+public sealed record StageParticipation(StageId Stage, int Order);
+
 public sealed record ModuleManifest(
     ModuleName Name,
     IReadOnlyList<Type> Provides, IReadOnlyList<Type> Requires,   // contract interfaces
@@ -471,10 +648,37 @@ public sealed record ModuleManifest(
     IReadOnlyList<StageParticipation> Stages,
     IReadOnlyList<Type> Commands);
 
+// Resolution happens AFTER validation of the whole module set, so Require can
+// only ever see a contract that was proven present.
+public interface IModuleComposition
+{
+    void Provide<T>(T implementation) where T : class;
+    T Require<T>() where T : class;
+}
+
+// NOT the composition validator — that is ModuleComposer (§12b). This is the
+// CONTENT plugin binder of SDD-004 §5 stage 6, which resolves a plugin named in
+// a content entry. The two shared a name until pass 10 (glossary rule N1).
+public interface IModuleRegistry
+{
+    bool CanBind(ContentId plugin, Type contract);
+    T Bind<T>(ContentId plugin) where T : class;
+}
+
 public interface IModule
 {
     ModuleManifest Manifest { get; }
-    void Compose(IModuleComposition c);   // c.Provide<T>(impl), c.Require<T>() — resolution AFTER validation
+    void Compose(IModuleComposition c);
+}
+
+// Per-tick execution context. Segments is null before stage 4 builds it and is
+// set exactly once by Availability; reading it earlier is a stage-isolation
+// violation (I-V5).
+public sealed class TickContext
+{
+    public required Tick Tick { get; init; }
+    public required GameDate Date { get; init; }
+    public SegmentPlan? Segments { get; set; }
 }
 
 public enum StageId  // exactly 03 §6 — the FOURTEEN stages, numbered as documented
@@ -487,6 +691,13 @@ public interface ITickStage { StageId Id { get; } void Execute(TickContext ctx);
 public sealed record Segment(int StartDay, int DurationDays,
                              IReadOnlyCollection<EntityRef> Available);
 public sealed record SegmentPlan(IReadOnlyList<Segment> Segments);    // built at stage 4
+
+// One entity's availability changing partway through a tick — the planner's
+// input. LastCommittedThroughput is the merge-ranking estimator pinned below:
+// last-committed rather than current, because true impact would need the solve
+// this plan precedes.
+public sealed record AvailabilityChange(
+    int Day, EntityRef Subject, bool Available, double LastCommittedThroughput);
 // invariant INV9: DurationDays sum to exactly 30 — INTEGER arithmetic on the
 // /30ths grid, never float positions summing to 1.0.
 ```
@@ -543,12 +754,33 @@ cheap, and wrong only when it does not matter (a boundary on an idle element).
 ## 10. State — R1.11
 
 ```csharp
+// Ordered key/value in the canonical form of SDD-013 §3. Three writers and no
+// generic object: the canonical byte rules are per-type (doubles as shortest
+// round-trip), and a generic Write(object) would put format decisions at every
+// call site instead of here.
+public interface IStateWriter
+{
+    void WriteString(string key, string value);
+    void WriteInt64(string key, long value);
+    void WriteDouble(string key, double value);
+}
+
+// No TryRead and no defaults: a missing or unreadable value is a SaveDataFault,
+// because a save that has quietly lost a field is not a save that should load
+// (design 11 §2.1).
+public interface IStateReader
+{
+    string ReadString(string key);
+    long ReadInt64(string key);
+    double ReadDouble(string key);
+}
+
 public interface IStateOwner
 {
     StateKey Key { get; }
-    int SchemaVersion { get; }
-    void Capture(IStateWriter w);    // writer: ordered key/value, canonical form
-    void Restore(IStateReader r);    // missing/unreadable value → SaveDataFault, never default
+    int SchemaVersion { get; }       // starts at 1, so an unset field cannot pass for valid
+    void Capture(IStateWriter w);
+    void Restore(IStateReader r);
 }
 ```
 
@@ -608,6 +840,107 @@ interface — `Advance`, `Seal`, `Prune`, `Register`, `RestoreTo`. A module hand
 `ISimulationClock` cannot move time; a module handed `IEventBus` cannot make a
 tick observable. Capability follows from what you were handed rather than from
 remembering not to call something, which is law L2 read forwards.
+
+**Those beyond-interface members are the part F-1 actually needs pinned**, since
+the interface members are already specified above. In full:
+
+```csharp
+public static class DetMath                       // §1.3
+{
+    public static double Exp(double x);           // overflow → ModelFault; underflow → 0
+    public static double Ln(double x);            // x <= 0 → ModelFault, never NaN
+    public static double Pow(double x, double y); // exact repeated squaring for integral |y| <= 64
+    public static double Sqrt(double x);          // Math.Sqrt — IEEE-correct, portable
+}
+
+public sealed class EntityRegistry : IEntityRegistry
+{
+    public ulong HighWaterMark<T>() where T : class;              // save-stable id continuation
+    public void RestoreHighWaterMark<T>(ulong mark) where T : class;
+}
+
+public sealed class SimulationClock : ISimulationClock
+{
+    public SimulationClock(GameDate epoch);       // the date at tick 0
+    public void Advance();                        // stage 0, once per tick, pipeline only
+    public void RestoreTo(Tick tick);             // load only — refused after ticking begins
+}
+
+public sealed class RandomSource : IRandomSource { public RandomSource(ulong worldSeed); }
+
+public sealed class Log : ILog { public Log(ILogSink sink, LogLevel minimumLevel); }
+
+public sealed class AuditTrail : IAuditTrail
+{
+    public AuditTrail(ISimulationClock clock, AuditRetention retention);
+    public int Count { get; }
+    public void Prune();                          // tick close; the §5 cause-graph closure
+}
+
+public abstract class FaultPolicy : IFaultPolicy      // records to log + trail, then decides
+{
+    protected FaultPolicy(ILog log, IAuditTrail audit);
+    protected abstract FaultResolution Decide(Fault fault);
+}
+public sealed class StrictFaultPolicy    : FaultPolicy { }   // throws on everything
+public sealed class ResilientFaultPolicy : FaultPolicy { }   // 09 §5.3 table
+
+public sealed class EventBus : IEventBus
+{
+    public EventBus(ISimulationClock clock);
+    public void Seal();                           // stage 13 — EM2: nothing observable before
+}
+
+public sealed class CommandBus : ICommandBus
+{
+    public CommandBus(IAuditTrail audit, IEventBus events);
+    public void Register<TCommand>(ICommandValidator<TCommand> validator,
+                                   ICommandApplier<TCommand> applier) where TCommand : Command;
+}
+
+public sealed class ModuleComposer                // NOT IModuleRegistry — see §9
+{
+    public CompositionResult Compose(IReadOnlyList<IModule> modules);
+}
+public enum CompositionProblemKind
+{ UnmetRequirement, DuplicateProvider, DuplicateStateKey, DependencyCycle, StageConflict }
+public sealed record CompositionProblem(CompositionProblemKind Kind, ModuleName Module, string Detail);
+public abstract record CompositionResult;
+public sealed record Composed(IReadOnlyList<IModule> OrderedModules) : CompositionResult;
+public sealed record CompositionRefused(IReadOnlyList<CompositionProblem> Problems) : CompositionResult;
+
+public sealed class StateRegistry                 // §10, registration only
+{
+    public void Register(IStateOwner owner);      // write-once per key (L5)
+    public IReadOnlyList<IStateOwner> Owners { get; }   // KEY order, not registration order
+    public bool TryGet(StateKey key, out IStateOwner? owner);
+    public IStateOwner Resolve(StateKey key);     // unowned key → InvariantFault
+    public int Count { get; }
+}
+
+public sealed class SegmentPlanner                // §9
+{
+    public const int MaxSegments = 4;             // TM-D2
+    public SegmentPlanner(IAuditTrail audit);     // takes the trail because EVERY merge is audited
+    public SegmentPlan Plan(IReadOnlyCollection<EntityRef> availableAtStart,
+                            IReadOnlyList<AvailabilityChange> changes);
+}
+
+public sealed class TickPipeline                  // §3, design 03 §6
+{
+    public TickPipeline(SimulationClock clock, EventBus events, IAuditTrail audit,
+                        IFaultPolicy faults, ILog log, IReadOnlyList<ITickStage> stages);
+    public Tick CurrentTick { get; }
+    public TickResult AdvanceTick();
+    public IReadOnlyList<StageId> DeclaredOrder();
+}
+```
+
+`TickPipeline` taking `SimulationClock` and `EventBus` **concretely** is the one
+deliberate exception to L1 in the kernel, and it is the reason the exception
+exists: the pipeline is the only thing permitted to call `Advance()` and
+`Seal()`, so it must hold the types that have them. Any other module gets the
+interfaces and therefore cannot.
 
 ## 13. Open items
 
