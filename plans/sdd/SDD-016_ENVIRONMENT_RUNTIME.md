@@ -25,11 +25,25 @@ boundaries live on the /30ths day grid (SDD-001 §9) — a daily process makes
 "the storm arrived on day 11" an exact grid fact, unifying weather with
 segmentation with no interpolation.
 
-> **Pass-5 amendment (finding 76):** the replaceable part is the state advance:
-> `IWeatherModel { ContentId Id; double NextState(double x, IRandomStream weather); }`.
-> Severity/temperature curves over x stay engine-side content application;
-> extremes (§2) stay engine draws. One call per region per day, Weather stream
-> only — a mod swapping the process cannot touch the curves or the calendar.
+**The replaceable part is the state advance, and only that** (finding 76):
+
+```csharp
+public interface IWeatherModel
+{
+    ContentId Id { get; }
+    double NextState(double x, IRandomStream weather);   // one call per region per day
+}
+```
+
+Severity and temperature curves over `x` stay engine-side content application,
+and the extremes of §2 stay engine draws — so **a mod swapping the process
+cannot touch the curves or the calendar.** The interface is one method wide for
+that reason: the widest thing a weather plugin may do is decide how persistent
+the weather is.
+
+Note what returning a bare `double` buys: severity and ambient temperature are
+both content curves over the *same* `x`, so hot spells and storm calms correlate
+without the model knowing either curve exists.
 
 ## 2. Extremes
 

@@ -51,38 +51,106 @@ store, built ONLY from the "regional data" observation pass — R15-V10's leak
 guarantee is that beliefs are constructed through the same observation door as
 everything else, never copied from truth).
 
-> **Pass-5 amendment (finding 76):** the handoff is TYPED. The generator's
-> only output channel is `IWorldSink`:
->
-> ```csharp
-> public interface IWorldSink
-> {
->     void AddAccumulation(GeneratedAccumulation a);   // Play, Closure, Subtlety (DetectClass),
->                                                      // AccessRequirements, FluidForm, Compartments
->                                                      // (PoreVolume, φ, So, P0, T, Depth)
->     void SetSurface(GeneratedSurface s);             // Terrain (heightfield, classes, rivers, lakes;
->                                                      // sea level = elevation 0, bathymetry negative),
->                                                      // Settlements, TransportLinks, Harbours,
->                                                      // ThirdPartyAssets, SensitivityZones
->     void AddClimateRegion(ClimateRegion r);          // (Profile, Area) — SDD-016 §1
->     void AddJurisdiction(Jurisdiction j);            // (FiscalRegime, Area)
->     void DeliverRegionalObservation(Observation o);  // beliefs ONLY via the observation door (R15-V10)
-> }
-> public interface IWorldGenerator
-> {
->     ContentId Id { get; }
->     void Generate(IWorldSink sink, IRandomStream worldGen);   // once, tick zero, WorldGen stream only
-> }
-> ```
->
-> Owning modules build internal truth FROM these records — the generator never
-> sees a module store, which is what makes the slot moddable (03 §3.2) without
-> opening the truth wall. R15.0 reviews granularity, not existence.
+**The handoff is typed** (finding 76). The generator's only output channel is
+`IWorldSink`; owning modules build their internal truth *from* these records, so
+the generator never sees a module store — which is what makes the slot moddable
+(03 §3.2) without opening the truth wall. R15.0 reviews granularity, not
+existence.
 
-> **Pass-7 amendment (findings 79–80):** generation is parameterised —
-> `Generate(WorldParameters, IWorldSink, IRandomStream)`. `WorldParameters
-> (Template, WidthCells, HeightCells, LandFraction, ResourceRichness,
-> BasinMaturity, ClimateSeverity, RivalCount, StartEra)`: a parameter never
+```csharp
+// ---- geology
+public sealed record GeneratedCompartment(
+    ReservoirVolume PoreVolume, double Porosity, double OilSaturation,
+    Pressure InitialPressure, Temperature Temperature, Length Depth);
+
+// Subtlety and Access are TRUTH attributes here — below-tier surveys spawn
+// nothing because screening reads these, not the other way round (§2.5–2.7).
+public sealed record GeneratedAccumulation(
+    ContentId Play, Polygon Closure, DetectClass Subtlety,
+    AccessRequirements Access, FluidForm Fluid,
+    IReadOnlyList<GeneratedCompartment> Compartments);
+
+// ---- surface
+// Sea level is elevation 0 and bathymetry is negative elevation, so harbour
+// depth falls out of the same field rather than needing its own map (§3).
+public sealed record Heightfield(
+    Length CellSize, int Width, int Height, ImmutableArray<double> ElevationMetres);
+
+public sealed record River(ImmutableArray<Coordinate> Path);
+
+public sealed record GeneratedTerrain(
+    Heightfield Elevation,
+    ImmutableArray<int> ClassByCell,        // indexes Classes; class ids are content (C16)
+    IReadOnlyList<ContentId> Classes,
+    IReadOnlyList<River> Rivers,
+    IReadOnlyList<Polygon> Lakes);
+
+public sealed record Settlement(Coordinate Site, long Population);
+public sealed record TransportLink(Coordinate A, Coordinate B, ContentId Kind);
+public sealed record Harbour(Coordinate Site, Length Depth);   // Harbour, NOT Port: PortId/PortSpec
+                                                               // are flow-element ports (N1)
+public sealed record ThirdPartyAsset(ContentId Template, Coordinate Site);
+public sealed record SensitivityZone(ContentId Kind, Polygon Area);
+
+public sealed record GeneratedSurface(
+    GeneratedTerrain Terrain,
+    IReadOnlyList<Settlement> Settlements,
+    IReadOnlyList<TransportLink> Transport,
+    IReadOnlyList<Harbour> Harbours,
+    IReadOnlyList<ThirdPartyAsset> ThirdParty,
+    IReadOnlyList<SensitivityZone> LandStatus);
+
+// ---- regions
+public sealed record ClimateRegion(ContentId Profile, Polygon Area);   // exactly one per location
+public sealed record Jurisdiction(ContentId FiscalRegime, Polygon Area);
+
+// ---- the sink and the generator
+public interface IWorldSink
+{
+    void AddAccumulation(GeneratedAccumulation accumulation);
+    void SetSurface(GeneratedSurface surface);
+    void AddClimateRegion(ClimateRegion region);
+    void AddJurisdiction(Jurisdiction jurisdiction);
+    void DeliverRegionalObservation(Observation observation);   // beliefs ONLY here (R15-V10)
+}
+
+public interface IWorldGenerator
+{
+    ContentId Id { get; }
+    void Generate(WorldParameters parameters, IWorldSink sink, IRandomStream worldGen);
+}
+```
+
+> **Contract pass 10 — the two amendments in this section disagreed with each
+> other.** Pass 5 declared `Generate(IWorldSink, IRandomStream)`; pass 7, three
+> paragraphs below, added `WorldParameters` as a first argument and never edited
+> pass 5's block. Whichever a reader reached first was the signature they would
+> have implemented. Consolidated above, with pass 7's form as the committed one.
+>
+> This is the **fourth** occurrence of the amendment-versus-block pattern
+> (SDD-002 §6, SDD-004 §5, SDD-005 §3), and the first where the two disagreeing
+> statements are both amendments in a single section — which is what makes it
+> worth a standing review rule rather than four separate corrections.
+>
+> The fourteen handoff records were described in comments *inside* the sink's
+> member list and declared nowhere. R15 cannot emit a world without them.
+
+```csharp
+public sealed record WorldParameters(
+    ContentId Template,          // the world-template entry: all archetype/weight tables
+    int WidthCells,              // terrain grid and region count (§3 terrain)
+    int HeightCells,
+    double LandFraction,         // sea-level percentile of the heightfield (§3 hydrology)
+    double ResourceRichness,     // charge-emission multiplier (§2 step 6 fill-spill)
+    double BasinMaturity,        // archetype weights frontier↔mature (§2 step 1)
+                                 // + third-party density (§3 step 9.5)
+    double ClimateSeverity,      // weather amplitude / extreme rate (SDD-016 §1–2)
+    int RivalCount,              // rival roster size (SDD-011)
+    Era StartEra);               // technology availability at tick zero (07 §2)
+```
+
+> **Pass-7 amendment (findings 79–80):** generation is parameterised. A
+> parameter never
 > invents content — it selects the world-template entry and scales that
 > template's declared tables (richness → step 6 charge emission; maturity →
 > step 1 archetype weights + step 9.5 third-party density; land fraction →

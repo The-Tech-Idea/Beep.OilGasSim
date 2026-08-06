@@ -36,9 +36,17 @@ reach tick 0 or keep tick N through any declared type. Pinned:
 // on IEngine:
 void WriteSave(System.IO.Stream destination);   // the SDD-013 §1 container; host owns slots/paths/IO (R19 §5)
 
-public sealed record EngineSetup(ulong WorldSeed, IReadOnlyList<IContentSource> Content,
-                                 ContentId RealityProfile, ContentId GameMode);
-public abstract record EngineStartResult;           // Started(IEngine) | Refused(IReadOnlyList<LoadFailure>)
+public sealed record EngineSetup(
+    ulong WorldSeed,
+    IReadOnlyList<IContentSource> Content,
+    ContentId RealityProfile,
+    ContentId GameMode,
+    WorldParameters World);                         // SDD-010 §4 — the new-world knobs
+
+public abstract record EngineStartResult;
+public sealed record EngineStarted(IEngine Engine) : EngineStartResult;
+public sealed record EngineRefused(IReadOnlyList<LoadFailure> Reasons) : EngineStartResult;
+
 public interface IEngineFactory
 {
     EngineStartResult CreateNew(EngineSetup setup);
@@ -46,14 +54,39 @@ public interface IEngineFactory
 }
 ```
 
+> **Contract pass 10.** `EngineSetup` had four members; SDD-010's pass-7
+> amendment added `WorldParameters` to world generation and nothing propagated
+> it here, so the host had no declared way to pass the new-world knobs to
+> `CreateNew` — the very call they parameterise. Fifth occurrence of the
+> amendment-not-propagated pattern and the first that crosses two documents.
+>
+> `EngineStarted` and `EngineRefused` existed only as a trailing comment on the
+> abstract base.
+
 Loading composes a NEW engine — continuation identity (G2/PV2) is a property
 of that composition. Composition, content and save refusals share the
 `LoadFailure` shape: ALL reasons, engine does not start.
 
 ## 1c. The world surface (pass-8 amendment, finding 81)
 
-`IEngine.World` (a `WorldView`: terrain, settlements, transport, harbours,
-land status, climate regions, jurisdictions) is the map screen's base layer —
+```csharp
+public sealed record WorldView(
+    GeneratedTerrain Terrain,
+    IReadOnlyList<Settlement> Settlements,
+    IReadOnlyList<TransportLink> Transport,
+    IReadOnlyList<Harbour> Harbours,
+    IReadOnlyList<SensitivityZone> LandStatus,
+    IReadOnlyList<ClimateRegion> ClimateRegions,
+    IReadOnlyList<Jurisdiction> Jurisdictions);
+```
+
+**`WorldView` reuses SDD-010's handoff records rather than defining view copies
+of them**, because the surface is static: a projection exists to keep a mutable
+truth away from the host, and there is no mutable truth here to keep away. That
+`GeneratedAccumulation` is *absent* from this list is the whole guarantee — the
+type system, not a filter, is what stops accumulations reaching the map.
+
+`IEngine.World` is the map screen's base layer —
 immutable after creation, so it sits beside the per-tick `ReadModel` instead of
 being rebuilt with it. It carries PUBLIC knowledge only: accumulations never
 appear — they are truth and reach the host solely as beliefs
@@ -69,23 +102,115 @@ One root record, rebuilt whole each tick (AD2), sections mirroring
 ```csharp
 public sealed record ReadModel(
     Tick Tick, GameDate Date,
-    CompanyView Company,          // cash, debt, borrowing base+rate, RRR, reserves by class, ESG, SL
-    IReadOnlyList<FieldView> Fields,      // production actual/potential/deferred-by-element, pressures, water cut, GOR
-    IReadOnlyList<WellView> Wells,        // status+cause, operating point, IPR/VLP curve samples, installed tiers
-    IReadOnlyList<FacilityView> Facilities,   // unit capacities/utilisation/spec margins, power balance
-    IReadOnlyList<OperationView> Operations,  // progress, expected completion, standby, accrued
-    LogisticsView Logistics,      // tanks/ullage, berths, cargoes, linefill
-    MarketView Market,            // benchmarks, realised components, contracts, cost index
-    HseView Hse,                  // barrier status+backlog, two safety indicators, emissions vs caps, incidents
-    EnvironmentView Environment,  // weather, forecast (SDD-016 §4), windows with time remaining, days lost by cause
-    BeliefView Beliefs,           // per entity/kind: P10/P50/P90, provenance, as-of; POS factors; "beyond imaging" flags
-    ExplorationView Exploration,  // licences+clocks+commitments, rounds, rival public results, VOI panels
-    ObjectiveView Objectives);    // progress, score dimensions, profile stamp
+    CompanyView Company,
+    IReadOnlyList<FieldView> Fields,
+    IReadOnlyList<WellView> Wells,
+    IReadOnlyList<FacilityView> Facilities,
+    IReadOnlyList<OperationView> Operations,
+    LogisticsView Logistics,
+    MarketView Market,
+    FinanceView Finance,
+    HseView Hse,
+    EnvironmentView Environment,
+    BeliefView Beliefs,
+    ExplorationView Exploration,
+    ObjectiveView Objectives);
 // NO AdvisorView — an earlier draft put Advisor proposals inside the engine's
 // read model, but the Advisor is a CLIENT (SDD-015 §1): the engine cannot carry
 // a client's state. Advisor output lives beside the read model, host-side.
-// This also restores the exact 16-section ⇔ R21 §2.4b correspondence (V11).
+
+public sealed record CompanyView(
+    Money Cash, Money Debt, Money BorrowingBase, double BorrowingRate,
+    double EsgRateSpread,                // ESG's cost-of-capital effect, explicit
+    double ReserveReplacementRatio,      // the liquidation spiral's standing indicator (IR2)
+    SurfaceVolume Reserves1P, SurfaceVolume Reserves2P, SurfaceVolume Reserves3P,
+    double EsgStanding, double SocialLicence);
+
+// BELIEVED values — the read model never carries truth (R21-V4).
+public sealed record CompartmentView(
+    EntityRef Compartment, Pressure BelievedPressure, double WaterCut, double GasOilRatio);
+
+public sealed record FieldView(
+    EntityRef Field, string DisplayId,
+    MassRate ProducedActual, MassRate ProducedPotential,
+    IReadOnlyList<(EntityRef Element, ConstraintKind Kind, Mass Deferred)> DeferredByElement,
+    double WaterCut, double GasOilRatio,
+    IReadOnlyList<CompartmentView> Compartments);
+
+public sealed record WellView(
+    EntityRef Well, string DisplayId, Coordinate Site,
+    WellStatus Status, string StatusCauseLocId,       // LocId, never formatted text (EM4)
+    OperatingPoint? OperatingPoint,
+    IReadOnlyList<ContentId> InstalledTiers,
+    IReadOnlyList<(MassRate Rate, Pressure BottomholePressure)> IprCurve,   // sampled for rendering
+    IReadOnlyList<(MassRate Rate, Pressure BottomholePressure)> VlpCurve);
+
+public sealed record FacilityView(
+    EntityRef Facility, string DisplayId, Coordinate Site,
+    Power PowerDemand, Power PowerSupply,
+    IReadOnlyList<(EntityRef Unit, ConstraintKind Kind, double Utilisation)> UnitUtilisation,
+    IReadOnlyList<(EntityRef Unit, SpecProperty Property, double Margin)> SpecMargins);
+
+public sealed record OperationView(
+    EntityRef Operation, string DisplayId, OperationState State,
+    int ProgressDays, int EffectiveDurationDays, Money Accrued);
+
+public sealed record LogisticsView(
+    IReadOnlyList<(EntityRef Tank, Mass Held, Mass Ullage)> Tanks,
+    IReadOnlyList<(EntityRef Berth, Tick NextFree)> Berths,
+    IReadOnlyList<(EntityRef Cargo, ContentId Grade, Mass Size, Tick Window)> Nominations);
+
+public sealed record MarketView(
+    IReadOnlyList<(ContentId Benchmark, Money PerTonne)> Prices, double CostIndex);
+
+// "Where did my money go?" — by cause, for the period (R21 §2.4b).
+public sealed record FinanceView(
+    IReadOnlyList<(ContentId Cause, Money Amount)> CostsByCause,
+    IReadOnlyList<(ContentId Cause, Money Amount)> RevenueByCause);
+
+public sealed record HseView(
+    double ProcessSafetyIndicator, double PersonalSafetyIndicator,
+    IReadOnlyList<(EntityRef Barrier, double Strength, int OverdueActions)> Barriers,
+    double EmissionsIntensity, double FlaringIntensity);
+
+public sealed record EnvironmentView(
+    double CurrentSeverity,
+    IReadOnlyList<(int HorizonDays, double ExpectedSeverity, double Confidence)> Forecast,
+    IReadOnlyList<(ContentId Window, int DaysRemaining)> AccessWindows,
+    IReadOnlyList<(ContentId Cause, int DaysLost)> DaysLostThisTick);
+
+public sealed record BeliefEntryView(
+    EntityRef Subject, ContentId PropertyKind,
+    double P10, double P50, double P90,               // P90 LOW, P10 HIGH (SDD-002 §2b)
+    Provenance BestSource, GameDate AsOf);
+
+public sealed record BeliefView(
+    IReadOnlyList<BeliefEntryView> Entries,
+    IReadOnlyList<(EntityRef Prospect, PosFactor Factor, double Mean)> PosFactors,
+    IReadOnlyList<(EntityRef PlayRegion, bool BeyondCurrentImaging)> ImagingFrontier);
+
+public sealed record ExplorationView(
+    IReadOnlyList<(EntityRef Licence, Polygon Area, Tick Expiry, int CommitmentItemsOutstanding)> Licences,
+    IReadOnlyList<(EntityRef Prospect, Polygon BelievedOutline, double Pos)> Prospects,   // BELIEVED outline
+    IReadOnlyList<(EntityRef Rival, string ResultLocId)> RivalPublicResults,
+    IReadOnlyList<(ContentId Source, EntityRef Subject, Money Cost, Money ExpectedValue)> PendingValueOfInformation);
+
+public sealed record ObjectiveView(
+    IReadOnlyList<(ContentId Objective, double Progress)> Progress,
+    IReadOnlyList<(ContentId Dimension, double Score)> ScoreDimensions,
+    ContentId RealityProfile);            // scores are stamped (18 §5b.6)
 ```
+
+> **Contract pass 10 — `FinanceView` was missing from the root.** This section
+> listed fourteen members and claimed "the exact 16-section ⇔ R21 §2.4b
+> correspondence (V11)" while omitting the projection R21 §2.4b calls *"where
+> did my money go?"*. The count in the claim and the count in the record never
+> agreed, and the note asserting they did is what stopped anyone checking.
+>
+> The fourteen view records were described in trailing comments and declared
+> nowhere. Declared above — worth doing in full rather than by summary, because
+> R21-V11 fixture-tests each section and SDD-014's path registry (§3) is
+> generated from these exact shapes.
 
 - **All records, all `IReadOnlyList`, no engine entity references** — views
   carry `EntityRef` + display ids only. Immutability is structural (records of
@@ -105,14 +230,29 @@ the host's own binding) — the registry *is* the read-model schema.
 ## 4. Audit query
 
 ```csharp
+public sealed record ProductionLossReport(
+    EntityRef Scope,
+    TickRange Range,
+    Mass Potential,
+    Mass Actual,
+    IReadOnlyList<(EntityRef Element, ConstraintKind Kind, Mass Deferred)> ByCause);
+
 public interface IAuditQuery
 {
-    IReadOnlyList<AuditEntry> ForEntity(EntityRef e, TickRange range);
-    IReadOnlyList<AuditEntry> ByCategory(AuditCategory c, TickRange range);
-    IReadOnlyList<AuditEntry> CauseChain(AuditId leaf, int maxDepth = 10);   // 21 §7, I-D3 cap
-    ProductionLossReport Losses(EntityRef fieldOrCompany, TickRange range);  // 09 §7 — pre-shaped, not host-derived
+    IReadOnlyList<AuditEntry> ForEntity(EntityRef entity, TickRange range);
+    IReadOnlyList<AuditEntry> ByCategory(AuditCategory category, TickRange range);
+    IReadOnlyList<AuditEntry> CauseChain(AuditId leaf, int maxDepth);        // 21 §7, I-D3 cap
+    ProductionLossReport Losses(EntityRef fieldOrCompany, TickRange range);  // 09 §7 — pre-shaped
 }
 ```
+
+> **Contract pass 10.** `maxDepth` carried a default of 10. Law L2 bans
+> defaulted dependencies, and while an `int` is not a collaborator, the depth cap
+> here is a *policy* (I-D3) — the same argument that makes `AuditRetention` a
+> constructor argument in SDD-001 §5 rather than a constant. A caller that has
+> not thought about how deep a cause chain it wants should be made to. Committed
+> without the default. `ProductionLossReport` was named in the return and
+> declared nowhere.
 
 `ProductionLossReport` is served, not derived by the host — the deferral ledger
 (SDD-002 §8) is authoritative and pre-aggregated here.
