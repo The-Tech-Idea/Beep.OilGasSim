@@ -166,12 +166,21 @@ invariant fault (INV6).
 public readonly record struct Coordinate(double X, double Y);   // metres on the world plane
 // Fictional basins on a flat plane (open decision W1): no geodesy, ever.
 
-public readonly record struct Polygon                            // immutable ring, CCW, no self-intersection (validated)
+public readonly record struct Polygon
 {
+    public ImmutableArray<Coordinate> Vertices { get; }
+
+    // VALIDATING constructor — the ring's properties are established once, here,
+    // so no consumer re-checks: at least 3 vertices, no zero-length edge, not
+    // self-intersecting, counter-clockwise. Simplicity is checked BEFORE
+    // orientation, because a bow-tie's lobes cancel to zero signed area and an
+    // orientation-first order reports the wrong defect (R1.1).
+    public Polygon(ImmutableArray<Coordinate> vertices);
+
     public Area Area { get; }                                    // shoelace — exact-order summation
-    public bool Contains(Coordinate p);                          // ray-cast, ties resolved by the half-open rule
-    public bool Overlaps(in Polygon other);
-    public Coordinate Centroid { get; }
+    public Coordinate Centroid { get; }                          // AREA centroid, not the vertex mean
+    public bool Contains(Coordinate p);                          // ray-cast, half-open rule
+    public bool Overlaps(in Polygon other);                      // conservative: touching counts
 }
 
 public static class Distances
@@ -196,7 +205,9 @@ footprints never need robust intersection: `Overlaps` may be conservative
 ## 2. Identity — R1.2
 
 ```csharp
-public readonly record struct EntityId<T>(ulong Value); // T: marker type, e.g. EntityId<IWell>
+// T is a marker type, e.g. EntityId<IWell>. Comparable, because ordered
+// enumeration by id is what rule D-5 asks of every registry.
+public readonly record struct EntityId<T>(ulong Value) : IComparable<EntityId<T>>;
 
 // The type-ERASED reference, for events, audit entries and read-model views —
 // places that must name an entity without depending on its module. One struct
@@ -214,13 +225,16 @@ public enum EntityKind
 // order of design 21 §5.3, so two runs cannot seal a tick differently.
 public readonly record struct EntityRef(EntityKind Kind, ulong Value) : IComparable<EntityRef>;
 
+// `where T : class` throughout: an entity is a reference, and the constraint is
+// what lets TryResolve return null for absence without boxing a value type
+// (pass 10 — the constraints were in the code and not in this block).
 public interface IEntityRegistry
 {
-    EntityId<T> Issue<T>();                       // monotonic per T, save-stable
-    void Register<T>(EntityId<T> id, T entity);    // completes the id issued above
-    T Resolve<T>(EntityId<T> id);                  // unresolvable → INV3 invariant fault
-    bool TryResolve<T>(EntityId<T> id, out T entity); // for the *few* places absence is a state
-    IReadOnlyList<T> All<T>();                     // ordered by id — D-5 safe enumeration
+    EntityId<T> Issue<T>() where T : class;                    // monotonic per T, save-stable
+    void Register<T>(EntityId<T> id, T entity) where T : class; // completes the id issued above
+    T Resolve<T>(EntityId<T> id) where T : class;               // unresolvable → INV3 fault
+    bool TryResolve<T>(EntityId<T> id, out T? entity) where T : class;  // the few places absence is a state
+    IReadOnlyList<T> All<T>() where T : class;                  // ordered by id — D-5 safe
 }
 ```
 
@@ -247,7 +261,12 @@ signature.
 ## 3. Time — R1.3, R1.13, R1.15
 
 ```csharp
-public readonly record struct Tick(int Value);              // 0-based, monotonic
+public readonly record struct Tick(int Value) : IComparable<Tick>   // 0-based, monotonic
+{
+    public Tick Next { get; }                               // the ONLY way a tick advances
+    public static bool operator >(Tick a, Tick b);
+    public static bool operator <(Tick a, Tick b);
+}
 // THE 360-DAY YEAR, pinned: every month is exactly 30 days (the industry's own
 // 30/360 day-count convention). This is what makes the /30ths segment grid
 // (§9) exact for EVERY tick — real month lengths (28-31) would break grid
@@ -399,7 +418,9 @@ public interface IAuditTrail
 {
     AuditId Record(AuditCategory category, EntityRef? subject, AuditId? cause,
                    IReadOnlyDictionary<string, AuditValue> data);
-    IReadOnlyList<AuditEntry> Query(in AuditQuery query);  // by entity / tick range / category / cause-walk
+    IReadOnlyList<AuditEntry> Query(AuditQuery query);     // entity / range / category / cause-walk
+    // pass 10: `in` dropped — AuditQuery is a record, so the modifier bought
+    // nothing and read as though it were a struct (same as SDD-002 §5's Transform)
 }
 
 public enum FaultClass { Content, Composition, Command, Model, Invariant, Host }
@@ -610,13 +631,42 @@ should question. No SDD needs to restate the full list; each states its own.
 > absent: fractional scaling MUST pass the half-even door, visibly.
 
 ```csharp
-public readonly record struct Money(long Cents)   // scaled integer: exact, portable, D-3
+public readonly record struct Money(long Cents) : IComparable<Money>
 {
-    public static Money FromMillions(double m) => new(checked((long)(m * 100_000_000)));
-    public static Money operator +(Money a, Money b) => new(checked(a.Cents + b.Cents));
-    // checked arithmetic: overflow is an invariant fault, not a wrap
+    public static readonly Money Zero;
+
+    // THE one double→Money rule: half-even, exactly once, at the Movement that
+    // enters the ledger (SDD-009 §1). Every crossing goes through here.
+    public static Money RoundHalfEven(double cents);
+    public static Money FromMillions(double millions);      // = RoundHalfEven(m · 1e8)
+
+    // Checked throughout: overflow is an invariant fault, never a wrap.
+    public static Money operator +(Money a, Money b);
+    public static Money operator -(Money a, Money b);
+    public static Money operator -(Money a);                 // unary
+    public static Money operator *(Money a, long factor);    // EXACT — pass 4, finding 74
+    public static Money operator *(long factor, Money a);
+    public static bool operator >(Money a, Money b);
+    public static bool operator <(Money a, Money b);
+    public static bool operator >=(Money a, Money b);
+    public static bool operator <=(Money a, Money b);
+    public int CompareTo(Money other);
 }
+// NO operator *(Money, double): fractional scaling MUST pass the half-even door
+// visibly, and an implicit double multiply is exactly how it would stop doing so.
 ```
+
+> **Contract pass 10, member-level diff.** This block declared
+> `FromMillions(double m) => new(checked((long)(m * 100_000_000)))` — a
+> **truncating cast**, which contradicts [SDD-009](SDD-009_ECONOMICS_ENGINE.md)
+> §1's rule that every double→Money crossing rounds half-even. Two documents
+> specified two different roundings for the same conversion; the committed code
+> follows SDD-009 and this block was wrong. The difference is not cosmetic:
+> truncation biases every conversion toward zero, and INV2 claims cash
+> conservation is *exact*.
+>
+> `Zero`, `RoundHalfEven`, subtraction, negation, the comparisons and
+> `IComparable<Money>` were all in the code and in no SDD.
 
 Cash conservation (INV2) over integers is *exact* — no tolerance term needed,
 which is why money is not a `double`.
