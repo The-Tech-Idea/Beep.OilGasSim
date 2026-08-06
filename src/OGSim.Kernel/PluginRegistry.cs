@@ -20,6 +20,12 @@ public sealed class PluginRegistry : IModuleRegistry
     // separation model, and they are different plugins.
     private readonly Dictionary<(ContentId Name, Type Contract), Func<object>> _factories = [];
 
+    // The same registrations as an ORDERED list. Not duplication of a fact —
+    // the Dictionary owns the lookup, this owns the enumeration order — and it
+    // is what lets RegisteredFor answer without enumerating a hash-ordered
+    // collection, which rule D-5 forbids outright rather than case by case.
+    private readonly List<(ContentId Name, Type Contract)> _registered = [];
+
     /// <summary>
     /// A factory rather than an instance: some plugins are per-element (a
     /// pipeline's hydraulic model) and some are singletons for a run. Deferring
@@ -38,6 +44,7 @@ public sealed class PluginRegistry : IModuleRegistry
                 "two modules cannot provide one plugin under one contract.");
 
         _factories.Add(key, factory);
+        _registered.Add(key);
     }
 
     public bool CanBind(ContentId plugin, Type contract)
@@ -62,12 +69,25 @@ public sealed class PluginRegistry : IModuleRegistry
         return (T)factory();
     }
 
-    // A `RegisteredFor(contract)` helper was written here and removed: nothing
-    // called it, and it enumerated the factory Dictionary — which rule D-5
-    // forbids even though the result was sorted afterwards. The rule's value is
-    // that it needs no reasoning about whether a particular enumeration happens
-    // to be safe, and "I sorted it after" is exactly the argument that stops
-    // being true when someone edits the method later. If a load report ever
-    // wants to list the available plugin names, that is the point to add the
-    // ordered structure it needs (law L3: no member without a consumer).
+    /// <summary>
+    /// Every name registered for a contract, in id order — what a load report
+    /// lists when a name does not resolve, so an author sees the real options
+    /// instead of guessing.
+    ///
+    /// Enumerates the ordered <c>_registered</c> list, never the factory
+    /// Dictionary: rule D-5 bans enumerating a hash-ordered collection outright,
+    /// and sorting the result afterwards would only be safe until someone edited
+    /// the method. The rule is worth more when it needs no such reasoning.
+    /// </summary>
+    public IReadOnlyList<ContentId> RegisteredFor(Type contract)
+    {
+        ArgumentNullException.ThrowIfNull(contract);
+
+        var names = new List<ContentId>();
+        for (int i = 0; i < _registered.Count; i++)
+            if (_registered[i].Contract == contract) names.Add(_registered[i].Name);
+
+        names.Sort((a, b) => a.CompareTo(b));
+        return names;
+    }
 }
