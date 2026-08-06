@@ -29,12 +29,19 @@ public readonly record struct Pressure(double Pascals) : IComparable<Pressure>
 }
 ```
 
-**The full dimension set (17):** `Length`, `Mass`, `Duration` (sim days, not
-`TimeSpan`), `Pressure`, `Temperature`, `MassRate`, `Power`, `Energy`,
+**The full dimension set (18):** `Length`, `Area`, `Mass`, `Duration` (sim days,
+not `TimeSpan`), `Pressure`, `Temperature`, `MassRate`, `Power`, `Energy`,
 `Permeability`, `Viscosity`, `Density`, `HeatingValue`, plus the volume family
 (§1.1) and rate family (`VolumetricRate` per volume type), and `Money` (§8).
-Written by hand, not generated — 17 small structs is an afternoon, and the
+
+Written by hand, not generated — 18 small structs is an afternoon, and the
 declared-operator surface *is* the design.
+
+> **R1.0 review correction:** `Area` (canonical m²) was used by §1.4's
+> `Polygon.Area` but appeared in no dimension list and in no code — licence
+> polygons, footprints and drainage areas all need it. Added here, count 17 → 18.
+> Its one legal quotient is `Area / Length → Length`; `Length * Length → Area` is
+> the declared product.
 
 ### 1.1 Volume conditions are types, not fields
 
@@ -208,7 +215,12 @@ independence) provable rather than probable.
 ```csharp
 public interface ILog
 {
-    void Write(LogLevel level, EventName name, in LogFields fields); // no string interpolation at call sites
+    // R1.0: the committed interim shape, pending S001-1. `EventName` and
+    // `LogFields` were named here but declared nowhere; until the profiler data
+    // that S001-1 waits on exists, the event name is a plain string and the
+    // fields are an ordered list of the typed LogField pair. The call-site rule
+    // that matters — no string interpolation — holds in both shapes.
+    void Write(LogLevel level, string eventName, IReadOnlyList<LogField> fields);
     IDisposable Scope(ScopeKind kind, string id);                    // Session→Tick→Stage→Element nesting
 }
 
@@ -343,13 +355,18 @@ public enum StageId  // exactly 03 §6 — the FOURTEEN stages, numbered as docu
 
 public interface ITickStage { StageId Id { get; } void Execute(TickContext ctx); }
 
-public sealed record SegmentPlan(IReadOnlyList<Segment> Segments)     // built at stage 4
-{
-    // Segment(double Start, double Duration, AvailabilitySet Available)
-    // invariant INV9: durations sum to 1.0 exactly (rational boundaries, not floats:
-    // positions are stored as (numerator, 30-denominator) day fractions)
-}
+public sealed record Segment(int StartDay, int DurationDays,
+                             IReadOnlyCollection<EntityRef> Available);
+public sealed record SegmentPlan(IReadOnlyList<Segment> Segments);    // built at stage 4
+// invariant INV9: DurationDays sum to exactly 30 — INTEGER arithmetic on the
+// /30ths grid, never float positions summing to 1.0.
 ```
+
+> **R1.0 review correction:** this block previously declared
+> `Segment(double Start, double Duration, AvailabilitySet Available)` and stated
+> INV9 as "durations sum to 1.0 exactly" — contradicting its own next paragraph,
+> which requires whole days so that INV9 *is* integer arithmetic. `AvailabilitySet`
+> was also a type no SDD ever declared. The shape above is the committed one.
 
 Segment boundaries live on a **/30ths-of-a-tick grid** (whole days) rather than
 raw doubles — INV9's "sums to exactly one tick" becomes integer arithmetic, and

@@ -75,7 +75,14 @@ the single most likely double-count in the engine, structurally.
 
 **Decision: named, independently-seeded streams**, derived from the world seed by
 a stable hash of the stream name. Streams: `worldgen`, `exploration`,
-`measurement`, `hazard`, `price`, `market`, `operations`.
+`measurement`, `hazard`, `weather`, `price`, `market`, `operations`.
+
+> **R1.0 review correction:** this list read seven streams and omitted
+> `weather`, while [SDD-001](../sdd/SDD-001_KERNEL_CONTRACTS.md) §4, the
+> committed `StreamId` enum and [SDD-013](../sdd/SDD-013_PERSISTENCE_FORMATS.md)
+> §2 ("persists all eight positions") all carry eight. `weather` is required by
+> [SDD-016](../sdd/SDD-016_ENVIRONMENT_RUNTIME.md) §1's daily AR(1) draw. **Eight
+> is correct**; the omission was here.
 
 Rationale in [11_PERSISTENCE](../design/11_PERSISTENCE.md) §3.1 — this is what
 keeps world seeds stable across engine versions.
@@ -185,7 +192,7 @@ development-time event and the developer should get the whole list.
 | R1-V16 | Sub-tick segmentation (TM2) | A mid-tick availability change produces the exact duration-weighted result, verified by hand calculation |
 | R1-V17 | Segmentation ≠ averaging (TM3) | A case is demonstrated where averaging gives a materially different, wrong answer |
 | R1-V18 | Segment budget (TM4) | Exceeding it merges to boundaries **and audits the merge** |
-| R1-V19 | Calendar (TM11) | Quarter and year boundaries fire on the correct ticks across leap years |
+| R1-V19 | Calendar (TM11) | Quarter and year boundaries fire on the correct ticks under 30/360 — **leap years do not exist** ([SDD-001](../sdd/SDD-001_KERNEL_CONTRACTS.md) §3); the earlier "across leap years" wording contradicted the pinned calendar and was corrected at R1.0 |
 | R1-V20 | No engine subscribers (EM1) | Architecture test: no engine assembly subscribes to `IEventBus` |
 | R1-V21 | Publication at tick close (EM2) | No event is observable mid-tick |
 | R1-V22 | Typed payloads (EM4) | No event payload contains a pre-formatted display string |
