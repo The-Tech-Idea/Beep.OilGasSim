@@ -10,6 +10,14 @@ pinned so "add a mission" never becomes engine work.
 ## 1. The predicate AST
 
 ```csharp
+// A dotted key resolved against the read-model schema registry (§2). A struct
+// over a string rather than a bare string, so a path cannot be confused with a
+// display id or a localisation key at a call site.
+public readonly record struct ReadModelPath(string Path);
+
+public enum CompareOp { Lt, Le, Eq, Ne, Ge, Gt }
+public enum AggOp { Max, Min, Sum, Count, Any, All }
+
 public abstract record Predicate;
 public sealed record Metric(ReadModelPath Path) : Predicate;         // §2
 public sealed record Const(double Value) : Predicate;
@@ -33,6 +41,25 @@ public sealed record Aggregate(ReadModelPath Collection, AggOp Op,              
 Closed hierarchy (like `Effect` — SDD-005 §4); content expresses these as a
 small JSON tree, validated at load. The stateful nodes' counters/indices are
 **objective state, persisted** (SDD-013 module block `objectives`).
+
+> **Contract pass 10, member-level diff.** Four types this AST is built from
+> were used in the declarations above and declared nowhere: `ReadModelPath`,
+> `CompareOp`, `AggOp` and `EventFilter`. The same defect as SDD-002's
+> `ConstraintWriter` and SDD-005's `EnvelopeContext` — a signature that cannot
+> be implemented because a type it names does not exist.
+>
+All four are determined by this document's own text: `AggOp`'s members came from
+the trailing comment on `Aggregate`, which listed them without declaring them,
+and **`EventFilter`'s shape is settled by open item S014-1 below** — "subject /
+category / severity now; payload fields later?". Category is already `OnEvent`'s
+first argument, so the filter narrows the remaining two:
+
+```csharp
+// Both optional: an unset field does not narrow. S014-1 tracks whether payload
+// fields are ever needed — until then this is the whole vocabulary, which is
+// what keeps objectives unable to see anything the event does not carry.
+public sealed record EventFilter(EntityRef? Subject, Severity? MinimumSeverity);
+```
 
 ## 2. `ReadModelPath` — the no-invention rule
 

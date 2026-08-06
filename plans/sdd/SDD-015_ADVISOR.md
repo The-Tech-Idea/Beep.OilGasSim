@@ -18,12 +18,37 @@ this shape, not from care.
 ## 2. Advisor rules — content, on the same AST
 
 ```csharp
+public enum AdvisorLevel { Manual, Advise, Confirm, Auto }        // §5, per domain
+
+// §3's closed selector vocabulary: no scripting language, no Turing trap. A
+// selector the vocabulary lacks is an SDD change, which is rule F-1's spirit
+// applied to content.
+public enum Selector { Cheapest, HighestMargin, FirstFitting }
+
 public sealed record AdvisorRule(
     ContentId Id, DecisionDomain Domain,
     Predicate Trigger,                        // SDD-014 §1 AST — REUSED, one predicate engine
     CommandTemplate Proposal,                 // command type + parameter bindings (§3)
     ReasoningTemplate Reasoning);             // §4
 ```
+
+> **Contract pass 10, member-level diff.** `AdvisorRule` names four types and
+> this document declares none of them. `AdvisorLevel` and `Selector` are fully
+> determined by §5 and §3 and are declared above.
+>
+> **`DecisionDomain`, `CommandTemplate` and `ReasoningTemplate` are NOT
+> declared, deliberately** — recorded as open items rather than guessed. §5 names
+> two domain members (`ExplorationJudgement`, `Sanction`) as the judgement cap
+> and open item S015-1 refers to "all eight domains", but **the list of eight
+> appears nowhere in this document or in [20](../design/20_PLAYER_DECISIONS.md)**,
+> whose catalogue is organised into six prefixes. Six or eight is a real
+> question, and the judgement cap is a safety property that depends on the
+> answer. `CommandTemplate` and `ReasoningTemplate` are described in §3 and §4 as
+> path-bound bindings without a settled shape.
+>
+> Inventing three types here would put a guess where R25.0 owes a decision — and
+> the guess would be load-bearing, since the cap is asserted against domain
+> membership.
 
 **Reusing the objective AST is the design's economy**: triggers get load-time
 `ReadModelPath` validation for free (SDD-014 §2), so an advisor rule can never
@@ -87,3 +112,5 @@ content swap changes behaviour with no code change).
 |---|---|---|
 | S015-1 | Selector vocabulary sufficiency across all eight domains — audit against the 61-decision catalogue during rule authoring | R25.3 |
 | S015-2 | Advisor explanation of *inaction* ("why is nothing proposed?") — likely a host rendering of trigger states | R25 review |
+| S015-3 | **`DecisionDomain`'s membership is unstated.** §5 names `ExplorationJudgement` and `Sanction` as the capped pair and S015-1 says "all eight domains", but no list of eight exists here or in [20](../design/20_PLAYER_DECISIONS.md), which organises its 61 decisions into **six** prefixes (DEX/DDV/DPR/DCO/DEN/DHS). Six or eight changes what the judgement cap covers, so it is a safety question, not a naming one (contract pass 10) | R25.0 — resolve against 20 §1 before any rule authoring |
+| S015-4 | **`CommandTemplate` and `ReasoningTemplate` have no declared shape** — §3 and §4 describe path-bound bindings and a four-part reasoning structure without settling either. Both are named in `AdvisorRule` | R25.0 |
