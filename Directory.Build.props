@@ -1,0 +1,12 @@
+<Project>
+  <!-- SDD-000 §1: the platform decisions every line inherits. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <AnalysisLevel>latest</AnalysisLevel>
+    <!-- SDD-000 §1: no external packages in engine assemblies. -->
+  </PropertyGroup>
+</Project>

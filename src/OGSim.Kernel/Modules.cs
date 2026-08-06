@@ -1,0 +1,103 @@
+// SDD-001 §9–10 — composition, the tick pipeline, segments, state.
+// Composition either fully succeeds or refuses to start with EVERY unmet
+// requirement named (design 03 §3.1).
+
+namespace OGSim.Kernel;
+
+public readonly record struct ModuleName(string Value);
+
+public readonly record struct StateKey(string Value);
+
+public sealed record StageParticipation(StageId Stage);
+
+/// <summary>Design 03 §3.1 — what a module declares before it is constructed.</summary>
+public sealed record ModuleManifest(
+    ModuleName Name,
+    IReadOnlyList<Type> Provides,
+    IReadOnlyList<Type> Requires,
+    IReadOnlyList<StateKey> OwnsState,
+    IReadOnlyList<StageParticipation> Stages,
+    IReadOnlyList<Type> Commands);
+
+/// <summary>Resolution happens AFTER validation of the whole module set.</summary>
+public interface IModuleComposition
+{
+    void Provide<T>(T implementation) where T : class;
+    T Require<T>() where T : class;
+}
+
+/// <summary>Model-plugin binding for content stage 6 (SDD-004 §5): a content
+/// entry naming a plugin resolves here or the load fails naming the entry.</summary>
+public interface IModuleRegistry
+{
+    bool CanBind(ContentId plugin, Type contract);
+    T Bind<T>(ContentId plugin) where T : class;
+}
+
+public interface IModule
+{
+    ModuleManifest Manifest { get; }
+    void Compose(IModuleComposition composition);
+}
+
+/// <summary>A tick stage — the 14 of design 03 §6, executed in declared order.</summary>
+public interface ITickStage
+{
+    StageId Id { get; }
+    void Execute(TickContext context);
+}
+
+/// <summary>
+/// Per-tick execution context. Stage read isolation (design 21 §4 / I-V5) is
+/// asserted at runtime pending open item S001-4's interface-per-stage decision.
+/// </summary>
+public sealed class TickContext
+{
+    public required Tick Tick { get; init; }
+    public required GameDate Date { get; init; }
+
+    /// <summary>Null before stage 4 builds it; set exactly once by Availability;
+    /// reading it earlier is a stage-isolation violation (I-V5).</summary>
+    public SegmentPlan? Segments { get; set; }
+}
+
+// ---------------------------------------------------------------- segments
+
+/// <summary>
+/// A within-tick interval of constant availability, on the /30ths day grid —
+/// integer days, so INV9 ("durations sum to exactly one tick") is integer
+/// arithmetic (SDD-001 §9). Budget: 4 per tick; merges are audited, ranked by
+/// last-committed throughput × remaining duration (the pinned estimator).
+/// </summary>
+public sealed record Segment(
+    int StartDay,
+    int DurationDays,
+    IReadOnlyCollection<EntityRef> Available);
+
+public sealed record SegmentPlan(IReadOnlyList<Segment> Segments);
+
+// ---------------------------------------------------------------- state
+
+/// <summary>Ordered key/value writer in the canonical form of SDD-013 §3.</summary>
+public interface IStateWriter
+{
+    void WriteString(string key, string value);
+    void WriteInt64(string key, long value);
+    void WriteDouble(string key, double value);   // canonical shortest round-trip on disk
+}
+
+/// <summary>A missing or unreadable value is a SaveDataFault — never a default (SDD-001 §10).</summary>
+public interface IStateReader
+{
+    string ReadString(string key);
+    long ReadInt64(string key);
+    double ReadDouble(string key);
+}
+
+public interface IStateOwner
+{
+    StateKey Key { get; }
+    int SchemaVersion { get; }
+    void Capture(IStateWriter writer);
+    void Restore(IStateReader reader);
+}

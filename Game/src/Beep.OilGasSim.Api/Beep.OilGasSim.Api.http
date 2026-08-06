@@ -1,6 +1,0 @@
-@Beep.OilGasSim.Api_HostAddress = http://localhost:5161
-
-GET {{Beep.OilGasSim.Api_HostAddress}}/weatherforecast/
-Accept: application/json
-
-###

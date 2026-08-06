@@ -1,0 +1,194 @@
+# SDD-004 — Content Pipeline and Catalogue
+
+**Status:** drafted · **Serves:** R3 · **Design docs:** [10](../design/10_CONTENT_AND_UNITS.md), [07](../design/07_TECHNOLOGY.md) §4b, [catalog/](../catalog/CATALOG_INDEX.md), [R3](../phases/R3_CONTENT.md)
+
+Everything the loader does, pinned: the file grammar, the unit-string grammar,
+how "unknown keys are errors" is actually achieved, id policy, catalogue
+building order, plugin binding, and mod layering. The content author's contract
+and the implementer's, in one place.
+
+---
+
+## 1. Scope
+
+`OGSim.Kernel.Content`. Zero external packages (SDD-000 §1): parsing is
+`System.Text.Json` **source-generated** contexts, which is also how unknown-key
+rejection works without a schema engine.
+
+## 2. File grammar
+
+One entry per file. Required envelope, in this order by convention:
+
+```jsonc
+{
+  "kind": "well-component",          // REQUIRED, first — the explicit type (10 §3.1)
+  "id": "esp-c",                     // REQUIRED — kebab-case, unique per kind
+  "name": "$loc:equip.esp-c",        // localisation id, never inline text (CD5)
+  "era": "E3",                       // availableFromEra; omitted = E1
+  "requiresTech": "esp-ht-gassy",    // omitted = ungated, EXPLICITLY (10 §3)
+  // ... kind-specific body
+}
+```
+
+- Files under `content/**` with extension `.json`; directory layout is
+  organisational only — **the loader never infers anything from paths**.
+- `id` charset: `[a-z0-9-]`, 1–64 chars. Uniqueness is per `kind`.
+- **`ContentId`, pinned here because every SDD uses it and none declared it:**
+  `readonly record struct ContentId(string Value)` — charset-validated at
+  construction, compared and sorted **ordinal** (D-8), interned at load.
+  Never a bare string in a signature.
+- Cross-references are always by `"kind:id"` when cross-kind
+  (`"tech:esp-ht-gassy"` is legal and equivalent for `requiresTech`, which is
+  implicitly `tech:`).
+
+> **Pass-7 amendment (finding 80):** `terrain-class` joins the kind table — a
+> plain `ContentDefinition` (world fact: no `requiresTech`, no `Fits`, no era).
+> Authoring spec: [C16](../catalog/C16_TERRAIN_CLASSES.md). Consumed by the
+> world generator's terrain step (SDD-010 §3) and read back for construction /
+> transport / access factors.
+
+## 3. Unknown keys, without a schema engine
+
+**Decision:** every content kind has a C# *definition record* in
+`OGSim.Kernel.Content.Definitions`, deserialised via a source-generated
+`JsonSerializerContext` with:
+
+```csharp
+[JsonSourceGenerationOptions(
+    PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase,
+    UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow,   // unknown key -> error
+    NumberHandling = JsonNumberHandling.Strict)]
+```
+
+`Disallow` gives R3-V3 natively; the load report wraps the thrown path into
+*file · JSON path · offending key · nearest valid key* (Levenshtein over the
+record's property names — small, worth it for authors).
+
+**JSON Schema files still ship** (R3 deliverable, for editor tooling) but are
+**generated from the definition records at build** — one source of truth, so
+R3-V13 (schema currency) becomes a build step, not a discipline.
+
+## 4. The unit-string grammar (CD2)
+
+```ebnf
+quantity   = number , " " , unit ;
+number     = [ "-" ] , digits , [ "." , digits ] , [ ("e"|"E") , [ "-" ] , digits ] ;
+unit       = token , { ("/" | "." ) , token } , [ "^" , digit ] ;   // "kg/m^3", "m3/d"
+```
+
+- Parsed with `InvariantCulture`; **decimal point only** — a comma is a load
+  error with a pointed message, not a locale guess.
+- The unit vocabulary is **closed**: a table in `PhysicalConstants` mapping unit
+  token → (dimension, factor-to-SI, offset for temperature). Unknown token →
+  load error naming the nearest known token.
+- Dimension check happens at bind time: the definition record property is a
+  quantity type (`Pressure`), and a `"3200 psi"` deserialising into a
+  `Temperature` property fails stage 3 with both dimensions named (R3-V5).
+- Volume tokens carry their condition: `stb`, `rb`, `scf`, `sm3`, `rm3` map to
+  the distinct volume types of SDD-001 §1.1 — the double-count protection
+  reaches all the way into content.
+
+## 5. The six stages, as code
+
+```csharp
+public sealed class ContentLoader   // one public entry point
+{
+    public LoadResult LoadAll(IReadOnlyList<IContentSource> sources);
+    // LoadResult = Catalogues(success) | Failures(IReadOnlyList<LoadFailure>)
+    // NEVER both. Any failure -> engine does not start (10 §3, G2).
+}
+```
+
+| Stage | Implementation | Failure carries |
+|---|---|---|
+| 1 Parse | `JsonDocument.Parse` per file | file, byte offset, parser message |
+| 2 Shape | Source-gen deserialise to the kind's record (`kind` read first, dispatch by table) | file, JSON path, unknown/missing key, nearest-key hint |
+| 3 Units | Quantity properties bound via the grammar (§4) | file, path, token, expected dimension |
+| 4 References | Every id-typed property resolved against the id index built in stage 2 across **all** files (two passes: index, then resolve) | file, path, dangling `kind:id` |
+| 5 Consistency | Per-kind validators (ranges from property kinds, duplicate ids, `requiresTech` DAG acyclicity, era ∈ {E1..E4}) | file, path, rule id, values |
+| 6 Binding | Model-plugin names resolved against `IModuleRegistry`'s factories | file, path, unbound plugin name |
+
+**All files run all stages**; failures accumulate (R3-V2). Stage order within a
+file is fixed; file order is `ordinal sort of relative path` — determinism even
+in diagnostics.
+
+> **Pass-3 amendment (finding 69):** the surface of this section now exists in
+> `OGSim.Contracts/ContentContracts.cs`: `ContentDefinition`, `GatedDefinition`,
+> `Era`, `ICatalog<TDef>`, `ICatalogSet.Of<TDef>()`, `IContentSource`
+> (`Name`, `DeclaredOrder`, `Files`), `ContentFile`, `LoadStage`, `LoadFailure`,
+> `ContentLoadResult = ContentLoaded(ICatalogSet) | ContentFailures`. Stage-6
+> binding resolves against `IModuleRegistry` (Kernel):
+> `CanBind(ContentId, Type)` / `Bind<T>(ContentId)`. The `ContentLoader` class
+> itself remains R3 implementation.
+
+## 6. Catalogues
+
+```csharp
+public interface ICatalog<TDef> where TDef : ContentDefinition
+{
+    TDef this[ContentId id] { get; }               // missing -> content fault (never null)
+    IReadOnlyList<TDef> All { get; }               // ordinal-sorted by id string — save-stable
+    bool TryGet(ContentId id, out TDef def);
+}
+```
+
+- **Ordinal assignment** (e.g. `MaterialId.Ordinal`, SDD-002 §2): index into the
+  id-sorted list. Sorted-by-id means adding a material *changes ordinals* — so
+  **ordinals never persist**: saves store the id string; ordinals rebuild at
+  load. Pinned here because persisting an ordinal is exactly the subtle bug an
+  implementer would commit in week two.
+- Equipment kinds (`well-component`, `facility-unit`, `pipe-spec`,
+  `information-source`, `lift-method`) share a `GatedDefinition` base:
+  `RequiresTech : ContentId?`, `Era`, **`Fits : SlotKind`** (required on every
+  unlockable — [SDD-005](SDD-005_CAPABILITIES_AND_EFFECTS.md) §4.0b), optional
+  `ScopedEffects` + `ConsumptionRate`/`UnitCost` for treatments, plus the
+  catalogue-sheet fields (capex, install operation template id, datasheet
+  block). **The datasheet block is
+  kind-specific and closed** — an ESP datasheet is `headCurve` (piecewise
+  points, monotone-decreasing validated), `powerCurve`, `maxFreeGasFraction`,
+  `maxTemperature`, `rateRange`; there is no generic properties bag, because a
+  bag is where unknown-key safety goes to die.
+
+## 7. Mods
+
+```csharp
+public interface IContentSource { string Name { get; } int DeclaredOrder { get; } ... }
+```
+
+Base content is source order 0. Mods declare order; **two sources overriding one
+`kind:id` at the same order → load failure naming both** (10 §4). An override
+replaces the whole entry (no partial merge — merge semantics are unspecifiable
+for datasheets). The load report lists every override applied (R3-V11).
+
+## 8. TECH_TREE and sheets as fixtures
+
+The [TECH_TREE registry](../catalog/TECH_TREE.md) and
+[catalogue sheets](../catalog/CATALOG_INDEX.md) are the authoring spec (10 §2b).
+The mapping rule, pinned: **content id = deterministic slug of the registry
+display name** — lowercase, `/`, spaces and `·` to `-`, diacritics/₂-class
+subscripts folded (`CO₂ flood` → `co2-flood`). One function, used by the
+fixture and by authors. Enforced mechanically here: a **fixture test** parses the registry's node tables
+and asserts (a) every shipped `tech` content id appears in the registry, (b)
+every `requiresTech` in shipped content names a registry node, (c) era and
+prereqs agree. The plans-side gate check that already runs over the sheets gets
+a code-side twin.
+
+## 9. Error surface
+
+All loader failures are **content faults** ([09](../design/09_DIAGNOSTICS.md)
+§5.1 C1): reported in batch, engine refuses to start. There are no warnings —
+a tolerated oddity today is a silent wrong game later.
+
+## 10. Test mapping
+
+R3-V1..V14 map one-to-one; §3 gives V3/V13 their mechanism, §4 gives V4/V5, §5
+gives V2/V6..V10, §7 gives V11/V12, §8 adds the registry fixture test
+(new: R3-V15, sheet/tree/content agreement).
+
+## 11. Open items
+
+| # | Item | Trigger |
+|---|---|---|
+| S004-1 | Schema generation tooling (records → JSON Schema) — build-time generator or a checked-in generated set with a drift test | R3.1 |
+| S004-2 | Localisation file format for `$loc:` ids | R21 (host needs it first) |
+| S004-3 | Content hot-reload for balancing sessions (out of scope for the engine proper; a dev-host feature) | post-R20 |

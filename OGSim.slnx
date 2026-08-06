@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/OGSim.Contracts/OGSim.Contracts.csproj" />
+    <Project Path="src/OGSim.Kernel/OGSim.Kernel.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/OGSim.Contracts.Tests/OGSim.Contracts.Tests.csproj" />
+  </Folder>
+</Solution>
