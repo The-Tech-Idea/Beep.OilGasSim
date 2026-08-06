@@ -307,7 +307,7 @@ the *handler*) keeps stack context where the fault happened.
 ```csharp
 public abstract record EngineEvent(
     EventId Id, EventCategory Category, StageId Stage,
-    Tick Tick, double SubTickPosition,              // [0,1) — 15 §6
+    Tick Tick, int Day,                             // /30ths grid — see the R1.8 note
     EntityRef? Subject, Severity Severity,
     AuditId Cause,                                   // REQUIRED for C/D (IR6) — checked at publish
     LoopRole LoopRole,                               // None | Entry | MidLoop | Consequence (21 §6)
@@ -315,12 +315,34 @@ public abstract record EngineEvent(
 
 public interface IEventBus
 {
-    void Publish(EngineEvent e);                            // engine-internal, stages only
-    IReadOnlyList<EngineEvent> Sealed(Tick tick);           // ordered: (Stage, SubTick, Subject, EventId)
+    EventId Publish(EngineEvent e);                         // engine-internal, stages only
+    IReadOnlyList<EngineEvent> Sealed(Tick tick);           // ordered: (Stage, Day, Subject, EventId)
     // deliberately NO Subscribe(). Consumers poll Sealed() after AdvanceTick —
     // the no-subscriber rule (16 §1) as an absence, not a convention.
 }
 ```
+
+> **R1.8 review corrections.** Four, of which the first is the same drift the
+> R1.0 review fixed in §9 and missed here:
+>
+> - **`double SubTickPosition` → `int Day`.** §9 pins sub-tick positions to the
+>   /30ths grid as whole days so INV9 is integer arithmetic; a `[0,1)` double on
+>   the event record contradicted it and would reintroduce float boundaries at
+>   exactly the join where segments and events must agree (design 21 §5). The
+>   committed record already carries `int Day`; the ordering key is
+>   `(Stage, Day, Subject, EventId)`.
+> - **`Publish` returns `EventId`**, per the pass-4 amendment above — the
+>   signature line here still said `void`.
+> - **Sealing is a distinct operation.** EM2 requires that no event be observable
+>   mid-tick, so publishing cannot be the same act as making a set visible.
+>   `Seal()` lives on the concrete `EventBus`, not on `IEventBus` — the same
+>   shape as `SimulationClock.Advance()`: only the pipeline that holds the
+>   concrete type can close a tick. Querying an unsealed or evicted tick faults
+>   rather than returning an empty list, which would read as "nothing happened".
+> - **`Publish` enforces two rules that were stated but unowned**: INV12/IR6 —
+>   a `Critical` or `Decision` event without a cause is refused; and IR4 — a
+>   `LoopRole.Entry` event below `Warning` is refused, because a loop-entry
+>   alert nobody sees is the failure mode rule IR4 exists to prevent.
 
 Concrete events are `sealed record`s per matrix row of
 [16](../design/16_EVENT_MATRIX.md) §4, with **typed payload properties** — the

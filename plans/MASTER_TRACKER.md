@@ -11,11 +11,11 @@ next.** Updated at the close of every phase.
 
 | | |
 |---|---|
-| **Phase** | R0 ✅ closed · R1-C (contract layer) ✅ complete · **R1 🟦 in progress — R1.0–R1.7 done, 7 of 18** |
+| **Phase** | R0 ✅ closed · R1-C (contract layer) ✅ complete · **R1 🟦 in progress — 10 of 18 (R1.0–R1.8, R1.16, R1.18)** |
 | **Design docs** | 24 design + 1 research + 25 phase docs, 17 catalogue sheets ([C16 terrain](catalog/C16_TERRAIN_CLASSES.md) newest) + tech tree, 18 SDDs (000–017). Coherence log: **81 findings**, 61–81 from the code passes. |
-| **Code status** | Contract layer complete, and **the first seven kernel services are implemented behind it**: quantities + `DetMath` + spatial, entity registry, clock, PCG64 streams, log, audit trail, fault policies. 0 warnings, 0 errors, **95/95 tests** (15 contract + 80 kernel). Every implemented member traces to a pinned SDD section (F-1). |
+| **Code status** | Contract layer complete, and **the first seven kernel services are implemented behind it**: quantities + `DetMath` + spatial, entity registry, clock, PCG64 streams, log, audit trail, fault policies. 0 warnings, 0 errors, **106/106 tests** (15 contract + 91 kernel). Every implemented member traces to a pinned SDD section (F-1). |
 | **Repository** | `The-Tech-Idea/Beep.OilGasSim`, branch `master`. The OGSim tree was copied in from the workspace it was authored in and the prior occupant of this repo removed in the same commit; work lands directly on `master`, one task per commit. |
-| **Next** | **R1.8 onward** — event bus, then commands, modules, state. `OGSim.Architecture.Tests` (R1.12) is the phase's other half and is **not started**, so laws L1–L5 and rules D-1…D-8 hold by review, not by test — the retrofit risk R1 §0 warns about grows with every task built ahead of it. Commit style `R<n>.<m>: <what>` |
+| **Next** | **R1.9 onward** — commands, modules, state. `OGSim.Architecture.Tests` (R1.12) is the phase's other half and is **not started**, so laws L1–L5 and rules D-1…D-8 hold by review, not by test — the retrofit risk R1 §0 warns about grows with every task built ahead of it. Commit style `R<n>.<m>: <what>` |
 
 > **Phase numbers are stable identifiers, not execution order.** They are assigned
 > in the order phases are designed; §"Execution order" below is authoritative for
@@ -145,7 +145,7 @@ design is wrong, that is discovered in Arc I and not in Arc III.
 | R1.5 | `ILog` — structured, levelled, nested correlation scopes; `ILogSink`/`LogRecord` declared (F-1: design 09 §3 named a sink that no type existed for) | ✅ |
 | R1.6 | `IAuditTrail` — append-only, queryable, bounded. Retention is a **cause-graph closure**, not a category filter: a prunable entry that still explains live state survives (09 §4.4) | ✅ |
 | R1.7 | `IFaultPolicy` — classification, strict and resilient implementations, both complete configurations per 09 §5.3 | ✅ |
-| R1.8 | `IEventBus` — outbound only | ⬜ |
+| R1.8 | `IEventBus` — outbound only. `Seal()` on the concrete bus, not the interface, so only the pipeline can close a tick (EM2) | ✅ |
 | R1.9 | `ICommand`, `ICommandBus` — validate → audit → apply → publish | ⬜ |
 | R1.10 | `IModule`, `IModuleRegistry` — declaration, validation, composition failure | ⬜ |
 | R1.11 | `IStateSerializer`, `IStateOwner` — registration only | ⬜ |
@@ -153,9 +153,9 @@ design is wrong, that is discovered in Arc I and not in Arc III.
 | R1.13 | **`AdvanceTick()` — the turn-based engine surface**; no wall-clock anywhere | ⬜ |
 | R1.14 | **Sub-tick segmentation** — fractional positions and durations, 4-segment budget, audited merges | ⬜ |
 | R1.15 | Calendar — month, quarter, year, season boundaries; real dates | ⬜ |
-| R1.16 | Event taxonomy — categories, severity, stage, loop role, segment-boundary flag, cause chain, **no-subscriber rule** | ⬜ |
+| R1.16 | Event taxonomy — categories, severity, stage, loop role, segment-boundary flag, cause chain, **no-subscriber rule**. INV12/IR6 and IR4 enforced at publish; the no-subscriber rule is an absence, architecture-tested at R1.12 | ✅ |
 | R1.17 | Tick pipeline — the 14 stages of [03](design/03_ARCHITECTURE.md) §6, with per-stage read isolation | ⬜ |
-| R1.18 | Deterministic event ordering — `(stage, sub-tick, entity id, event id)` | ⬜ |
+| R1.18 | Deterministic event ordering — `(stage, day, subject, event id)`; **F-4: SDD-001 §6 still said `double SubTickPosition`** against the committed /30ths-grid `int Day` | ✅ |
 
 ### Phase R2 — Materials, properties, streams ⬜
 > 📄 [phases/R2_MATERIALS.md](phases/R2_MATERIALS.md)
