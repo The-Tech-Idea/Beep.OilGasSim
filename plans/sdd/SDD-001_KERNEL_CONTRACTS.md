@@ -266,6 +266,37 @@ public interface IFaultPolicy
 architecture test verifies the call, and the policy being the *decider* (not
 the *handler*) keeps stack context where the fault happened.
 
+> **R1.5–R1.7 review corrections.** Three shapes the trio needs that §5 named
+> only in prose:
+>
+> ```csharp
+> public readonly record struct LogScope(ScopeKind Kind, string Id);
+> public sealed record LogRecord(LogLevel Level, string EventName,
+>     IReadOnlyList<LogField> Fields, IReadOnlyList<LogScope> Scopes);
+> public interface ILogSink { void Emit(LogRecord record); }   // 09 §3's "sink"
+>
+> public sealed record AuditRetention(int DetailWindowTicks);  // 09 §4.4's "window"
+> ```
+>
+> - **`ILogSink`** — 09 §3 says fields "stay typed until a sink renders them",
+>   but no sink type existed, so `ILog` had nowhere to write. Every record
+>   carries its full scope chain, which is what makes 09 §3's "everything inside
+>   the flow solve for W-014 on tick 132" a filter rather than a text search.
+> - **`AuditRetention`** — 09 §4.4 requires a *configurable* window of full
+>   detail. The bound is a policy, so it is a constructor argument, not a
+>   constant: L2 forbids it having a default.
+> - **The retention rule is a category partition, and the cause chain overrides
+>   it.** 09 §4.4 keeps every state transition, financial event and fault while
+>   discarding "per-tick per-element detail" — that is `ConstraintBinding`,
+>   `InvariantCheck` and `Merge`; everything else is durable. But §4.4 also says
+>   *nothing that explains the current state is ever discarded*, so a prunable
+>   entry that is a transitive `Cause` of a surviving entry survives with it.
+>   Pruning computes that closure rather than trusting the category alone —
+>   otherwise the tick-4 constraint that explains a tick-400 shut-in vanishes and
+>   the "why?" query 09 §4.3 promises returns a broken chain.
+> - **`Record` takes no `Tick`** — it reads the clock, so the trail requires
+>   `ISimulationClock`. An entry cannot be stamped with a tick its caller chose.
+
 ## 6. Events — R1.8, R1.16
 
 > **Pass-4 amendment (finding 75):** `Publish` returns `EventId`. Callers

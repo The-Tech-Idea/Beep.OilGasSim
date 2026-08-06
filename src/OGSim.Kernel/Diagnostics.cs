@@ -13,6 +13,29 @@ public enum ScopeKind { Session, Tick, Stage, Element, Operation }
 /// <summary>A typed log field — no string interpolation at call sites (SDD-001 §5).</summary>
 public readonly record struct LogField(string Name, string Value);
 
+/// <summary>One level of the correlation chain (design 09 §3).</summary>
+public readonly record struct LogScope(ScopeKind Kind, string Id);
+
+/// <summary>
+/// A structured record with its full scope chain, outermost first. Carrying the
+/// chain is what makes "everything inside the flow solve for W-014 on tick 132"
+/// a filter rather than a text search (design 09 §3).
+/// </summary>
+public sealed record LogRecord(
+    LogLevel Level,
+    string EventName,
+    IReadOnlyList<LogField> Fields,
+    IReadOnlyList<LogScope> Scopes);
+
+/// <summary>
+/// Where records go. Fields stay typed all the way here; only a sink renders
+/// (design 09 §3), which is what keeps Trace affordable when it is disabled.
+/// </summary>
+public interface ILogSink
+{
+    void Emit(LogRecord record);
+}
+
 public interface ILog
 {
     void Write(LogLevel level, string eventName, IReadOnlyList<LogField> fields);
@@ -54,6 +77,13 @@ public sealed record AuditQuery(
     AuditCategory? Category,
     TickRange? Range,
     AuditId? CauseChainLeaf);
+
+/// <summary>
+/// Design 09 §4.4 — how much full detail the trail keeps. A 40-year game would
+/// otherwise grow without limit. The window is a policy and therefore an
+/// argument, never a constant: law L2 forbids it a default.
+/// </summary>
+public sealed record AuditRetention(int DetailWindowTicks);
 
 public interface IAuditTrail
 {

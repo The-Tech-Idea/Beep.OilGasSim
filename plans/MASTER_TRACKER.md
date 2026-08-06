@@ -11,11 +11,11 @@ next.** Updated at the close of every phase.
 
 | | |
 |---|---|
-| **Phase** | R0 ✅ closed · R1-C (contract layer) ✅ complete · **R1 🟦 in progress — R1.0 and R1.1 done** |
+| **Phase** | R0 ✅ closed · R1-C (contract layer) ✅ complete · **R1 🟦 in progress — R1.0–R1.7 done, 7 of 18** |
 | **Design docs** | 24 design + 1 research + 25 phase docs, 17 catalogue sheets ([C16 terrain](catalog/C16_TERRAIN_CLASSES.md) newest) + tech tree, 18 SDDs (000–017). Coherence log: **81 findings**, 61–81 from the code passes. |
-| **Code status** | **Contract layer complete**: `OGSim.Kernel` (13 files) + `OGSim.Contracts` (14 files) + smoke tests — 0 warnings, 0 errors, **15/15 tests** (verified in this repo, 2026-08-06). Eight review passes (R1-C…C8 below); every member traceable to a pinned SDD section; every 03 §3.2 replaceable slot typed. |
-| **Repository** | `The-Tech-Idea/Beep.OilGasSim`, branch `master`. The OGSim tree (`plans/`, `src/`, `tests/`, `OGSim.slnx`, `Directory.Build.props` — 130 files, ~18,700 lines) was **copied in from the workspace it was authored in**; the prior occupant of this repo was removed at the same time. R0 + R1-C therefore have **no commit of their own here** — their first commit in this repository is still pending, and `git log` before it shows only the removed project's history. |
-| **Next** | **R1.2 onward** — identity registry, clock, RNG streams, then the log/audit/fault services. `OGSim.Architecture.Tests` (R1.12) is the phase's other half and is not started, so laws L1–L5 and rules D-1…D-8 currently hold by review, not by test. Commit style `R<n>.<m>: <what>` |
+| **Code status** | Contract layer complete, and **the first seven kernel services are implemented behind it**: quantities + `DetMath` + spatial, entity registry, clock, PCG64 streams, log, audit trail, fault policies. 0 warnings, 0 errors, **95/95 tests** (15 contract + 80 kernel). Every implemented member traces to a pinned SDD section (F-1). |
+| **Repository** | `The-Tech-Idea/Beep.OilGasSim`, branch `master`. The OGSim tree was copied in from the workspace it was authored in and the prior occupant of this repo removed in the same commit; work lands directly on `master`, one task per commit. |
+| **Next** | **R1.8 onward** — event bus, then commands, modules, state. `OGSim.Architecture.Tests` (R1.12) is the phase's other half and is **not started**, so laws L1–L5 and rules D-1…D-8 hold by review, not by test — the retrofit risk R1 §0 warns about grows with every task built ahead of it. Commit style `R<n>.<m>: <what>` |
 
 > **Phase numbers are stable identifiers, not execution order.** They are assigned
 > in the order phases are designed; §"Execution order" below is authoritative for
@@ -142,9 +142,9 @@ design is wrong, that is discovered in Arc I and not in Arc III.
 | R1.2 | `IEntityId<T>`, `IEntityRegistry`; resolution faults — **F-4: the interface had no `Register`**, so `Resolve` could never return and the registry was unimplementable as declared. Ids begin at 1; registration is write-once | ✅ |
 | R1.3 | `ISimulationClock` — read-only interface, `Advance()` on the concrete type only; 30/360 `AddMonths`/`MonthsUntil`; `GameDate` month validated | ✅ |
 | R1.4 | `IRandomSource` with independent per-subsystem streams — PCG64 XSL-RR, eight streams seeded by **name** not ordinal, closed-form `Seek`, Marsaglia polar `NextNormal`, rejection-sampled `NextInt`. R1-V5 proven byte-identical | ✅ |
-| R1.5 | `ILog` — structured, levelled, nested correlation scopes | ⬜ |
-| R1.6 | `IAuditTrail` — append-only, queryable, bounded | ⬜ |
-| R1.7 | `IFaultPolicy` — classification, strict and resilient implementations | ⬜ |
+| R1.5 | `ILog` — structured, levelled, nested correlation scopes; `ILogSink`/`LogRecord` declared (F-1: design 09 §3 named a sink that no type existed for) | ✅ |
+| R1.6 | `IAuditTrail` — append-only, queryable, bounded. Retention is a **cause-graph closure**, not a category filter: a prunable entry that still explains live state survives (09 §4.4) | ✅ |
+| R1.7 | `IFaultPolicy` — classification, strict and resilient implementations, both complete configurations per 09 §5.3 | ✅ |
 | R1.8 | `IEventBus` — outbound only | ⬜ |
 | R1.9 | `ICommand`, `ICommandBus` — validate → audit → apply → publish | ⬜ |
 | R1.10 | `IModule`, `IModuleRegistry` — declaration, validation, composition failure | ⬜ |
