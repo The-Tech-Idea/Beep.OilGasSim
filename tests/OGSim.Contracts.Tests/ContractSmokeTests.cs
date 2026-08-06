@@ -125,7 +125,7 @@ public class ContractSmokeTests
             new Pressure(5_000_000), new Temperature(330),
             new Allocation([(new EntityRef(EntityKind.Compartment, 1), 1.0)]));
         var result = choke.Transform(new TransformInput(
-            [inStream], new SegmentContext(30, new Temperature(288), 0.0)));
+            [inStream], new SegmentContext(30, new Temperature(288), 0.0), SolvedRate: null));
 
         Assert.Single(topology.Connections);
         Assert.Single(result.Outlets);

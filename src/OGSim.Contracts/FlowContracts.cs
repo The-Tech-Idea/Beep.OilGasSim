@@ -33,9 +33,23 @@ public sealed record SegmentContext(
     Temperature Ambient,
     double WeatherSeverity);
 
+/// <summary>
+/// What an element is given for a segment (SDD-002 §5).
+///
+/// <para><see cref="SolvedRate"/> is how §7 S2's "build streams from q_w"
+/// reaches the element: the solver hands a completion the rate S1 damped and S3
+/// capped, and the element turns it into a stream through its own PVT. Since
+/// <c>Transform</c> is pure, this is the ONLY channel — without it S3's cap
+/// would adjust a number the forward pass never reads.</para>
+///
+/// <para>Null means the solver holds no rate for this element, which is not the
+/// same as zero: a shut-in or DEAD completion is asked for 0.0 and must produce
+/// nothing, while a non-completion is asked for nothing at all.</para>
+/// </summary>
 public sealed record TransformInput(
     IReadOnlyList<MaterialStream> Inlets,
-    SegmentContext Segment);
+    SegmentContext Segment,
+    ReservoirRate? SolvedRate);
 
 /// <summary>Kind-tagged mass leaving the network — each maps 1:1 onto its
 /// 04 §7 conservation term (SDD-002 §5, third pass).</summary>

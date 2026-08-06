@@ -212,7 +212,19 @@ public interface IFlowElement
 
 public sealed record TransformInput(
     IReadOnlyList<MaterialStream> Inlets,  // by inlet PortId.Index
-    SegmentContext Segment);
+    SegmentContext Segment,
+    ReservoirRate? SolvedRate);            // §7 S2's q_w, for completion elements
+    // SolvedRate is how "build streams from q_w" (§7 S2) reaches the element:
+    // the solver hands a completion the rate S1 damped and S3 capped, and the
+    // element turns that rate into a stream through its own PVT. NULL means the
+    // solver holds no rate for this element (it is not a completion) — which is
+    // NOT the same as zero: a shut-in or DEAD completion is asked for 0.0 and
+    // must produce nothing, while a non-completion source is asked for nothing
+    // and produces whatever it produces.
+    //
+    // Without this the cap S3 computes could never reduce the mass in the
+    // network: Transform is pure, so an element cannot be told its rate by
+    // mutation, and the solver must therefore pass it in.
 
 public sealed record SegmentContext(
     int DurationDays,                      // /30ths grid, SDD-001 §9
@@ -269,6 +281,15 @@ public enum ConstraintKind
 >   let an element smuggle state out of a pure call.
 > - **`in` dropped from both parameters.** `TransformInput` is a record — a
 >   reference type — so `in` bought nothing and read as though it were a struct.
+
+> **R4 amendment (finding 96): `TransformInput.SolvedRate`.** §7 S2 says "build
+> streams from `q_w`", but nothing in §5 gave the solver a way to hand `q_w` to
+> an element. `Transform` is pure by §5's own rule, so the rate cannot arrive by
+> mutation; with no channel for it, S3's pro-rata cap adjusted a number the
+> forward pass never read, and a bound constraint could be violated for every one
+> of S6's 200 iterations without the load ever falling. Found by FV7, which
+> looped to budget exhaustion and then reported a ladder failure — blaming
+> convergence for a wiring omission. The field closes the S1→S2 loop.
 
 **Availability is not on the element.** The segment plan lists available
 elements; an unavailable element is absent from the network
@@ -346,12 +367,19 @@ S1  WELLS      for each completion (ascending id):
 S2  FORWARD    topo order: build streams from q_w, apply Transform at every
                element, run element-level conservation check, evaluate constraints.
 S3  THROTTLE   for each violated capacity constraint (deterministic element order):
-                 excess = Load − Capacity
                  reduce each contributing completion's target PRO-RATA to its
-                 provenance share through that element; record
-                 deferred[(element, kind)] += reduction · segmentDuration.
+                 provenance share through that element.
                Throttled targets re-enter S1 as upper bounds on q*.
-S4  BACKWARD   with rates fixed, from each sink upward:
+               The DEFERRED VOLUME is not recorded here — it is a property of the
+               converged state, computed once by §8's attribution pass.
+               A violated constraint with NO live completion upstream cannot be
+               relieved by throttling at all: model fault naming the element and
+               the constraint, rather than iterating to the S6 budget and then
+               blaming the ladder for a composition problem.
+S4  BACKWARD   with rates fixed, from each sink upward, starting at the network
+               boundary pressure (content, default 101 325 Pa — a terminal sink
+               discharges to somewhere, and zero absolute would let a completion
+               flow against a vacuum):
                  P_upstream = P_downstream + ΔP_element(q)   // element's hydraulic transform
                yielding new Pwh_w for every completion — EXCEPT completions whose
                choke reports critical flow (SDD-003 §6.3): they are flagged
@@ -402,9 +430,32 @@ public sealed record SolveReport(
     int OuterIterations);
 ```
 
-Deferrals accumulate across segments (duration-weighted in S3 already) and feed
-the bottleneck report, `flow.constraintBound` events and the read model's
-deferred-by-element projection verbatim — the UI never re-derives them.
+Deferrals accumulate across segments and feed the bottleneck report,
+`flow.constraintBound` events and the read model's deferred-by-element
+projection verbatim — the UI never re-derives them.
+
+**The attribution pass.** Within one segment a deferral is computed ONCE, on the
+converged state: the same network re-evaluated with every completion at the
+UNCAPPED target S1 last produced, and each violated constraint's
+`(Load − Capacity) × segmentDuration` recorded against its element.
+
+> **R4 amendment (finding 97): deferrals cannot be recorded in S3.** The original
+> text said S3 had already duration-weighted them, and that cannot work in either
+> direction. Recording per iteration and summing makes the reported volume a
+> function of how many iterations convergence happened to take — the same
+> bottleneck reports a different number under different damping, which is a
+> numerics artefact presented to the player as a business fact. Recording only
+> the final iteration's excess reports zero, because §7 S5 refuses to declare
+> convergence while any capacity is still violated: by the time the solve ends,
+> the cap has removed the very excess that was to be measured.
+>
+> Measured against the uncapped targets instead, the figure is what the
+> bottleneck actually refused, and it does not depend on the solver's path to the
+> answer — which is what this section promises when it says the projection is
+> used verbatim. Pinned by `FV4_the_deferred_volume_is_independent_of_the_iteration_count`.
+>
+> S3 keeps the pro-rata cap and nothing else. **Accumulation across segments is
+> unaffected**: each segment contributes its own converged figure.
 
 ## 9. Commit and conservation
 

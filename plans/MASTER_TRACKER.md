@@ -187,20 +187,41 @@ design is wrong, that is discovered in Arc I and not in Arc III.
 | R3.6 | Mod loading through the identical path; a later source replaces an entry **whole**, and two sources at one declared order is a failure naming both | ✅ |
 | R3.7 | Shipped catalogues — `content/` exists: 5 property kinds, 9 materials (the PPDM/PRODML product list of research §5), 3 rock types. **`property-kind` is a bootstrap kind** loaded in its own pass, because stage 3 binds units against the dimension it declares and stage 4 comes later. Fluid systems deferred to R5 with the reservoir that consumes them | ✅ |
 
-### Phase R4 — Flow solver core ⬜
+### Phase R4 — Flow solver core 🟨
 > 📄 [phases/R4_FLOW_SOLVER.md](phases/R4_FLOW_SOLVER.md)
+> `src/OGSim.Flow` — references Contracts and Kernel only.
 
 | # | Task | Status |
 |---|---|---|
-| R4.1 | `IFlowElement` — ports, constraints, transform, availability | ⬜ |
-| R4.2 | Network construction and validation; tree topology | ⬜ |
-| R4.3 | Forward propagation and constraint evaluation | ⬜ |
-| R4.4 | Throttle and back-propagation to convergence | ⬜ |
-| R4.5 | **Bottleneck attribution** — binding element + deferred volume | ⬜ |
-| R4.6 | Mass conservation invariant | ⬜ |
-| R4.7 | Non-convergence as a fault; tick abandoned whole | ⬜ |
-| R4.8 | Synthetic flow elements for testing (source, sink, restrictor, splitter, buffer) | ⬜ |
-| R4.9 | FV1–FV13 verification suite ([04](design/04_MATERIAL_AND_FLOW.md) §9) | ⬜ |
+| R4.0 | SDD review — SDD-002 §5, §7, §8 amended: `TransformInput.SolvedRate` (finding 96), deferrals moved from S3 to §8's attribution pass (finding 97), S4's boundary pressure pinned, S3's unrelievable-constraint fault | ✅ |
+| R4.1 | `IFlowElement` — ports, constraints, transform. **Availability is not on the element**: an unavailable element is absent from the segment's network (04 §4) | ✅ |
+| R4.2 | Network construction and validation; tree topology. Kahn's algorithm with the ready set in ascending id, so the order is not merely *a* topological order but always the same one | ✅ |
+| R4.3 | Forward propagation and constraint evaluation, in topological order | ✅ |
+| R4.4 | Throttle and back-propagation to convergence. **S2 receives `SolvedRate`** — without it S3's cap adjusted a number the forward pass never read, and a bound constraint could survive all 200 iterations | ✅ |
+| R4.5 | **Bottleneck attribution** — binding element + deferred volume, computed once on the converged state against the completions' uncapped targets, so the figure does not depend on how many iterations convergence took | ✅ |
+| R4.6 | Mass conservation invariant, checked after **every** transform — what makes an INV1 breakdown attributable to one element rather than to the network | ✅ |
+| R4.7 | Non-convergence engages the audited shut-in ladder and the tick **completes** (04 §4.0b); ladder exhaustion is the invariant fault | ✅ |
+| R4.8 | Synthetic flow elements — source, sink, restrictor, splitter, manifold, completion. A completion is one object in both roles, because the solver solves a rate for it and then asks the same element to turn that rate into a stream | ✅ |
+| R4.9 | FV suite ([04](design/04_MATERIAL_AND_FLOW.md) §9) — **partial, see below** | 🟨 |
+
+**R4.9 honestly: 6 of 13 covered, 7 need a domain or a tick loop R4 does not have.**
+Test names carry their FV number so coverage is readable from the test list.
+
+| FV | Covered | Where / why not |
+|---|---|---|
+| FV1 Conservation | ✅ | Hand-built chains + **200 randomised networks × 3 seeds**, generated valid-by-construction. The design asks for 1,000 *ticks*; there is no tick loop until R7, so the per-solve half is proven here and the loop half belongs with the loop |
+| FV2 Depletion shape | ⬜ | Needs a reservoir (R5) — an Arps curve cannot be checked against synthetic elements |
+| FV3 Operating point | 🟨 | Convergence onto the IPR and the DEAD outcome are pinned, recomputed independently from the report. The **parameter sweep against IPR ∩ VLP** needs a real VLP (R6) |
+| FV4 Bottleneck attribution | ✅ | The element is named and the deferred volume matches the analytic answer; a second test pins that the volume is damping-independent |
+| FV5 Backpressure propagation | ✅ | A larger downstream drop measurably reduces withdrawal; a pressure-decoupled completion is unmoved by the same swing |
+| FV6 Spec gating | ⬜ | Needs a spec gate and a flare (R6). The network build already refuses a spec gate with no Reject port |
+| FV7 Material agnosticism | 🟨 | The solver contains no material-identity branch and the architecture tests check it; the synthetic-material equivalence half needs R5's materials |
+| FV8 Determinism | 🟨 | Repeat solves agree to the bit. **Cross-platform state hashing is not covered** — no state hash exists until R7, and CI has no Linux leg yet (R1-V6) |
+| FV9 Convergence | ✅ | Budget exhaustion engages the ladder, audited with its cause, and the solve completes rather than faulting |
+| FV10 Allocation | ✅ | A commingle allocates back in mass proportion, shares summing to exactly 1 |
+| FV11 Segmentation | ⬜ | Needs the segment loop (R7); R4 solves one segment given to it |
+| FV12 Segmentation ≠ averaging | ⬜ | As FV11 |
+| FV13 Segment commit atomicity | ⬜ | Needs `ICommitTarget` and the stage-6 commit (R7) |
 
 ---
 
@@ -562,7 +583,7 @@ order they are built in.
 | Arc | Phases (execution order) | Focus | Gate |
 |---|---|---|---|
 | **0** | R0 | Design | Owner approval |
-| **I** | R1 → R2 → R3 → R4 | Kernel, materials, content, **solver proven standalone** | FV1–FV13 pass with synthetic elements |
+| **I** | R1 → R2 → R3 → R4 | Kernel, materials, content, **solver proven standalone** | Every FV check that does not require a domain or a tick loop passes with synthetic elements — FV1, FV4, FV5, FV9, FV10 in full, FV3/FV7/FV8 in the part R4 owns. The rest are gated at the phase that supplies what they need (see R4.9) |
 | **II** | R22 → R5 → R6 → R7 → R8 → R9 → R10 → R11 | Environment, then the physical chain reservoir to berth | SC3, SC4, SC8 pass; R11-V13 whole-chain conservation |
 | **III** | R12 → R13 → R14 → R15 → R16 → R17 → R18 → R23 | The company: operations, money, information, world, tech, risk | SC6, SC7 pass; HS3 holds |
 | **IV** | R19 → R24 → R20 → R21 → R25 | Persistence, objectives, balance, host contract, **Advisor & reality profiles** | **SC1 passes; GM15 Advisor purity holds** |

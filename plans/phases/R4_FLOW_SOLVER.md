@@ -137,14 +137,26 @@ these, and every expected answer is computable by hand.
 | Project | Contents |
 |---|---|
 | `OGSim.Flow` | `IFlowElement`, `IFlowNetwork`, `IFlowSolver`, constraint model, attribution, conservation invariant |
-| `OGSim.Flow.Tests` | The five synthetic elements; FV1–FV13; randomised property tests; benchmarks |
+| `OGSim.Flow.Tests` | The synthetic elements (six — the completion is one object in both roles); the FV checks R4 can prove; randomised property tests; benchmarks |
 
 ---
 
 ## 4. Verification
 
 The FV1–FV13 suite from [04](../design/04_MATERIAL_AND_FLOW.md) §9, executed
-against synthetic elements, plus:
+against synthetic elements, plus the R4-V checks below.
+
+> **What R4 can actually prove (recorded during implementation).** Seven of the
+> thirteen FV checks name something R4 does not have: FV2 needs a reservoir
+> (R5), FV6 a spec gate and flare (R6), FV11–FV13 the segment loop and the
+> stage-6 commit (R7), and FV3's and FV7's remaining halves need a VLP and real
+> materials. They are gated at the phase that supplies what they need rather
+> than reinterpreted into something R4 could pass — a suite that always passes
+> because its harder half was quietly redefined proves nothing. The per-FV
+> position is kept in the tracker's R4.9 entry, and the same accounting applies
+> to R4-V11 (100-tick runs need R7's loop), R4-V14/V15 (a `Buffer` and
+> availability arrive with R6), R4-V16c (`flow.solverFault` escalation needs
+> cross-tick memory), R4-V17 and R4-V20–V22 (commit atomicity, R7).
 
 | # | Test | Passes when |
 |---|---|---|
