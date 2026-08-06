@@ -2,11 +2,9 @@
 // R2-V5 log-normal propagation is the load-bearing one; the P90/P10 ordering is
 // the one most likely to be got backwards by a future contributor.
 
-using OGSim.Contracts;
 using OGSim.Kernel;
-using Xunit;
 
-namespace OGSim.Tests;
+namespace OGSim.Kernel.Tests;
 
 public class DistributionTests
 {

@@ -128,6 +128,25 @@ crosses, instead of being restated by each correlation that consumes it.
 so for content generally, restated because `Composition` is a dense array indexed
 by them, which makes the temptation to save one strong.
 
+> **R2.1 layering correction.** [R2](../phases/R2_MATERIALS.md) §3's deliverables
+> table places these contracts in `OGSim.Contracts` and their implementations in
+> `OGSim.Kernel`. That is impossible: Contracts references Kernel and not the
+> reverse, so no kernel type can implement a contract declared in Contracts. The
+> table specified a build that could not compile.
+>
+> **The whole material layer lives in `OGSim.Kernel`**, on §1's own stated
+> principle — stream types are there "because they are the currency every module
+> trades in", and a material catalogue is that same currency: `Composition` is a
+> dense array indexed by `MaterialId`, which was already a kernel type. The
+> alternative, an `OGSim.Materials` module, would add a project
+> [03](../design/03_ARCHITECTURE.md) §8 does not list, to hold types every module
+> needs — which is the "shared Common project" that SDD-000 §2 forbids, wearing a
+> domain name.
+>
+> `BeliefSpace` and `Provenance` moved with them. `IProperty` needs both, and R2
+> runs eleven phases before R14 — they are vocabulary for *how a value is known*,
+> not belief state, and nothing in them knows what a belief is.
+
 ## 3. Provenance
 
 ```csharp

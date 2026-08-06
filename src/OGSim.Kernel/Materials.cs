@@ -5,12 +5,16 @@
 // the 03 §3.2 replaceable slots and the host surface, and never came back for
 // the material layer R2 is built from.
 //
-// Data shapes and contracts only — the catalogue implementations, the
-// distribution arithmetic and the black-oil model are R2 proper.
+// R2.1 LAYERING CORRECTION. R2 §3's deliverables table puts these contracts in
+// OGSim.Contracts and their implementations in OGSim.Kernel — which is
+// impossible, because Contracts references Kernel and not the reverse, so no
+// kernel type could ever implement them. They live here instead, on SDD-002
+// §1's own stated principle: the stream types are in the kernel "because they
+// are the currency every module trades in", and a material catalogue is that
+// same currency — Composition is a dense array indexed by MaterialId, which was
+// already here. BeliefSpace and Provenance moved with them (Provenance.cs).
 
-using OGSim.Kernel;
-
-namespace OGSim.Contracts;
+namespace OGSim.Kernel;
 
 // ---------------------------------------------------------------- distributions
 

@@ -90,9 +90,17 @@ sensible behaviour — just less nuanced behaviour.
 
 | Project | Contents |
 |---|---|
-| `OGSim.Contracts` | `IProperty`, `IPropertyKind`, `IMaterial`, `IStream`, `IFluidPropertyModel`, distributions |
-| `OGSim.Kernel` *(extension)* | Implementations of the above; catalogues |
+| `OGSim.Kernel` | `IPropertyKind`, `IProperty`, `IMaterial`, `IMaterialCatalog`, the `Distribution` family, `MaterialStream` and the `Composition`/`Allocation` algebra — **and their implementations** |
+| `OGSim.Contracts` | `IFluidPropertyModel` (declared with the subsurface surface it serves — [SDD-003](../sdd/SDD-003_SUBSURFACE_AND_WELLS.md) §4) |
 | Content | `property-kind` and `material` catalogues for the standard set in [research/PPDM_ALIGNMENT](../research/PPDM_ALIGNMENT.md) §5 |
+
+> **R2.1 correction.** This table previously put the contracts in
+> `OGSim.Contracts` and their implementations in `OGSim.Kernel` — a build that
+> cannot compile, since Contracts references Kernel and not the reverse. The
+> material layer is kernel currency for the same reason stream types are
+> ([SDD-002](../sdd/SDD-002_STREAMS_AND_FLOW.md) §1): `Composition` is a dense
+> array indexed by `MaterialId`, and every module trades in it. `IStream` in the
+> old row was the pre-rename name for `MaterialStream` (finding 61).
 
 ---
 

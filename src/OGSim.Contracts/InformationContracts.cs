@@ -6,13 +6,10 @@ using OGSim.Kernel;
 
 namespace OGSim.Contracts;
 
-public enum BeliefSpace { Linear, Log }
-
-/// <summary>Design 02 §1.2 ordering — ProductionHistory near the top: dynamic data is the most trustworthy.</summary>
-public enum Provenance
-{
-    Assumed, Analogue, Seismic, Log, WellTest, Core, ProductionHistory, Measured
-}
+// BeliefSpace and Provenance moved to OGSim.Kernel/Provenance.cs at R2.1:
+// IProperty needs them and R2 runs eleven phases before R14, so they cannot
+// live in an assembly the material layer is below. They are vocabulary, not
+// belief state.
 
 /// <summary>Every belief is Normal in its declared space (SDD-008 §2). Quantiles closed-form.</summary>
 public readonly record struct Belief(
