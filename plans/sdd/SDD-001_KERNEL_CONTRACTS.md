@@ -576,6 +576,39 @@ independence) follows from PCG64 counters by construction and is tested anyway;
 **R1-V16..18** (segmentation) test the /30ths grid arithmetic, including the
 audited merge.
 
+## 12b. The shipped implementations — R1's concrete types
+
+> **Contract pass 9 (finding 82).** F-1 requires every public member of an engine
+> assembly to be specified in a merged SDD, and it does not exempt implementations.
+> R1 built thirteen concrete types against the contracts above and this SDD named
+> none of them, so the rule was satisfied for the interfaces and quietly broken
+> for the classes behind them. Named here.
+
+| Contract | Implementation | Note |
+|---|---|---|
+| — | `DetMath` | §1.3. The D-2 exception, and the only legal `System.Math` site |
+| — | `Faults` (`FaultException`, `ModelFault`, `InvariantFault`, `SaveDataFault`) | §11's carriers, which §11 named and never declared |
+| `IEntityRegistry` | `EntityRegistry` | §2. Ids from 1; `Register` write-once |
+| `ISimulationClock` | `SimulationClock` | §3. `Advance()`/`RestoreTo()` are on the CLASS, not the interface |
+| `IRandomSource` / `IRandomStream` | `RandomSource` (+ `PcgStream`) | §4. PCG64 XSL-RR; streams seeded by name |
+| `ILog` | `Log` | §5. Takes `ILogSink` + a minimum level |
+| `IAuditTrail` | `AuditTrail` | §5. `Prune()` is on the class; retention is a cause-graph closure |
+| `IFaultPolicy` | `FaultPolicy` → `StrictFaultPolicy`, `ResilientFaultPolicy` | §5, design 09 §5.3. Both are complete configurations |
+| `IEventBus` | `EventBus` | §6. `Seal()` is on the class — EM2 |
+| `ICommandBus` | `CommandBus` | §7. `Register<T>()` is on the class |
+| — | `ModuleComposer` (+ `CompositionResult`, `CompositionProblem`) | §9. NOT `IModuleRegistry` — that name is the content plugin binder |
+| — | `StateRegistry` | §10. Registration only; the format is SDD-013 |
+| — | `TickPipeline` (+ `TickResult`) | §3/§9. The 14 stages of design 03 §6 |
+| — | `SegmentPlanner` (+ `AvailabilityChange`) | §9. /30ths grid, 4-segment budget, audited merges |
+
+**The recurring shape is worth stating once**, because it appears five times
+above and is not an accident: where a contract must stay read-only for its
+consumers, the mutating member lives on the concrete class and never on the
+interface — `Advance`, `Seal`, `Prune`, `Register`, `RestoreTo`. A module handed
+`ISimulationClock` cannot move time; a module handed `IEventBus` cannot make a
+tick observable. Capability follows from what you were handed rather than from
+remembering not to call something, which is law L2 read forwards.
+
 ## 13. Open items
 
 | # | Item | Trigger |

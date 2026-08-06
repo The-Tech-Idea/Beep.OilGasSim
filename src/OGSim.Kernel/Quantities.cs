@@ -6,6 +6,22 @@
 
 namespace OGSim.Kernel;
 
+/// <summary>
+/// Runtime tag for the dimensions of SDD-001 §1. The typed structs below are the
+/// compile-time story; this is the runtime one, needed wherever a dimension is
+/// data rather than code — content binding `"3200 psi"` to a quantity, and a
+/// property kind declaring what it measures (SDD-002 §2b).
+/// </summary>
+public enum Dimension
+{
+    Dimensionless,
+    Length, Area, Mass, Duration, Pressure, Temperature, TemperatureDelta,
+    MassRate, Power, Energy, Permeability, Viscosity, Density, HeatingValue,
+    ReservoirVolume, SurfaceVolume, StandardGasVolume,
+    ReservoirRate, SurfaceRate, StandardGasRate,
+    Money,
+}
+
 /// <summary>Pressure, canonical pascals. SDD-001 §1 exemplar — the full pinned surface.</summary>
 public readonly record struct Pressure(double Pascals) : IComparable<Pressure>
 {

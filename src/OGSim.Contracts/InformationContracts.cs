@@ -40,6 +40,27 @@ public sealed record Observation(
     BeliefSpace Space,
     Provenance Source);
 
+/// <summary>
+/// Design 03 §3.2 — "per source; tunes how much uncertainty survives". The third
+/// replaceable slot the eight contract passes missed (finding 82): SDD-008 §3's
+/// sampling algorithm had no contract to sit behind.
+///
+/// The model owns SIGMA and deliberately not the draw. The draw consumes a named
+/// RNG stream (`exploration` or `measurement`) and must stay in the engine where
+/// the stream and the audit record live: a plugin drawing its own numbers could
+/// consume a different count and shift every later draw in that stream, which is
+/// exactly the independence property R1-V5 exists to protect.
+/// </summary>
+public interface IObservationModel
+{
+    /// <summary>
+    /// The honest sigma for this source reading this kind of this subject.
+    /// Null means the source cannot see the kind at all — absence is a
+    /// legitimate answer, and is NOT the same as a very wide sigma.
+    /// </summary>
+    double? SigmaFor(ContentId source, ContentId propertyKind, EntityRef subject);
+}
+
 public interface IBeliefStore
 {
     /// <summary>The one conjugate update (SDD-008 §2.1).</summary>

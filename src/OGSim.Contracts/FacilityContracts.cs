@@ -51,3 +51,46 @@ public interface IPowerSource
     Power MaxSupply { get; }
     int MeritRank { get; }
 }
+
+// ------------------------------------------------- the two replaceable slots
+// SDD-006 §0. Both are 03 §3.2 plug-and-play slots that the eight contract
+// passes missed while recording that none remained (finding 82).
+
+/// <summary>Datasheet recovery efficiencies; 2-phase vessels pass 0 for water.</summary>
+public readonly record struct SeparationEfficiency(
+    double LiquidFromGas,
+    double GasFromLiquid,
+    double WaterFromLiquid);
+
+/// <summary>
+/// Design 03 §3.2 — fixed-efficiency split ↔ flash calculation.
+///
+/// Deliberately NOT <see cref="IFluidPropertyModel.SplitAt"/>: that answers
+/// "which phases exist at this (P,T)", which is thermodynamics and belongs to
+/// the fluid; this answers "what did this vessel actually recover", which is
+/// equipment. A fixed-efficiency implementation applies the datasheet numbers to
+/// the fluid's ideal split; a flash implementation computes equilibrium directly
+/// and ignores them. Swapping between them must never change what a phase IS.
+/// </summary>
+public interface ISeparationModel
+{
+    PhaseSplit SeparateAt(MaterialStream inlet, SeparationEfficiency efficiency,
+                          IFluidPropertyModel fluid);
+}
+
+/// <summary>Geometry a pipe segment's drop is computed from (SDD-006 §6).</summary>
+public readonly record struct PipeGeometry(
+    Length PipeLength,
+    Length InnerDiameter,
+    double Roughness,
+    Length ElevationRise);
+
+/// <summary>
+/// Design 03 §3.2 — Darcy-Weisbach ↔ Panhandle ↔ simplified. Capacity is never
+/// configured: it emerges from geometry and the fluid actually flowing, which is
+/// why the geometry is an argument rather than a rating.
+/// </summary>
+public interface IHydraulicModel
+{
+    Pressure DropAlong(MaterialStream stream, PipeGeometry geometry, IFluidPropertyModel fluid);
+}

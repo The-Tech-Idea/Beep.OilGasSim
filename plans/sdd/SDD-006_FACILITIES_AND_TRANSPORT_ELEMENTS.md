@@ -23,27 +23,48 @@ come from the catalogue-sheet content ([SDD-004](SDD-004_CONTENT_PIPELINE.md) §
 
 ```csharp
 /// Design 03 §3.2 — fixed-efficiency split ↔ flash calculation.
+public readonly record struct SeparationEfficiency(
+    double LiquidFromGas,      // carry-under: liquid recovered out of the gas leg
+    double GasFromLiquid,      // carry-over
+    double WaterFromLiquid);   // 3-phase only; 2-phase passes 0
+
 public interface ISeparationModel
 {
-    /// Ideal phase split before efficiency; the derate in §1 is the engine's,
-    /// so a model swap changes the physics and not the capacity semantics.
-    PhaseSplit SplitAt(Composition composition, Pressure p, Temperature t,
-                       IFluidPropertyModel fluid);
+    /// The ACHIEVED split at the operating point. Note this is NOT
+    /// IFluidPropertyModel.SplitAt: the fluid model answers "what phases exist
+    /// at this (P,T)" — thermodynamics — and this answers "what did this vessel
+    /// actually manage to separate" — equipment. A fixed-efficiency
+    /// implementation applies the datasheet efficiencies to the fluid model's
+    /// ideal split; a flash implementation computes equilibrium directly and
+    /// ignores them. Swapping between the two must not change what a phase IS.
+    PhaseSplit SeparateAt(MaterialStream inlet, SeparationEfficiency efficiency,
+                          IFluidPropertyModel fluid);
 }
 
 /// Design 03 §3.2 — Darcy-Weisbach ↔ Panhandle ↔ simplified.
+public readonly record struct PipeGeometry(
+    Length PipeLength, Length InnerDiameter, double Roughness, Length ElevationRise);
+
 public interface IHydraulicModel
 {
-    /// Pressure drop along one segment for the fluid ACTUALLY flowing (§6):
-    /// capacity is never configured, it emerges from geometry and the stream.
-    Pressure DropAlong(MaterialStream stream, Length pipeLength,
-                       Length innerDiameter, double roughness,
+    /// Pressure drop along one segment for the fluid ACTUALLY flowing (§6).
+    /// Capacity is never configured — it emerges from geometry and the stream,
+    /// which is why the geometry is an argument and not a rating.
+    Pressure DropAlong(MaterialStream stream, PipeGeometry geometry,
                        IFluidPropertyModel fluid);
 }
 ```
 
 Both are capability-blind and stateless: they receive everything they need and
 own nothing, so the fidelity dial cannot become a hidden second source of state.
+
+> **Correction while writing this section.** The first draft gave
+> `ISeparationModel` the signature `SplitAt(composition, P, T, fluid)` — which is
+> `IFluidPropertyModel.SplitAt` with an extra argument, i.e. two contracts
+> answering one question. The two are genuinely different: phase *existence* at a
+> (P,T) is thermodynamics and belongs to the fluid model; phase *recovery* is
+> what a vessel achieved and belongs here. Recorded because the duplicate would
+> have been invisible once both had implementations.
 
 ## 1. Separator
 
