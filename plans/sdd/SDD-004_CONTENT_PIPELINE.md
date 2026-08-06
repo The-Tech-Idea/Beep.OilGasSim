@@ -49,6 +49,17 @@ One entry per file. Required envelope, in this order by convention:
 
 ## 3. Unknown keys, without a schema engine
 
+> **R3.0 layering correction.** This section places the definition records in
+> `OGSim.Kernel.*` while `ContentDefinition` and `GatedDefinition` — the bases
+> they derive from — were declared in `OGSim.Contracts`. Kernel cannot reference
+> Contracts, so no definition record could have derived from its own base. The
+> whole content surface (`ContentDefinition`, `GatedDefinition`, `Era`,
+> `ICatalog<T>`, `ICatalogSet`, `IContentSource`, `ContentFile`, `LoadStage`,
+> `LoadFailure`, `ContentLoadResult`) now lives in `OGSim.Kernel/Content.cs`,
+> which also matches [R3](../phases/R3_CONTENT.md) §3's own deliverable name,
+> `OGSim.Kernel.Content`. Second instance of the pattern R2.1 found in R2 §3 —
+> a deliverables table specifying a build that cannot compile.
+
 **Decision:** every content kind has a C# *definition record* in
 `OGSim.Kernel.Content.Definitions`, deserialised via a source-generated
 `JsonSerializerContext` with:
@@ -78,9 +89,15 @@ unit       = token , { ("/" | "." ) , token } , [ "^" , digit ] ;   // "kg/m^3",
 
 - Parsed with `InvariantCulture`; **decimal point only** — a comma is a load
   error with a pointed message, not a locale guess.
-- The unit vocabulary is **closed**: a table in `PhysicalConstants` mapping unit
-  token → (dimension, factor-to-SI, offset for temperature). Unknown token →
-  load error naming the nearest known token.
+- The unit vocabulary is **closed**: a table mapping unit token →
+  (dimension, factor-to-SI, offset for temperature). Unknown token → load error
+  naming the nearest known token.
+
+  > **R3.1 correction — the table is `UnitGrammar`, not `PhysicalConstants`.**
+  > This bullet placed it in `PhysicalConstants`, which is rule F-2's home: one
+  > file where every entry is a *physical constant* carrying its SDD citation and
+  > unit. A token-to-dimension map contains no physics, and putting it there
+  > would dissolve the single property that makes F-2 checkable at all.
 - Dimension check happens at bind time: the definition record property is a
   quantity type (`Pressure`), and a `"3200 psi"` deserialising into a
   `Temperature` property fails stage 3 with both dimensions named (R3-V5).

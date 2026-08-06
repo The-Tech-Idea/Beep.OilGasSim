@@ -3,9 +3,8 @@
 // were pinned in the SDD but declared nowhere — the moddability rule had no type.
 // The loader CLASS (six stages) is R3 implementation; these are its contracts.
 
-using OGSim.Kernel;
 
-namespace OGSim.Contracts;
+namespace OGSim.Kernel;
 
 /// <summary>The four technology eras (design 07 §2).</summary>
 public enum Era { E1, E2, E3, E4 }
