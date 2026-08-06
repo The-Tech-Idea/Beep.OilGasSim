@@ -47,11 +47,44 @@ public readonly record struct GasFormationVolumeFactor(double Rm3PerSm3)
     public ReservoirVolume Swell(StandardGasVolume v) => new(v.CubicMetres * Rm3PerSm3);
 }
 
+// SDD-001 §1 — the rate family: one volumetric rate per volume condition, so a
+// reservoir rate can no more be added to a surface rate than the volumes can.
+// R1.1 completes the family: StandardGasRate was missing, and none of the three
+// declared the rate × duration → volume product that R6/R8 integrate with.
+
 /// <summary>Reservoir-condition volumetric rate, m³/s (the IPR's q_rc — SDD-003 §6.1).</summary>
-public readonly record struct ReservoirRate(double CubicMetresPerSecond)
+public readonly record struct ReservoirRate(double CubicMetresPerSecond) : IComparable<ReservoirRate>
 {
     public static ReservoirRate operator +(ReservoirRate a, ReservoirRate b) => new(a.CubicMetresPerSecond + b.CubicMetresPerSecond);
+    public static ReservoirRate operator -(ReservoirRate a, ReservoirRate b) => new(a.CubicMetresPerSecond - b.CubicMetresPerSecond);
+    /// <summary>The declared product: a rate held for a duration is a volume.</summary>
+    public static ReservoirVolume operator *(ReservoirRate r, Duration d) => new(r.CubicMetresPerSecond * d.Seconds);
+    public static double operator /(ReservoirRate a, ReservoirRate b) => a.CubicMetresPerSecond / b.CubicMetresPerSecond;
+    public static bool operator >(ReservoirRate a, ReservoirRate b) => a.CubicMetresPerSecond > b.CubicMetresPerSecond;
+    public static bool operator <(ReservoirRate a, ReservoirRate b) => a.CubicMetresPerSecond < b.CubicMetresPerSecond;
+    public int CompareTo(ReservoirRate other) => CubicMetresPerSecond.CompareTo(other.CubicMetresPerSecond);
 }
 
 /// <summary>Surface-condition volumetric rate, m³/s.</summary>
-public readonly record struct SurfaceRate(double CubicMetresPerSecond);
+public readonly record struct SurfaceRate(double CubicMetresPerSecond) : IComparable<SurfaceRate>
+{
+    public static SurfaceRate operator +(SurfaceRate a, SurfaceRate b) => new(a.CubicMetresPerSecond + b.CubicMetresPerSecond);
+    public static SurfaceRate operator -(SurfaceRate a, SurfaceRate b) => new(a.CubicMetresPerSecond - b.CubicMetresPerSecond);
+    public static SurfaceVolume operator *(SurfaceRate r, Duration d) => new(r.CubicMetresPerSecond * d.Seconds);
+    public static double operator /(SurfaceRate a, SurfaceRate b) => a.CubicMetresPerSecond / b.CubicMetresPerSecond;
+    public static bool operator >(SurfaceRate a, SurfaceRate b) => a.CubicMetresPerSecond > b.CubicMetresPerSecond;
+    public static bool operator <(SurfaceRate a, SurfaceRate b) => a.CubicMetresPerSecond < b.CubicMetresPerSecond;
+    public int CompareTo(SurfaceRate other) => CubicMetresPerSecond.CompareTo(other.CubicMetresPerSecond);
+}
+
+/// <summary>Standard-condition gas rate, sm³/s — the gas family's own rate.</summary>
+public readonly record struct StandardGasRate(double CubicMetresPerSecond) : IComparable<StandardGasRate>
+{
+    public static StandardGasRate operator +(StandardGasRate a, StandardGasRate b) => new(a.CubicMetresPerSecond + b.CubicMetresPerSecond);
+    public static StandardGasRate operator -(StandardGasRate a, StandardGasRate b) => new(a.CubicMetresPerSecond - b.CubicMetresPerSecond);
+    public static StandardGasVolume operator *(StandardGasRate r, Duration d) => new(r.CubicMetresPerSecond * d.Seconds);
+    public static double operator /(StandardGasRate a, StandardGasRate b) => a.CubicMetresPerSecond / b.CubicMetresPerSecond;
+    public static bool operator >(StandardGasRate a, StandardGasRate b) => a.CubicMetresPerSecond > b.CubicMetresPerSecond;
+    public static bool operator <(StandardGasRate a, StandardGasRate b) => a.CubicMetresPerSecond < b.CubicMetresPerSecond;
+    public int CompareTo(StandardGasRate other) => CubicMetresPerSecond.CompareTo(other.CubicMetresPerSecond);
+}

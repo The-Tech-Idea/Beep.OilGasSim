@@ -50,9 +50,34 @@ public readonly record struct Length(double Metres) : IComparable<Length>
     public static Length operator +(Length a, Length b) => new(a.Metres + b.Metres);
     public static Length operator -(Length a, Length b) => new(a.Metres - b.Metres);
     public static double operator /(Length a, Length b) => a.Metres / b.Metres;
+    /// <summary>The declared product (SDD-001 §1, R1.0 amendment): length × length is area.</summary>
+    public static Area operator *(Length a, Length b) => new(a.Metres * b.Metres);
     public static bool operator >(Length a, Length b) => a.Metres > b.Metres;
     public static bool operator <(Length a, Length b) => a.Metres < b.Metres;
     public int CompareTo(Length other) => Metres.CompareTo(other.Metres);
+}
+
+/// <summary>
+/// Area, canonical square metres. Added by the R1.0 review: §1.4's Polygon.Area
+/// consumed it while no dimension list or file declared it. Licence blocks,
+/// facility footprints and drainage areas all speak it.
+/// </summary>
+public readonly record struct Area(double SquareMetres) : IComparable<Area>
+{
+    public static Area FromSquareKilometres(double km2) => new(km2 * 1e6);
+    public static Area FromHectares(double ha) => new(ha * 1e4);
+    public static Area FromAcres(double acres) => new(acres * 4046.8564224);
+    public double ToSquareKilometres() => SquareMetres / 1e6;
+    public double ToAcres() => SquareMetres / 4046.8564224;
+
+    public static Area operator +(Area a, Area b) => new(a.SquareMetres + b.SquareMetres);
+    public static Area operator -(Area a, Area b) => new(a.SquareMetres - b.SquareMetres);
+    public static double operator /(Area a, Area b) => a.SquareMetres / b.SquareMetres;
+    /// <summary>The declared quotient: area over a length is a length.</summary>
+    public static Length operator /(Area a, Length l) => new(a.SquareMetres / l.Metres);
+    public static bool operator >(Area a, Area b) => a.SquareMetres > b.SquareMetres;
+    public static bool operator <(Area a, Area b) => a.SquareMetres < b.SquareMetres;
+    public int CompareTo(Area other) => SquareMetres.CompareTo(other.SquareMetres);
 }
 
 /// <summary>Mass, canonical kilograms. What the engine conserves (04 §2.1).</summary>

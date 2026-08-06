@@ -11,11 +11,11 @@ next.** Updated at the close of every phase.
 
 | | |
 |---|---|
-| **Phase** | R0 ✅ closed · **R1-C (contract layer) ✅ complete** · R1 proper next |
+| **Phase** | R0 ✅ closed · R1-C (contract layer) ✅ complete · **R1 🟦 in progress — R1.0 and R1.1 done** |
 | **Design docs** | 24 design + 1 research + 25 phase docs, 17 catalogue sheets ([C16 terrain](catalog/C16_TERRAIN_CLASSES.md) newest) + tech tree, 18 SDDs (000–017). Coherence log: **81 findings**, 61–81 from the code passes. |
 | **Code status** | **Contract layer complete**: `OGSim.Kernel` (13 files) + `OGSim.Contracts` (14 files) + smoke tests — 0 warnings, 0 errors, **15/15 tests** (verified in this repo, 2026-08-06). Eight review passes (R1-C…C8 below); every member traceable to a pinned SDD section; every 03 §3.2 replaceable slot typed. |
 | **Repository** | `The-Tech-Idea/Beep.OilGasSim`, branch `master`. The OGSim tree (`plans/`, `src/`, `tests/`, `OGSim.slnx`, `Directory.Build.props` — 130 files, ~18,700 lines) was **copied in from the workspace it was authored in**; the prior occupant of this repo was removed at the same time. R0 + R1-C therefore have **no commit of their own here** — their first commit in this repository is still pending, and `git log` before it shows only the removed project's history. |
-| **Next** | **R1 proper**: kernel implementations behind the contracts + the 23-check architecture test suite per [SDD-000](sdd/SDD-000_ENGINEERING_STANDARDS.md)/[SDD-001](sdd/SDD-001_KERNEL_CONTRACTS.md); commit style `R<n>: <what> (<before> -> <after> xUnit)` |
+| **Next** | **R1.2 onward** — identity registry, clock, RNG streams, then the log/audit/fault services. `OGSim.Architecture.Tests` (R1.12) is the phase's other half and is not started, so laws L1–L5 and rules D-1…D-8 currently hold by review, not by test. Commit style `R<n>.<m>: <what>` |
 
 > **Phase numbers are stable identifiers, not execution order.** They are assigned
 > in the order phases are designed; §"Execution order" below is authoritative for
@@ -132,12 +132,13 @@ design is wrong, that is discovered in Arc I and not in Arc III.
 
 ## Arc I — Foundation
 
-### Phase R1 — Kernel ⬜
+### Phase R1 — Kernel 🟦
 > 📄 [phases/R1_KERNEL.md](phases/R1_KERNEL.md)
 
 | # | Task | Status |
 |---|---|---|
-| R1.1 | Dimensions, units, `IQuantity`; conversion; nonlinear scales | ⬜ |
+| R1.0 | **SDD review** ([SDD_INDEX](sdd/SDD_INDEX.md) §1) — SDD-001 and the R1 phase doc read against the committed contract layer. Five drifts corrected under rule F-4 *before* any code: the missing `weather` RNG stream, R1-V19's "across leap years" against a 30/360 calendar, §9's `Segment(double…)`/`AvailabilitySet` block, the undeclared `Area` dimension, and `ILog`'s phantom `EventName`/`LogFields` | ✅ |
+| R1.1 | Dimensions, units, `IQuantity`; conversion; nonlinear scales — **plus `DetMath`** (§1.3), the `Area` dimension, the volumetric rate family, the §1.4 spatial algorithms and the §11 fault carriers. 37 kernel tests | ✅ |
 | R1.2 | `IEntityId<T>`, `IEntityRegistry`; resolution faults | ⬜ |
 | R1.3 | `ISimulationClock` | ⬜ |
 | R1.4 | `IRandomSource` with independent per-subsystem streams | ⬜ |
