@@ -209,6 +209,49 @@ public class MetadataRules
         EngineCorpus.AssertNone(violations, "N3 — contract names carry no weasel words");
     }
 
+    [Fact] // SDD-000 §8 rule F-6: identity is EntityId<T>, and there is no second scheme.
+           // Contract pass 10 found CompartmentId, PerforationId and OperationId each
+           // invented in an SDD, used across sections and declared nowhere — three
+           // documents independently reaching for a per-entity id type.
+    public void F6_IdentityIsEntityIdAndNothingElse()
+    {
+        // Each exemption is a DIFFERENT kind of identity, and that is why it is
+        // allowed to end in Id:
+        //   EntityId<T>  the one entity scheme (SDD-001 §2)
+        //   ContentId    content-catalogue identity — a kebab-case string, not a number
+        //   TechnologyId a typed wrapper over ContentId; technologies are content
+        //   AuditId      a position in an append-only trail, not an entity
+        //   EventId      a per-tick publish sequence, not an entity
+        //   MaterialId   a catalogue ORDINAL, explicitly never persisted (SDD-004 §6)
+        //   PortId       an element-local index, meaningless outside its element
+        string[] allowed =
+            ["EntityId", "ContentId", "TechnologyId", "AuditId", "EventId", "MaterialId", "PortId"];
+
+        var violations = new List<string>();
+        foreach (Type type in EngineTypes)
+        {
+            if (!type.IsPublic && !type.IsNestedPublic) continue;
+
+            // An ENUM cannot be an identity scheme, whatever it is called: its
+            // membership is fixed, finite and named at compile time, and minting
+            // a new member at runtime — which is the whole job of an identity —
+            // is impossible. StageId (the 14 tick stages) and StreamId (the 8
+            // RNG streams) are closed vocabularies that happen to end in "Id".
+            if (type.IsEnum) continue;
+
+            string name = type.Name;
+            int tick = name.IndexOf('`');           // strip generic arity: EntityId`1
+            if (tick >= 0) name = name[..tick];
+
+            if (!name.EndsWith("Id", StringComparison.Ordinal)) continue;
+            if (allowed.Contains(name, StringComparer.Ordinal)) continue;
+
+            violations.Add($"{type.FullName} — a second identity scheme; use EntityId<T>");
+        }
+
+        EngineCorpus.AssertNone(violations, "F-6 — identity is EntityId<T>");
+    }
+
     // ------------------------------------------------------------- helpers
 
     private static Type Unwrap(Type type) =>
