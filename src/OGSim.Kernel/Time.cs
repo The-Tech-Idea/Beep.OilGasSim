@@ -26,12 +26,48 @@ public enum ClimateHemisphere { Northern, Southern }
 /// <summary>Real calendar labels over 30/360 arithmetic (SDD-001 §3, TM-D5).</summary>
 public readonly record struct GameDate(int Year, int Month)
 {
-    public Quarter Quarter => (Quarter)((Month - 1) / 3 + 1);
+    /// <summary>Validated at construction: a month outside 1–12 would silently
+    /// yield a wrong quarter and a wrong season (R1.3).</summary>
+    public int Month { get; init; } = Month is >= 1 and <= 12
+        ? Month
+        : throw new ArgumentOutOfRangeException(nameof(Month), Month,
+            "GameDate month must be 1-12 (SDD-001 §3).");
+
+    public Quarter Quarter => (Quarter)((Guarded() - 1) / 3 + 1);
+
+    /// <summary>
+    /// Months forward (or back) on the 30/360 calendar. This is the whole of
+    /// date arithmetic: with every month exactly 30 days there is no day-length
+    /// case analysis and no leap year to carry.
+    /// </summary>
+    public GameDate AddMonths(int months)
+    {
+        int total = Year * 12 + (Guarded() - 1) + months;
+        // Floor division, so dates before the epoch move back correctly rather
+        // than truncating toward zero across the year boundary.
+        int year = total >= 0 ? total / 12 : (total - 11) / 12;
+        return new GameDate(year, total - year * 12 + 1);
+    }
+
+    /// <summary>Whole months from this date to another — the inverse of AddMonths.</summary>
+    public int MonthsUntil(GameDate other) =>
+        (other.Year * 12 + other.Guarded() - 1) - (Year * 12 + Guarded() - 1);
+
+    /// <summary>
+    /// default(GameDate) bypasses the constructor and carries month 0. Every
+    /// member checks rather than quietly reporting Q0 (the Polygon rule, applied
+    /// at the other value-type boundary that has no valid zero).
+    /// </summary>
+    private int Guarded() =>
+        Month is >= 1 and <= 12
+            ? Month
+            : throw new InvariantFault("SDD-001 §3", null,
+                $"default(GameDate) has month {Month}; a date must be constructed.");
 
     /// <summary>Meteorological season by month, flipped for the southern hemisphere.</summary>
     public Season SeasonAt(ClimateHemisphere hemisphere)
     {
-        var northern = Month switch
+        var northern = Guarded() switch
         {
             12 or 1 or 2 => Season.Winter,
             3 or 4 or 5 => Season.Spring,
