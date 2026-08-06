@@ -28,20 +28,61 @@ immediately.
 ## 3. The compartment
 
 ```csharp
-internal interface IReservoirCompartment            // TRUTH — internal to OGSim.Subsurface
+// PUBLIC — the id marker only. The compartment itself is truth and stays
+// internal; other modules may hold a reference to one and learn nothing from it.
+public interface IReservoirCompartmentEntity { }
+
+// INTERNAL to OGSim.Subsurface. Everything below is truth.
+internal interface IReservoirCompartment
 {
-    CompartmentId Id { get; }
+    EntityId<IReservoirCompartmentEntity> Id { get; }
     Pressure Pr { get; }                             // average pressure, Pa
-    InPlace InPlace { get; }                         // Mass per material, kg
-    ContactSet Contacts { get; }                     // GOC, OWC as datum depths (Length TVD)
-    RockTruth Rock { get; }                          // φ, k (m²), h (m), A (m²), c_f (1/Pa)
+    InPlace InPlace { get; }                         // mass per material, kg
+    ContactSet Contacts { get; }
+    RockTruth Rock { get; }
     IDriveMechanism Drive { get; }
-    IReadOnlyList<CompartmentLink> Links { get; }    // (other id, transmissibility)
+    IReadOnlyList<CompartmentLink> Links { get; }
 }
+
+// Dense mass-per-material, kg, indexed by MaterialId.Ordinal — the same layout
+// as Composition and deliberately NOT the same type. Composition is a mass FLOW
+// (kg/s, SDD-002 §2); this is a mass. Reusing Composition here would let a rate
+// be committed as an inventory, which is the one arithmetic error the volume
+// families were split up to prevent.
+internal readonly record struct InPlace(ImmutableArray<double> KilogramsByOrdinal);
+
+internal readonly record struct ContactSet(
+    Length GasOilContact,                            // datum TVD
+    Length OilWaterContact);
+
+internal readonly record struct RockTruth(
+    double Porosity,                                 // fraction
+    Permeability Permeability,
+    Length NetThickness,                             // h
+    Area DrainageArea,                               // A
+    double RockCompressibility);                     // c_f, 1/Pa
+
+internal readonly record struct CompartmentLink(
+    EntityId<IReservoirCompartmentEntity> Other,
+    double Transmissibility);                        // m³/s/Pa
 ```
 
-Mutation only through `MaterialBalance.Commit` (stage 6). Beliefs about all of
-this live in `OGSim.Information` and never here.
+Mutation only through the stage-6 commit path (`IWithdrawalTarget` /
+`IReceiptTarget`, SDD-002 §9). Beliefs about all of this live in
+`OGSim.Information` and never here.
+
+> **Contract pass 10.** `CompartmentId` was used throughout this document and
+> declared nowhere: identity is `EntityId<T>` over a marker interface
+> (SDD-001 §2), and the committed marker is `IReservoirCompartmentEntity`.
+> Corrected here and in §5. `InPlace`, `ContactSet`, `RockTruth` and
+> `CompartmentLink` were likewise referenced and never declared — R5 cannot
+> implement a compartment without them, and F-1 says they are specified first.
+>
+> Writing `InPlace` surfaced a distinction worth keeping: it has the same dense
+> layout as `Composition` and must not be the same type, because `Composition`
+> is kg/s and this is kg. A shared type would make "commit a rate as an
+> inventory" a silent unit error of exactly the kind §1.1's volume families exist
+> to make uncompilable.
 
 ### 3.0b Accumulation truth attributes (06 §2.3)
 
@@ -50,6 +91,11 @@ carries:
 
 ```csharp
 public enum DetectClass { D0, D1, D2, D3 }
+
+// Both were consumed by AccessRequirements and declared nowhere (pass 10).
+public enum DepthClass      { Shallow, Standard, Deep, UltraDeep }
+public enum WaterDepthClass { Onshore, Shallow, Deep, UltraDeep }
+
 public sealed record AccessRequirements(
     DepthClass Depth, WaterDepthClass WaterDepth,
     bool Hpht, bool Tight, bool Sour);
@@ -101,6 +147,16 @@ J_aq: productivity index, content per aquifer (m³/s/Pa)
 ## 4. Fluid model
 
 ```csharp
+// Pass 10: all three were consumed by IFluidPropertyModel and declared nowhere.
+public enum FluidForm { BlackOil, ModifiedBlackOil }    // condensate, 05 §2
+
+public sealed record PhaseSplit(
+    IReadOnlyList<(MaterialId Material,
+                   double GasFraction, double LiquidFraction, double AqueousFraction)> Fractions);
+
+public sealed record ValidityRange(
+    Pressure MinP, Pressure MaxP, Temperature MinT, Temperature MaxT);
+
 public interface IFluidPropertyModel
 {
     FluidForm Form { get; }                          // BlackOil | ModifiedBlackOil (condensate, 05 §2)
@@ -122,41 +178,162 @@ Standard implementation: the correlation set of [05](../design/05_SIMULATION_MOD
 implemented against `DetMath` only** and pinned by an MX test to reference
 values computed from the published papers.
 
-## 5. The well hierarchy
+### 4.1 The two subsurface plugin slots
+
+`IDriveMechanism` is one of the eleven [03](../design/03_ARCHITECTURE.md) §3.2
+replaceable models; the aquifer is its own smaller slot. §3 above names both and
+neither was declared (pass 10).
 
 ```csharp
+public sealed record MaterialBalanceInput(
+    Pressure StartPressure,
+    ReservoirVolume Withdrawn,
+    ReservoirVolume Injected,
+    ReservoirVolume AquiferInflux);
+
+// Design 02 §2.2 — a plugin deliberately: the recovery factor EMERGES from the
+// mechanism, so adding EOR is adding an implementation and never editing a
+// reservoir. §3.1's bisection is this interface's default implementation.
+public interface IDriveMechanism
+{
+    ContentId Id { get; }
+    Pressure SolveEndPressure(MaterialBalanceInput input, IFluidPropertyModel fluid);
+
+    // Which injectants the mechanism accepts — asked, never branched on by
+    // material identity (SDD-005 §4.0b, and the "one engine" architecture test).
+    IReadOnlyList<ContentId> AcceptedInjectants { get; }
+}
+
+// §3.3's Fetkovich form. An aquifer IS a water compartment, so the influx it
+// reports is a reservoir volume like any other withdrawal or injection.
+public interface IAquiferModel
+{
+    ReservoirVolume InfluxDuring(Pressure reservoirPressure, Duration duration);
+}
+```
+
+**`AcceptedInjectants` is a list of content ids rather than a material-kind
+enum**, and that is the whole "one engine" rule in one member: the drive is
+*asked* whether it takes a material, so a CO₂ flood is a content entry naming a
+mechanism that accepts `co2`, not a branch on what the material is.
+
+## 5. The well hierarchy
+
+The PPDM four-level hierarchy of [02](../design/02_DOMAIN_MODEL.md) §3: a well
+is not a hole. Identity, geometry, physics and the reservoir connection are four
+types because they have four different lifetimes — a sidetrack adds a wellbore
+without touching the well, a recompletion replaces a completion without touching
+either.
+
+```csharp
+// Design 02 §3.4 — every transition is a command; none skips abandonment.
+public enum WellStatus
+{
+    Proposed, Permitted, Drilling, DryHole, Logged, SuspendedNonCommercial,
+    Completing, Producing, ShutIn, Workover, Injecting, Abandoned
+}
+
+public enum WellClassification { Exploration, Appraisal, Development, Injector, Observation }
+
 public interface IWell           // identity + status machine; NO physics
 {
     EntityId<IWell> Id { get; }
     WellStatus Status { get; }                       // transitions: data-driven table, commands only
+    WellClassification Classification { get; }
     EntityId<ILicence> Licence { get; }
     Coordinate Surface { get; }
+    IReadOnlyList<EntityId<IWellbore>> Wellbores { get; }
 }
 
-public interface IWellbore
+public readonly record struct TrajectoryStation(Length Md, Length Tvd, Coordinate Position);
+public sealed record Trajectory(IReadOnlyList<TrajectoryStation> Stations);
+
+public interface IWellbore       // a physical hole: the original plus each sidetrack
 {
-    Trajectory Path { get; }                         // polyline of (MD, TVD, x, y) stations
-    Length ContactLengthIn(CompartmentId c);         // computed from Path ∩ compartment interval
+    EntityId<IWellbore> Id { get; }
+    EntityId<IWell> Well { get; }
+    Trajectory Path { get; }
+    Length ContactLengthIn(EntityId<IReservoirCompartmentEntity> compartment);   // Path ∩ interval
+    IReadOnlyList<EntityId<ICompletion>> Completions { get; }
 }
 
 public sealed record Perforation(
-    PerforationId Id,
-    CompartmentId Drains,
+    EntityId<IReservoirCompartmentEntity> Drains,
     Length TopMd, Length BottomMd,
     double Skin,                                     // dimensionless
-    bool Isolated)
-{
+    bool Isolated);
     // Standoff (05 §3.3b): computed each tick from trajectory TVD midpoint vs
     // the compartment's nearest contact — DERIVED, never stored (law L5).
-}
 ```
+
+> **Contract pass 10 — §5 against the committed shape.** `IWell` was missing
+> `Classification` and `Wellbores`, `IWellbore` was missing `Id`, `Well` and
+> `Completions`, and `WellStatus`, `WellClassification`, `Trajectory` and
+> `TrajectoryStation` were all used here and declared nowhere.
+>
+> **`Perforation` has no id, deliberately**, where this document previously gave
+> it a `PerforationId` that existed in no SDD and no code. A perforation is not
+> an independently addressable entity: it is a component of exactly one
+> completion, it is never referenced from outside it, and nothing in the design
+> resolves one by id. Giving it an id would put a second identity scheme beside
+> `EntityId<T>` for no consumer — and would invite storing the derived standoff
+> against it, which law L5 forbids.
 
 ## 6. The completion — the source element
 
 `ICompletion : IFlowElement`. Its `Transform` is the operating-point solve —
 and as a **source element** it has no inlets and reports its withdrawal as
 `TransformResult.Sourced` (SDD-002 §5), which is how the element-level
-conservation check covers wells:
+conservation check covers wells.
+
+The three algorithms below are §6.1–6.3. Pass 10 declares the contracts they
+run behind — the document specified every formula and none of the signatures:
+
+```csharp
+// SDD-003 §6.1. Per PERFORATION, not per completion: multi-perforation
+// commingling apportions by each perf's own kh share and skin (FV10), so a
+// completion-level signature could not express the case it is built for.
+public interface IInflowModel
+{
+    ContentId Id { get; }
+    ReservoirRate InflowAt(Pressure reservoirPressure, Pressure bottomholePressure,
+                           Perforation perforation);
+}
+
+// SDD-003 §6.2. Inverted relative to the physics: the VLP is naturally
+// "what wellhead pressure results from this rate", but the operating-point
+// bisection in §6.3 searches on Pwf, so the useful direction is the one that
+// answers "what bottomhole pressure does this rate DEMAND".
+public interface IOutflowModel
+{
+    ContentId Id { get; }
+    Pressure RequiredBottomhole(ReservoirRate rate, Pressure wellheadPressure);
+}
+
+// A lift method modifies the VLP, and its TIER datasheet is the whole effect
+// (07 §4b) — there is no per-method interface for ESP vs rod pump vs PCP,
+// because that would be an equipment hierarchy in code (02 §4.1).
+public interface ILiftMethod
+{
+    ContentId InstalledTier { get; }
+}
+
+// §6.3's outcome. DEAD is a distinct result and NOT a zero rate: "cannot flow
+// at any rate" and "produced nothing this tick" have different remedies, and
+// the read model and well.diedNaturally both consume the distinction (R6-V6).
+public abstract record OperatingPoint;
+public sealed record Flowing(ReservoirRate Rate, Pressure Bottomhole) : OperatingPoint;
+public sealed record Dead : OperatingPoint;
+
+public interface ICompletion : IFlowElement
+{
+    EntityId<ICompletion> CompletionId { get; }
+    EntityId<IWellbore> Wellbore { get; }
+    IReadOnlyList<Perforation> Perforations { get; }
+    ILiftMethod? Lift { get; }                       // null: natural flow
+    OperatingPoint SolveOperatingPoint(Pressure wellheadBackpressure);
+}
+```
 
 ### 6.1 Inflow (SI Darcy form, per perforation)
 
