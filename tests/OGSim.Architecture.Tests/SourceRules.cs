@@ -31,7 +31,13 @@ public class SourceRules
                 string body = clause.Block?.ToString() ?? string.Empty;
                 bool routes = body.Contains("Report(", StringComparison.Ordinal)
                     || body.Contains("Fault(", StringComparison.Ordinal)
-                    || body.Contains("throw;", StringComparison.Ordinal);
+                    || body.Contains("throw;", StringComparison.Ordinal)
+                    // A caught exception RECORDED as a LoadFailure has not been
+                    // discarded either: design 09 §5.1 C1 makes the load report
+                    // the content fault's designed destination, and the report
+                    // is returned to the caller rather than swallowed. L4 is
+                    // about nothing being lost, not about one function's name.
+                    || body.Contains("LoadFailure(", StringComparison.Ordinal);
                 if (!routes)
                     violations.Add($"{EngineCorpus.Where(file, clause)} catch does not route to the fault policy");
             }
@@ -223,6 +229,14 @@ public class SourceRules
             {
                 if (invocation.Expression is not MemberAccessExpressionSyntax access) continue;
                 if (access.Name.Identifier.Text is not ("ToString" or "Parse" or "TryParse")) continue;
+
+                // JSON parsing cannot be culture-sensitive: RFC 8259 fixes the
+                // number grammar to a '.' separator, and JsonDocument.Parse
+                // accepts no culture to get wrong. Exempted by RECEIVER rather
+                // than by an allowlist of call sites, so the exemption cannot
+                // drift into covering a real numeric parse.
+                if (access.Expression.ToString() is "JsonDocument" or "JsonSerializer"
+                    or "JsonNode" or "JsonElement") continue;
 
                 string arguments = invocation.ArgumentList.ToString();
                 bool hasFormatOrParse =

@@ -43,6 +43,35 @@ public interface ICatalogSet
 
 public sealed record ContentFile(string RelativePath, string Json);
 
+/// <summary>One id an entry points at, with the path that named it (SDD-004 §5 stage 4).</summary>
+public readonly record struct ContentReference(string Kind, ContentId Id, string JsonPath);
+
+/// <summary>
+/// SDD-004 §5 stage 2's dispatch table entry. THIS is what keeps the loader
+/// type-agnostic: a content kind is registered, never coded into the loader, so
+/// R3 §3's acceptance criterion — "if a later phase needs a loader change to add
+/// a content kind, R3's design is wrong" — is a property of this interface
+/// rather than a promise anyone has to keep.
+///
+/// There is deliberately no Write: content is authored by hand and by tooling
+/// and never emitted by the engine, so a serialiser would be an unused member
+/// (law L3) and an invitation to round-trip authored files through the engine,
+/// which is how formatting and comments get destroyed.
+/// </summary>
+public interface IContentKind
+{
+    string Name { get; }
+
+    /// <summary>Stages 2–3: shape and units. Throws; the loader turns the throw
+    /// into a LoadFailure carrying file and JSON path.</summary>
+    ContentDefinition Read(System.Text.Json.JsonElement element);
+
+    IReadOnlyList<ContentReference> ReferencesOf(ContentDefinition definition);
+
+    /// <summary>Stage 5: EVERY problem, never just the first.</summary>
+    IReadOnlyList<string> ConsistencyProblems(ContentDefinition definition);
+}
+
 /// <summary>
 /// Base content is order 0; mods declare order. Two sources overriding one
 /// kind:id at the SAME order is a load failure naming both (SDD-004 §7).

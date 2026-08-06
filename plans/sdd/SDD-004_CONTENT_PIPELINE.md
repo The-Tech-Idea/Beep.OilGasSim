@@ -124,11 +124,40 @@ public abstract record ContentLoadResult;
 public sealed record ContentLoaded(ICatalogSet Catalogues) : ContentLoadResult;
 public sealed record ContentFailures(IReadOnlyList<LoadFailure> Failures) : ContentLoadResult;
 
-public sealed class ContentLoader   // one public entry point; R3 implementation
+// Stage 2's "dispatch by table", declared (R3.2). THIS is what keeps the loader
+// type-agnostic: a content kind is REGISTERED, never coded into the loader, so
+// R3 §3's real acceptance criterion — "if a later phase needs a loader change to
+// add a content kind, R3's design is wrong" — is a property of this interface
+// rather than a promise. All 27 kinds of design 10 §2 arrive this way.
+public readonly record struct ContentReference(string Kind, ContentId Id, string JsonPath);
+
+public interface IContentKind
 {
+    string Name { get; }                                    // the JSON "kind" value
+
+    // Stages 2-3: shape and units. Throws ContentUnitFault / JsonException;
+    // the loader converts either into a LoadFailure carrying file and path.
+    ContentDefinition Read(JsonElement element);
+
+    // Stage 4: every id this entry points at, for resolution against the index.
+    IReadOnlyList<ContentReference> ReferencesOf(ContentDefinition definition);
+
+    // Stage 5: per-kind rules — ranges, monotone curves, DAG membership.
+    // Returns EVERY problem, not the first.
+    IReadOnlyList<string> ConsistencyProblems(ContentDefinition definition);
+}
+
+public sealed class ContentLoader   // one public entry point
+{
+    public ContentLoader(IReadOnlyList<IContentKind> kinds, IModuleRegistry plugins);
     public ContentLoadResult LoadAll(IReadOnlyList<IContentSource> sources);
 }
 ```
+
+**`IContentKind` has no `Write`, and that is deliberate.** Content is authored by
+hand and by tooling, never emitted by the engine — a serialiser here would be an
+unused member (law L3) and an invitation to round-trip content through the engine,
+which is how authored formatting and comments get destroyed.
 
 > **Contract pass 10.** This block declared the return as `LoadResult` while the
 > pass-3 amendment below it — and the committed code — say `ContentLoadResult`.
@@ -153,6 +182,23 @@ public sealed class ContentLoader   // one public entry point; R3 implementation
 **All files run all stages**; failures accumulate (R3-V2). Stage order within a
 file is fixed; file order is `ordinal sort of relative path` — determinism even
 in diagnostics.
+
+> **R3.2 refinement — "all files" and "all stages" are different promises, and
+> only the first is unconditional.** Stages 1–3 are *per-file*: every file is
+> parsed, shaped and unit-bound regardless of what any other file did, which is
+> what R3-V2 is actually protecting — never stopping at the first bad file.
+>
+> Stages 4–6 are *cross-file*: they resolve against an index built from every
+> entry that survived 1–3. If a file failed to parse, its entry is simply
+> absent, and every reference to it would then report a dangling reference —
+> **a cascade of spurious failures from one root cause**, burying the real error
+> in consequences of it. So 4–6 run only once 1–3 have produced a complete
+> index.
+>
+> The practical shape: a first run reports the malformed files; fixing those and
+> re-running reports the reference and consistency problems. Two rounds, each
+> reporting everything it can honestly see — rather than one round reporting a
+> true error and five false ones.
 
 > **Pass-3 amendment (finding 69):** the surface of this section now exists in
 > `OGSim.Contracts/ContentContracts.cs`: `ContentDefinition`, `GatedDefinition`,
