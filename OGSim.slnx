@@ -3,11 +3,13 @@
     <Project Path="src/OGSim.Contracts/OGSim.Contracts.csproj" />
     <Project Path="src/OGSim.Kernel/OGSim.Kernel.csproj" />
     <Project Path="src/OGSim.Flow/OGSim.Flow.csproj" />
+    <Project Path="src/OGSim.Subsurface/OGSim.Subsurface.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/OGSim.Contracts.Tests/OGSim.Contracts.Tests.csproj" />
     <Project Path="tests/OGSim.Kernel.Tests/OGSim.Kernel.Tests.csproj" />
     <Project Path="tests/OGSim.Architecture.Tests/OGSim.Architecture.Tests.csproj" />
     <Project Path="tests/OGSim.Flow.Tests/OGSim.Flow.Tests.csproj" />
+    <Project Path="tests/OGSim.Subsurface.Tests/OGSim.Subsurface.Tests.csproj" />
   </Folder>
 </Solution>

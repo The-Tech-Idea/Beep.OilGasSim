@@ -147,6 +147,32 @@ public sealed class BlackOilModel : IFluidPropertyModel
             _bobAtBubblePoint * DetMath.Exp(co * (_bubblePointPsia - psia)));
     }
 
+    // ------------------------------------------------------------- Bw
+
+    /// <summary>
+    /// McCain (1990), transcribed from SDD-003 §4.1. Gas-free pure water: the two
+    /// volume changes are thermal and pressure, applied multiplicatively.
+    ///
+    /// <para>Small — Bw stays within a few percent of 1 — but not 1. Substituting
+    /// unity would put a systematic error straight into §3.1's withdrawal term
+    /// for every compartment producing water, growing with water cut, which is
+    /// exactly when the material balance matters most.</para>
+    /// </summary>
+    public FormationVolumeFactor Bw(Pressure p)
+    {
+        double psia = Psia(p);
+        double t = _reservoirF;
+
+        double thermal = -1.0001e-2 + 1.33391e-4 * t + 5.50654e-7 * t * t;
+
+        double compression = -1.95301e-9 * psia * t
+                             - 1.72834e-13 * psia * psia * t
+                             - 3.58922e-7 * psia
+                             - 2.25341e-10 * psia * psia;
+
+        return new FormationVolumeFactor((1.0 + compression) * (1.0 + thermal));
+    }
+
     private double SaturatedBo(double rsScf)
     {
         // API ≤ 30 and API > 30 have different fitted sets — this is the

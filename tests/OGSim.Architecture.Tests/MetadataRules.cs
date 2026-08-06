@@ -3,6 +3,7 @@
 // what makes design 22 §6.1's "every law has a test" check mechanical.
 
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using OGSim.Kernel;
 
 namespace OGSim.Architecture.Tests;
@@ -96,6 +97,12 @@ public class MetadataRules
         {
             ["OGSim.Kernel"] = [],
             ["OGSim.Contracts"] = ["OGSim.Kernel"],
+
+            // Domain modules (design 03 §2/§8). Each references the two layers
+            // below it and NEVER a sibling: a module that could name another
+            // module's types would make the composition graph a suggestion.
+            ["OGSim.Flow"] = ["OGSim.Kernel", "OGSim.Contracts"],
+            ["OGSim.Subsurface"] = ["OGSim.Kernel", "OGSim.Contracts"],
         };
 
         var violations = new List<string>();
@@ -250,6 +257,39 @@ public class MetadataRules
         }
 
         EngineCorpus.AssertNone(violations, "F-6 — identity is EntityId<T>");
+    }
+
+    /// <summary>
+    /// The truth boundary (R5 §2.5, SDD-003 §1/§3). Subsurface truth is
+    /// <c>internal</c> and the assembly boundary is what enforces it.
+    ///
+    /// <para>This is R5's most consequential law and the reason its risk table
+    /// says to establish the boundary in R5 rather than in R14. The player's
+    /// belief about a reservoir IS the game: if any consumer could read a
+    /// compartment's pressure directly, every exploration and appraisal decision
+    /// downstream would be theatre. R14 then inherits a boundary that already
+    /// holds instead of retrofitting one around code that grew up without it.</para>
+    ///
+    /// <para>Stated as "no public type at all" rather than as a list of
+    /// forbidden members, because the moment there is one public type there is a
+    /// door, and the next person to need something through it will widen the
+    /// door rather than question the need.</para>
+    /// </summary>
+    [Fact]
+    public void Truth_SubsurfaceExposesNoPublicType()
+    {
+        var violations = new List<string>();
+
+        foreach (Type type in EngineCorpus.Subsurface.GetTypes())
+        {
+            if (!type.IsPublic && !type.IsNestedPublic) continue;
+            if (type.GetCustomAttribute<CompilerGeneratedAttribute>() is not null) continue;
+
+            violations.Add($"{type.FullName} is public; subsurface truth is internal " +
+                           "(SDD-003 §1) and beliefs about it live in OGSim.Information");
+        }
+
+        EngineCorpus.AssertNone(violations, "truth boundary — OGSim.Subsurface exposes nothing");
     }
 
     // ------------------------------------------------------------- helpers

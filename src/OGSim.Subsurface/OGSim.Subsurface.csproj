@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- SDD-003 §1: subsurface TRUTH types are internal to this assembly.
+         The assembly boundary IS the enforcement (design 03 §2) — nothing
+         outside can name IReservoirCompartment, so nothing outside can read a
+         pressure the player has not measured. -->
+    <ProjectReference Include="..\OGSim.Contracts\OGSim.Contracts.csproj" />
+    <ProjectReference Include="..\OGSim.Kernel\OGSim.Kernel.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="OGSim.Subsurface.Tests" />
+  </ItemGroup>
+
+</Project>

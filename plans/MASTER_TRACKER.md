@@ -241,20 +241,45 @@ Test names carry their FV number so coverage is readable from the test list.
 | R22.7 | Ambient conditions into flow assurance and equipment derating | ⬜ |
 | R22.8 | EN1–EN12 verification suite ([13](design/13_ENVIRONMENT.md) §8) | ⬜ |
 
-### Phase R5 — Subsurface ⬜
+### Phase R5 — Subsurface 🟨
 > 📄 [phases/R5_SUBSURFACE.md](phases/R5_SUBSURFACE.md)
+> `src/OGSim.Subsurface` — **every type internal**, enforced by
+> `Truth_SubsurfaceExposesNoPublicType`.
 
 | # | Task | Status |
 |---|---|---|
-| R5.1 | `IReservoirCompartment` — in-place volumes, pressure, properties | ⬜ |
-| R5.2 | `IFluidSystem` — PVT behaviour, bubble point, phase evolution | ⬜ |
-| R5.3 | Tank material balance | ⬜ |
-| R5.4 | `IDriveMechanism` — six implementations | ⬜ |
-| R5.5 | `IAquifer` — influx model | ⬜ |
-| R5.6 | Compartment connectivity and transmissibility | ⬜ |
-| R5.7 | `p/Z` behaviour for gas — exactly linear when volumetric | ⬜ |
-| R5.8 | `IReservoir`, `IField` aggregates | ⬜ |
-| R5.9 | Model tests MX3, MB1, MB2 | ⬜ |
+| R5.0 | SDD review — nine findings, six of them defects in SDD-003 (see below) | ✅ |
+| R5.1 | `IReservoirCompartment` and its truth types — `InPlace` (kg, deliberately not `Composition`'s kg/s), `ContactSet`, `RockTruth`, `CompartmentLink`, `InitialConditions`, `CumulativeProduction` | ✅ |
+| R5.2 | PVT is `IFluidPropertyModel`, built at R2.7; `Bw` added here (finding 101) | ✅ |
+| R5.3 | Tank material balance — Havlena-Odeh grouping, **cumulative from initial conditions**, bisection | ✅ |
+| R5.4 | `IDriveMechanism` — six implementations, distinguished by which of §3.1's terms each **admits**, and each refusing a compartment that contradicts it | ✅ |
+| R5.5 | `IAquiferModel` — Fetkovich influx, bounded by remaining expansion, weakening as it delivers | ✅ |
+| R5.6 | Compartment connectivity and transmissibility | ⬜ — `CompartmentLink` declared; the multi-compartment solve is not written |
+| R5.7 | `p/Z` for gas — its own balance, since the oil form is identically zero at `N = 0` (finding 105) | ✅ |
+| R5.8 | ~~`IReservoir`, `IField` aggregates~~ | ⬜ — deferred (finding 103): groupings with no behaviour in R5, and L3 forbids declaring a member that has none |
+| R5.9 | Model tests — MX3 ✅, MB2 ✅, MB1 partial | 🟨 |
+
+**R5.0's findings.** Six are defects in SDD-003, three are stale phase-doc text.
+
+| # | Finding |
+|---|---|
+| 98 | Two sections both numbered §4.1, making every `SDD-003 §4.1` citation ambiguous under F-3 |
+| 99 | **§3.1 balanced cumulative expansion against one tick's withdrawal.** Read as written, pressure would have fallen by roughly the ratio of field life to one month — which is to say hardly at all. Now cumulative from initial conditions, which is also self-correcting |
+| 100 | §3.1's expansion forms cited "the black-oil forms of 05 §3.1", and 05 §3.1 states the balance **in words** with no algebra. The citation pointed at nothing; the forms are now stated in the SDD |
+| 101 | `IFluidPropertyModel` had no `Bw`, so the withdrawal term could not be evaluated for any compartment producing water |
+| 104 | Design 02 §2.2 promises six different pressure-vs-withdrawal relationships; the SDD specified one balance for all six. Resolved by §4.2b — a drive is defined by **which terms it admits**, which is the standard classification and needs no invented physics |
+| 105 | §3.1's form is expressed per stock-tank m³ of oil, so a gas reservoir (`N = 0`) had no root and was unimplementable. §3.1b added |
+| 106 | The validity limit was stated against "a fraction of expansion capacity", which has **no well-defined value**: `Bg → ∞` at the bracket floor makes any compartment's capacity effectively infinite and the limit could never fire. Now on the pressure step |
+| 102 | R5 §2.2 said the compartment **is** an `IFlowElement`. Design 23 pins `ICompletion : IFlowElement, never the reverse`; and an element publishes its outlet pressure into every downstream stream, so a compartment element would broadcast reservoir pressure in the phase meant to establish the boundary against exactly that |
+| 103 | Five deliverables named in R5 §3 are declared in no SDD (`IFluidSystem`, `IMaterialBalanceModel`, `IStratigraphicUnit`, `IReservoir`, `IField`), and `IAquifer` is declared as `IAquiferModel` |
+
+**What R5 proves, and what it cannot.** Recovery factor emerges — MB2's 5–30% band
+is hit for producing GOR from 3× to 12× `Rsi`, and retaining the liberated gas
+instead gives 72%, an order of magnitude from one mechanism. But **the band is a
+property of the GOR history**, which R5 does not determine: how much liberated gas
+is produced is set by relative permeability and the well. So R5-V3/R5-V4 as
+written — "recovery lands in band MB1/MB2" — are only half provable here, and the
+band test driven by a simulated production history belongs with R6.
 
 ### Phase R6 — Wells ⬜
 > 📄 [phases/R6_WELLS.md](phases/R6_WELLS.md)

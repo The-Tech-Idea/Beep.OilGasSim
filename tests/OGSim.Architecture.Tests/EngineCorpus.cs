@@ -23,12 +23,43 @@ namespace OGSim.Architecture.Tests;
 
 internal static class EngineCorpus
 {
+    /// <summary>
+    /// Loaded BY NAME rather than through a type, because OGSim.Subsurface has
+    /// no public type to name — which is exactly what
+    /// <c>Truth_SubsurfaceExposesNoPublicType</c> asserts. A corpus that could
+    /// only reach an assembly through its public surface would silently skip the
+    /// one assembly whose whole point is not having one.
+    ///
+    /// <para>Loaded from the output DIRECTORY rather than through this
+    /// assembly's reference list, because the compiler omits a reference no type
+    /// uses — and no type here can use one. The project reference is what puts
+    /// the file next to us; this is what opens it.</para>
+    ///
+    /// <para>Declared BEFORE <see cref="Assemblies"/>: static initialisers run in
+    /// declaration order, so the other way round the corpus would hold a null and
+    /// every metadata rule would quietly stop covering this assembly.</para>
+    /// </summary>
+    public static Assembly Subsurface { get; } = LoadBesideUs("OGSim.Subsurface");
+
+    private static Assembly LoadBesideUs(string assemblyName)
+    {
+        string path = Path.Combine(AppContext.BaseDirectory, assemblyName + ".dll");
+
+        Assert.True(File.Exists(path),
+            $"{assemblyName}.dll is not in the test output at {path}; without it this rule " +
+            "would pass by having nothing to check");
+
+        return Assembly.LoadFrom(path);
+    }
+
     /// <summary>Every engine assembly currently built. The suite scales with the
     /// solution: a new module is covered the day its project is referenced.</summary>
     public static IReadOnlyList<Assembly> Assemblies { get; } =
     [
         typeof(OGSim.Kernel.Money).Assembly,
         typeof(OGSim.Contracts.IEngine).Assembly,
+        typeof(OGSim.Flow.FlowSolver).Assembly,
+        Subsurface,
     ];
 
     public static IEnumerable<Type> Types =>

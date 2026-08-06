@@ -137,22 +137,124 @@ layer or the read model — the R15-V10 leak test covers both.
 
 ### 3.1 Material balance solve
 
-Voidage-balance root-find for end-of-tick pressure:
+The black-oil material balance in Havlena-Odeh grouping, solved for end-of-tick
+pressure. **All volumes reservoir m³; all pressures Pa.** Every term below is
+evaluated at the trial pressure `P` except those subscripted `i`, which are at
+initial conditions and never change.
 
 ```text
-F(P_end) = E_o(P_end) + E_g(P_end) + E_w(P_end) + E_f(P_end)
-           + W_influx(P_end) + V_injected − V_withdrawn        [reservoir m³]
-solve F(P_end) = 0 by BISECTION on P_end ∈ [1 kPa, Pr_start]
+UNDERGROUND WITHDRAWAL — what has left the compartment, at conditions P
+  F(P) = Np·[Bo(P) + (Rp − Rs(P))·Bg(P)] + Wp·Bw(P)
+  where Rp = Gp / Np                      (cumulative producing GOR; Np = 0 ⇒ F = 0)
+
+EXPANSION per stock-tank m³ of original oil
+  Eo(P)  = (Bo(P) − Boi) + (Rsi − Rs(P))·Bg(P)          oil + its dissolved gas
+  Eg(P)  = Boi·(Bg(P)/Bgi − 1)                          gas cap
+  Efw(P) = (1 + m)·Boi·[(cw·Swc + cf)/(1 − Swc)]·(Pi − P)   connate water + rock
+
+BALANCE — solve Φ(P) = 0 for P
+  Φ(P) = N·(Eo(P) + m·Eg(P) + Efw(P)) + We + Vinj − F(P)
+
+  N   original oil in place, stock-tank m³      m   gas-cap ratio (initial gas-cap
+  We  CUMULATIVE water influx, reservoir m³         reservoir volume ÷ oil-zone
+  Vinj CUMULATIVE injection, reservoir m³           reservoir volume), dimensionless
+
+by BISECTION on P ∈ [1 kPa, Pi]
   · 80 iterations max, tolerance 100 Pa
-  · expansion terms from the fluid model's Bo/Bg/Rs and compressibilities,
-    exactly the black-oil expansion forms of 05 §3.1
-  · no root in bracket, or V_withdrawn > maxTickVoidageFraction (content,
-    default 0.25) of expansion capacity → MODEL FAULT (05 §3.1 validity limit)
+  · no root in bracket → MODEL FAULT
+
+VALIDITY LIMIT (05 §3.1), checked AFTER the solve:
+  (P_start − P_end) / P_start > maxTickPressureDropFraction
+      (content, default 0.25)  → MODEL FAULT
 ```
+
+> **R5.0 amendment (finding 106): "a fraction of expansion capacity" has no
+> well-defined value.** The limit was stated against the expansion capacity the
+> compartment has left, and there is no pressure at which to evaluate that: taken
+> to the bracket floor, `Bg → ∞`, so the liberated-gas term makes the capacity of
+> any compartment effectively infinite and the limit can never fire. Implemented
+> as written it is a guard that reads as present and is not — the worst kind,
+> because the phase would have shipped believing 05 §3.1's refusal was in place.
+>
+> The limit is therefore on the **pressure step**, which is the quantity that
+> actually bounds explicit first-order error, is unambiguous, and preserves the
+> intent exactly: a large withdrawal in one tick produces a large pressure drop
+> and is refused. It is checked after the solve because the drop is what the
+> solve computes.
 
 Bisection, not Newton: 80 deterministic iterations cost nothing at tens of
 compartments, and bisection cannot diverge or need a derivative — one less
 thing to get wrong.
+
+**Everything is cumulative, measured from initial conditions.** Not from the
+start of the tick — see the amendment below. At `P = Pi` with nothing yet
+produced every term is zero, so an untouched compartment's root is `Pi` exactly.
+
+> **R5.0 amendment (finding 99): §3.1 balanced cumulative expansion against ONE
+> TICK's withdrawal.** The previous form wrote `… + V_injected − V_withdrawn`
+> with the E-terms unqualified. Read per-tick throughout it is a valid explicit
+> scheme but accumulates integration error with nothing correcting it; read as
+> written — expansion terms are functions of `P_end` alone, so they are
+> necessarily measured from initial conditions — it balanced the compartment's
+> whole expansion since discovery against a single month's offtake, and pressure
+> would have fallen roughly by the ratio of field life to one tick, which is to
+> say hardly at all. Either reading is wrong; the two cannot be mixed, and the
+> original text did mix them.
+>
+> The cumulative form is chosen because it is **self-correcting**: each tick
+> re-solves from initial conditions, so a rounding error in one tick's pressure
+> cannot propagate into the next. It is also the form R5-V9's invariant is
+> written against (cumulative production + remaining + injected = original in
+> place), and the form every published treatment states.
+
+> **R5.0 amendment (finding 100): the expansion forms are stated HERE.** The
+> previous text deferred them to "exactly the black-oil expansion forms of
+> 05 §3.1", and 05 §3.1 states the balance in words — expansion of oil, gas,
+> connate water and rock equals withdrawal — and no algebra at all. F-3 requires
+> a formula to cite the SDD section *stating its form*, so the citation pointed
+> at nothing and an implementer would have had to reconstruct the grouping from
+> memory. That is the exact hallucination surface this document exists to close.
+
+> **R5.0 amendment (finding 101): `Bw` was missing from the fluid model.** The
+> withdrawal term needs a water formation volume factor and `IFluidPropertyModel`
+> declared none, so `F(P)` could not be evaluated for any compartment producing
+> water — which is all of them, eventually. Added in §4.
+
+### 3.1b Gas material balance — the `p/Z` line
+
+> **R5.0 amendment (finding 105): §3.1's form cannot solve a gas reservoir.**
+> Every expansion term is expressed per stock-tank m³ of original OIL, so `N = 0`
+> makes the whole balance identically zero and there is no root. [05](../design/05_SIMULATION_MODELS.md)
+> §3.2 states the gas case separately and R5.7 lists it as its own task; this
+> document had no form for it, so a dry-gas compartment was unimplementable.
+
+For a volumetric gas reservoir the balance is the expansion of the gas alone,
+which rearranges to a straight line — the form design 05 §3.2 calls the best
+information mechanic in the game:
+
+```text
+p/Z = (pi/Zi)·(1 − Gp/G)                                    [05 §3.2]
+
+Solved for P DIRECTLY, not by bisection: the relation gives p/Z, and P is
+recovered by one bisection on Z's implicit definition — which §4.1's
+Dranchuk-Abou-Kassem already owns. Two nested root-finds would be one more
+than the problem has.
+
+  target = (pi/Zi)·(1 − Gp/G)                                [Pa]
+  find P in [1 kPa, pi] with P/Z(P, T) = target
+    · bisection, 80 iterations, tolerance 100 Pa
+    · Gp > G → MODEL FAULT: more gas produced than was ever in place
+
+WITH WATER DRIVE the line BENDS UP, and that is the point (05 §3.2):
+  p/Z = (pi/Zi)·(1 − Gp/G) · 1/(1 − (We − Wp·Bw)/(G·Bgi))
+The player reads the bend as the discovery. The engine does not announce it.
+```
+
+**Exactness matters here and nowhere else quite as much.** MX3 asserts the
+volumetric line is linear to floating-point tolerance, because the player is
+invited to extrapolate it and read `G` off the x-intercept. A line that drifted
+by a percent would make a correct deduction give a wrong answer, and the mechanic
+depends on the player being able to trust their own arithmetic.
 
 ### 3.2 Contacts
 
@@ -193,6 +295,7 @@ public interface IFluidPropertyModel
     double Rv(Pressure p);                           // MBO only: sm³ condensate / sm³ gas; BlackOil ⇒ 0
     FormationVolumeFactor Bo(Pressure p);
     GasFormationVolumeFactor Bg(Pressure p);         // rm³ / sm³ — pass-6 amendment (finding 77, correcting 72): gas has its OWN bridge (ReservoirVolume ↔ StandardGasVolume); the oil FVF bridges to SurfaceVolume — the wrong family for standard gas
+    FormationVolumeFactor Bw(Pressure p);            // rm³/stock-tank m³ — R5.0 finding 101
     Viscosity MuOil(Pressure p);
     Viscosity MuGas(Pressure p);
     double Z(Pressure p, Temperature t);
@@ -274,6 +377,16 @@ DRANCHUK-ABOU-KASSEM (1975) — Z factor            [T in °R]
   it cannot diverge and needs no derivative. Validity: 1 ≤ Tpr ≤ 3,
   0.2 ≤ Ppr ≤ 30.
 
+McCAIN (1990) — water formation volume factor      [T in °F, p in psia]
+  ΔVwT = −1.0001e-2 + 1.33391e-4·T + 5.50654e-7·T²
+  ΔVwP = −1.95301e-9·p·T − 1.72834e-13·p²·T
+         − 3.58922e-7·p   − 2.25341e-10·p²
+  Bw   = (1 + ΔVwP)·(1 + ΔVwT)
+  Pure water, gas-free. The engine models formation water as brine only through
+  its density and viscosity elsewhere; salinity's effect on Bw is under 1% over
+  the range the game uses, and inventing a salinity input to carry it would add
+  a content field nothing else needs. Validity: 32–260 °F, atmospheric–5000 psia.
+
 Bg — from Z, exactly, no correlation:
   Bg = (Z · T · p_sc) / (p · T_sc)          [rm³/sm³ once both p in the same unit]
   p_sc = 101 325 Pa, T_sc = 288.706 K (60 °F) — standard conditions, SDD-004.
@@ -294,18 +407,44 @@ plainly so no later reader mistakes the coverage for verification:
 
 
 
-### 4.1 The two subsurface plugin slots
+### 4.2 The two subsurface plugin slots
+
+> **R5.0 amendment (finding 98): this section was numbered §4.1, as was the
+> correlation section above it.** F-3 makes a formula cite the SDD section
+> stating its form, and two sections sharing a number makes every such citation
+> ambiguous — `SDD-003 §4.1` resolved to either the Standing transcription or a
+> plugin declaration depending on which the reader found first. Renumbered.
 
 `IDriveMechanism` is one of the eleven [03](../design/03_ARCHITECTURE.md) §3.2
 replaceable models; the aquifer is its own smaller slot. §3 above names both and
 neither was declared (pass 10).
 
 ```csharp
+// Everything §3.1's Φ(P) needs, and nothing else. Passed as a value rather than
+// as the compartment, because IDriveMechanism is a PUBLIC plugin slot and the
+// compartment is truth internal to OGSim.Subsurface (§3): a plugin author gets
+// the numbers the balance is written in, never the object they came from.
 public sealed record MaterialBalanceInput(
-    Pressure StartPressure,
-    ReservoirVolume Withdrawn,
-    ReservoirVolume Injected,
-    ReservoirVolume AquiferInflux);
+    // Initial conditions. Expansion is always measured from here, so the solve
+    // cannot drift (§3.1's amendment).
+    Pressure InitialPressure,                   // Pi
+    SurfaceVolume OriginalOilInPlace,           // N, stock-tank m³
+    double GasCapRatio,                         // m, dimensionless
+    double ConnateWaterSaturation,              // Swc, fraction
+    double WaterCompressibility,                // cw, 1/Pa
+    double RockCompressibility,                 // cf, 1/Pa
+
+    // Cumulative to the end of this tick, from initial conditions.
+    SurfaceVolume CumulativeOilProduced,        // Np, stock-tank m³
+    StandardGasVolume CumulativeGasProduced,    // Gp
+    SurfaceVolume CumulativeWaterProduced,      // Wp
+    ReservoirVolume CumulativeWaterInflux,      // We
+    ReservoirVolume CumulativeInjected,         // Vinj
+
+    // This tick alone — the validity limit is a statement about one step, not
+    // about the history.
+    Pressure StartPressure,                     // Pr at the start of this tick
+    ReservoirVolume WithdrawnThisTick);
 
 // Design 02 §2.2 — a plugin deliberately: the recovery factor EMERGES from the
 // mechanism, so adding EOR is adding an implementation and never editing a
@@ -314,6 +453,10 @@ public interface IDriveMechanism
 {
     ContentId Id { get; }
     Pressure SolveEndPressure(MaterialBalanceInput input, IFluidPropertyModel fluid);
+
+    // §4.2b. Which of §3.1's terms this drive admits — and therefore which
+    // compartments it will accept as coherent.
+    AdmittedTerms Admits { get; }
 
     // Which injectants the mechanism accepts — asked, never branched on by
     // material identity (SDD-005 §4.0b, and the "one engine" architecture test).
@@ -326,6 +469,55 @@ public interface IAquiferModel
 {
     ReservoirVolume InfluxDuring(Pressure reservoirPressure, Duration duration);
 }
+```
+
+#### 4.2b What distinguishes the six mechanisms
+
+> **R5.0 amendment (finding 104).** [02](../design/02_DOMAIN_MODEL.md) §2.2 says
+> each drive is "a different pressure-vs-withdrawal relationship and a different
+> recovery factor band". §3.1 above specifies ONE balance, and neither this
+> document nor [05](../design/05_SIMULATION_MODELS.md) said what the six differ
+> in. Implementing them against the text as it stood would have produced one real
+> class and five that differed in nothing — the stub pattern SDD-000 §4 forbids —
+> or five invented physics models, which F-1 forbids harder.
+
+A drive is defined by **which terms of §3.1's balance it admits**. That is the
+standard classification and it needs no physics this document has not already
+stated: a different set of active terms *is* a different pressure-vs-withdrawal
+relationship, and the recovery band follows from it rather than being asserted
+alongside it.
+
+| Mechanism | Eo | m·Eg | We | Efw | Band |
+|---|:--:|:--:|:--:|:--:|---|
+| `solution-gas-drive` | ● | — | — | ● | MB2, 5–30% |
+| `gas-cap-expansion-drive` | ● | ● | — | ● | 20–40% |
+| `water-drive` | ● | — | ● | ● | MB1, 35–75% |
+| `compaction-drive` | ● | — | — | ● | 5–20% |
+| `gravity-drainage-drive` | ● | — | — | ● | 40–70% |
+| `combination-drive` | ● | ● | ● | ● | between its parts |
+
+`Efw` is admitted by every mechanism: connate water and rock expand whatever the
+drive, and for an undersaturated reservoir above `Pb` they are the *only*
+expansion there is.
+
+**A mechanism REFUSES a compartment that contradicts it** — a solution-gas drive
+handed a non-zero gas-cap ratio, or a water drive handed no influx, is a content
+error, and it is caught when the compartment is built rather than showing up
+later as a recovery factor nobody can explain. This is the mechanism's behaviour
+in the L3 sense: it is not a tag on a compartment, it is the thing that decides
+whether the compartment is coherent.
+
+Compaction and gravity drainage admit the same terms as solution gas and are
+distinguished by their **content**: compaction by a large `cf`, gravity drainage
+by the tighter per-tick voidage limit its segregation depends on. Both are
+recorded here as content distinctions rather than code ones, per non-negotiable
+11 — and neither is given a fabricated term merely to look different.
+
+```csharp
+// The admitted-terms declaration above, as the contract's own member — so a
+// mechanism's definition is readable from it rather than from a table a reader
+// has to find. Checked against the compartment when it is built.
+public sealed record AdmittedTerms(bool GasCap, bool AquiferInflux);
 ```
 
 **`AcceptedInjectants` is a list of content ids rather than a material-kind

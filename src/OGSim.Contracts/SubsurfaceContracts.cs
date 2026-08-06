@@ -48,6 +48,7 @@ public interface IFluidPropertyModel
     double Rv(Pressure p);                       // ModifiedBlackOil only; BlackOil ⇒ 0
     FormationVolumeFactor Bo(Pressure p);
     GasFormationVolumeFactor Bg(Pressure p);     // rm³/sm³ — its OWN bridge to StandardGasVolume (finding 77 corrects finding 72)
+    FormationVolumeFactor Bw(Pressure p);        // rm³ per stock-tank m³ of water — §3.1's withdrawal term
     Viscosity MuOil(Pressure p);
     Viscosity MuGas(Pressure p);
     double Z(Pressure p, Temperature t);
@@ -55,21 +56,60 @@ public interface IFluidPropertyModel
     ValidityRange Validity { get; }
 }
 
-/// <summary>Inputs to a drive mechanism's end-of-tick pressure solve (SDD-003 §3.1).</summary>
+/// <summary>
+/// Everything SDD-003 §3.1's Φ(P) needs, and nothing else.
+///
+/// <para>Passed as a value rather than as the compartment, because
+/// <see cref="IDriveMechanism"/> is a public plugin slot and the compartment is
+/// truth internal to <c>OGSim.Subsurface</c> (§3): a plugin author gets the
+/// numbers the balance is written in, never the object they came from.</para>
+///
+/// <para>Everything is CUMULATIVE from initial conditions, not per tick. Each
+/// tick re-solves from `Pi`, so a rounding error in one tick's pressure cannot
+/// propagate into the next.</para>
+/// </summary>
 public sealed record MaterialBalanceInput(
+    // Initial conditions — expansion is always measured from here.
+    Pressure InitialPressure,                   // Pi
+    SurfaceVolume OriginalOilInPlace,           // N, stock-tank m³
+    double GasCapRatio,                         // m: initial gas-cap rm³ ÷ oil-zone rm³
+    double ConnateWaterSaturation,              // Swc, fraction
+    double WaterCompressibility,                // cw, 1/Pa
+    double RockCompressibility,                 // cf, 1/Pa
+
+    // Cumulative to the end of this tick.
+    SurfaceVolume CumulativeOilProduced,        // Np
+    StandardGasVolume CumulativeGasProduced,    // Gp
+    SurfaceVolume CumulativeWaterProduced,      // Wp
+    ReservoirVolume CumulativeWaterInflux,      // We
+    ReservoirVolume CumulativeInjected,         // Vinj
+
+    // This tick alone: the validity limit is a statement about one step.
     Pressure StartPressure,
-    ReservoirVolume Withdrawn,
-    ReservoirVolume Injected,
-    ReservoirVolume AquiferInflux);
+    ReservoirVolume WithdrawnThisTick);
 
 /// <summary>
 /// Design 02 §2.2 — a plugin, deliberately: recovery factor EMERGES from the
 /// mechanism; adding EOR is adding an implementation, never editing a reservoir.
 /// </summary>
+/// <summary>
+/// SDD-003 §4.2b — which of §3.1's expansion terms a drive admits, and
+/// therefore which compartments it accepts as coherent. A different set of
+/// active terms IS a different pressure-vs-withdrawal relationship, which is
+/// what design 02 §2.2 means by six mechanisms.
+///
+/// <para><c>Efw</c> is not listed: connate water and rock expand whatever the
+/// drive, and above the bubble point they are the only expansion there is.</para>
+/// </summary>
+public sealed record AdmittedTerms(bool GasCap, bool AquiferInflux);
+
 public interface IDriveMechanism
 {
     ContentId Id { get; }
     Pressure SolveEndPressure(MaterialBalanceInput input, IFluidPropertyModel fluid);
+
+    /// <summary>SDD-003 §4.2b.</summary>
+    AdmittedTerms Admits { get; }
     /// <summary>Which injectant materials this drive accepts (SDD-005 §4.0b — no identity branches).</summary>
     IReadOnlyList<ContentId> AcceptedInjectants { get; }
 }
