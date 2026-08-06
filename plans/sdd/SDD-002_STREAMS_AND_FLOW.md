@@ -37,6 +37,97 @@ public readonly struct Composition                        // immutable; mass flo
 materials), streams are created constantly, and ordinal indexing gives
 deterministic iteration for free. A modded 40-material game is still tiny.
 
+## 2b. Properties, distributions and the material catalogue — R2.1–R2.4
+
+> **Ninth contract pass (finding 82), R2.0.** The eight R1-C passes declared every
+> [03](../design/03_ARCHITECTURE.md) §3.2 replaceable slot but never the property
+> and material surface R2 is built from: `IPropertyKind`, `IProperty`,
+> `IMaterial`, `IMaterialCatalog` and the distribution types appeared in the R2
+> phase document's deliverables and in **no SDD and no code**. The decisions below
+> are not new — they are [R2](../phases/R2_MATERIALS.md) §2.1–2.4, already
+> approved — this section is the signature level they were missing.
+
+```csharp
+// ---- distributions (R2 §2.1: a property holds a distribution, never a value)
+public abstract record Distribution
+{
+    public abstract double Mean { get; }
+    public abstract double P90 { get; }   // LOW  — see the convention note
+    public abstract double P50 { get; }
+    public abstract double P10 { get; }   // HIGH
+}
+
+public sealed record PointValue(double Value) : Distribution;
+public sealed record NormalDistribution(double Mean, double StandardDeviation) : Distribution;
+public sealed record LogNormalDistribution(double LogMean, double LogStandardDeviation) : Distribution
+{
+    // R2-V5: a product of log-normals is log-normal, analytically.
+    public static LogNormalDistribution Product(LogNormalDistribution a, LogNormalDistribution b);
+}
+public sealed record TriangularDistribution(double Minimum, double Mode, double Maximum) : Distribution;
+public sealed record UniformDistribution(double Minimum, double Maximum) : Distribution;
+
+// ---- property kinds (R2.1: dimension binding and validity range)
+public interface IPropertyKind
+{
+    ContentId Id { get; }
+    Dimension Dimension { get; }          // binds content's "3200 psi" to a quantity type
+    double MinimumValid { get; }          // canonical SI, inclusive
+    double MaximumValid { get; }
+    BeliefSpace Space { get; }            // Log for volumes and permeability
+}
+
+// ---- properties (R2.2: value, provenance, uncertainty, as-of — all required)
+public interface IProperty
+{
+    ContentId Kind { get; }
+    Distribution Value { get; }
+    Provenance Source { get; }
+    GameDate AsOf { get; }
+}
+
+// ---- materials (R2.4)
+public enum PhaseAtStandardConditions { Liquid, Gas, Aqueous, Solid }
+
+public interface IMaterial
+{
+    ContentId Id { get; }
+    MaterialId Ordinal { get; }           // catalogue position; NEVER persisted (SDD-004 §6)
+    PhaseAtStandardConditions Phase { get; }
+    IReadOnlyList<IProperty> Properties { get; }
+}
+
+public interface IMaterialCatalog
+{
+    int Count { get; }
+    IMaterial this[MaterialId ordinal] { get; }
+    IMaterial Resolve(ContentId id);      // unknown id → content fault, never null
+    bool TryResolve(ContentId id, out IMaterial material);
+}
+```
+
+**The P10/P90 convention is pinned here because it silently inverts reserves.**
+Petroleum practice (SPE-PRMS, and [08](../design/08_ECONOMICS.md)'s 1P/2P/3P) is
+the *reverse* of the statistical reading: **`P90` is the LOW, conservative
+estimate** — 90% probability of being exceeded, the proved case — and **`P10` is
+the HIGH** one. Numerically `P90 < P50 < P10`. A contributor who reads `P10` as
+"the 10th percentile" books possible reserves as proved and nothing in the type
+system objects, which is exactly why the ordering is stated on the contract
+rather than left to the reader.
+
+**`Distribution` is closed to these five** (R2 §2.1). A point value is a
+distribution with zero spread, not a special case — that is what stops consumers
+reading a scalar and letting the uncertainty go decorative.
+
+**Validity ranges are on the KIND, not the correlation.** R2-V10 requires an
+out-of-range input to raise a model fault rather than extrapolate silently; a
+range attached to the property kind is checked once at the boundary every value
+crosses, instead of being restated by each correlation that consumes it.
+
+**Ordinals are catalogue positions and never persist** — SDD-004 §6 already says
+so for content generally, restated because `Composition` is a dense array indexed
+by them, which makes the temptation to save one strong.
+
 ## 3. Provenance
 
 ```csharp

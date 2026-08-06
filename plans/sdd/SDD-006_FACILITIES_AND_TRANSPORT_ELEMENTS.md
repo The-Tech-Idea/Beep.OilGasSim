@@ -9,6 +9,42 @@ come from the catalogue-sheet content ([SDD-004](SDD-004_CONTENT_PIPELINE.md) §
 
 ---
 
+## 0. The two replaceable slots this SDD owns
+
+> **Ninth contract pass (finding 82).** `ISeparationModel` and `IHydraulicModel`
+> are two of the eleven plug-and-play slots in [03](../design/03_ARCHITECTURE.md)
+> §3.2 — they are the fidelity dial for separation and for pipeline flow — and
+> neither was ever declared. Pass R1-C5 recorded that every §3.2 slot was a
+> compiled type; three were not. The algorithms in §1 and §6 below are the
+> *default implementations* of these interfaces, not the only ones: swapping
+> Darcy-Weisbach for Panhandle, or a fixed-efficiency split for a flash
+> calculation, is selecting a different plugin by name from content, never an
+> edit here (non-negotiable 11).
+
+```csharp
+/// Design 03 §3.2 — fixed-efficiency split ↔ flash calculation.
+public interface ISeparationModel
+{
+    /// Ideal phase split before efficiency; the derate in §1 is the engine's,
+    /// so a model swap changes the physics and not the capacity semantics.
+    PhaseSplit SplitAt(Composition composition, Pressure p, Temperature t,
+                       IFluidPropertyModel fluid);
+}
+
+/// Design 03 §3.2 — Darcy-Weisbach ↔ Panhandle ↔ simplified.
+public interface IHydraulicModel
+{
+    /// Pressure drop along one segment for the fluid ACTUALLY flowing (§6):
+    /// capacity is never configured, it emerges from geometry and the stream.
+    Pressure DropAlong(MaterialStream stream, Length pipeLength,
+                       Length innerDiameter, double roughness,
+                       IFluidPropertyModel fluid);
+}
+```
+
+Both are capability-blind and stateless: they receive everything they need and
+own nothing, so the fidelity dial cannot become a hidden second source of state.
+
 ## 1. Separator
 
 ```text

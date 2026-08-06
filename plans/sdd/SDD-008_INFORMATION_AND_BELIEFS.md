@@ -59,6 +59,31 @@ For each property kind a source can see (content: kinds + σ_obs per kind):
 Sources never return truth, never return bias — σ honest, centre honest. What
 distinguishes a core from a log is *which kinds* and *how small the σ*.
 
+> **Ninth contract pass (finding 82).** The step-2 draw above *is* the
+> `IObservationModel` slot — one of the eleven replaceable models in
+> [03](../design/03_ARCHITECTURE.md) §3.2, "per source; tunes how much
+> uncertainty survives" — and it was never declared, so the algorithm had no
+> contract to sit behind. Pass R1-C5's claim that every §3.2 slot was a compiled
+> type was wrong on this one as well as on SDD-006's two.
+
+```csharp
+/// Design 03 §3.2 — the per-source error model. Replacing it is how a scenario
+/// makes seismic sharper or logs noisier without touching truth or the update.
+public interface IObservationModel
+{
+    /// The honest sigma for this source reading this kind, before the draw.
+    /// Returns null when the source cannot see the kind at all — absence is a
+    /// legitimate answer here, and NOT the same as a wide sigma.
+    double? SigmaFor(ContentId source, ContentId propertyKind, EntityRef subject);
+}
+```
+
+**Why the model owns σ and not the draw:** the draw consumes a named RNG stream
+(`exploration` or `measurement`) and must stay in the engine, where the stream
+and the audit record live. A plugin that drew its own numbers could silently
+consume a different count and shift every later draw in that stream — the exact
+independence property R1-V5 exists to protect.
+
 ## 4. POS — Beta-Bernoulli, per factor
 
 ```csharp
