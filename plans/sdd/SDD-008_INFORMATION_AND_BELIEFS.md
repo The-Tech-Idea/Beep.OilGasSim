@@ -17,10 +17,28 @@ observations-as-commands (survey operations deliver here), and projections.
 ## 2. Belief representation — one mechanism
 
 ```csharp
+public enum BeliefSpace { Linear, Log }     // declared per property-kind in content
+
+// Design 02 §1.2 / R2 §2.2 — ORDERED BY CONFIDENCE, and the order is the
+// contract: it drives the default uncertainty, the §2.1 update weighting, and
+// the player-facing "how do we know this?". ProductionHistory ranks near the
+// top because the dynamic data is the most trustworthy thing about a reservoir,
+// which is what makes the p/Z deduction of §6 as powerful as it is.
+public enum Provenance
+{
+    Assumed, Analogue, Seismic, Log, WellTest, Core, ProductionHistory, Measured
+}
+
 public readonly record struct Belief(double Mu, double Sigma, BeliefSpace Space,
                                      Provenance BestSource, GameDate AsOf);
-public enum BeliefSpace { Linear, Log }     // declared per property-kind in content
 ```
+
+> **Contract pass 10.** `Provenance` was consumed by `Belief` here, by
+> `IProperty` in [SDD-002](SDD-002_STREAMS_AND_FLOW.md) §2b and by `Observation`
+> in §3, and declared in no SDD. It is declared here because this is where the
+> confidence ordering is *used*; note that R2 needs it well before R14, so the
+> committed type correctly lives in `OGSim.Contracts` and is available from the
+> materials phase onward.
 
 - **Every belief is Normal in its declared space.** Additive kinds (depth, net
   pay, saturation) are `Linear`; multiplicative kinds (permeability, area,
@@ -46,6 +64,31 @@ year *for dynamic kinds only* (pressure, contacts — things production changes)
 static rock properties do not drift. Drift is content; zero is legal.
 
 ## 3. Observation sampling
+
+```csharp
+// The ONLY shape that crosses the truth wall: a sampled value with an honest
+// sigma, never truth itself. Audited on delivery (09 §4.2's fairness record).
+public sealed record Observation(
+    EntityRef Subject,
+    ContentId PropertyKind,
+    double Value,
+    double Sigma,
+    BeliefSpace Space,
+    Provenance Source);
+
+// Apply is the ONLY writer. There is deliberately no Set, no seed-from-truth
+// and no bulk import: world generation delivers initial beliefs through this
+// same door (R15-V10), so there is no belief-copy path for truth to leak down.
+public interface IBeliefStore
+{
+    void Apply(Observation observation);                        // §2.1's conjugate update
+    Belief? Get(EntityRef subject, ContentId propertyKind);     // null: nothing known yet
+}
+```
+
+`Get` returning null rather than a wide prior is deliberate: "we have never
+looked" and "we looked and learned little" are different states, and only the
+first should leave a map region unrendered.
 
 ```text
 For each property kind a source can see (content: kinds + σ_obs per kind):
@@ -88,6 +131,9 @@ independence property R1-V5 exists to protect.
 
 ```csharp
 public readonly record struct FactorBelief(double Alpha, double Beta);   // mean = α/(α+β)
+
+// The five petroleum-system factors (06 §2.2). POS = product of the five means.
+public enum PosFactor { Source, Reservoir, Seal, Trap, Timing }
 ```
 
 - **Play-shared factors** (source, reservoir-presence, seal) live on the play;

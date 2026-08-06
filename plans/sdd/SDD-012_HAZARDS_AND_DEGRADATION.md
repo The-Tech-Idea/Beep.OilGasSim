@@ -7,6 +7,44 @@ hazard law, and exactly when the dice are rolled.
 
 ---
 
+## 0. The two replaceable models
+
+Both are [03](../design/03_ARCHITECTURE.md) §3.2 slots — the hazard model is
+named there explicitly as the "off ↔ realistic ↔ punishing" difficulty dial —
+and this document pinned both algorithms without declaring either interface
+(contract pass 10).
+
+```csharp
+// The §1 severity sum, as an argument rather than as ambient state: both models
+// are BLIND to everything but their declared inputs, which is what lets a
+// scenario swap them without the engine noticing.
+public sealed record ServiceSeverity(
+    double WaterCut,
+    double SourFraction,
+    double DutyFraction,
+    double OverTemperature,       // max(0, T_amb − T_rated) / T_span
+    double TicksSinceService);
+
+public interface IDegradationModel      // §1: severity in, condition out
+{
+    ContentId Id { get; }
+    double NextCondition(double condition, ServiceSeverity severity, Duration dt);
+}
+
+public interface IHazardModel           // §2: condition in, probability out
+{
+    ContentId Id { get; }
+    double FailureProbability(double condition, Duration dt);
+}
+```
+
+**Neither model draws.** `IHazardModel` returns a probability and the engine
+performs the draw at stage 4, consuming only the `Hazard` stream — the same
+separation §3 of [SDD-008](SDD-008_INFORMATION_AND_BELIEFS.md) applies to
+`IObservationModel`, and for the same reason: a plugin that drew its own numbers
+could consume a different count and shift every later draw in that stream,
+breaking the independence R1-V5 guarantees.
+
 ## 1. Condition decay
 
 Per component instance, per tick, at stage 4, from **previous-tick service**

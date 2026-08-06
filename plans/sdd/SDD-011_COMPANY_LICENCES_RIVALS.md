@@ -11,11 +11,46 @@ the player's machinery, with no access to truth.**
 ## 1. Licences
 
 ```csharp
-public sealed record LicenceTerms(          // from jurisdiction content
-    Duration Term, IReadOnlyList<CommitmentItem> WorkCommitment,   // wells, km² seismic
-    Money Bond, RelinquishmentSchedule Relinquishment,             // fraction at dates
-    ContentId FiscalRegime, ContentId HseRegime);
+// The live licence — already committed, because a well references one from R6
+// onward. Deliberately thin: everything negotiable is in the terms below, and
+// everything spatial is in the read model's ExplorationView (SDD-017).
+public interface ILicence
+{
+    EntityId<ILicence> Id { get; }
+    ContentId FiscalRegime { get; }
+    Tick Expiry { get; }
+}
+
+public sealed record CommitmentItem(
+    ContentId Kind,                          // e.g. exploration-well, seismic-2d
+    double Quantity,                         // wells, or km²
+    Tick Due);
+
+public sealed record RelinquishmentStep(double Fraction, Tick Due);
+
+public sealed record LicenceTerms(           // from jurisdiction content
+    int TermMonths,                          // /30ths-grid whole months, not a Duration
+    IReadOnlyList<CommitmentItem> WorkCommitment,
+    Money Bond,
+    IReadOnlyList<RelinquishmentStep> Relinquishment,
+    ContentId FiscalRegime,
+    ContentId HseRegime);
 ```
+
+> **Contract pass 10.** `LicenceTerms` referenced `CommitmentItem` and
+> `RelinquishmentSchedule`, neither declared anywhere; the schedule is a list of
+> (fraction, date) steps rather than a type of its own, which is what §1's own
+> "fraction at dates" comment describes. `Term` was a `Duration` — a `double` of
+> days (SDD-001 §1) — where a licence term is a whole number of months on the
+> calendar; the same defect SDD-007 §1 had with `BaseDuration`.
+>
+> `ILicence` itself is declared here for the first time although it has been in
+> the code since the contract layer, because `IWell.Licence` needs it from R6.
+> **It currently sits in `InformationContracts.cs`, which is the wrong file** —
+> it is a company/licence type, not a belief one. Moving it is an R16 task and
+> is noted in §7 rather than done now: the type is right, only its address is
+> wrong, and moving a public type is a change worth making where the tests that
+> cover it are being written.
 
 Commitment tracking is mechanical: qualifying completed operations decrement
 items; at deadline, unmet ⇒ bond forfeit + licence loss (`licence.*` events,
@@ -101,3 +136,4 @@ have no truth access path (the Information `internal` boundary covers them).
 |---|---|---|
 | S011-1 | Rival belief coarseness (full per-prospect vs play-level only) — start play-level + per-bid prospect sampling; measure cost | R16.4 |
 | S011-2 | Whether rivals participate in the same licence's working interests as partners (farm-in TO the player) | post-R20; the data model (WorkingInterest) already permits it |
+| S011-3 | **`ILicence` is declared in `OGSim.Contracts/InformationContracts.cs`** — the wrong file. It is a company/licence type, not a belief one; it landed there because `IWell.Licence` needed it during the contract passes and beliefs was the file open at the time. Move it to a licence-owned file when R16 writes the tests that cover it (contract pass 10 — the type is right, only its address is wrong) | R16.2 |

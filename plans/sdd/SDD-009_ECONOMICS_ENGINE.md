@@ -50,7 +50,42 @@ tested).
 
 ## 3. Fiscal regimes — the exact algorithms
 
-Evaluated per licence per tick, in this order, all integer:
+Evaluated per licence per tick, in this order, all integer.
+
+```csharp
+// Everything a regime may consider, per licence per tick. Closed deliberately:
+// a regime that could reach for arbitrary engine state would be a regime whose
+// output could not be reproduced from its inputs, and R13-V4's hand-computed
+// fixtures depend on exactly that reproducibility.
+public sealed record FiscalInput(
+    Money GrossRevenue,
+    Money RecoverableOpex,
+    Money RecoverableCapex,
+    Money Depreciation,
+    Money CostPoolCarry,          // §3.2 step 5 — the carryforward, in
+    double PriorRFactor);         // §3.2 step 7 — PRIOR tick's, no same-tick circularity
+
+public sealed record FiscalResult(
+    Money Royalty,
+    Money Tax,
+    Money ContractorTake,
+    Money CostPoolCarry);         // the carryforward, out
+
+// Design 03 §3.2 — royalty/tax ↔ PSC ↔ service contract ↔ sliding scale.
+// The engine calls Assess once per licence per tick at stage 8 and books ONLY
+// what comes back: there is no fiscal arithmetic anywhere else (R13-V2).
+public interface IFiscalRegime
+{
+    ContentId Id { get; }
+    FiscalResult Assess(FiscalInput input);
+}
+```
+
+**`CostPoolCarry` appears on both sides**, and that is the pinned shape of §3.2
+step 5: the regime is a pure function of its inputs, so the carryforward has to
+be threaded through it rather than held inside it. A regime holding its own pool
+would be state outside the save's module blocks (SDD-013) and would make the
+under-recovery fixture untestable in isolation.
 
 ### 3.1 Royalty/tax
 
@@ -129,6 +164,18 @@ the cure window is the player's warning (IR-consistent).
 ```
 
 ## 6. Prices
+
+```csharp
+// Design 03 §3.2 — random walk ↔ mean-reverting ↔ scripted scenario ↔
+// historical replay. The stream is handed IN rather than held: the model must
+// draw from `price` and no other, and a model that owned a source could quietly
+// draw from the wrong one (D-6, and the R1-V5 independence guarantee).
+public interface IPriceModel
+{
+    ContentId Id { get; }
+    Money Advance(Money current, IRandomStream price);
+}
+```
 
 ```text
 Mean-reverting (OU in log space, per benchmark):
