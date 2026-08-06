@@ -66,6 +66,31 @@ own nothing, so the fidelity dial cannot become a hidden second source of state.
 > what a vessel achieved and belongs here. Recorded because the duplicate would
 > have been invisible once both had implementations.
 
+## 0b. The container
+
+Design [02](../design/02_DOMAIN_MODEL.md) §4.1: a facility is a **container and
+a cost centre, never a process.** All physics is in units, each an
+`IFlowElement`. There is no `GasPlant` type and no facility-type enum — "gas
+plant" is a `facility-template` content entry, and after construction the engine
+knows only the units.
+
+```csharp
+public interface IFacility
+{
+    EntityId<IFacility> Id { get; }
+    Coordinate Site { get; }
+    IReadOnlyList<EntityId<IFacility>> Children { get; }        // recursive (PPDM)
+    IReadOnlyList<EntityId<IFlowElement>> Units { get; }
+}
+```
+
+**`Units` is a list of `IFlowElement` ids and not of some `IFacilityUnit`**, and
+that is the §4.1 rule expressed as a type: the container knows only that its
+units are things a stream passes through. The unit taxonomy of 02 §4.2 —
+separator, treater, compressor, dehydrator, tank, meter, flare — exists in
+content and in this document's transforms, and in no interface anywhere
+(coherence finding 82).
+
 ## 1. Separator
 
 ```text
@@ -127,6 +152,19 @@ derated (one bounded re-pass, pinned; a second shortfall → units offline per
 priority). FuelConsumed lands in the 04 §7 fuel term; grid tie contributes
 cost only. Datasheet: {maxPower, η_driver, fuelType | grid, meritRank}.
 ```
+
+```csharp
+public interface IPowerSource
+{
+    Power MaxSupply { get; }
+    int MeritRank { get; }      // lower runs first: grid → waste-heat → turbine → genset
+}
+```
+
+**A power source is not an `IFlowElement`.** It is balanced at stage 4, before
+the solve, and its output is a fixed fuel *sink* placed into the network rather
+than a transform of its own — which is why it declares supply and rank and
+nothing about ports.
 
 **Lift-gas offtake**: the compression side of the gas-lift recycle is a fixed
 sink at last tick's committed lift rate (SDD-002 §6) — third member of the
@@ -192,6 +230,22 @@ hazard rates (R18 severity inputs); insulation tiers raise T_stream via a
 declared U-value against ambient.
 ```
 
+```csharp
+public interface IPipeline : IFlowElement
+{
+    Length PipeLength { get; }
+    Length InnerDiameter { get; }
+    Pressure Rating { get; }
+    ContentId PipeSpec { get; }
+}
+```
+
+**A pipeline declares geometry, never a capacity.** Throughput is whatever the
+hydraulics above yield for the fluid actually flowing, so a line that was
+comfortable on dry oil throttles on its own when the water cut climbs — a
+configured `maxRate` field would have made that emergent behaviour impossible to
+express and is deliberately absent.
+
 ## 7. Terminal, berth, cargo, custody
 
 ```text
@@ -215,6 +269,31 @@ are documented simplifications ([02](../design/02_DOMAIN_MODEL.md) §9 class):
 they preserve the decisions (build a dehydrator/stabiliser) without vapour-
 pressure thermodynamics.
 ```
+
+```csharp
+// The pinned proxy set above, as a closed enum — closed because a spec property
+// the engine cannot derive from a stream is a spec it cannot gate on.
+public enum SpecProperty
+{
+    BasicSedimentAndWater, H2SFraction, Co2Fraction, WaterInGasFraction,
+    LightEndsFraction, HeatingValueMin, HeatingValueMax
+}
+
+public sealed record SpecLimit(SpecProperty Property, double Limit);
+public sealed record Specification(IReadOnlyList<SpecLimit> Limits);
+
+// The metered, contractual revenue event — the ONLY place revenue originates
+// (SDD-009 §1, architecture test R13-V2). It is an IFlowElement because the
+// stream physically passes through it and can be REFUSED there.
+public interface ICustodyTransferPoint : IFlowElement
+{
+    Specification Spec { get; }
+}
+```
+
+**`HeatingValueMin` and `HeatingValueMax` are separate members rather than one
+property with a band**, because a sales-gas contract sets them independently and
+a stream can fail either end — rich gas is off-spec as surely as lean.
 
 ## 8. Datasheet field registry (content ⇄ code)
 

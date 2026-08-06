@@ -11,18 +11,44 @@ stochastic outcomes are drawn and how they apply.**
 ## 1. The operation
 
 ```csharp
+public interface IRig { }                    // resource marker; calendars live in the scheduler
+
+public sealed record ResourceNeeds(
+    EntityId<IRig>? Rig,                     // null: no rig needed (a survey, a study)
+    IReadOnlyList<(ContentId Discipline, int Count)> Crew);
+
 public sealed record OperationSpec(          // from an operation-template content entry
     ContentId Template,
     EntityRef Target,
-    Duration BaseDuration,                   // whole days
+    int BaseDurationDays,                    // whole days on the /30ths grid
     CostProfile Costs,                       // §3
-    ResourceNeeds Resources,                 // rig class/id, crew disciplines+counts, equipment
+    ResourceNeeds Resources,                 // rig, crew disciplines + counts
     Requirements Requirements,               // SDD-005 §3 — validated at scheduling ONLY
     IReadOnlyList<ServiceRental> Rentals,
     OutcomeTable Outcomes);                  // §4
 
 public enum OperationState { Scheduled, Active, Standby, Completed, Failed, Cancelled }
+
+public interface IOperation
+{
+    EntityId<IOperation> Id { get; }
+    OperationSpec Spec { get; }
+    OperationState State { get; }
+    int ProgressDays { get; }
+    Money Accrued { get; }
+}
 ```
+
+> **Contract pass 10.** `BaseDuration` was typed `Duration` with the comment
+> "whole days". `Duration` carries a `double` (SDD-001 §1), so the type and its
+> own comment disagreed — and an operation duration must be an integer day count
+> or §4's `disasterDay` cannot be drawn uniform over `{0 .. effectiveDuration−1}`
+> and the segment boundary it creates would not land on the /30ths grid.
+> `int BaseDurationDays`, as committed.
+>
+> `IRig`, `ResourceNeeds` and `IOperation` itself were all referenced here and
+> declared nowhere — this document specified an operations engine without ever
+> declaring an operation.
 
 State transitions are engine-driven except `Cancelled` (a command). `Standby`
 means committed-but-not-progressing (weather, suspension order): **cost without
@@ -69,6 +95,23 @@ day rate but burns no mud and runs no bits. The distinction is visible in the
 cost report and is the honest price of a missed weather window.
 
 ## 4. Outcomes — drawn at start, applied across execution (pinned)
+
+```csharp
+public enum OutcomeGrade { OnTime, Delayed, OverBudget, Partial, Failure, Disaster }
+
+public sealed record OutcomeRow(
+    OutcomeGrade Grade,
+    double Probability,
+    double DurationFactor,
+    double CostFactor,
+    int? DisasterDay);                       // INTEGER day index — /30ths-grid exact
+
+public sealed record OutcomeTable(IReadOnlyList<OutcomeRow> Rows);
+// Probabilities sum to 1.0, checked at CONTENT LOAD (stage 5 consistency,
+// SDD-004 §5) rather than at draw time: a table that cannot produce an outcome
+// is a broken content file, and the engine refuses to start rather than
+// discovering it on the first spud of a campaign.
+```
 
 ```text
 At Active entry, ONE draw from the `operations` stream (audited: stream,
@@ -140,7 +183,10 @@ public interface IObligationRegistry     // OGSim.Operations owns it
 {
     void Register(EntityRef asset, ContentId abandonmentTemplate);   // at asset creation, ALWAYS
     Money EstimatedCost(EntityRef asset);                            // feeds R13's provision accrual
-    void Discharge(EntityRef asset, OperationId completedAbandonment);
+    void Discharge(EntityRef asset, EntityId<IOperation> completedAbandonment);
+    // pass 10: was `OperationId`, an identity scheme declared nowhere —
+    // identity is EntityId<T>, SDD-001 §2 (the CompartmentId/PerforationId
+    // pattern of SDD-003, third occurrence)
 }
 ```
 
