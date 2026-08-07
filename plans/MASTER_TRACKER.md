@@ -695,18 +695,44 @@ class is that a subtle trap is invisible until the survey tier catches up.
 |---|---|
 | 123 | **`Polygon`'s record equality compared its vertices by REFERENCE.** A record's generated equality does not recurse into an `ImmutableArray` member, so two polygons with identical vertices compared unequal — and two with *different* vertices would have compared equal had they shared an array. Found by PV7 reporting two regenerations of one seed as different worlds: the invariant was right and the comparison was wrong. `Allocation` already carried the override for the same reason; the geometry types did not. The same trap sits on any contract record holding a collection, which is why the PV7 test now compares compartments element by element and says so |
 
-### Phase R16 — Company, licences, regulation ⬜
+### Phase R16 — Company, licences, regulation 🟨
 > 📄 [phases/R16_COMPANY.md](phases/R16_COMPANY.md)
+> SDD-011 needed no amendment — five phases running.
 
 | # | Task | Status |
 |---|---|---|
-| R16.1 | `ICompany` | ⬜ |
-| R16.2 | `ILicence` — term, work commitment, relinquishment clock | ⬜ |
-| R16.3 | Licence rounds and bidding | ⬜ |
-| R16.4 | Rival operators; their results as public data | ⬜ |
-| R16.5 | `IRegulator` — inspections, penalties, licence risk | ⬜ |
-| R16.6 | Jurisdiction rule set — emissions caps, flaring rules, discharge standards *(the state they constrain is R23's)* | ⬜ |
-| R16.7 | Flaring caps and their production consequence | ⬜ |
+| R16.0 | SDD review — no findings. **`ILicence` moved** out of `InformationContracts.cs`, the standing task SDD-011 §1 assigned to this phase | ✅ |
+| R16.1 | `ICompany` | ✅ — an identity marker; the company's *state* is the ledger (R13) and the licences below |
+| R16.2 | `Licence` — term, work commitment, relinquishment clock | ✅ |
+| R16.3 | Licence rounds and bidding | ✅ |
+| R16.4 | Rivals; their results as public data | ✅ |
+| R16.5 | `IRegulator` — inspections, penalties | ⬜ — SDD-011 §5 says findings *read R23's barrier state*, which R23 owns |
+| R16.6 | Jurisdiction rule set | 🟨 — `LicenceTerms` carries the fiscal and HSE regime ids; the rules they name are R23's |
+| R16.7 | Flaring caps and their production consequence | ✅ — **delivered at R9** (R9-V8): the cap is an element capacity and S3 does the rest |
+
+**The fairness claim, made concrete.** SDD-011 §2's rule is that *a rival is a
+policy over beliefs, never a reader of truth* — and the test builds two rivals
+with identical personalities and deliberately different beliefs about one block,
+then shows the optimist bids more. Truth does not enter that test at all. A
+rival with no belief does not bid, and **cannot**, because there is no truth for
+it to reach: the architecture test keeping truth `internal` to
+`OGSim.Information` protects the player by construction, with no rival-specific
+data path to audit.
+
+**Rival technology is deterministic diffusion**, not dice: a node arrives at
+*era start + their tech lag*. The player races real clocks and can learn a
+rival's pace — which is a strategy. Dice would make a rival's capability
+unknowable rather than merely unknown.
+
+**R16-V5 needed no new mechanism, which is the point.** A rival's result
+publishes as an ordinary `Observation` with extra σ — you read their press
+release, not their logs — and updates the player's beliefs through the identical
+conjugate path. Sigmas combine **in quadrature**, because precision is what adds;
+adding them directly would make two disclosures of one well worse than one.
+
+**The bond forfeits whole, not pro-rata.** That is what a bond is: it secures the
+promise, not a fraction of it, and a pro-rata forfeit would make a token well a
+cheap way to keep most of the money.
 
 ### Phase R17 — Technology ⬜
 > 📄 [phases/R17_TECHNOLOGY.md](phases/R17_TECHNOLOGY.md)

@@ -65,9 +65,6 @@ public interface IBeliefStore
     Belief? Get(EntityRef subject, ContentId propertyKind);
 }
 
-public interface ILicence
-{
-    EntityId<ILicence> Id { get; }
-    ContentId FiscalRegime { get; }
-    Tick Expiry { get; }
-}
+// ILicence moved to CompanyContracts.cs at R16, per SDD-011 §1's standing note:
+// it is a company/licence type, not a belief one, and it only lived here because
+// this was the file that existed when IWell.Licence first needed it.
