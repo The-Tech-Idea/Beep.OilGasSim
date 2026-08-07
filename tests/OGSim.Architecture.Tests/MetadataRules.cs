@@ -106,6 +106,7 @@ public class MetadataRules
             ["OGSim.Wells"] = ["OGSim.Kernel", "OGSim.Contracts"],
             ["OGSim.Facilities"] = ["OGSim.Kernel", "OGSim.Contracts"],
             ["OGSim.Operations"] = ["OGSim.Kernel", "OGSim.Contracts"],
+            ["OGSim.Company"] = ["OGSim.Kernel", "OGSim.Contracts"],
         };
 
         var violations = new List<string>();

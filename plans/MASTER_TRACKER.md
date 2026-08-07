@@ -572,22 +572,50 @@ under the recorded threshold. R12-V5 runs 20 000 trials and requires all six
 grades — including Disaster at 1%, which is the one a sloppy cumulative
 comparison drops off the end.
 
-### Phase R13 — Economics ⬜
+### Phase R13 — Economics 🟨
 > 📄 [phases/R13_ECONOMICS.md](phases/R13_ECONOMICS.md)
+> `src/OGSim.Company`. SDD-009 needed no amendment either.
 
 | # | Task | Status |
 |---|---|---|
-| R13.1 | `ICostLedger` — CAPEX, OPEX, accrual; cash conservation invariant | ⬜ |
-| R13.2 | `IPriceModel` plugins; quality and location differentials | ⬜ |
+| R13.0 | SDD review — no findings | ✅ |
+| R13.1 | `CostLedger` — double-entry, **INV2 with no tolerance** | ✅ |
+| R13.2 | `IPriceModel` plugins | ⬜ — contract declared; the OU-in-log-space model needs the `Price` RNG stream in a tick |
 | R13.3 | `ISalesContract` — spot, term, take-or-pay, hedge | ⬜ |
-| R13.4 | `IFiscalRegime` — royalty/tax, PSC, service, sliding scale | ⬜ |
-| R13.5 | `ITreasury` — cash, debt, equity, reserve-based lending | ⬜ |
-| R13.6 | P&L and balance sheet | ⬜ |
-| R13.7 | `IReservesBooking` — 1P/2P/3P, contingent; **RRR** | ⬜ |
-| R13.8 | Economic limit detection; abandonment provision accrual | ⬜ |
+| R13.4 | `IFiscalRegime` — royalty/tax, PSC, service | ✅ — sliding scale is a content table over the same PSC machinery |
+| R13.5 | `ITreasury` — cash, debt, equity, RBL | 🟨 — the ledger holds cash, debt and equity as accounts; borrowing-base mechanics need R13.7's reserves |
+| R13.6 | P&L and balance sheet | 🟨 — the accounts and the trial balance are here; the statements are a projection R19's read model owns |
+| R13.7 | `IReservesBooking` — 1P/2P/3P; RRR | ⬜ — needs R14's belief percentiles |
+| R13.8 | Economic limit; abandonment provision | ⬜ — needs `IObligationRegistry` (R12.8) |
 | R13.9 | `IWorkingInterest`; farm-outs | ⬜ |
 | R13.10 | Insolvency and restructuring | ⬜ |
-| R13.11 | SC6 | ⬜ |
+| R13.11 | SC6 | ⬜ — needs R13.2's price model |
+
+**R13's verification.** R13-V1 ✅ · R13-V2 ✅ · R13-V4 ✅ · R13-V5 ✅ ·
+R13-V3/V6..V13 ⬜ with the tasks above.
+
+**INV2 caught a real bug on its first run.** The opening entry debited *both*
+cash and equity, and the trial balance came out by exactly twice the opening
+cash. Equity is a credit balance; credit-balance accounts carry negative
+balances in a signed convention, which is ordinary double-entry rather than an
+error. An invariant with a tolerance term would have swallowed a hundred-million
+discrepancy as easily as a rounding one.
+
+**The exactness is real, not a slogan.** The double→Money boundary is pinned:
+every crossing rounds half-even exactly once, at the movement entering the
+ledger. Inside, the arithmetic is pure integer. A thousand postings of `i/3`
+cents balance to the cent, and `Money`'s checked arithmetic overflows rather
+than wrapping — so an impossible balance throws instead of drifting.
+
+**R13-V5's carryforward is the part implementations get wrong.** An
+under-recovered PSC period carries its unrecovered cost forward **in full, with
+no interest, forever**. A regime that wrote it off would quietly hand the
+contractor's money to the state, and no test of a single profitable period would
+notice. Tested over five consecutive under-recovered periods.
+
+Every fiscal figure asserted is **hand-computed in the test from the declared
+rates**, per SDD-009 §3.2's mandate — a fixture that called the code twice would
+verify only that the arithmetic is repeatable.
 
 ### Phase R14 — Information and uncertainty ⬜
 > 📄 [phases/R14_INFORMATION.md](phases/R14_INFORMATION.md)
