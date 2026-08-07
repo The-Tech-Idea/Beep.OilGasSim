@@ -124,10 +124,9 @@ public sealed class ShippedSetTests
     }
 
     /// <summary>
-    /// A composed engine yields a real pipeline running the fourteen-stage order.
-    /// It runs ZERO stages today — no module owns entity state, so no module
-    /// contributes work — and the tick still completes, which is the honest
-    /// state of the engine rather than a stage list that pretends otherwise.
+    /// A composed engine yields a real pipeline running the fourteen-stage order,
+    /// and advancing it does real work: the subsurface's material balance is
+    /// stage 6, and it runs.
     /// </summary>
     [Fact]
     public void The_composed_engine_advances_a_tick()
@@ -136,6 +135,35 @@ public sealed class ShippedSetTests
 
         Assert.IsType<TickCompleted>(built.Engine.Pipeline.AdvanceTick());
         Assert.Equal(1, built.Engine.Pipeline.CurrentTick.Value);
+    }
+
+    /// <summary>
+    /// The shipped engine runs exactly the stages its modules declared. One
+    /// today — subsurface's material balance — and the assertion names it rather
+    /// than counting, so adding a stage without declaring it fails here.
+    /// </summary>
+    [Fact]
+    public void The_shipped_engine_runs_the_stages_its_modules_declared()
+    {
+        Built built = Assert.IsType<Built>(EngineBuilder.Build(Fixture.Settings()));
+
+        Assert.Equal([StageId.MaterialBalance], built.Engine.Pipeline.DeclaredOrder());
+    }
+
+    /// <summary>
+    /// Many ticks, not one. A stage that worked once and then faulted — on a
+    /// second commit, a growing history, an accumulating rounding error — would
+    /// pass the single-tick test above and fail a game.
+    /// </summary>
+    [Fact]
+    public void The_composed_engine_advances_a_hundred_ticks()
+    {
+        Built built = Assert.IsType<Built>(EngineBuilder.Build(Fixture.Settings()));
+
+        for (int tick = 0; tick < 100; tick++)
+            Assert.IsType<TickCompleted>(built.Engine.Pipeline.AdvanceTick());
+
+        Assert.Equal(100, built.Engine.Pipeline.CurrentTick.Value);
     }
 }
 
