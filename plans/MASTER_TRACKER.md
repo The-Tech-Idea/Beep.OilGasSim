@@ -5,6 +5,14 @@ next.** Updated at the close of every phase.
 
 **Status legend:** ⬜ not started · 🟦 in progress · ✅ complete · ❌ blocked
 
+> **Two axes, and for a long time only one of them was tracked.** A phase mark
+> says its models are **built and tested against their SDD**. It says nothing
+> about whether the running engine **uses** them — and for eight subsystems the
+> answer is currently no. Facilities, gas, water and transport are complete and
+> bypassed; the belief store is complete and unused. **[R20d](#phase-r20d)** is
+> where that second axis lives. A subsystem is not in the game until it has a
+> mark there.
+
 ---
 
 ## Current state
@@ -16,7 +24,7 @@ next.** Updated at the close of every phase.
 | **Code status** | 15 engine assemblies, 0 warnings, 0 errors, **779 tests**. The kernel, the contract layer, eleven domain modules and Layer 4 composition are implemented. The composed engine **advances a tick and plays**: a player drills, waits, finds oil or doesn't, produces, declines, and wins or goes broke. Every implemented member traces to a pinned SDD section (F-1). |
 | **Repository** | `The-Tech-Idea/Beep.OilGasSim`, branch `master`. Work lands directly on `master`, one task per commit. |
 | **The playable loop** | **arrive → commit capital under uncertainty → wait four months → find oil or don't → produce → decline → reinvest → win or go broke.** Six of the fourteen tick stages are real (3, 5, 6, 8, 12, 13). One command, one product, one goal, one failure condition. |
-| **Next** | **R21e** — the scenario runner, replacing the `ScenarioGoal` compiled into composition with the contracts R21d declared. Then **R20c.9**: `plans/catalog/`'s sixteen sheets becoming loadable content, which is what turns one well and one goal into a game with variety. |
+| **Next** | **R21e** — the scenario runner, replacing the `ScenarioGoal` compiled into composition with the contracts R21d declared. Then the two that change the game most: **R20d.7** (wire beliefs in — the player stops being told where the oil is) and **R20c.9** (`plans/catalog/`'s sixteen sheets becoming loadable content). |
 
 **Three things are true at once and all three should stay visible.** The engine
 is architecturally complete to its own laws — every manifest promise checked,
@@ -1151,6 +1159,51 @@ hypothetical:
 | 127 | **`OwnsState` was a claim nothing had to honour.** A module declared which facts it owned and the composer checked the claims were unique — and no member on `IModule` handed over an `IStateOwner`, so `StateRegistry` was populated by nobody and a save would have walked an empty owner list. The same gap as 125, on the state side, and it closes the same way: `Own(IStateOwner)`, a key outside the module's own `OwnsState` refused, a declared key with no owner refused, and `Composed` carrying the populated registry. An engine whose save is silently empty is worse than one that will not save, because the loss surfaces only on load |
 | 126 | **Resolution ran in caller-list order, not dependency order.** `Compose` validated the set and then called `module.Compose(c)` over the modules *as given*, so a module whose provider sat later in the list threw from `Require` — the composer proved the graph acyclic and then discarded the construction order that proof establishes. Found the moment `flow` was listed before `diagnostics`. Requires exists precisely so a module need not know who builds it first; making the answer depend on argument order put that knowledge back in every caller, where each scenario, test and host would have had to keep it consistent by hand. Now a DFS post-order over the same providers map, and a test composes the shipped set reversed and gets the identical engine |
 
+### Phase R20d — Integration: wiring what is built into the loop 🟨
+
+**A phase mark and an integration mark are different axes, and this tracker only
+ever had one of them.** A phase is ✅ or 🟨 when its models are built and tested
+against their SDD. That says nothing about whether the running engine uses them —
+and for eight subsystems the answer is currently *no*. Facilities, gas
+processing, water handling and transport are complete, tested, and **bypassed**:
+oil goes straight from reservoir to sale. The belief store and observation model
+are complete and **unused**: the player is told where the oil is. Nothing was
+wrong with those phases; the second axis simply had nowhere to be recorded, so
+it was recorded nowhere.
+
+This section is that axis. It is not new work discovered — it is work that was
+always implied by "the engine is headless and composed" and never given rows.
+
+| # | Subsystem | Built | In the loop |
+|---|---|---|---|
+| R20d.1 | Flow solver — real network, not a direct well→sale path | ✅ R4 | ⬜ the loop calls `SolveOperatingPoint` per well; `IFlowSolver` is composed and unused |
+| R20d.2 | Facilities — separation, treating, tanks, specs | ✅ R8 | ⬜ |
+| R20d.3 | Gas — compression, dehydration, sweetening, NGL, flare | ✅ R9 | ⬜ |
+| R20d.4 | Water — production, treatment, injection, disposal | ✅ R10 | ⬜ |
+| R20d.5 | Transport — pipelines, berths, cargoes, custody transfer points | ✅ R11 | ⬜ custody is an audit entry, not a metered point |
+| R20d.6 | Operations — the one scheduled-activity engine | ✅ R12 | 🟨 drilling has its own timer; `OperationScheduler` is unused |
+| R20d.7 | Information — observations, beliefs, POS | ✅ R14 | ⬜ **the biggest gap in gameplay terms**: the exploration game does not exist until this is wired |
+| R20d.8 | World generation — basins, plays, traps, terrain | ✅ R15 | ⬜ compartments are hand-built by `FieldControl` |
+| R20d.9 | Company — licences, commitments, rivals, regulator | ✅ R16 | ⬜ |
+| R20d.10 | Technology — acquisition routes, gating, effects | ✅ R17 | ⬜ content ships; nothing can be bought |
+| R20d.11 | Integrity &amp; HSE — condition, hazards, barriers, ESG | ✅ R18/R23 | ⬜ |
+| R20d.12 | Persistence — save/load the composed engine end to end | ✅ R19 | 🟨 four state owners round-trip; no whole-engine save path |
+| R20d.13 | Environment — weather, seasons, access windows | ⬜ R22 | ⬜ |
+
+**Reading this table.** Every ⬜ in the right column is a subsystem whose code is
+finished and whose absence a player would notice. That is a better position than
+the reverse, and it is also the reason the engine currently has one product, one
+decision and one failure mode: the parts are all there and only one path through
+them is connected.
+
+**The order they should be wired is not the order they were built.** R20d.7
+(information) changes the game most — it is the difference between being told
+where the oil is and having to find it. R20d.1–5 (the chain) change the
+simulation most. R20d.10 (technology) is what makes the forty-year arc mean
+something. R20d.13 is a phase that has not started at all.
+
+---
+
 ### Phase R20 — Scenarios and balance ⬜
 > 📄 [phases/R20_SCENARIOS.md](phases/R20_SCENARIOS.md)
 
@@ -1175,11 +1228,11 @@ hypothetical:
 | # | Task | Status |
 |---|---|---|
 | R21.1 | Immutable read model published at tick close | 🟨 — `FieldReadModel` is published at stage 13; it is five fields where SDD-017 §2 specifies fifteen views |
-| R21.2 | Command submission surface | 🟨 — the bus is composed and `DrillWellCommand` runs through it; one command of the 61-decision catalogue |
+| R21.2 | Command submission surface | 🟨 — the bus is composed and `DrillWellCommand` runs through it; **1 of the 61-decision catalogue** ([20](design/20_PLAYER_DECISIONS.md)), and PD1's fixture that derives the required set from that catalogue has never been run |
 | R21.3 | Audit query surface — the player-facing "why?" | ⬜ — the trail records causes; nothing queries it for a player |
 | R21.4 | Belief and uncertainty projection for map rendering | ⬜ |
 | R21.5 | Reference headless client proving the contract is sufficient | ⬜ |
-| R21.6 | The 16 required read-model projections ([R21](phases/R21_HOST.md) §2.4b) | ⬜ |
+| R21.6 | The 16 required read-model projections ([R21](phases/R21_HOST.md) §2.4b) | 🟨 — `FieldReadModel` carries 8 fields drawn from 4 of the 16; the other 12 have no source until R20d wires their subsystems in |
 
 **A playable slice exists, and it is a slice.** Three sub-phases got the engine
 from *runs* to *is played*:
