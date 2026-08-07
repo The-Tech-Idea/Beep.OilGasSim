@@ -912,20 +912,52 @@ investigation. Refusals name the module, the mod *and its version*, and report
 v2→v3 cannot migrate a v2 save, and discovering that when a player opens one is
 the worst possible moment.
 
-### Phase R24 — Objectives, Challenges and Missions ⬜  *(executes before R20)*
+### Phase R24 — Objectives, Challenges and Missions 🟨  *(executes before R20)*
 > 📄 [phases/R24_OBJECTIVES.md](phases/R24_OBJECTIVES.md)
+> `src/OGSim.Objectives`. SDD-014's own pass-10 note listed the four undeclared
+> types; **declaring them was R24.0's work**, not a new finding.
 
 | # | Task | Status |
 |---|---|---|
-| R24.1 | `IObjective` — predicate, target, deadline, weight, kind, visibility | ⬜ |
-| R24.2 | Predicate vocabulary across nine domains, reading **only the read model** | ⬜ |
-| R24.3 | Combinators — `all-of`, `any-of`, `sequence`, `count-of-N`, `sustained-for`, `never` | ⬜ |
-| R24.4 | Evaluation at tick stage 12 against sealed state — **observe, never influence** | ⬜ |
-| R24.5 | Deadlines, expiry, failure conditions, progress events | ⬜ |
-| R24.6 | The eight scoring dimensions and the composite | ⬜ |
-| R24.7 | `IScenario` and `ICampaign` — loading, declared persistence, branching | ⬜ |
-| R24.8 | Modifier application, reusing fidelity/model/content selection | ⬜ |
-| R24.9 | GM1–GM13 verification suite ([18](design/18_GAME_MODES.md) §7) | ⬜ |
+| R24.0 | SDD review — the AST's four undeclared types now exist in `OGSim.Contracts` | ✅ |
+| R24.1 | `Objective` — predicate, deadline, weight, visibility | ✅ |
+| R24.2 | Predicate vocabulary reading **only the read model** | ✅ |
+| R24.3 | Combinators — all-of, any-of, count-of-N, sustained-for, sequence, never | ✅ |
+| R24.4 | Evaluation over sealed state — **observe, never influence** | ✅ |
+| R24.5 | Deadlines, expiry, progress events | 🟨 — `Deadline` is carried and `Never` is the failure condition; emitting `objective.*` needs the tick loop |
+| R24.6 | The eight scoring dimensions | ⬜ — each reads a read-model projection (R21) |
+| R24.7 | `IScenario` / `ICampaign` | ⬜ |
+| R24.8 | Modifier application | ⬜ — reuses R17's effect path |
+| R24.9 | GM1–GM13 | 🟨 — GM1 and GM4 built |
+
+**GM4 is mechanised, not promised.** Every path is validated against a
+read-model schema registry at load, so an objective **cannot** reference data the
+player is unable to see. A test renames a projection and shows the old path fails
+validation immediately — loudly at load, rather than evaluating to something
+arbitrary two hours into a campaign. And a path the registry accepted but the
+snapshot lacks is an `InvariantFault`, because defaulting to zero would make an
+objective silently *true*.
+
+**R24-V15 is structural.** The assembly holds no command bus and references only
+Kernel and Contracts — an objective that could act would make a scenario a second
+player, and the outcome would stop being the player's doing.
+
+**Three semantics worth stating, each easy to get lazily wrong.**
+
+*`sustained-for` **resets**, it does not pause.* "Sustained for twelve months"
+means twelve in a row; a pausing counter would let a player satisfy a stability
+objective with a decade of intermittent compliance.
+
+*A sequence's index never goes backwards.* Letting an earlier step un-satisfy
+would make "drill, then complete, then produce" satisfiable by producing first.
+
+*`Never`, once broken, stays broken* — which makes it a promise about the whole
+scenario rather than a momentary check.
+
+**`Max` over an empty collection is refused, not zero.** "The highest water cut
+across no wells" has no answer, and zero would make a fleet objective trivially
+true before the first well is drilled. `Sum` and `All` do have identities and use
+them.
 
 ### Phase R20 — Scenarios and balance ⬜
 > 📄 [phases/R20_SCENARIOS.md](phases/R20_SCENARIOS.md)

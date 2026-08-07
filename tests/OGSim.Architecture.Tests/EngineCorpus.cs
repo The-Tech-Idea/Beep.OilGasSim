@@ -68,6 +68,7 @@ internal static class EngineCorpus
         typeof(OGSim.Capabilities.GatingValidator).Assembly,
         typeof(OGSim.Integrity.IntegrityPass).Assembly,
         typeof(OGSim.Persistence.MigrationChain).Assembly,
+        typeof(OGSim.Objectives.ObjectiveEvaluator).Assembly,
         Subsurface,
     ];
 
