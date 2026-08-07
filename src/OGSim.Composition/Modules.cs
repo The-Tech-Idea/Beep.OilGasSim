@@ -85,8 +85,12 @@ internal sealed class SubsurfaceModule() : EngineModule(Declare(
     "subsurface",
     provides: [typeof(IDriveMechanism), typeof(IAquiferModel)],
     requires: [typeof(IFluidPropertyModel)],
-    ownsState: NothingOwnedYet,
-    stages: NoStagesYet))
+
+    // The FIRST module to own a fact and act on it. Both arrive together on
+    // purpose: a stage with nothing to act on is law L3's declaration with no
+    // behaviour, and state no stage ever changes is a fact the game cannot use.
+    ownsState: ["subsurface.compartments"],
+    stages: [new StageParticipation(StageId.MaterialBalance, Order: 0)]))
 {
     public override void Compose(IModuleComposition composition)
     {
@@ -95,9 +99,27 @@ internal sealed class SubsurfaceModule() : EngineModule(Declare(
         // The drive is content-selected in the real composition; the solution-gas
         // drive is the one every compartment falls back to having, not a default
         // dependency — a compartment declares which drive it has.
-        composition.Provide<IDriveMechanism>(new OGSim.Subsurface.SolutionGasDrive());
+        var drive = new OGSim.Subsurface.SolutionGasDrive();
+
+        composition.Provide<IDriveMechanism>(drive);
         composition.Provide<IAquiferModel>(new OGSim.Subsurface.FetkovichAquifer(
             productivityIndex: 1e-9, new Pressure(30e6), new ReservoirVolume(1e6)));
+
+        var state = new OGSim.Subsurface.SubsurfaceState(
+            composition.Require<IFluidPropertyModel>(), drive,
+            Defaults.MaxTickPressureDropFraction);
+
+        composition.Own(state);
+
+        // Withdrawal comes from stage 5's solve, duration-weighted across
+        // segments (SDD-002 §9). Until a completion exists to produce any, the
+        // honest answer is NONE — an empty tick, not a fabricated one. The
+        // reservoir still re-solves, and at zero withdrawal §3.1 returns the
+        // pressure it already had, which is the correct physics rather than a
+        // special case.
+        composition.Contribute(
+            order: 0,
+            new OGSim.Subsurface.MaterialBalanceStage(state, () => []));
     }
 }
 

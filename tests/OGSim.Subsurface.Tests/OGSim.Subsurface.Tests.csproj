@@ -23,6 +23,9 @@
     <!-- The only assembly with InternalsVisibleTo from OGSim.Subsurface
          (SDD-000: a module's own test assembly, and nothing else). -->
     <ProjectReference Include="..\..\src\OGSim.Subsurface\OGSim.Subsurface.csproj" />
+    <!-- StateBlock, so the compartment round-trips through the REAL canonical
+         writer rather than a double that could agree with a bug. -->
+    <ProjectReference Include="..\..\src\OGSim.Persistence\OGSim.Persistence.csproj" />
   </ItemGroup>
 
 </Project>

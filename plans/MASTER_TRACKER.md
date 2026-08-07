@@ -975,8 +975,8 @@ cannot start without it: a scenario is a composed engine.
 | R20c.3 | `EngineBuilder` — validate, resolve, build a real `TickPipeline` | ✅ |
 | R20c.4 | Composition refusal suite — all seven failure modes, every problem named | ✅ |
 | R20c.5 | Layer 4 declared in the architecture corpus, with its one exemption | ✅ |
-| R20c.6 | Module state ownership — `IStateOwner` per `OwnsState` key | 🟨 — mechanism complete and proven; no shipped module can own state yet |
-| R20c.7 | Stage bodies — the per-tick work each module contributes | ⬜ — blocked on entity instantiation, see below |
+| R20c.6 | Module state ownership — `IStateOwner` per `OwnsState` key | 🟨 — mechanism complete; **subsurface owns and saves its compartments** |
+| R20c.7 | Stage bodies — the per-tick work each module contributes | 🟨 — **stage 6 is real**: the reservoir depletes on a tick |
 | R20c.8 | Custody transfers recorded, so the ledger can be composed | ⬜ |
 | R20c.10 | `IFlowElementRegistry` — who assembles the topology | ✅ |
 | R20c.9 | Content kinds for entities — equipment, wells, facilities, reservoirs | 🟨 — `tech` done: the 65-node registry ships as content, with the fixture check |
@@ -992,6 +992,39 @@ ticks. A stage body with nothing to act on would be law L3's "declaration with
 no behaviour", so **no module claims a stage** and `NoStagesYet` says why at
 each manifest. R20c.6/.7 are what fill them, and they are the real unblocker for
 the eleven deferred rows — not composition itself.
+
+**The subsurface is alive.** `IReservoirCompartment` had been declared at R5.1
+and **never implemented** (finding 136) — the material balance was proven against
+inputs a test assembled, and nothing held a reservoir between two ticks.
+`ReservoirCompartment` is that thing: the first entity in the engine that
+persists across a tick and changes because of what happened. `SubsurfaceState`
+owns them, saves them and re-solves them; `MaterialBalanceStage` fills stage 6.
+The composed engine now runs a real stage, and producing oil costs pressure.
+
+Three decisions worth keeping:
+
+*Pressure is re-solved from initial conditions every tick, never stepped from
+last tick's value.* SDD-003 §3.1 measures every expansion term from Pi, so a
+rounding error in one month cannot compound into the next — and a save that
+restores cumulative production restores the pressure exactly rather than
+approximately.
+
+*Pressure is not saved at all.* It is derived (SDD-013 §4), so the restore
+re-solves it; a hand-edited file cannot assert a pressure the material balance
+would never have produced. What the block carries is initial conditions and
+cumulative production — the history, not its consequence.
+
+*Commit happens only after the solve succeeds.* A drive that refuses a step —
+a pressure drop the model cannot honestly represent — leaves the compartment
+exactly as it was, so an abandoned tick has not quietly moved the reservoir.
+
+**The truth wall held, and said so.** `SubsurfaceState` was written public,
+because composition has to register it. The architecture test failed on the
+first run: `OGSim.Subsurface` exposes no public type, and that is the guarantee
+R14 inherits rather than retrofits. It is internal now, reached through the
+`InternalsVisibleTo` door that already existed — a state owner is registered as
+an `IStateOwner` and contributed as an `ITickStage`, both public interfaces, so
+nothing about being composable required being public.
 
 **R20c.6 closed the state half, and then found nothing could use it.** The
 mechanism is complete: `Own(IStateOwner)`, both refusals (a declared key with no
@@ -1067,6 +1100,7 @@ hypothetical:
 | # | Finding |
 |---|---|
 | 125 | **A module declared its stages and had no way to supply them.** `ModuleManifest.Stages` names the `(StageId, Order)` slots a module claims and check 5 forbids two modules claiming one — and then `TickPipeline` took `IReadOnlyList<ITickStage>` from *nowhere*, with no member on `IModule` producing one. Composition validated a stage plan that nothing could fill: law L3 at the architecture level, a declaration with no behaviour behind it. `IModuleComposition` gains `Contribute(int order, ITickStage work)` and `Composed` carries the collected stages, so the pipeline is built from exactly what was validated. Two refusals fall out — a slot declared and never filled, and a contribution to a slot never declared. Letting the pipeline take an independently-assembled stage list instead would have made the manifest decorative: the composer would police an order the tick was free to ignore |
+| 136 | **`IReservoirCompartment` was declared and never implemented.** R5.1 wrote the interface, the value types around it and the whole material balance, and no class ever satisfied it — the balance was proven against `MaterialBalanceInput`s that tests assembled by hand, so nothing in the engine held a reservoir from one tick to the next. Law L3 at the type level: a declaration with no behaviour behind it, sitting in the middle of the module whose entire purpose it is. It was invisible for fifteen phases because every subsurface test supplied its own inputs, which is exactly what a test of a pure function should do — the gap was never in the arithmetic, it was that nobody owned the numbers between calls. `ReservoirCompartment` implements it, `SubsurfaceState` owns and persists them, and `MaterialBalanceStage` runs them at stage 6 |
 | 135 | **`BuildResult` and `EngineStartResult` were the same concept twice.** Closing finding 133 added `EngineCompositionRefused` to the contract layer while `OGSim.Composition` already had `BuildRefused(IReadOnlyList<CompositionProblem>)` saying exactly the same thing — a duplication introduced by the fix for the gap it was fixing. Rule N1 again. `BuildRefused` now wraps the contract record rather than restating it, so a host printing why the engine would not start never translates between two shapes at the moment it least wants to. `Built` stays composition's own: it carries an `Engine`, which is a Layer 4 type the contract layer cannot name |
 | 134 | **`IMigrationStep` is declared twice.** `OGSim.Contracts` declares one taking `System.Text.Json.Nodes.JsonNode`; `OGSim.Persistence` declares another taking the engine's own `JsonValue`. The second is the one `MigrationChain` uses and every migration test implements; the first has no implementations and no callers. Two declarations of one concept is what glossary rule N1 forbids — and the live one is right on the merits, not merely by being used: SDD-013 §3 requires writer and reader to live in ONE class, and migrating through `JsonNode` would be the second serialisation path that rule exists to prevent, with the block parsed by one library and rewritten by another. **Left in place, marked superseded**: removing a contract type is the owner's call, and `OGSim.Contracts` cannot host the live one because `JsonValue` belongs to the module above it |
 | 133 | **A composition refusal had no way to reach the host.** SDD-017 §1b said content, composition and save refusals "share one shape" and declared only `EngineRefused(IReadOnlyList<LoadFailure>)`. A `LoadFailure` carries source, file, JSON path and load stage; a `CompositionProblem` carries a module and a kind and has none of those. A factory whose module set failed to compose could report it only by inventing a filename for a defect that is not in a file, which throws away the one thing an all-or-nothing refusal is for — naming precisely what is wrong. `EngineCompositionRefused` added alongside; nothing removed |

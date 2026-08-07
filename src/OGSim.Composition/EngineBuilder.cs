@@ -48,6 +48,14 @@ internal static class Defaults
     public static Wells.TubingGeometry Tubing { get; } = new(
         new Length(2000.0), new Length(2000.0), new Length(0.0889), 4.6e-5);
 
+    /// <summary>
+    /// SDD-003 §3.1's per-tick step limit. A reservoir that lost more than a
+    /// fifth of its pressure in one month is not being modelled, it is being
+    /// extrapolated — the solve refuses rather than reporting a number nobody
+    /// should trust.
+    /// </summary>
+    public const double MaxTickPressureDropFraction = 0.2;
+
     public static Integrity.DegradationCoefficients Decay { get; } =
         new(BaseRatePerYear: 0.05, WaterCutFactor: 1.0, SourFactor: 2.0,
             DutyFactor: 0.5, TemperatureFactor: 1.5, ServiceIntervalFactor: 0.2);
