@@ -658,24 +658,42 @@ correlation: a dry hole failing on source rock moves every prospect sharing that
 factor, because they were never independent. Correlating outcomes instead would
 have needed a covariance nobody could state.
 
-### Phase R15 — World generation ⬜
+### Phase R15 — World generation 🟨
 > 📄 [phases/R15_WORLD.md](phases/R15_WORLD.md)
+> `src/OGSim.World`. SDD-010 needed no amendment — four phases running.
 
-| # | Task | Status |
-|---|---|---|
-| R15.1 | `IWorldGenerator`; the eleven-step pipeline | ⬜ |
-| R15.2 | Tectonic setting, stratigraphy | ⬜ |
-| R15.3 | **Burial and thermal history** — the oil/gas/barren switch | ⬜ |
-| R15.4 | Structure, traps, migration, charge | ⬜ |
-| R15.5 | Accumulations; log-normal size distribution | ⬜ |
-| R15.6 | Plays and prospects; correlation structure; **detectability/accessibility class assignment with era-layering bands** | ⬜ |
-| R15.7a | Surface: terrain and hydrology — elevation, terrain classes, rivers, coastline, **bathymetry** | ⬜ |
-| R15.7b | Surface: settlements — siting logic, population, **slow growth responding to employment** | ⬜ |
-| R15.7c | Surface: transport network, utilities, **third-party infrastructure with tariffs**; computed remoteness | ⬜ |
-| R15.7d | Surface: land status → sensitivity; **environment profiles derived, not authored** (9.8) | ⬜ |
-| R15.8 | Jurisdictions | ⬜ |
-| R15.9 | Initial beliefs | ⬜ |
-| R15.10 | Determinism test PV7; band tests MB4, MB5 | ⬜ |
+**Built:** the eleven-step pipeline with **per-step substreams** (R15.1), traps
+and fill-spill charge (R15.4–5), log-normal accumulation sizing with derived
+`AccessRequirements` (R15.7), a heightfield whose bathymetry *is* the field below
+zero (R15.7a), jurisdictions (R15.8), **initial beliefs through the observation
+door** (R15.9), and PV7 (R15.10).
+
+**Deferred, and each for a stated reason:** R15.2/R15.3 (stratigraphy, burial and
+thermal history) are table lookups on content that does not exist yet; R15.6's
+era-layering quota resampling needs the class-quota bands from content;
+R15.7b–d (settlements, transport, land status) need the terrain classes and cost
+tables the same content supplies. The pipeline's *shape* is in place and each is
+a step body rather than new machinery.
+
+**PV7 is a property of the construction, not of discipline.** The whole world is
+a function of one number, and each step draws from its own substream derived from
+`SplitMix64(worldSeed ^ FNV1a(stepName))` — so editing step 7 cannot shift step
+9's draws. A test verifies exactly that: a hundred draws from the charge stream
+leave the surface stream's first value unchanged. Names rather than numbers, so
+inserting a step renumbers nothing. The hash is FNV-1a because
+`string.GetHashCode` is randomised per process and would make a world
+unreproducible between two runs of *the same binary*.
+
+**R15-V10 holds — the leak test, and R14's wall proven end to end.** Regional
+beliefs arrive as `Observation`s through the same conjugate update every in-game
+survey uses, with σ so wide that P10/P90 span more than an order of magnitude.
+And an above-tier accumulation gets **no observation at all** — not a vague one,
+since a vague reading still says "something is here", and the point of a subtlety
+class is that a subtle trap is invisible until the survey tier catches up.
+
+| # | Finding |
+|---|---|
+| 123 | **`Polygon`'s record equality compared its vertices by REFERENCE.** A record's generated equality does not recurse into an `ImmutableArray` member, so two polygons with identical vertices compared unequal — and two with *different* vertices would have compared equal had they shared an array. Found by PV7 reporting two regenerations of one seed as different worlds: the invariant was right and the comparison was wrong. `Allocation` already carried the override for the same reason; the geometry types did not. The same trap sits on any contract record holding a collection, which is why the PV7 test now compares compartments element by element and says so |
 
 ### Phase R16 — Company, licences, regulation ⬜
 > 📄 [phases/R16_COMPANY.md](phases/R16_COMPANY.md)

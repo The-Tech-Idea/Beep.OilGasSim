@@ -61,6 +61,42 @@ public readonly record struct Polygon
         Vertices = vertices;
     }
 
+    /// <summary>
+    /// STRUCTURAL equality over the vertices (R15.0 finding 123).
+    ///
+    /// <para>A record's generated equality compares an <see cref="ImmutableArray{T}"/>
+    /// member by the underlying array REFERENCE, so two polygons with identical
+    /// vertices compared unequal. Found by PV7, which regenerated a world from
+    /// the same seed and reported the two as different — the invariant was
+    /// right and the comparison was wrong, and the same defect would have made
+    /// a save round-trip check, a dedup or a read-model diff silently wrong in
+    /// the other direction.</para>
+    ///
+    /// <para><see cref="Allocation"/> already carried this override for the same
+    /// reason; the geometry types did not.</para>
+    /// </summary>
+    public bool Equals(Polygon other)
+    {
+        if (Vertices.IsDefault || other.Vertices.IsDefault)
+            return Vertices.IsDefault && other.Vertices.IsDefault;
+
+        if (Vertices.Length != other.Vertices.Length) return false;
+
+        for (int i = 0; i < Vertices.Length; i++)
+            if (Vertices[i] != other.Vertices[i]) return false;
+
+        return true;
+    }
+
+    public override int GetHashCode()
+    {
+        if (Vertices.IsDefault) return 0;
+
+        var hash = new HashCode();
+        for (int i = 0; i < Vertices.Length; i++) hash.Add(Vertices[i]);
+        return hash.ToHashCode();
+    }
+
     /// <summary>Shoelace, summed in vertex order so the result is reproducible.</summary>
     public Area Area => new(TwiceSignedArea(Guarded()) * 0.5);
 
