@@ -256,6 +256,63 @@ invited to extrapolate it and read `G` off the x-intercept. A line that drifted
 by a percent would make a correct deduction give a wrong answer, and the mechanic
 depends on the player being able to trust their own arithmetic.
 
+### 3.1c Water cut — the fractional-flow S-curve
+
+> **R10.0 amendment (finding 119): CAL3 asks for "a recognisable S-curve after
+> breakthrough" and no document said what curve.** R10.5, R10-V1 and SC4 all
+> pin against it, and neither [05](../design/05_SIMULATION_MODELS.md) nor this
+> document stated a form. Unimplementable under F-1. Stated here.
+>
+> The S-curve is **not** a shape to be drawn — it is what fractional flow does
+> when relative permeabilities are power laws, which is the standard Corey
+> treatment. A fitted sigmoid would have produced the same picture and taught
+> the player nothing, because it would not respond to viscosity, and the whole
+> reason a viscous oil waters out early is the mobility ratio in the denominator.
+
+```text
+NORMALISED SATURATION
+  S* = (Sw − Swc) / (1 − Swc − Sor)          clamped to [0, 1]
+
+COREY RELATIVE PERMEABILITIES (exponents and endpoints from the rock type)
+  krw = krw_max · S*^nw
+  kro = kro_max · (1 − S*)^no
+
+FRACTIONAL FLOW — the water cut at the sandface
+  fw = 1 / ( 1 + (kro · μw) / (krw · μo) )
+  krw = 0 (S* = 0) ⇒ fw = 0: BEFORE BREAKTHROUGH, no water flows at all.
+
+Breakthrough is therefore not an event that is scheduled. It is the first tick
+at which Sw at the producer exceeds Swc, and the S-curve after it is the shape
+of fw(S*) — steep in the middle because both power laws are moving at once,
+flattening as kro → 0 and the well approaches pure water.
+
+MOBILITY RATIO M = (krw/μw) / (kro/μo) at the endpoints. M > 1 is an unfavourable
+flood: the water outruns the oil, breakthrough is early and the S-curve's rise is
+sharp. This is why a viscous oil waters out early, and it falls out of the form
+above rather than being asserted beside it.
+```
+
+### 3.1d Injectivity
+
+> **R10.0 amendment (finding 120): `ConstraintKind.Injectivity` was declared in
+> SDD-002 §5 and no document said how to compute one.** R10.2 and R10-V4 both
+> need it.
+
+```text
+INJECTION RATE — §6.1's Darcy form with the pressure difference reversed
+  q_inj = 2π·k·h·(Pwf − Pr) / [ μw · ( ln(re/rw) − 0.75 + s ) ]
+  Water viscosity, not oil: it is water going in.
+
+INJECTIVITY DECLINE (R10 §2.2) — the formation plugs with solids and fines
+  s(V) = s0 + α · V_cumulative / V_reference
+  α and V_reference from content; remediation (an acid job or a filter upgrade)
+  resets the accumulated term to zero, restoring — never exceeding — s0.
+
+Declining injectivity is what makes water disposal an ONGOING operational
+problem rather than a one-time build, and it produces the authentic case where a
+field is throttled by disposal capacity and by nothing upstream at all.
+```
+
 ### 3.2 Contacts
 
 ```text

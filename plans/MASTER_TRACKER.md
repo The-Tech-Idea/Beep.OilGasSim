@@ -453,16 +453,47 @@ so an impure element ends up holding the uncapped answer — and the first versi
 of the test reported no throttling at any cap. Transform is required to be pure
 (SDD-002 §5); the converged values live in the report.
 
-### Phase R10 — Water handling ⬜
+### Phase R10 — Water handling 🟨
 > 📄 [phases/R10_WATER.md](phases/R10_WATER.md)
 
 | # | Task | Status |
 |---|---|---|
-| R10.1 | Water treatment units | ⬜ |
-| R10.2 | Injection and disposal wells; injectivity | ⬜ |
-| R10.3 | Pressure support coupling back to the compartment | ⬜ |
-| R10.4 | Waterflood as an `IDriveMechanism` | ⬜ |
-| R10.5 | Water cut S-curve; SC4 | ⬜ |
+| R10.0 | SDD review — two findings; **neither the S-curve nor injectivity had a form** | ✅ |
+| R10.1 | Water treatment units | ⬜ — R8's `RemovalUnit` covers skim/hydrocyclone/filter as content tiers; the catalogue is content, not code |
+| R10.2 | Injection and disposal wells; injectivity | ✅ — with decline and remediation |
+| R10.3 | Pressure support coupling back to the compartment | ✅ — `CumulativeInjected` was in the balance from R5; R10 supplies what fills it |
+| R10.4 | Waterflood as an `IDriveMechanism` | ✅ — an addition, not an edit |
+| R10.5 | Water cut S-curve; SC4 | ✅ |
+
+**R10's verification.** SC4/R10-V1 ✅ · R10-V3 ✅ · R10-V4 ✅ · R10-V5 ✅ ·
+R10-V6 ✅ · R10-V2/V7 ⬜ (both need a completion whose perforations carry their
+own saturation — R6.10's per-perf work) · R10-V8 ⬜ (economic limit, R13) ·
+R10-V9 ⬜ (whole-chain water balance, with the tick loop) · R10-V10 ⬜ (R13).
+
+**The S-curve is not a shape that is drawn.** CAL3 asks for "a recognisable
+S-curve after breakthrough" and no document said what curve. It is what
+fractional flow does when relative permeabilities are power laws — the standard
+Corey treatment — and the test asserts the steepest rise is *interior*, which a
+straight line would fail. A fitted sigmoid would have drawn the same picture and
+taught nobody anything, because it would not respond to viscosity: a viscous oil
+waters out early through the mobility ratio in the denominator, and that falls
+out rather than being asserted beside it.
+
+**R10.0's findings.**
+
+| # | Finding |
+|---|---|
+| 119 | CAL3's S-curve had no algebraic form in any document. R10.5, R10-V1 and SC4 all pin against it. Written as SDD-003 §3.1c (Corey + fractional flow) |
+| 120 | `ConstraintKind.Injectivity` was declared in SDD-002 §5 and nothing said how to compute one. R10.2 and R10-V4 both need it. Written as SDD-003 §3.1d, including the plugging law that makes disposal an ongoing problem rather than a one-time build |
+
+Two bugs of my own, both caught rather than shipped. `WaterfloodDrive` first
+declared its injectants with `new`, which hides the base property — every caller
+holds an `IDriveMechanism`, so the interface would have returned the base's empty
+list and the flood would have accepted nothing. The test now goes through the
+interface deliberately. Then `L2_NoOptionalContractParameter` caught the
+constructor default that replaced it; required is better anyway, since "this
+drive takes no injectant" is a statement each mechanism should make rather than
+omit.
 
 ### Phase R11 — Transport and export ⬜
 > 📄 [phases/R11_TRANSPORT.md](phases/R11_TRANSPORT.md)

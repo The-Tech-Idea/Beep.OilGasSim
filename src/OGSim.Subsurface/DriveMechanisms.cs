@@ -22,13 +22,25 @@ internal abstract class DriveMechanism : IDriveMechanism
     /// <summary>Content default, SDD-003 §3.1.</summary>
     protected const double DefaultMaxTickVoidageFraction = 0.25;
 
-    protected DriveMechanism(string id, AdmittedTerms admits)
+    /// <summary>
+    /// Injectants are a CONSTRUCTOR argument rather than an overridable property:
+    /// a derived class hiding the base one with `new` would still hand the base's
+    /// empty list to anything holding an IDriveMechanism, which is how every
+    /// caller holds it.
+    ///
+    /// <para>REQUIRED, not defaulted (law L2). "This drive takes no injectant" is
+    /// a statement each mechanism should make, and a default would let a new
+    /// mechanism silently accept nothing because its author forgot to say.</para>
+    /// </summary>
+    protected DriveMechanism(
+        string id, AdmittedTerms admits, IReadOnlyList<ContentId> acceptedInjectants)
     {
         ArgumentNullException.ThrowIfNull(admits);
+        ArgumentNullException.ThrowIfNull(acceptedInjectants);
 
         Id = new ContentId(id);
         Admits = admits;
-        AcceptedInjectants = [];      // natural drives take none; R9/R10 add their own
+        AcceptedInjectants = acceptedInjectants;
     }
 
     public ContentId Id { get; }
@@ -89,14 +101,14 @@ internal abstract class DriveMechanism : IDriveMechanism
 /// expansion, which runs out quickly.</para>
 /// </summary>
 internal sealed class SolutionGasDrive()
-    : DriveMechanism("solution-gas-drive", new AdmittedTerms(GasCap: false, AquiferInflux: false));
+    : DriveMechanism("solution-gas-drive", new AdmittedTerms(GasCap: false, AquiferInflux: false), []);
 
 /// <summary>
 /// Gas cap expansion. The cap does the work, so pressure is better supported
 /// than by solution gas alone — provided the cap is not produced. Band 20–40%.
 /// </summary>
 internal sealed class GasCapExpansionDrive()
-    : DriveMechanism("gas-cap-expansion-drive", new AdmittedTerms(GasCap: true, AquiferInflux: false));
+    : DriveMechanism("gas-cap-expansion-drive", new AdmittedTerms(GasCap: true, AquiferInflux: false), []);
 
 /// <summary>
 /// Water drive. Influx replaces produced volume, so pressure is maintained and
@@ -107,7 +119,7 @@ internal sealed class GasCapExpansionDrive()
 /// aquifer independently of the drive at all.</para>
 /// </summary>
 internal sealed class WaterDrive()
-    : DriveMechanism("water-drive", new AdmittedTerms(GasCap: false, AquiferInflux: true))
+    : DriveMechanism("water-drive", new AdmittedTerms(GasCap: false, AquiferInflux: true), [])
 {
     // A supported compartment moves slowly in pressure, so a larger step is
     // still inside the integration's honest range.
@@ -123,7 +135,7 @@ internal sealed class WaterDrive()
 /// be inventing physics no design document states.</para>
 /// </summary>
 internal sealed class CompactionDrive()
-    : DriveMechanism("compaction-drive", new AdmittedTerms(GasCap: false, AquiferInflux: false));
+    : DriveMechanism("compaction-drive", new AdmittedTerms(GasCap: false, AquiferInflux: false), []);
 
 /// <summary>
 /// Gravity drainage. Oil drains downward under its own weight; slow, and its
@@ -135,7 +147,7 @@ internal sealed class CompactionDrive()
 /// is a failure the monthly step must not step over.</para>
 /// </summary>
 internal sealed class GravityDrainageDrive()
-    : DriveMechanism("gravity-drainage-drive", new AdmittedTerms(GasCap: false, AquiferInflux: false))
+    : DriveMechanism("gravity-drainage-drive", new AdmittedTerms(GasCap: false, AquiferInflux: false), [])
 {
     protected override double MaxTickVoidageFraction => 0.1;
 }
@@ -150,4 +162,34 @@ internal sealed class GravityDrainageDrive()
 /// drive that could not be named could not be guessed at.</para>
 /// </summary>
 internal sealed class CombinationDrive()
-    : DriveMechanism("combination-drive", new AdmittedTerms(GasCap: true, AquiferInflux: true));
+    : DriveMechanism("combination-drive", new AdmittedTerms(GasCap: true, AquiferInflux: true), []);
+
+/// <summary>
+/// R10.4 — waterflood. Injected water replaces produced volume, so pressure is
+/// supported and recovery rises well above the natural drives (R10-V6).
+///
+/// <para><b>An ADDITION, not an edit</b> (R10 §2.3, design 02 §2.2). A
+/// waterflood compartment has a different pressure response because it has a
+/// different drive mechanism, not because a flag was set on an existing one —
+/// which is the whole reason `IDriveMechanism` is a plugin slot.</para>
+///
+/// <para>It admits aquifer influx as well as injection, because the balance
+/// cannot tell them apart and neither can the reservoir: water arriving from an
+/// aquifer and water arriving from an injector both replace voidage. A flood on
+/// a compartment that also has an aquifer is a real and common case, and
+/// refusing it would have been an artefact of the type system rather than of
+/// the physics.</para>
+/// </summary>
+/// <para>Water is what it accepts, named by CONTENT ID rather than branched on by
+/// material identity — SDD-005 §4.0b and the "one engine" architecture test.</para>
+internal sealed class WaterfloodDrive()
+    : DriveMechanism("waterflood-drive",
+                     new AdmittedTerms(GasCap: false, AquiferInflux: true),
+                     [new ContentId("water")])
+{
+    // A flood holds pressure up, so the compartment moves slowly and a larger
+    // step stays inside the integration's honest range — the same reasoning as
+    // the natural water drive it replaces.
+    protected override double MaxTickVoidageFraction => 0.4;
+
+}
