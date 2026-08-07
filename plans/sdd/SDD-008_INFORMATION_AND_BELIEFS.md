@@ -129,6 +129,54 @@ and the audit record live. A plugin that drew its own numbers could silently
 consume a different count and shift every later draw in that stream — the exact
 independence property R1-V5 exists to protect.
 
+> **R12b amendment (finding 149) — the truth door, and σ's units.** Three things
+> this section pinned had nothing behind them, and the first activity that
+> measured anything walked straight past all three.
+>
+> **(a) The subsurface declared one door.** `SubsurfaceState.TruePressureOf` was
+> the whole of it, so a build-up was the only measurement that *could* be built;
+> a log, a core and a survey each measure something else and would otherwise have
+> had an `internal` member invented for them at the call site. The door is now
+> the whole set, `internal` to `OGSim.Subsurface` and visible only to
+> `OGSim.Composition`:
+>
+> ```csharp
+> internal Pressure      TruePressureOf(EntityId<IReservoirCompartmentEntity> c);   // dynamic — moves as it is produced
+> internal double        TruePorosityOf(EntityId<IReservoirCompartmentEntity> c);   // RockTruth, static
+> internal Permeability  TruePermeabilityOf(EntityId<IReservoirCompartmentEntity> c);
+> internal SurfaceVolume TrueOilInPlaceOf(EntityId<IReservoirCompartmentEntity> c); // N, INITIAL conditions
+> ```
+>
+> Every one returns a bare number the caller must still push through
+> `ObservationSampler` to learn anything: there is no path from any of them to a
+> belief that skips the draw. `TrueOilInPlaceOf` reads initial conditions rather
+> than remaining volume deliberately — a survey sees the accumulation, not what
+> is left of it, and a company cannot deduce cumulative production by re-shooting.
+>
+> **(b) σ is in the KIND's space, and a source is priced per kind.** The prose
+> above already said it — "content: kinds + σ_obs per kind", "what distinguishes
+> a core from a log is *which kinds* and how small the σ" — but the first
+> `IObservationModel` keyed on source alone. Every source therefore saw every
+> kind at one number, which let a build-up measure oil-in-place at 0.03 and made
+> shooting seismic pointless. `SigmaFor(source, kind, subject)` is a **table over
+> both**, and the σ it returns is absolute in that kind's declared space:
+> porosity in porosity units, pressure in pascals, permeability and oil-in-place
+> in natural-log units where an absolute σ *is* a relative one. `null` where the
+> pair is not in the table — a log cannot see the areal extent of an accumulation
+> and must return nothing rather than a wide guess.
+>
+> INV8's floor is per kind for the same reason: one flat floor either erases the
+> difference between a core and a log or is meaningless against a pressure in
+> pascals.
+>
+> **(c) `ObservationSampler` is composed, or it is not the door.** R14.3 built
+> it — stream selection, the σ sanity check, the 09 §4.2 fairness record — and no
+> module provided it, so composition's first measuring activity sampled truth by
+> hand and delivered a belief with no audit trail. `OGSim.Information` provides
+> `ObservationSampler`; anything that measures resolves it. **A `beliefs.Apply`
+> whose `Observation` did not come out of `Sample` is a defect** — that is the
+> whole of the wall, and it is a review obligation until R14.12 can assert it.
+
 ## 4. POS — Beta-Bernoulli, per factor
 
 ```csharp

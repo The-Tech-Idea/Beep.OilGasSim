@@ -167,6 +167,61 @@ Outcome application is a stage-3 state change — a well coming online **is** a
 segment-boundary event ([21](../design/21_INTEGRATION.md) §5) for the tick it
 lands in.
 
+> **R12b amendment (finding 149) — one activity, one class.** The list above
+> ("well online, facility commissioned, survey delivered…") named what completion
+> *does* and declared nothing that does it. Built from that, the first two
+> templates came out scattered across three files each: an `ActivityTerms` entry
+> in the composition's content block, a bespoke `ICommandValidator` beside the
+> command, and an effect lambda in a dictionary in the module. Nothing held a
+> template together, so nothing could check one was whole — a template composed
+> with no effect registered was caught by an `InvariantFault` *at completion*,
+> which is to say after the player had already paid for it and waited.
+>
+> **An activity is one object**, in `OGSim.Composition` — the only layer entitled
+> to know that a well, a compartment and a belief are all real (03 §2):
+>
+> ```csharp
+> internal interface IActivity                 // the register holds these
+> {
+>     ActivityTerms Terms { get; }             // §1 spec, §3 costs, §4 outcome table
+>     ContentId Template { get; }              // == Terms.Template, never a second copy
+>     bool LeavesAnAsset { get; }              // capex if it does, opex if it leaves only knowledge
+>     void Complete(CompletedActivity done, Tick tick);         // THIS section, executed
+>     void Register(IModuleComposition composition, ActivityOrders orders);
+> }
+>
+> internal abstract class Activity<TCommand> : IActivity where TCommand : Command
+> {
+>     public abstract (EntityRef Target, Length Depth) Aim(TCommand command);
+>     public abstract void Refuse(TCommand command, List<RejectionReason> reasons);
+>     public abstract void Complete(CompletedActivity done, Tick tick);
+> }
+> ```
+>
+> The generic parameter is the point: `Register` is the only place that knows
+> `TCommand`, so an activity wires its own `ICommandValidator<TCommand>` /
+> `ICommandApplier<TCommand>` pair and the module never switches on a concrete
+> command type to do it.
+>
+> **What is shared stays shared.** One `ActivityOrders` holds the refusals every
+> activity has (the cash, the target, the scheduler's own answer on contention)
+> and books the operation when there are none; `Refuse` adds only what is true of
+> *that* activity — a drilling envelope, a wellbore to test in. One generic
+> validator asks both, in that order, and reports every reason (R1 §2.5).
+>
+> **The register holds activities, not template ids.** `InFlight` carries the
+> `IActivity`, so completion calls `activity.Complete(…)` directly and §3's
+> capex/opex split reads `activity.LeavesAnAsset`. The parallel
+> `ContentId → effect` dictionary is gone, and with it the class of defect it
+> existed to detect: an activity with no effect is now unconstructable rather
+> than faulted at run time (law L3, structurally).
+>
+> *Open:* `Aim` returns a `Length Depth` because drilling is the only template so
+> far that is aimed at more than an entity. A survey is aimed at an area and a
+> workover at a wellbore; the per-template parameter block that generalises this
+> is R12b.16 and is **not** to be invented at a call site (F-4). Until it lands,
+> a template with no depth passes zero and says so.
+
 ## 5b. Operations that move mass
 
 A well test produces and flares real barrels outside the routed network. Any
