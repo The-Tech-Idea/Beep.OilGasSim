@@ -76,6 +76,11 @@ public sealed record Observation(
     BeliefSpace Space,
     Provenance Source);
 
+// What Get cannot answer: WHICH pairs are known. Ordered by first learning, so
+// two runs of one save project the same list in the same order (D-5).
+public readonly record struct HeldBelief(
+    EntityRef Subject, ContentId PropertyKind, Belief Belief);
+
 // Apply is the ONLY writer. There is deliberately no Set, no seed-from-truth
 // and no bulk import: world generation delivers initial beliefs through this
 // same door (R15-V10), so there is no belief-copy path for truth to leak down.
@@ -83,12 +88,32 @@ public interface IBeliefStore
 {
     void Apply(Observation observation);                        // §2.1's conjugate update
     Belief? Get(EntityRef subject, ContentId propertyKind);     // null: nothing known yet
+    IReadOnlyList<HeldBelief> Held { get; }                     // §8's projection walks this
 }
 ```
 
 `Get` returning null rather than a wide prior is deliberate: "we have never
 looked" and "we looked and learned little" are different states, and only the
 first should leave a map region unrendered.
+
+> **R20d.7 amendment.** §8 has always said beliefs project as
+> `(P10, P50, P90, BestSource, AsOf)` **per kind** — and this interface could not
+> produce that list. `Get` answers about a pair the caller already holds, so the
+> stage-13 projection had to be given the (subject, kind) pairs from somewhere
+> else, and the only place they exist is inside the store. The consumer was
+> specified and the door was not, which is finding 147's shape seen from the
+> store side: a host promised a belief panel that nothing could enumerate.
+>
+> **`Held` is not a widening of what a player may see.** A pair enters it only
+> through `Apply`, so it lists exactly what `Get` would already answer, one call
+> at a time — the door does not decide what is knowable, it decides whether the
+> known can be walked. A store that could be enumerated *before* anything was
+> observed would be the leak, and there is no such state: an unobserved subject
+> has no entry to find.
+>
+> It carries the whole `Belief` rather than the key alone because a caller handed
+> a key it must then re-`Get` can be answered `null` for a pair the store just
+> named — a state the type should not be able to express.
 
 ```text
 For each property kind a source can see (content: kinds + σ_obs per kind):
@@ -271,6 +296,15 @@ Beliefs project as `(P10, P50, P90, BestSource, AsOf)` per kind; POS as five
 factor means + product; "beyond current imaging" as a boolean per play-region
 with **no attached magnitude** (the finding-51 no-leak rule). Architecture
 test: the projection assembly references no truth type.
+
+The walk is `IBeliefStore.Held` (§3) and the shape is
+[SDD-017](SDD-017_HOST_SURFACE.md) §2's `BeliefEntryView`. Quantiles are §2's
+closed form, **P90 the low case and P10 the high** — the projection is where the
+petroleum convention faces a host, and reading them the statistical way round
+would render a possible case as a proved one. `Mu` and `Sigma` are deliberately
+NOT projected: a host given the parameters could quote any quantile it liked,
+including ones this document has not pinned, and the three that ship are the
+three the design asks a player to decide on.
 
 ## 9. Error surface
 
