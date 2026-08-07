@@ -20,7 +20,7 @@ next.** Updated at the close of every phase.
 | | |
 |---|---|
 | **Phase** | R0–R19, R23, R24 ✅ · **R20c (composition) ✅ but for content** · **R21a–d ✅ — the engine is played** · R20, R21e/f, R22, R25 ⬜ |
-| **Design docs** | 24 design + 1 research + 25 phase docs, 17 catalogue sheets + tech tree, 18 SDDs (000–017). Coherence log: **141 findings**, 61–141 from the code passes. |
+| **Design docs** | 24 design + 1 research + 25 phase docs, 17 catalogue sheets + tech tree, 18 SDDs (000–017). Coherence log: **143 findings**, 61–143 from the code passes. **49 open SDD items** now registered here rather than only in the documents that raised them. |
 | **Code status** | 15 engine assemblies, 0 warnings, 0 errors, **779 tests**. The kernel, the contract layer, eleven domain modules and Layer 4 composition are implemented. The composed engine **advances a tick and plays**: a player drills, waits, finds oil or doesn't, produces, declines, and wins or goes broke. Every implemented member traces to a pinned SDD section (F-1). |
 | **Repository** | `The-Tech-Idea/Beep.OilGasSim`, branch `master`. Work lands directly on `master`, one task per commit. |
 | **The playable loop** | **arrive → commit capital under uncertainty → wait four months → find oil or don't → produce → decline → reinvest → win or go broke.** Six of the fourteen tick stages are real (3, 5, 6, 8, 12, 13). One command, one product, one goal, one failure condition. |
@@ -1194,6 +1194,7 @@ hypothetical:
 | # | Finding |
 |---|---|
 | 125 | **A module declared its stages and had no way to supply them.** `ModuleManifest.Stages` names the `(StageId, Order)` slots a module claims and check 5 forbids two modules claiming one — and then `TickPipeline` took `IReadOnlyList<ITickStage>` from *nowhere*, with no member on `IModule` producing one. Composition validated a stage plan that nothing could fill: law L3 at the architecture level, a declaration with no behaviour behind it. `IModuleComposition` gains `Contribute(int order, ITickStage work)` and `Composed` carries the collected stages, so the pipeline is built from exactly what was validated. Two refusals fall out — a slot declared and never filled, and a contribution to a slot never declared. Letting the pipeline take an independently-assembled stage list instead would have made the manifest decorative: the composer would police an order the tick was free to ignore |
+| 143 | **The SDDs' open items were a register kept in eighteen places and nowhere.** Fifty-three decisions were deliberately deferred with named triggers — which is the right way to defer a decision — and this tracker, whose first line calls it "the single source of truth for what is designed, what is built, and what is next", carried two of them. So "what is still undecided?" had no answer short of reading all eighteen SDDs, and one item (S011-3, `ILicence` in the wrong file) had been **closed in code at R16 and left open in its SDD** for eight phases. Consolidated into a register above, grouped by what actually distinguishes them: four closed, four blocking a phase, six deciding whether the physics can be trusted, thirteen deferred with a start-here answer already chosen, and twenty-three waiting on profiling data. Three of the four blocking ones are the same defect as findings 129 and 141 — a type named in a signature and declared nowhere — which is what makes it a pattern rather than three accidents |
 | 142 | **Drilling was built as its own timer beside the one scheduled-activity engine.** R21b gave drilling a duration, a cost, a resource commitment and an outcome drawn once at the start — and did it with a bespoke `DrillingState` holding `WellUnderConstruction`, when `OGSim.Operations` had shipped exactly that engine at R12: `OperationSpec` with base duration, `CostProfile`, `ResourceNeeds`, `OutcomeTable`, and `OperationScheduler` with rig contention and worst-case reservation. R12.4 even says in as many words that "drilling **is** an operation template". The duplication is the shape glossary rule N1 forbids, and it is worse than a naming collision: the bespoke path has no rig contention, so two wells can be drilled at once with one rig; no cost accrual, so a six-month well is paid for on day one rather than over six months — which is precisely the "runs out of money mid-well" dynamic R12-V2 exists to assert; and no `DisasterDay`, so drilling cannot go wrong in any way except being dry. It happened because the loop was being built end to end at speed and `OperationScheduler` was one of the eight subsystems the loop did not yet call — the fastest way to a working tick was to write past it. That is exactly how a second engine gets built. R12b.15 collapses it |
 | 141 | **Scenarios and campaigns were described in prose and declared nowhere.** SDD-014 §5 specified them as a text block — "scenario content: world source, starting state, objectives[], failure conditions, scoring weights, modifiers, scripted entries" — so R24.7's `IScenario` / `ICampaign` had nothing to implement, and when the first playable goal was needed it went in as an ad-hoc `ScenarioGoal` record inside composition. A scenario that cannot be authored, loaded or varied without editing the engine is exactly what design 03 §3.3 forbids: a mode is content, never code. Declared in SDD-014 §5 and written as `Scenario`, `Campaign`, `WorldSource`, `ScriptedEntry`, `ScoreWeight`, `ObjectiveState`, `ScenarioProgress` and `IScenarioRunner`. Two shapes are load-bearing and were nearly got wrong: **failure conditions are their own list**, because a `Never` that ends the run and a goal the player works toward are different things and merging them makes every consumer test which it is holding; and **the deadline sits on the scenario**, because a run whose objectives were all open-ended would never resolve and "did they manage it in time" is the question a challenge asks. Proven by building all ten of design 18 §3.3's challenge patterns from the same nine members — a pattern needing a tenth would have meant the vocabulary was wrong rather than the pattern unusual |
 | 140 | **One rule was implemented four times, and one of the four was still half-done.** Findings 125, 127 and 139 each fixed a manifest list nobody checked — stages, state, commands — and each did it with its own near-identical pair of loops: a declared-it check inside the delivery method, and an assertion sweep afterwards. Writing the third made the shape obvious; checking the fourth made it worse. **`Provides` was still validated in one direction only** — every declared contract had to be delivered, but a module could deliver a contract it never declared, so a consumer's `Require` could be satisfied by something no manifest mentions and the dependency graph the composer orders modules by would have a missing edge. Four bespoke implementations of one rule is exactly how a fifth list goes unchecked. Replaced by `ManifestPromise<TKey>`, which states the rule once — **a module may deliver only what it declared, only once, and must deliver everything it declared** — with the first two throwing at the line that made the mistake and the third accumulating into the refusal. `Provide`, `Contribute`, `Own` and `HandleCommand` are now four calls to one method, the four assertion sweeps are one, and a sixth promise on the manifest joins the check by being added to a list rather than by someone remembering |
@@ -1210,6 +1211,84 @@ hypothetical:
 | 128 | **Diffusion granted nodes that have no diffusion route.** `ApplyDiffusion` granted everything whose era had started and whose lag had elapsed, but TECH_TREE lists **D** for only some nodes — Horizontal is `R L S`, hydraulic fracturing is `R L S`. Every such node was being handed over free on a timer, erasing the difference between "eventually standard practice" and "go and get this", which is the entire reason design 07 §3 has four routes. Invisible for as long as the graph was only ever built by test fixtures, because no fixture carried a route list to contradict — the defect arrived the moment real content did, which is the argument for shipping the registry as content rather than as a table |
 | 127 | **`OwnsState` was a claim nothing had to honour.** A module declared which facts it owned and the composer checked the claims were unique — and no member on `IModule` handed over an `IStateOwner`, so `StateRegistry` was populated by nobody and a save would have walked an empty owner list. The same gap as 125, on the state side, and it closes the same way: `Own(IStateOwner)`, a key outside the module's own `OwnsState` refused, a declared key with no owner refused, and `Composed` carrying the populated registry. An engine whose save is silently empty is worse than one that will not save, because the loss surfaces only on load |
 | 126 | **Resolution ran in caller-list order, not dependency order.** `Compose` validated the set and then called `module.Compose(c)` over the modules *as given*, so a module whose provider sat later in the list threw from `Require` — the composer proved the graph acyclic and then discarded the construction order that proof establishes. Found the moment `flow` was listed before `diagnostics`. Requires exists precisely so a module need not know who builds it first; making the answer depend on argument order put that knowledge back in every caller, where each scenario, test and host would have had to keep it consistent by hand. Now a DFS post-order over the same providers map, and a test composes the shipped set reversed and gets the identical engine |
+
+## Open items — the SDDs' own unresolved decisions
+
+**Fifty-three were raised across the eighteen SDDs and two of them were in this
+tracker.** Each is a decision its author deliberately deferred with a named
+trigger, which is the right way to defer a decision — and then the register
+lived in eighteen separate files, so "what is still undecided?" had no answer
+short of reading all of them. Four are now closed; the rest are listed here with
+the phase that closes them (finding 143).
+
+**Closed by work already done**
+
+| # | Was | Closed by |
+|---|---|---|
+| S000-2 | Analyzer: Roslyn vs reflection | R1.12 — **both**, chosen per rule: reflection where the rule is about shape, Roslyn where it is about what was written |
+| S001-3 | `EntityRef` shape | Decided — one struct with a kind tag; an interface would box in every event and audit entry |
+| S001-5 | Spatial primitives | Specified in SDD-001 §1.4 |
+| S011-3 | `ILicence` in the wrong file | R16 — moved to `CompanyContracts.cs`, where its tests are |
+
+**Blocking a phase that has not started**
+
+| # | Item | Blocks |
+|---|---|---|
+| S015-3 | **`DecisionDomain`'s membership is unstated** — §5 names two of "all eight" and never lists them | R25 |
+| S015-4 | **`CommandTemplate` and `ReasoningTemplate` have no declared shape** — signatures that cannot be implemented because a type they name does not exist | R25 |
+| S004-2 | Localisation file format for `$loc:` ids — **already being emitted**: every `RejectionReason` the engine produces carries one and nothing defines what resolves it | R21 |
+| S017-2 | Localisation of rejection/reasoning rendering at the host boundary | R21, after S004-2 |
+
+**Model honesty — the ones that decide whether numbers can be trusted**
+
+| # | Item | Trigger |
+|---|---|---|
+| S003-4 | §4.1's five correlations are pinned by invariants, continuity and round-trip — **not against published worked examples** | R20 calibration |
+| S003-5 | §6.2's friction term pins no viscosity, so the Reynolds number has **no declared source** | R6 review |
+| S014-2 | Whether the Recovery proxy (2P-at-sanction) needs a truth-side check to stay honest | R20 calibration |
+| S003-1 | Two-pass ρ_mix vs full pressure-traverse for deep gassy wells | R6 model tests |
+| S003-2 | Coning constants need calibration against CAL3's S-curve | R10 |
+| S003-3 | Drainage-area split when completions share a compartment | R6.10 — recommend kh-weighted |
+
+**Deferred with a named trigger — start-here answers already chosen**
+
+| # | Item | Start with |
+|---|---|---|
+| S001-4 | Stage read isolation: interface-per-stage vs runtime assert | runtime assert (I-V5) |
+| S002-1 | Player-policy throttling layered on pro-rata | pro-rata only |
+| S002-2 | λ adaptation on gas-lift-heavy networks | fixed λ = 0.5 |
+| S005-2 | `MaxDetectClass` per-basin vs global | global |
+| S006-2 | Tank storage-temperature model | fixed per climate |
+| S007-1 | Release rigs early on an on-time completion | worst-case reservation |
+| S008-2 | Whether staleness drift pauses while shut-in | drift only while producing |
+| S008-3 | Normal quantiles exceeding bounds on `[0,1]` kinds | clamped display |
+| S009-1 | Ring-fencing per licence vs consolidated | per licence — stricter and simpler |
+| S009-2 | Discount rate for reserves PV | fixed, SEC-style |
+| S010-1 | Heightfield grid resolution | 250 m cells |
+| S011-1 | Rival belief coarseness | play-level + per-bid sampling |
+| S017-1 | IPR/VLP curve sampling density | 32 points, content |
+
+**Profiling and tooling — answer with data, not opinion**
+
+S000-1 (`DetMath` function list and accuracy) · S000-3 (host TFM pin) ·
+S000-4 (automating F-1 as a member-diff) · S001-1 (`LogFields` shape) ·
+S001-2 (audit storage) · S002-3 (`Composition` pooling) · S004-1 (schema
+generation) · S004-3 (content hot-reload) · S005-1 (rival capability
+footprint) · S006-1 (slug catcher sizing) · S006-3 (LNG train ⚑) ·
+S007-2 (multi-resource operations) · S008-1 (Beta visualisation) ·
+S010-2 (settlement growth handoff) · S011-2 (rivals as partners) ·
+S012-1 (collateral damage on failure) · S012-2 (draw batching) ·
+S013-1 (audit sidecar rotation) · S013-2 (save-diff tool) ·
+S014-1 (event filter expressiveness) · S015-1 (selector vocabulary audit) ·
+S015-2 (explaining inaction) · S016-1 (spatial weather correlation).
+
+> **The pattern worth noticing.** Three of the four "blocking" items are the
+> same defect this project keeps finding: a type named in a signature and
+> declared nowhere (findings 129, 141, and S015-3/4). It is the failure mode of
+> writing specifications in prose, and the reason F-1 exists. R25 will hit it on
+> its first day unless SDD-015 is amended first.
+
+---
 
 ### Phase R20d — Integration: wiring what is built into the loop 🟨
 
