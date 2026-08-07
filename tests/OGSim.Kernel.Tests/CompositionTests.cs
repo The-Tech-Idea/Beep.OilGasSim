@@ -228,7 +228,7 @@ public class CompositionTests
 
         CompositionProblem problem = Assert.Single(refused.Problems);
         Assert.Equal(CompositionProblemKind.UnmetRequirement, problem.Kind);
-        Assert.Contains("no work was contributed", problem.Detail);
+        Assert.Contains("declared but never delivered", problem.Detail);
     }
 
     [Fact] // R1-V11: a composed set hands back a registry the save can walk
@@ -262,7 +262,7 @@ public class CompositionTests
 
         CompositionProblem problem = Assert.Single(refused.Problems);
         Assert.Equal(CompositionProblemKind.DuplicateStateKey, problem.Kind);
-        Assert.Contains("no owner was registered", problem.Detail);
+        Assert.Contains("declared but never delivered", problem.Detail);
     }
 
     [Fact] // Failure mode 9: owning a fact the manifest never declared
@@ -295,7 +295,7 @@ public class CompositionTests
         var refused = Assert.IsType<CompositionRefused>(new ModuleComposer().Compose([declared]));
 
         CompositionProblem problem = Assert.Single(refused.Problems);
-        Assert.Contains("no handler was registered", problem.Detail);
+        Assert.Contains("declared but never delivered", problem.Detail);
     }
 
     [Fact] // Failure mode 11: handling a command the manifest never declared
@@ -328,6 +328,28 @@ public class CompositionTests
 
         CommandRegistration registration = Assert.Single(composed.Commands);
         Assert.Equal(typeof(TestCommand), registration.CommandType);
+    }
+
+    [Fact] // Failure mode 12: providing a contract the manifest never declared
+    public void R1V12_providing_an_undeclared_contract_throws()
+    {
+        // The direction Provides was NEVER checked in (finding 140). A module
+        // could hand over a contract nothing declared, so a consumer's Require
+        // was satisfied by something no manifest mentions — and the dependency
+        // graph the composer orders modules by had a missing edge.
+        var sneak = new TestModule("sneak", [], [], [], [])
+        {
+            OnCompose = composition =>
+            {
+                composition.Provide<IPumpModel>(new PumpModel());
+                return true;
+            },
+        };
+
+        InvariantFault fault = Assert.Throws<InvariantFault>(
+            () => new ModuleComposer().Compose([sneak]));
+
+        Assert.Contains("never declared", fault.Message);
     }
 
     [Fact] // Failure mode 7: acting in a stage the manifest never declared
@@ -453,7 +475,7 @@ public class CompositionTests
         };
 
         var refused = Assert.IsType<CompositionRefused>(new ModuleComposer().Compose([liar]));
-        Assert.Contains(refused.Problems, p => p.Detail.Contains("never provided"));
+        Assert.Contains(refused.Problems, p => p.Detail.Contains("declared but never delivered"));
     }
 
     [Fact] // Resolution happens after validation, so Require only sees proven contracts

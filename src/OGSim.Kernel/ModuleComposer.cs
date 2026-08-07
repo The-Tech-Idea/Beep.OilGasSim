@@ -56,6 +56,67 @@ public interface IResolvedContracts
 public sealed record CommandRegistration(Type CommandType, Action<CommandBus> BindTo);
 
 /// <summary>
+/// One list on a manifest, and what modules actually delivered against it
+/// (finding 140).
+///
+/// <para>A manifest makes five promises — Provides, Requires, OwnsState, Stages,
+/// Commands — and for most of the project's life only Requires was checked
+/// against anything. Findings 125, 127 and 139 fixed three of the others, one at
+/// a time, each with its own near-identical pair of loops; the fourth, Provides,
+/// was still checked in one direction only, so a module could hand over a
+/// contract it never declared. Four bespoke implementations of one rule is how
+/// the fifth list would have gone unchecked too.</para>
+///
+/// <para>The rule, stated once: <b>a module may deliver only what it declared,
+/// may deliver it only once, and must deliver everything it declared.</b> The
+/// first two throw — they are the module's own mistake, visible at the line that
+/// made it — and the third accumulates into the refusal, because a whole set's
+/// missing pieces should be reported together.</para>
+/// </summary>
+internal sealed class ManifestPromise<TKey>(
+    string noun,
+    Func<ModuleManifest, IReadOnlyList<TKey>> declaredIn)
+    where TKey : notnull
+{
+    private readonly Dictionary<TKey, ModuleName> _delivered = [];
+
+    public void Deliver(ModuleManifest manifest, TKey key, string described)
+    {
+        if (!declaredIn(manifest).Contains(key))
+            throw new InvariantFault("SDD-001 §9", null,
+                $"{manifest.Name.Value} delivered {noun} {described}, " +
+                "which its manifest never declared.");
+
+        if (_delivered.TryGetValue(key, out ModuleName existing))
+            throw new InvariantFault("SDD-001 §9", null,
+                $"{noun} {described} was already delivered by {existing.Value}; " +
+                "two of one is one too many.");
+
+        _delivered.Add(key, manifest.Name);
+    }
+
+    public bool WasDelivered(TKey key) => _delivered.ContainsKey(key);
+
+    public void AssertComplete(
+        IReadOnlyList<IModule> modules,
+        List<CompositionProblem> problems,
+        CompositionProblemKind kind,
+        Func<TKey, string> describe)
+    {
+        foreach (IModule module in modules)
+        {
+            IReadOnlyList<TKey> declared = declaredIn(module.Manifest);
+
+            for (int i = 0; i < declared.Count; i++)
+                if (!_delivered.ContainsKey(declared[i]))
+                    problems.Add(new CompositionProblem(
+                        kind, module.Manifest.Name,
+                        $"{noun} {describe(declared[i])} was declared but never delivered."));
+        }
+    }
+}
+
+/// <summary>
 /// Modules in the order their stages run, every stage they contributed —
 /// ordered by (StageId, Order), so what composition validated IS what the tick
 /// runs (SDD-001 §9, finding 125) — and what they provided.
@@ -183,10 +244,7 @@ public sealed class ModuleComposer
         foreach (IModule module in ResolutionOrder(modules, providers))
             composition.Composing(module).Compose(composition);
 
-        composition.AssertEveryProviderDelivered(modules, problems);
-        composition.AssertEverySlotFilled(modules, problems);
-        composition.AssertEveryFactOwned(modules, problems);
-        composition.AssertEveryCommandHandled(modules, problems);
+        composition.AssertEveryPromiseKept(modules, problems);
 
         if (problems.Count > 0) return new CompositionRefused(problems);
 
@@ -338,10 +396,22 @@ public sealed class ModuleComposer
 
         private readonly Dictionary<Type, object> _implementations = [];
         private readonly List<(StageId Stage, int Order, ITickStage Work)> _stages = [];
-        private readonly Dictionary<(StageId, int), ModuleName> _contributors = [];
-        private readonly HashSet<StateKey> _owned = [];
-        private readonly HashSet<Type> _handled = [];
         private readonly List<CommandRegistration> _commands = [];
+
+        // One rule, four lists. Adding a sixth promise to the manifest means
+        // adding one of these, not another pair of loops (finding 140).
+        private readonly ManifestPromise<Type> _provides =
+            new("contract", manifest => manifest.Provides);
+
+        private readonly ManifestPromise<StateKey> _ownsState =
+            new("state key", manifest => manifest.OwnsState);
+
+        private readonly ManifestPromise<(StageId Stage, int Order)> _stageSlots =
+            new("stage slot",
+                manifest => [.. manifest.Stages.Select(s => (s.Stage, s.Order))]);
+
+        private readonly ManifestPromise<Type> _commandTypes =
+            new("command", manifest => manifest.Commands);
 
         /// <summary>The registry the save walks — populated here and nowhere
         /// else, so a fact reaches a save only by being declared and owned.</summary>
@@ -361,12 +431,26 @@ public sealed class ModuleComposer
             return module;
         }
 
+        /// <summary>
+        /// The module being composed. Every delivery goes through here, so
+        /// "outside any module's Compose" is one message rather than four.
+        /// </summary>
+        private IModule Current =>
+            _current ?? throw new InvariantFault("SDD-001 §9", null,
+                "A module delivered something outside any module's Compose.");
+
         public void Provide<T>(T implementation) where T : class
         {
             ArgumentNullException.ThrowIfNull(implementation);
-            if (!_implementations.TryAdd(typeof(T), implementation))
-                throw new InvariantFault("L5", null,
-                    $"{typeof(T).Name} was provided twice during composition.");
+
+            // Checked in BOTH directions now (finding 140). Providing a contract
+            // the manifest never declared used to be allowed, so a consumer's
+            // Require could be satisfied by something no manifest mentions — and
+            // the dependency graph the composer orders modules by would have a
+            // missing edge.
+            _provides.Deliver(Current.Manifest, typeof(T), typeof(T).Name);
+
+            _implementations.Add(typeof(T), implementation);
         }
 
         public T Require<T>() where T : class
@@ -386,35 +470,9 @@ public sealed class ModuleComposer
         {
             ArgumentNullException.ThrowIfNull(work);
 
-            if (_current is null)
-                throw new InvariantFault("SDD-001 §9", null,
-                    "A stage was contributed outside any module's Compose.");
+            _stageSlots.Deliver(
+                Current.Manifest, (work.Id, order), $"{work.Id} order {order}");
 
-            ModuleManifest manifest = _current.Manifest;
-            var slot = (work.Id, order);
-
-            // A module may only fill a slot it DECLARED. Without this the
-            // manifest's stage list would be decorative — check 5 would police
-            // an order the tick was free to ignore.
-            bool declared = false;
-            for (int i = 0; i < manifest.Stages.Count; i++)
-                if (manifest.Stages[i].Stage == work.Id && manifest.Stages[i].Order == order)
-                {
-                    declared = true;
-                    break;
-                }
-
-            if (!declared)
-                throw new InvariantFault("SDD-001 §9", null,
-                    $"{manifest.Name.Value} contributed to stage {work.Id} order {order}, " +
-                    "which its manifest never declared.");
-
-            if (_contributors.TryGetValue(slot, out ModuleName existing))
-                throw new InvariantFault("SDD-001 §9", null,
-                    $"Stage {work.Id} order {order} was already filled by {existing.Value}; " +
-                    "check 5 should have refused this set.");
-
-            _contributors.Add(slot, manifest.Name);
             _stages.Add((work.Id, order, work));
         }
 
@@ -426,24 +484,7 @@ public sealed class ModuleComposer
             ArgumentNullException.ThrowIfNull(validator);
             ArgumentNullException.ThrowIfNull(applier);
 
-            if (_current is null)
-                throw new InvariantFault("SDD-001 §9", null,
-                    "A command handler was registered outside any module's Compose.");
-
-            ModuleManifest manifest = _current.Manifest;
-
-            // A module may only handle a command it DECLARED — the same rule as
-            // stages and state. Without it the engine's input surface would sit
-            // outside the set the composer validates.
-            if (!manifest.Commands.Contains(typeof(TCommand)))
-                throw new InvariantFault("SDD-001 §9", null,
-                    $"{manifest.Name.Value} handles {typeof(TCommand).Name}, " +
-                    "which its manifest never declared.");
-
-            if (!_handled.Add(typeof(TCommand)))
-                throw new InvariantFault("SDD-001 §7", null,
-                    $"{typeof(TCommand).Name} already has a handler; a command with two " +
-                    "would be applied by whichever registered first.");
+            _commandTypes.Deliver(Current.Manifest, typeof(TCommand), typeof(TCommand).Name);
 
             _commands.Add(new CommandRegistration(
                 typeof(TCommand), bus => bus.Register(validator, applier)));
@@ -451,57 +492,41 @@ public sealed class ModuleComposer
 
         public IReadOnlyList<CommandRegistration> Registrations() => _commands;
 
-        /// <summary>
-        /// A command declared and left unhandled. It would reach the bus, find
-        /// nothing listening, and fail at the moment a player used it — which is
-        /// the latest possible moment to discover it.
-        /// </summary>
-        public void AssertEveryCommandHandled(
-            IReadOnlyList<IModule> modules, List<CompositionProblem> problems)
-        {
-            foreach (IModule module in modules)
-            {
-                IReadOnlyList<Type> commands = module.Manifest.Commands;
-                for (int i = 0; i < commands.Count; i++)
-                    if (!_handled.Contains(commands[i]))
-                        problems.Add(new CompositionProblem(
-                            CompositionProblemKind.UnmetRequirement, module.Manifest.Name,
-                            $"{commands[i].Name} was declared in Commands but no handler " +
-                            "was registered for it."));
-            }
-        }
-
         public void Own(IStateOwner state)
         {
             ArgumentNullException.ThrowIfNull(state);
 
-            if (_current is null)
-                throw new InvariantFault("SDD-001 §9", null,
-                    "A state owner was registered outside any module's Compose.");
-
-            ModuleManifest manifest = _current.Manifest;
-
-            // A module may only own a fact it DECLARED. Otherwise OwnsState
-            // would police uniqueness among claims while the actual owners went
-            // unchecked, and law L5 would hold on paper only.
-            bool declared = false;
-            for (int i = 0; i < manifest.OwnsState.Count; i++)
-                if (manifest.OwnsState[i] == state.Key)
-                {
-                    declared = true;
-                    break;
-                }
-
-            if (!declared)
-                throw new InvariantFault("L5", null,
-                    $"{manifest.Name.Value} owns state '{state.Key.Value}', " +
-                    "which its manifest never declared.");
-
-            _owned.Add(state.Key);
+            _ownsState.Deliver(Current.Manifest, state.Key, state.Key.Value);
 
             // StateRegistry enforces write-once per key itself; this adds the
             // manifest half, which it cannot see.
             State.Register(state);
+        }
+
+        /// <summary>
+        /// Every promise on every manifest, checked in one pass (finding 140).
+        /// A declared contract nobody provided, a stage slot nobody filled, a
+        /// fact nobody owns, a command nobody handles — one rule, one loop, and
+        /// a sixth list would join it by being added to this array.
+        /// </summary>
+        public void AssertEveryPromiseKept(
+            IReadOnlyList<IModule> modules, List<CompositionProblem> problems)
+        {
+            _provides.AssertComplete(
+                modules, problems, CompositionProblemKind.UnmetRequirement,
+                contract => contract.Name);
+
+            _stageSlots.AssertComplete(
+                modules, problems, CompositionProblemKind.UnmetRequirement,
+                slot => $"{slot.Stage} order {slot.Order}");
+
+            _ownsState.AssertComplete(
+                modules, problems, CompositionProblemKind.DuplicateStateKey,
+                key => key.Value);
+
+            _commandTypes.AssertComplete(
+                modules, problems, CompositionProblemKind.UnmetRequirement,
+                command => command.Name);
         }
 
         /// <summary>
@@ -521,66 +546,6 @@ public sealed class ModuleComposer
             var stages = new List<ITickStage>(sorted.Count);
             for (int i = 0; i < sorted.Count; i++) stages.Add(sorted[i].Work);
             return stages;
-        }
-
-        /// <summary>
-        /// A module may declare a contract in Provides and then fail to hand one
-        /// over. Validation cannot see that — only running Compose can — so it is
-        /// checked afterwards and reported the same way.
-        /// </summary>
-        public void AssertEveryProviderDelivered(
-            IReadOnlyList<IModule> modules, List<CompositionProblem> problems)
-        {
-            foreach (IModule module in modules)
-            {
-                IReadOnlyList<Type> provides = module.Manifest.Provides;
-                for (int i = 0; i < provides.Count; i++)
-                    if (!_implementations.ContainsKey(provides[i]))
-                        problems.Add(new CompositionProblem(
-                            CompositionProblemKind.UnmetRequirement, module.Manifest.Name,
-                            $"{provides[i].Name} was declared in Provides but never provided."));
-            }
-        }
-
-        /// <summary>
-        /// The same omission on the stage side: a slot claimed and left empty.
-        /// Law L3 — a declaration with no behaviour behind it — and the tick
-        /// would silently skip it, which is the failure this refuses to ship.
-        /// </summary>
-        public void AssertEverySlotFilled(
-            IReadOnlyList<IModule> modules, List<CompositionProblem> problems)
-        {
-            foreach (IModule module in modules)
-            {
-                IReadOnlyList<StageParticipation> stages = module.Manifest.Stages;
-                for (int i = 0; i < stages.Count; i++)
-                    if (!_contributors.ContainsKey((stages[i].Stage, stages[i].Order)))
-                        problems.Add(new CompositionProblem(
-                            CompositionProblemKind.UnmetRequirement, module.Manifest.Name,
-                            $"Stage {stages[i].Stage} order {stages[i].Order} was declared " +
-                            "in Stages but no work was contributed for it."));
-            }
-        }
-
-        /// <summary>
-        /// The same omission on the state side: a fact declared and left
-        /// unowned. It would be validated for uniqueness, never registered, and
-        /// silently absent from every save — which is worse than refusing to
-        /// save at all, because the loss surfaces only on load.
-        /// </summary>
-        public void AssertEveryFactOwned(
-            IReadOnlyList<IModule> modules, List<CompositionProblem> problems)
-        {
-            foreach (IModule module in modules)
-            {
-                IReadOnlyList<StateKey> keys = module.Manifest.OwnsState;
-                for (int i = 0; i < keys.Count; i++)
-                    if (!_owned.Contains(keys[i]))
-                        problems.Add(new CompositionProblem(
-                            CompositionProblemKind.DuplicateStateKey, module.Manifest.Name,
-                            $"State key '{keys[i].Value}' was declared in OwnsState but " +
-                            "no owner was registered for it."));
-            }
         }
     }
 }

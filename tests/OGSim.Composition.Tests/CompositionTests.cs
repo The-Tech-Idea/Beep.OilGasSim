@@ -311,7 +311,7 @@ public sealed class RefusalTests
 
         CompositionProblem problem = Assert.Single(problems);
         Assert.Equal(CompositionProblemKind.UnmetRequirement, problem.Kind);
-        Assert.Contains("never provided", problem.Detail, StringComparison.Ordinal);
+        Assert.Contains("declared but never delivered", problem.Detail, StringComparison.Ordinal);
     }
 }
 
@@ -398,7 +398,7 @@ public sealed class StageWiringTests
             Fixture.ProblemsFrom(EngineBuilder.Build(Fixture.Settings(), modules));
 
         CompositionProblem problem = Assert.Single(problems);
-        Assert.Contains("no work was contributed", problem.Detail, StringComparison.Ordinal);
+        Assert.Contains("declared but never delivered", problem.Detail, StringComparison.Ordinal);
     }
 
     /// <summary>
