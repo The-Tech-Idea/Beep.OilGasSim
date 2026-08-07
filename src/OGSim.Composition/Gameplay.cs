@@ -51,7 +51,8 @@ public sealed record FieldReadModel(
     int Wells,
     int WellsDrilling,
     SurfaceVolume ProducedThisTick,
-    bool Insolvent);
+    bool Insolvent,
+    Outcome Outcome);
 
 // -------------------------------------------------------------- losing
 
@@ -70,35 +71,18 @@ internal sealed class CloseStage(
     CompanyState company,
     FieldControl field,
     DrillingState drilling,
-    IAuditTrail audit) : ITickStage
+    ObjectiveStage objectives) : ITickStage
 {
     public StageId Id => StageId.Close;
 
     /// <summary>The tick just closed, as the host reads it.</summary>
     public FieldReadModel? Published { get; private set; }
 
-    /// <summary>Once true, always true: a company does not recover from having
-    /// been wound up, and a later month's revenue must not quietly un-fail
-    /// it.</summary>
-    public bool Insolvent { get; private set; }
+    public bool Insolvent => objectives.Insolvent;
 
     public void Execute(TickContext context)
     {
         ArgumentNullException.ThrowIfNull(context);
-
-        if (!Insolvent && company.Ledger.Cash.Cents < 0)
-        {
-            Insolvent = true;
-
-            audit.Record(
-                AuditCategory.StateTransition, subject: null, cause: null,
-                new Dictionary<string, AuditValue>(StringComparer.Ordinal)
-                {
-                    ["outcome"] = new("insolvent"),
-                    ["cash-cents"] = new(company.Ledger.Cash.Cents.ToString(
-                        System.Globalization.CultureInfo.InvariantCulture)),
-                });
-        }
 
         Published = new FieldReadModel(
             context.Tick,
@@ -107,6 +91,7 @@ internal sealed class CloseStage(
             field.WellCount,
             drilling.InProgress,
             loop.ProducedThisTick,
-            Insolvent);
+            objectives.Insolvent,
+            objectives.Outcome);
     }
 }

@@ -126,6 +126,13 @@ internal static class Defaults
             lift: null);
     }
 
+    /// <summary>
+    /// What this scenario asks for: double the opening cash inside ten years.
+    /// Reachable with a few good wells and out of reach if the early holes are
+    /// dry — which is what makes the first drilling decision matter.
+    /// </summary>
+    public static ScenarioGoal Goal { get; } = new(Money.FromMillions(100.0), new Tick(120));
+
     public static Temperature ReservoirTemperature { get; } = Temperature.FromCelsius(93.3);
 
     /// <summary>Separator inlet pressure the wells flow against.</summary>

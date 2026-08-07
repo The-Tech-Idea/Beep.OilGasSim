@@ -310,6 +310,7 @@ internal sealed class FieldModule() : EngineModule(Declare(
         new StageParticipation(StageId.Operations, Order: 0),
         new StageParticipation(StageId.SolveFlow, Order: 0),
         new StageParticipation(StageId.Economics, Order: 0),
+        new StageParticipation(StageId.Objectives, Order: 0),
         new StageParticipation(StageId.Close, Order: 0),
     ],
 
@@ -352,8 +353,10 @@ internal sealed class FieldModule() : EngineModule(Declare(
         var drilling = new DrillingState(Defaults.Drilling);
         composition.Own(drilling);
 
-        var close = new CloseStage(loop, company, field, drilling, audit);
+        var objectives = new ObjectiveStage(company, Defaults.Goal, audit);
+        composition.Contribute(order: 0, objectives);
 
+        var close = new CloseStage(loop, company, field, drilling, objectives);
         composition.Contribute(order: 0, close);
         composition.Provide(close);
 

@@ -287,6 +287,82 @@ public sealed class GameplayTests
         Assert.True(engine.ReadModel!.Insolvent);
     }
 
+    // ------------------------------------------------------------- winning
+
+    /// <summary>
+    /// The game can be WON. Until this existed the arc had one end — keep going
+    /// until the money runs out — and a game that can only be lost is not one.
+    /// </summary>
+    [Fact]
+    public void A_player_who_drills_enough_wells_wins()
+    {
+        (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled();
+
+        // Five wells: enough of them land to double the opening cash inside the
+        // decade the goal allows.
+        for (var attempt = 0; attempt < 5; attempt++) engine.Commands.Submit(Drill(target));
+
+        for (var month = 0; month < 120; month++)
+        {
+            engine.Pipeline.AdvanceTick();
+            if (engine.ReadModel!.Outcome != Outcome.Playing) break;
+        }
+
+        Assert.Equal(Outcome.Won, engine.ReadModel!.Outcome);
+    }
+
+    /// <summary>A player who does nothing runs out of money and loses.</summary>
+    [Fact]
+    public void A_player_who_does_nothing_loses()
+    {
+        Built built = Assert.IsType<Built>(EngineBuilder.Build(Fixture.Settings()));
+        Engine engine = built.Engine;
+
+        for (var month = 0; month < 200; month++)
+        {
+            engine.Pipeline.AdvanceTick();
+            if (engine.ReadModel!.Outcome != Outcome.Playing) break;
+        }
+
+        Assert.Equal(Outcome.Lost, engine.ReadModel!.Outcome);
+    }
+
+    /// <summary>
+    /// A verdict, once reached, stands. A player who hit the target in month 90
+    /// has won, and a bad month 91 does not take it back — the verdict is about
+    /// what they achieved, not where they happened to stop.
+    /// </summary>
+    [Fact]
+    public void A_verdict_once_reached_does_not_change()
+    {
+        (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled();
+
+        for (var attempt = 0; attempt < 5; attempt++) engine.Commands.Submit(Drill(target));
+
+        while (engine.ReadModel?.Outcome is null or Outcome.Playing)
+            engine.Pipeline.AdvanceTick();
+
+        Outcome verdict = engine.ReadModel!.Outcome;
+
+        for (var month = 0; month < 240; month++) engine.Pipeline.AdvanceTick();
+
+        Assert.Equal(verdict, engine.ReadModel!.Outcome);
+    }
+
+    /// <summary>
+    /// The game is still being played until it is not. A verdict on month one
+    /// would mean the goal was never a goal.
+    /// </summary>
+    [Fact]
+    public void The_game_starts_undecided()
+    {
+        (Engine engine, _) = Undrilled();
+
+        engine.Pipeline.AdvanceTick();
+
+        Assert.Equal(Outcome.Playing, engine.ReadModel!.Outcome);
+    }
+
     /// <summary>
     /// The whole arc, as a player would live it: arrive, drill, produce, and be
     /// better off for having done it than for having done nothing.
