@@ -185,7 +185,14 @@ Datasheet: {capacity, combustionEfficiency}.
 inlet back to the gas system; remainder follows the flare/fugitive path.
 Datasheet: {capacity, recoveryFraction}.
 
-## 3b. Compression
+## 3c. Compression — the pinned model
+
+> **Numbered 3c, not 3b (finding 144).** This section and §3b above were both
+> labelled `3b`, and both are cited from code: `IPowerSource` cites §3b for
+> merit-ordered supply, and five comments in `GasProcessing.cs` cited §3b for
+> polytropic compression. A citation that resolves to two different sections
+> fails F-3 — "every formula cites the SDD section stating its form" — for
+> whichever half of the callers lands on the wrong one.
 
 > **R9.0 amendment (finding 115): compression was specified in no SDD at all.**
 > R9.1 names `ICompressionModel`, R9-V1 pins it against "the polytropic formula"

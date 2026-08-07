@@ -1,4 +1,4 @@
-// R9 — gas processing (SDD-006 §3b, §4, design 04, R9).
+// R9 — gas processing (SDD-006 §3c, §4, design 04, R9).
 //
 // EACH TREATING STEP IS AN INDEPENDENT UNIT. There is no "gas plant": sweet dry
 // gas needs compression only, sour wet gas needs everything, and the player pays
@@ -17,7 +17,7 @@ using OGSim.Kernel;
 
 namespace OGSim.Facilities;
 
-/// <summary>SDD-006 §3b's datasheet.</summary>
+/// <summary>SDD-006 §3c's datasheet.</summary>
 public sealed record CompressorTier(
     ContentId Id,
     MassRate RatedCapacity,
@@ -29,7 +29,7 @@ public sealed record CompressorTier(
     Temperature DerateReference);   // T_ref
 
 /// <summary>
-/// SDD-006 §3b. Staged polytropic compression with interstage cooling.
+/// SDD-006 §3c. Staged polytropic compression with interstage cooling.
 ///
 /// <para>Stages take the EQUAL ratio, which minimises total power for a fixed
 /// overall ratio — the reason real trains are balanced rather than front-loaded.
@@ -97,7 +97,7 @@ public sealed class Compressor : IFlowElement
     public Temperature StageDischargeTemperature(Temperature suctionTemperature) =>
         new(suctionTemperature.Kelvin * DetMath.Pow(StageRatio, Exponent));
 
-    /// <summary>Specific work of one stage, J/kg (SDD-006 §3b).</summary>
+    /// <summary>Specific work of one stage, J/kg (SDD-006 §3c).</summary>
     public double StageWorkJoulesPerKg(Temperature suctionTemperature)
     {
         double n = _tier.PolytropicExponent;
@@ -115,7 +115,7 @@ public sealed class Compressor : IFlowElement
             / _tier.PolytropicEfficiency);
 
     /// <summary>
-    /// SDD-006 §3b / R9 §2.6. Capacity falls with ambient temperature.
+    /// SDD-006 §3c / R9 §2.6. Capacity falls with ambient temperature.
     ///
     /// <para>Seasonal and non-obvious: a desert field loses gas-handling capacity
     /// in exactly the hottest months, and because the flaring cap makes gas
@@ -183,31 +183,31 @@ public sealed class Compressor : IFlowElement
         CompressorTier tier, Pressure suction, Pressure discharge, double z)
     {
         if (suction.Pascals <= 0.0)
-            throw new ModelFault("SDD-006 §3b", null, "suction pressure must be positive");
+            throw new ModelFault("SDD-006 §3c", null, "suction pressure must be positive");
 
         if (discharge.Pascals < suction.Pascals)
-            throw new ModelFault("SDD-006 §3b", null,
+            throw new ModelFault("SDD-006 §3c", null,
                 $"discharge {Format(discharge.Pascals)} Pa is below suction " +
                 $"{Format(suction.Pascals)} Pa; a compressor raises pressure");
 
         if (tier.MaxStageRatio <= 1.0)
-            throw new ModelFault("SDD-006 §3b", null,
+            throw new ModelFault("SDD-006 §3c", null,
                 $"max stage ratio {Format(tier.MaxStageRatio)} must exceed 1; " +
                 "the stage count divides by its logarithm");
 
         if (tier.PolytropicExponent <= 1.0)
-            throw new ModelFault("SDD-006 §3b", null,
+            throw new ModelFault("SDD-006 §3c", null,
                 $"polytropic exponent {Format(tier.PolytropicExponent)} must exceed 1");
 
         if (tier.PolytropicEfficiency is <= 0.0 or > 1.0)
-            throw new ModelFault("SDD-006 §3b", null,
+            throw new ModelFault("SDD-006 §3c", null,
                 $"polytropic efficiency {Format(tier.PolytropicEfficiency)} is not in (0, 1]");
 
         if (tier.MolarMassKgPerMol <= 0.0)
-            throw new ModelFault("SDD-006 §3b", null, "molar mass must be positive");
+            throw new ModelFault("SDD-006 §3c", null, "molar mass must be positive");
 
         if (z <= 0.0)
-            throw new ModelFault("SDD-006 §3b", null, "compressibility must be positive");
+            throw new ModelFault("SDD-006 §3c", null, "compressibility must be positive");
     }
 
     internal static DisposedMass NoDisposal(int materialCount) => new(
