@@ -30,6 +30,8 @@ public readonly record struct SeparationEfficiency(
 
 public interface ISeparationModel
 {
+    ContentId Id { get; }        // finding 132: every 03 §3.2 slot names itself
+
     /// The ACHIEVED split at the operating point. Note this is NOT
     /// IFluidPropertyModel.SplitAt: the fluid model answers "what phases exist
     /// at this (P,T)" — thermodynamics — and this answers "what did this vessel
@@ -47,6 +49,8 @@ public readonly record struct PipeGeometry(
 
 public interface IHydraulicModel
 {
+    ContentId Id { get; }        // finding 132
+
     /// Pressure drop along one segment for the fluid ACTUALLY flowing (§6).
     /// Capacity is never configured — it emerges from geometry and the stream,
     /// which is why the geometry is an argument and not a rating.

@@ -27,6 +27,8 @@ namespace OGSim.Facilities;
 /// </summary>
 public sealed class FixedEfficiencySeparationModel : ISeparationModel
 {
+    public ContentId Id { get; } = new("fixed-efficiency-separation");
+
     public PhaseSplit SeparateAt(
         MaterialStream inlet, SeparationEfficiency efficiency, IFluidPropertyModel fluid)
     {

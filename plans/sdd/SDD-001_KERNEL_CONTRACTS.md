@@ -852,6 +852,39 @@ cheap, and wrong only when it does not matter (a boundary on an idle element).
 >   validated uniqueness among claims that could never be redeemed — an engine
 >   whose save is silently empty is worse than one that will not save.
 
+> **Contract revision (finding 131) — records that carry collections.** A
+> record's generated equality compares an `ImmutableArray<T>` member by
+> reference of the underlying array, and an `IReadOnlyList<T>` member by
+> reference of the list. Two records built from identical values therefore
+> compare **unequal**, and two built from different values compare **equal** if
+> they happen to share an array. Both directions are wrong, neither is visible
+> at the call site, and every save round-trip check, dedup and read-model diff
+> in the engine sits downstream of it.
+>
+> Finding 123 caught this on `Polygon` — PV7 reported two regenerations of one
+> seed as different worlds — and recorded that "the same trap sits on any
+> contract record holding a collection". It did. The kernel now ships the one
+> implementation those records share:
+>
+> ```csharp
+> public static class Structural
+> {
+>     public static bool Equal<T>(ImmutableArray<T> left, ImmutableArray<T> right);
+>     public static bool Equal<T>(IReadOnlyList<T>? left, IReadOnlyList<T>? right);
+>     public static int HashOf<T>(ImmutableArray<T> items);
+>     public static int HashOf<T>(IReadOnlyList<T>? items);
+> }
+> ```
+>
+> **A default `ImmutableArray` is not an empty one** and the two never compare
+> equal: it has no array at all, and conflating them would make an
+> uninitialised record equal to a deliberately empty one.
+>
+> The rule for the contract layer: **a record that carries a collection
+> overrides `Equals` and `GetHashCode` through `Structural`.** C# gives every
+> record `==` whether or not it is meaningful, so there is no option to leave
+> equality undefined — only the option to leave it wrong.
+
 ## 10. State — R1.11
 
 ```csharp

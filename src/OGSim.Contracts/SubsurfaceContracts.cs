@@ -31,7 +31,17 @@ public enum FluidForm { BlackOil, ModifiedBlackOil }
 
 /// <summary>Per-material phase fractions at a given (P, T).</summary>
 public sealed record PhaseSplit(
-    IReadOnlyList<(MaterialId Material, double GasFraction, double LiquidFraction, double AqueousFraction)> Fractions);
+    IReadOnlyList<(MaterialId Material, double GasFraction, double LiquidFraction, double AqueousFraction)> Fractions)
+{
+    // Finding 131: a fixed-efficiency separator compares the split it achieved
+    // against the fluid's ideal one. By reference that comparison is always
+    // "different", which is exactly the wrong answer for a vessel at 100 %
+    // efficiency.
+    public bool Equals(PhaseSplit? other) =>
+        other is not null && Structural.Equal(Fractions, other.Fractions);
+
+    public override int GetHashCode() => Structural.HashOf(Fractions);
+}
 
 public sealed record ValidityRange(Pressure MinP, Pressure MaxP, Temperature MinT, Temperature MaxT);
 
@@ -42,6 +52,15 @@ public sealed record ValidityRange(Pressure MinP, Pressure MaxP, Temperature Min
 /// </summary>
 public interface IFluidPropertyModel
 {
+    /// <summary>
+    /// Which model this is. Every design 03 §3.2 plugin slot names itself
+    /// (finding 132): a fault or an audit entry has to be able to say WHICH
+    /// implementation produced a number, and a technology that swaps a slot
+    /// through <c>SetModelSelection</c> can only be shown to have taken effect
+    /// by asking the implementation its id.
+    /// </summary>
+    ContentId Id { get; }
+
     FluidForm Form { get; }
     Pressure Pb { get; }
     double Rs(Pressure p);
@@ -117,5 +136,7 @@ public interface IDriveMechanism
 /// <summary>Fetkovich-form aquifer (SDD-003 §3.3): an aquifer is a water compartment.</summary>
 public interface IAquiferModel
 {
+    ContentId Id { get; }
+
     ReservoirVolume InfluxDuring(Pressure reservoirPressure, Duration duration);
 }

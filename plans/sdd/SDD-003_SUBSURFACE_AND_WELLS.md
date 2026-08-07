@@ -346,6 +346,7 @@ public sealed record ValidityRange(
 
 public interface IFluidPropertyModel
 {
+    ContentId Id { get; }                            // finding 132: every 03 §3.2 slot names itself
     FluidForm Form { get; }                          // BlackOil | ModifiedBlackOil (condensate, 05 §2)
     Pressure Pb { get; }                             // bubble point (dew point for MBO)
     double Rs(Pressure p);                           // sm³ gas / sm³ oil  (dimensionless ratio of standard volumes)
@@ -524,6 +525,7 @@ public interface IDriveMechanism
 // reports is a reservoir volume like any other withdrawal or injection.
 public interface IAquiferModel
 {
+    ContentId Id { get; }                            // finding 132
     ReservoirVolume InfluxDuring(Pressure reservoirPressure, Duration duration);
 }
 ```

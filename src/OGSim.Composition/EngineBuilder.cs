@@ -60,6 +60,8 @@ internal static class Defaults
 /// </summary>
 internal sealed class RegionalObservationModel : IObservationModel
 {
+    public ContentId Id { get; } = new("regional-observation");
+
     public double? SigmaFor(ContentId source, ContentId propertyKind, EntityRef subject) =>
         source.Value switch
         {

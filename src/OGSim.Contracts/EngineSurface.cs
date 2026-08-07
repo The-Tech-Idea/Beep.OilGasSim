@@ -58,10 +58,27 @@ public sealed record EngineSetup(
     ContentId GameMode,
     WorldParameters World);
 
-/// <summary>Composition, content and save refusals share one shape: ALL reasons, engine does not start.</summary>
+/// <summary>Content, composition and save refusals all mean the same thing: ALL
+/// reasons reported, engine does not start. They do not share one PAYLOAD —
+/// see below.</summary>
 public abstract record EngineStartResult;
 public sealed record EngineStarted(IEngine Engine) : EngineStartResult;
+
+/// <summary>Content and save refusals — a file, a JSON path and a load stage.</summary>
 public sealed record EngineRefused(IReadOnlyList<LoadFailure> Reasons) : EngineStartResult;
+
+/// <summary>
+/// Composition refusals (finding 133). This section claimed all three refusals
+/// "share one shape" and only <see cref="LoadFailure"/> existed, so a factory
+/// whose module set failed to compose had nothing to report it with: a
+/// <see cref="CompositionProblem"/> names a module and a kind, and has no file,
+/// no JSON path and no load stage to invent. Squeezing one into a
+/// <c>LoadFailure</c> would have meant fabricating a filename for a defect that
+/// is not in a file — and the whole value of an all-or-nothing refusal is that
+/// it names precisely what is wrong.
+/// </summary>
+public sealed record EngineCompositionRefused(
+    IReadOnlyList<CompositionProblem> Problems) : EngineStartResult;
 
 /// <summary>
 /// The host’s two doors in (SDD-017 §1b): a new world from a seed, or a saved

@@ -46,6 +46,10 @@ public sealed record EngineSetup(
 public abstract record EngineStartResult;
 public sealed record EngineStarted(IEngine Engine) : EngineStartResult;
 public sealed record EngineRefused(IReadOnlyList<LoadFailure> Reasons) : EngineStartResult;
+// Composition refusals carry CompositionProblem, which has no file, no JSON path
+// and no load stage to invent (R20c revision, finding 133).
+public sealed record EngineCompositionRefused(
+    IReadOnlyList<CompositionProblem> Problems) : EngineStartResult;
 
 public interface IEngineFactory
 {

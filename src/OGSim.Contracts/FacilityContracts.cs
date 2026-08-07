@@ -25,7 +25,17 @@ public enum SpecProperty
 public sealed record SpecLimit(SpecProperty Property, double Limit);
 
 /// <summary>A stream that fails a spec DOES NOT PASS — it routes to the Reject port (design 02 §4.3).</summary>
-public sealed record Specification(IReadOnlyList<SpecLimit> Limits);
+public sealed record Specification(IReadOnlyList<SpecLimit> Limits)
+{
+    // Finding 131: two specifications with identical limits must BE the same
+    // specification. Content override replaces an entry whole (SDD-004 §7), and
+    // "did this mod actually change the sales-gas spec?" is answered by
+    // comparing them.
+    public bool Equals(Specification? other) =>
+        other is not null && Structural.Equal(Limits, other.Limits);
+
+    public override int GetHashCode() => Structural.HashOf(Limits);
+}
 
 /// <summary>
 /// The metered, contractual revenue event — the ONLY place revenue originates
@@ -75,6 +85,8 @@ public readonly record struct SeparationEfficiency(
 /// </summary>
 public interface ISeparationModel
 {
+    ContentId Id { get; }
+
     PhaseSplit SeparateAt(MaterialStream inlet, SeparationEfficiency efficiency,
                           IFluidPropertyModel fluid);
 }
@@ -93,6 +105,8 @@ public readonly record struct PipeGeometry(
 /// </summary>
 public interface IHydraulicModel
 {
+    ContentId Id { get; }
+
     Pressure DropAlong(MaterialStream stream, PipeGeometry geometry, IFluidPropertyModel fluid);
 }
 
@@ -150,6 +164,16 @@ public sealed record ComponentSplit(ImmutableArray<double> MassFractionByCompone
     }
 
     public double this[GasComponent component] => MassFractionByComponent[(int)component];
+
+    // Finding 131. A component split is a VALUE — five fractions — and two
+    // streams with the same composition must compare equal, or the NGL plant's
+    // "did the split change across this element?" check compares array
+    // identities and always answers yes.
+    public bool Equals(ComponentSplit? other) =>
+        other is not null
+        && Structural.Equal(MassFractionByComponent, other.MassFractionByComponent);
+
+    public override int GetHashCode() => Structural.HashOf(MassFractionByComponent);
 }
 
 /// <summary>Per-component recovery, from the NGL plant's tier (SDD-006 §4).</summary>
@@ -174,4 +198,11 @@ public sealed record NglRecovery(ImmutableArray<double> FractionByComponent)
     }
 
     public double this[GasComponent component] => FractionByComponent[(int)component];
+
+    // Finding 131 — same reason as ComponentSplit: a recovery set is a value,
+    // and two tiers with identical recoveries are the same recovery.
+    public bool Equals(NglRecovery? other) =>
+        other is not null && Structural.Equal(FractionByComponent, other.FractionByComponent);
+
+    public override int GetHashCode() => Structural.HashOf(FractionByComponent);
 }

@@ -60,6 +60,11 @@ public sealed class BlackOilModel : IFluidPropertyModel
     private readonly double _plateauRs;        // sm³/sm³ — Rs at Pb by the forward form
     private readonly double _bobAtBubblePoint;
 
+    /// <summary>The correlation set named in design 03 §3.2's fidelity dial —
+    /// the table-lookup and constant-properties models ship under their own
+    /// ids (finding 132).</summary>
+    public ContentId Id { get; } = new("black-oil-correlations");
+
     public BlackOilModel(BlackOilInputs inputs, ValidityRange validity)
     {
         ArgumentNullException.ThrowIfNull(inputs);

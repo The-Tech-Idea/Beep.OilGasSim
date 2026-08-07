@@ -24,6 +24,8 @@ namespace OGSim.Subsurface;
 /// </summary>
 internal sealed class FetkovichAquifer : IAquiferModel
 {
+    public ContentId Id { get; } = new("fetkovich-aquifer");
+
     private readonly double _productivityIndex;    // J_aq, m³/s/Pa
     private readonly double _initialPressurePa;
     private readonly double _maximumInfluxM3;      // W_ei: total expansion available

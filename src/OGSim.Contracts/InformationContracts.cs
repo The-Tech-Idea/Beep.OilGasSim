@@ -50,6 +50,8 @@ public sealed record Observation(
 /// </summary>
 public interface IObservationModel
 {
+    ContentId Id { get; }
+
     /// <summary>
     /// The honest sigma for this source reading this kind of this subject.
     /// Null means the source cannot see the kind at all — absence is a

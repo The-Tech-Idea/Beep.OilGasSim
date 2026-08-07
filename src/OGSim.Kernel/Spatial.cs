@@ -75,27 +75,13 @@ public readonly record struct Polygon
     /// <para><see cref="Allocation"/> already carried this override for the same
     /// reason; the geometry types did not.</para>
     /// </summary>
-    public bool Equals(Polygon other)
-    {
-        if (Vertices.IsDefault || other.Vertices.IsDefault)
-            return Vertices.IsDefault && other.Vertices.IsDefault;
+    /// <para>Written out by hand when finding 123 caught it here first; it now
+    /// shares <see cref="Structural"/> with every other record that carries a
+    /// collection, so the rule cannot be applied one way here and another way
+    /// there (finding 131).</para>
+    public bool Equals(Polygon other) => Structural.Equal(Vertices, other.Vertices);
 
-        if (Vertices.Length != other.Vertices.Length) return false;
-
-        for (int i = 0; i < Vertices.Length; i++)
-            if (Vertices[i] != other.Vertices[i]) return false;
-
-        return true;
-    }
-
-    public override int GetHashCode()
-    {
-        if (Vertices.IsDefault) return 0;
-
-        var hash = new HashCode();
-        for (int i = 0; i < Vertices.Length; i++) hash.Add(Vertices[i]);
-        return hash.ToHashCode();
-    }
+    public override int GetHashCode() => Structural.HashOf(Vertices);
 
     /// <summary>Shoelace, summed in vertex order so the result is reproducible.</summary>
     public Area Area => new(TwiceSignedArea(Guarded()) * 0.5);

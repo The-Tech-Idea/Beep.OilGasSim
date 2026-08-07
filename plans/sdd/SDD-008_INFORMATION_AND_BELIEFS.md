@@ -114,6 +114,8 @@ distinguishes a core from a log is *which kinds* and *how small the σ*.
 /// makes seismic sharper or logs noisier without touching truth or the update.
 public interface IObservationModel
 {
+    ContentId Id { get; }        // finding 132
+
     /// The honest sigma for this source reading this kind, before the draw.
     /// Returns null when the source cannot see the kind at all — absence is a
     /// legitimate answer here, and NOT the same as a wide sigma.

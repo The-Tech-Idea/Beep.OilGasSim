@@ -28,6 +28,8 @@ namespace OGSim.Facilities;
 /// <summary>SDD-006 §6's liquid form: Darcy-Weisbach plus static head.</summary>
 public sealed class LiquidHydraulicModel : IHydraulicModel
 {
+    public ContentId Id { get; } = new("liquid-darcy-weisbach");
+
     private readonly Density _density;
     private readonly Viscosity _viscosity;
     private readonly Length _elevationRise;

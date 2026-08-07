@@ -30,6 +30,7 @@ internal static class Fx
     /// what the VESSEL achieved, and a real flash would obscure it.</summary>
     public sealed class IdealSplitFluid : IFluidPropertyModel
     {
+        public ContentId Id { get; } = new("ideal-split-test-fluid");
         public FluidForm Form => FluidForm.BlackOil;
         public Pressure Pb => Pressure.FromBar(50.0);
         public double Rs(Pressure p) => 100.0;

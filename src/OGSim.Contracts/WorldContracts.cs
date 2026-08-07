@@ -35,7 +35,23 @@ public sealed record GeneratedAccumulation(
     DetectClass Subtlety,
     AccessRequirements Access,
     FluidForm Fluid,
-    IReadOnlyList<GeneratedCompartment> Compartments);
+    IReadOnlyList<GeneratedCompartment> Compartments)
+{
+    // Finding 131 — the reason PV7 had to compare compartments element by
+    // element rather than simply comparing two accumulations.
+    public bool Equals(GeneratedAccumulation? other) =>
+        other is not null
+        && Play == other.Play
+        && Closure == other.Closure
+        && Subtlety == other.Subtlety
+        && Access == other.Access
+        && Fluid == other.Fluid
+        && Structural.Equal(Compartments, other.Compartments);
+
+    public override int GetHashCode() =>
+        HashCode.Combine(Play, Closure, Subtlety, Access, Fluid,
+                         Structural.HashOf(Compartments));
+}
 
 // ------------------------------------------------------------ surface handoff
 
@@ -45,9 +61,29 @@ public sealed record Heightfield(
     Length CellSize,
     int Width,
     int Height,
-    ImmutableArray<double> ElevationMetres);
+    ImmutableArray<double> ElevationMetres)
+{
+    // Finding 131. Without these the generated-equality on this record compares
+    // the elevation array by REFERENCE, so two regenerations of one seed are
+    // unequal and PV2's "a reloaded world is the world that was saved" cannot
+    // be asked as a question.
+    public bool Equals(Heightfield? other) =>
+        other is not null
+        && CellSize == other.CellSize
+        && Width == other.Width
+        && Height == other.Height
+        && Structural.Equal(ElevationMetres, other.ElevationMetres);
 
-public sealed record River(ImmutableArray<Coordinate> Path);
+    public override int GetHashCode() =>
+        HashCode.Combine(CellSize, Width, Height, Structural.HashOf(ElevationMetres));
+}
+
+public sealed record River(ImmutableArray<Coordinate> Path)
+{
+    public bool Equals(River? other) => other is not null && Structural.Equal(Path, other.Path);
+
+    public override int GetHashCode() => Structural.HashOf(Path);
+}
 
 /// <summary>Cell class indexes the Classes list — class ids are content (SDD-010 §3 terrain).</summary>
 public sealed record GeneratedTerrain(
@@ -55,7 +91,24 @@ public sealed record GeneratedTerrain(
     ImmutableArray<int> ClassByCell,
     IReadOnlyList<ContentId> Classes,
     IReadOnlyList<River> Rivers,
-    IReadOnlyList<Polygon> Lakes);
+    IReadOnlyList<Polygon> Lakes)
+{
+    public bool Equals(GeneratedTerrain? other) =>
+        other is not null
+        && Elevation == other.Elevation
+        && Structural.Equal(ClassByCell, other.ClassByCell)
+        && Structural.Equal(Classes, other.Classes)
+        && Structural.Equal(Rivers, other.Rivers)
+        && Structural.Equal(Lakes, other.Lakes);
+
+    public override int GetHashCode() =>
+        HashCode.Combine(
+            Elevation,
+            Structural.HashOf(ClassByCell),
+            Structural.HashOf(Classes),
+            Structural.HashOf(Rivers),
+            Structural.HashOf(Lakes));
+}
 
 public sealed record Settlement(Coordinate Site, long Population);
 

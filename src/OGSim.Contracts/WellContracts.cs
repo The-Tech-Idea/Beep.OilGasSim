@@ -29,7 +29,16 @@ public interface IWell
 /// <summary>A trajectory station: measured depth, true vertical depth, plan position.</summary>
 public readonly record struct TrajectoryStation(Length Md, Length Tvd, Coordinate Position);
 
-public sealed record Trajectory(IReadOnlyList<TrajectoryStation> Stations);
+public sealed record Trajectory(IReadOnlyList<TrajectoryStation> Stations)
+{
+    // Finding 131: a trajectory is the survey, and two wellbores drilled to the
+    // same survey have the same trajectory. Reference equality would make a
+    // restored wellbore differ from the one that was saved.
+    public bool Equals(Trajectory? other) =>
+        other is not null && Structural.Equal(Stations, other.Stations);
+
+    public override int GetHashCode() => Structural.HashOf(Stations);
+}
 
 /// <summary>A physical hole — the original plus each sidetrack (design 02 §3.1).</summary>
 public interface IWellbore
