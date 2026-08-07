@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Design 23: WellContracts -> FlowContracts is one-way. This module never
+         references OGSim.Subsurface: the completion asks the compartment for a
+         pressure through a contract, and truth stays where R5 put it. -->
+    <ProjectReference Include="..\OGSim.Contracts\OGSim.Contracts.csproj" />
+    <ProjectReference Include="..\OGSim.Kernel\OGSim.Kernel.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="OGSim.Wells.Tests" />
+  </ItemGroup>
+
+</Project>

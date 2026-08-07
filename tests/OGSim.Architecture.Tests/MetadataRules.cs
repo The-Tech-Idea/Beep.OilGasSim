@@ -103,6 +103,7 @@ public class MetadataRules
             // module's types would make the composition graph a suggestion.
             ["OGSim.Flow"] = ["OGSim.Kernel", "OGSim.Contracts"],
             ["OGSim.Subsurface"] = ["OGSim.Kernel", "OGSim.Contracts"],
+            ["OGSim.Wells"] = ["OGSim.Kernel", "OGSim.Contracts"],
         };
 
         var violations = new List<string>();

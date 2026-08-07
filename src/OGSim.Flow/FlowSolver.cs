@@ -35,45 +35,18 @@ public sealed record SolverSettings(
         SinkBoundaryPressurePa: 101_325.0);
 }
 
-/// <summary>
-/// A completion's target for this segment. The solver treats a completion as any
-/// element that can be asked for an operating point; R6 supplies the real ones,
-/// and R4 proves the machinery against synthetic ones (R4.8).
-/// </summary>
-public interface ICompletionTarget
-{
-    EntityId<IFlowElement> Id { get; }
-
-    /// <summary>SDD-002 §7 S1. May return DEAD, which is q* = 0 with a distinct meaning.</summary>
-    OperatingPoint OperatingPointAt(Pressure wellheadBackpressure);
-
-    /// <summary>S4: a choked completion ignores downstream pressure until sub-critical.</summary>
-    bool IsPressureDecoupled { get; }
-}
-
 public sealed class FlowSolver : IFlowSolver
 {
     private readonly SolverSettings _settings;
-    private readonly IReadOnlyList<ICompletionTarget> _completions;
     private readonly IAuditTrail _audit;
 
-    public FlowSolver(
-        SolverSettings settings,
-        IReadOnlyList<ICompletionTarget> completions,
-        IAuditTrail audit)
+    public FlowSolver(SolverSettings settings, IAuditTrail audit)
     {
         ArgumentNullException.ThrowIfNull(settings);
-        ArgumentNullException.ThrowIfNull(completions);
         ArgumentNullException.ThrowIfNull(audit);
 
         _settings = settings;
         _audit = audit;
-
-        // Ascending id: S1 iterates completions in this order and the result
-        // must not depend on how the caller happened to list them.
-        var ordered = new List<ICompletionTarget>(completions);
-        ordered.Sort((a, b) => a.Id.Value.CompareTo(b.Id.Value));
-        _completions = ordered;
     }
 
     public SolveReport Solve(SegmentContext segment, FlowTopology topology)
@@ -88,13 +61,21 @@ public sealed class FlowSolver : IFlowSolver
 
         FlowNetwork network = built.Network;
 
-        var state = new SolveState(_completions, _settings);
+        // The completions are IN the network, because ICompletion : IFlowElement.
+        // Taking them as a second constructor argument — which this solver did
+        // until R6.0's finding 107 — let the two disagree: a completion the
+        // solver capped need not be the object the network took its mass from.
+        // Found in the network, in the order the network already fixed, that is
+        // no longer expressible.
+        IReadOnlyList<ICompletion> completions = CompletionsIn(network);
+
+        var state = new SolveState(completions, _settings);
         var forcedShutIns = new List<ForcedShutIn>();
 
         // S6's ladder: at most one completion is shut per round, so the loop is
         // bounded by the completion count — termination by construction, not by
         // hope (SDD-002 §7).
-        for (int ladderStep = 0; ladderStep <= _completions.Count; ladderStep++)
+        for (int ladderStep = 0; ladderStep <= completions.Count; ladderStep++)
         {
             SolveOutcome outcome = RunToConvergence(network, segment, state);
             if (outcome.Converged)
@@ -103,7 +84,7 @@ public sealed class FlowSolver : IFlowSolver
                 return Report(state, outcome, forcedShutIns);
             }
 
-            ICompletionTarget victim = state.LargestResidual();
+            ICompletion victim = state.LargestResidual();
             state.ForceShutIn(victim.Id);
             forcedShutIns.Add(new ForcedShutIn(victim.Id, outcome.WorstResidual));
 
@@ -269,18 +250,24 @@ public sealed class FlowSolver : IFlowSolver
         // One reverse sweep computes every element's demanded inlet pressure;
         // each completion then reads the one it faces.
         state.BackwardPass(network, _settings.SinkBoundaryPressurePa);
+        return state.UpdateBackpressures(network);
+    }
 
-        double worstChange = 0.0;
-        for (int i = 0; i < _completions.Count; i++)
-        {
-            ICompletionTarget completion = _completions[i];
-            if (completion.IsPressureDecoupled) continue;
+    /// <summary>
+    /// The completions in the network, in the topological order the network
+    /// already fixed — which is stable across input orderings, so S1 iterates
+    /// them identically on every run without a second sort.
+    /// </summary>
+    private static IReadOnlyList<ICompletion> CompletionsIn(FlowNetwork network)
+    {
+        var completions = new List<ICompletion>();
 
-            double change = state.UpdateBackpressure(completion, network);
-            if (change > worstChange) worstChange = change;
-        }
+        IReadOnlyList<IFlowElement> ordered = network.Ordered;
+        for (int i = 0; i < ordered.Count; i++)
+            if (ordered[i] is ICompletion completion)
+                completions.Add(completion);
 
-        return worstChange;
+        return completions;
     }
 
     /// <summary>

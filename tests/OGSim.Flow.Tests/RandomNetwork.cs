@@ -18,7 +18,7 @@ namespace OGSim.Flow.Tests;
 
 internal sealed record RandomNetwork(
     FlowTopology Topology,
-    IReadOnlyList<ICompletionTarget> Completions)
+    IReadOnlyList<ICompletion> Completions)
 {
     private const int MinCompletions = 1;
     private const int MaxCompletions = 5;
@@ -28,7 +28,7 @@ internal sealed record RandomNetwork(
     {
         var elements = new List<IFlowElement>();
         var connections = new List<FlowConnection>();
-        var completions = new List<ICompletionTarget>();
+        var completions = new List<ICompletion>();
 
         ulong nextId = 1;
 

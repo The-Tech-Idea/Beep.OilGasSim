@@ -95,10 +95,18 @@ topology, so both cut the tick ([21](../design/21_INTEGRATION.md) section 5).
 
 ## 3. Deliverables
 
-`OGSim.Wells`: `IWell`, `IWellbore`, `IWellPath`, `ICompletion`, `IPerforation`,
-`IWellComponent`, `IChoke`, `IInflowModel` (Darcy, Vogel, composite, gas
-back-pressure), `IOutflowModel`, the operating-point solver, allocation.
+`OGSim.Wells`: implementations behind `IWell`, `IWellbore`, `ICompletion`,
+`IWellComponent`, `IInflowModel` (Darcy, Vogel composite, gas back-pressure),
+`IOutflowModel`, the operating-point solver, allocation.
 Content: `well-component` catalogue, tubing catalogue.
+
+> **R6.0 correction (finding 109): three of the names above were wrong.**
+>
+> | Promised | Resolution |
+> |---|---|
+> | `IWellPath` | Declared as `Trajectory` + `TrajectoryStation` (SDD-003 §5). Geometry is a value, not a collaborator — nothing is ever substituted for a well path |
+> | `IPerforation` | Declared as `Perforation`, a record with **no id**, deliberately (SDD-003 §5, pass 10): it is a component of exactly one completion, is never resolved from outside it, and an id would invite storing the derived standoff against it (L5) |
+> | `IChoke` | **Never to be declared** — [22](../design/22_DESIGN_COHERENCE.md) finding 82(c) lists it among the equipment names 02 §4.1 and non-negotiable 11 keep out of code. The choke is a `well-component` tier whose critical-pressure ratio and critical rate feed SDD-003 §6.3 |
 
 ---
 

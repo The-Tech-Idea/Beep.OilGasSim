@@ -93,4 +93,33 @@ public interface ICompletion : IFlowElement
     IReadOnlyList<Perforation> Perforations { get; }
     ILiftMethod? Lift { get; }
     OperatingPoint SolveOperatingPoint(Pressure wellheadBackpressure);
+
+    /// <summary>
+    /// SDD-002 §7 S4: true while the choke reports critical flow (SDD-003 §6.3).
+    /// The completion keeps its rate and ignores backpressure until sub-critical,
+    /// which is why a choked well survives backpressure swings on a shared line.
+    ///
+    /// <para>Owned here because the choke that decides it is the completion's own
+    /// component. The solver only asks.</para>
+    /// </summary>
+    bool IsPressureDecoupled { get; }
+}
+
+/// <summary>
+/// Design 02 §3.2 — an equipment instance. It carries only what is per-asset;
+/// everything specifiable lives in the catalogue <see cref="Tier"/> it
+/// references (design 07 §4b): size, rating, material, performance curves,
+/// capital cost, install duration, degradation profile, requiresTech.
+///
+/// <para>There is no component-TYPE hierarchy — no <c>ITubing</c>, no
+/// <c>IPacker</c>, no <c>IChoke</c>. Design 02 §4.1 and non-negotiable 11 apply
+/// to well equipment exactly as to facility units: adding a kind of component is
+/// a JSON entry, never a type.</para>
+/// </summary>
+public interface IWellComponent
+{
+    EntityId<IWellComponent> Id { get; }
+    ContentId Tier { get; }
+    double Condition { get; }        // 0..1, per-asset
+    GameDate Installed { get; }
 }

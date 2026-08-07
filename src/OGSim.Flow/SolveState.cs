@@ -13,13 +13,13 @@ namespace OGSim.Flow;
 internal sealed class SolveState
 {
     private readonly SolverSettings _settings;
-    private readonly IReadOnlyList<ICompletionTarget> _completions;
+    private readonly IReadOnlyList<ICompletion> _completions;
     private readonly CompletionSolveState[] _byCompletion;
 
     private readonly Dictionary<EntityId<IFlowElement>, TransformResult> _results = [];
     private readonly Dictionary<EntityId<IFlowElement>, IReadOnlyList<ConstraintEvaluation>> _constraints = [];
 
-    public SolveState(IReadOnlyList<ICompletionTarget> completions, SolverSettings settings)
+    public SolveState(IReadOnlyList<ICompletion> completions, SolverSettings settings)
     {
         _completions = completions;
         _settings = settings;
@@ -62,7 +62,7 @@ internal sealed class SolveState
 
         for (int i = 0; i < _completions.Count; i++)
         {
-            ICompletionTarget completion = _completions[i];
+            ICompletion completion = _completions[i];
             ref CompletionSolveState state = ref _byCompletion[i];
 
             if (state.ShutIn)
@@ -71,7 +71,7 @@ internal sealed class SolveState
                 continue;
             }
 
-            OperatingPoint point = completion.OperatingPointAt(state.Backpressure);
+            OperatingPoint point = completion.SolveOperatingPoint(state.Backpressure);
             double target = point switch
             {
                 Flowing flowing => flowing.Rate.CubicMetresPerSecond,
@@ -345,7 +345,25 @@ internal sealed class SolveState
     /// A PRESSURE-DECOUPLED completion keeps its rate and is not updated — that
     /// is why a choked well survives backpressure swings on a shared line.
     /// </summary>
-    public double UpdateBackpressure(ICompletionTarget completion, FlowNetwork network)
+    public double UpdateBackpressures(FlowNetwork network)
+    {
+        double worst = 0.0;
+
+        for (int i = 0; i < _completions.Count; i++)
+        {
+            // A PRESSURE-DECOUPLED completion keeps its rate and is not updated:
+            // that is why a choked well survives backpressure swings on a shared
+            // line, and what damps the oscillation S1's damping alone would not.
+            if (_completions[i].IsPressureDecoupled) continue;
+
+            double change = UpdateBackpressure(_completions[i], network);
+            if (change > worst) worst = change;
+        }
+
+        return worst;
+    }
+
+    private double UpdateBackpressure(ICompletion completion, FlowNetwork network)
     {
         int index = IndexOf(completion.Id);
         if (index < 0) return 0.0;
@@ -367,9 +385,9 @@ internal sealed class SolveState
 
     /// <summary>The completion carrying the largest relative residual; ties go to
     /// the lowest id, so the ladder's choice is total (SDD-002 §7 S6).</summary>
-    public ICompletionTarget LargestResidual()
+    public ICompletion LargestResidual()
     {
-        ICompletionTarget? worst = null;
+        ICompletion? worst = null;
         double worstRate = -1.0;
 
         for (int i = 0; i < _completions.Count; i++)

@@ -587,6 +587,40 @@ public sealed record Perforation(
 > `EntityId<T>` for no consumer — and would invite storing the derived standoff
 > against it, which law L5 forbids.
 
+### 5.1 The equipment tree
+
+> **R6.0 amendment (finding 108).** [02](../design/02_DOMAIN_MODEL.md) §3.2 and
+> [01](../design/01_CONCEPT_MATRIX.md) B6 both specify `IWellComponent`, R6.8
+> lists it as a task, and it was declared in no SDD and no code. F-1 makes it
+> unimplementable until stated, so it is stated here.
+
+```csharp
+// Design 02 §3.2. The INSTANCE carries only what is per-asset; everything
+// specifiable — size, rating, material, performance curves, capital cost,
+// install duration, degradation and failure profile, requiresTech — lives in
+// the catalogue TIER it references (07 §4b).
+public interface IWellComponent
+{
+    EntityId<IWellComponent> Id { get; }
+    ContentId Tier { get; }                          // the catalogue entry
+    double Condition { get; }                        // 0..1, per-asset
+    GameDate Installed { get; }
+}
+```
+
+**There is no component-TYPE hierarchy** — no `ITubing`, no `IPacker`, and above
+all no `IChoke`. 02 §4.1's rule and non-negotiable 11 apply to well equipment
+exactly as they do to facility units: a component is an instance plus a content
+tier, and adding a new kind of component is a JSON entry. `ILiftMethod` is the
+one apparent exception and is not one — it names the tier and nothing else,
+because ESP-versus-rod-pump behaviour is entirely the tier's datasheet (§6.2).
+
+**The choke is a component tier, not a type.** §6.3's critical-flow rule reads
+its critical-pressure ratio and critical rate from the tier; `IChoke` is one of
+the ~20 equipment names [22](../design/22_DESIGN_COHERENCE.md) finding 82(c)
+records as never to be declared, and R6 §3's deliverable list naming it is the
+same stale phase-doc text that finding corrects at each `Rn.0`.
+
 ## 6. The completion — the source element
 
 `ICompletion : IFlowElement`. Its `Transform` is the operating-point solve —
@@ -640,8 +674,34 @@ public interface ICompletion : IFlowElement
     IReadOnlyList<Perforation> Perforations { get; }
     ILiftMethod? Lift { get; }                       // null: natural flow
     OperatingPoint SolveOperatingPoint(Pressure wellheadBackpressure);
+
+    // SDD-002 §7 S4. True while the choke reports critical flow (§6.3): the
+    // completion keeps its rate and ignores backpressure until sub-critical.
+    // Owned HERE because the choke that decides it is the completion's own
+    // component — the solver only asks.
+    bool IsPressureDecoupled { get; }
 }
 ```
+
+> **R6.0 amendment (finding 107): the solver's completion type and this one were
+> two names for one concept.** R4 declared `ICompletionTarget` in `OGSim.Flow`
+> with `Id`, `OperatingPointAt` and `IsPressureDecoupled`, because its synthetic
+> tests could not supply a wellbore or a perforation list. That is a testing
+> convenience, and it bought a naming-law violation (N1) plus a seam R6 would
+> have had to bridge with an adapter — at which point "one engine" would be true
+> everywhere except where the wells attach.
+>
+> `ICompletionTarget` is removed. The solver takes `ICompletion`, and
+> `IsPressureDecoupled` moves here, where §6.3 already decides it.
+>
+> **The completion list goes too.** `FlowSolver` took completions as a separate
+> constructor argument alongside the topology, so the same completion was
+> reachable twice and the two could disagree — which is exactly the defect FV7
+> exposed at R4, where a synthetic source and a synthetic completion shared an id
+> and were different objects, so S3's cap adjusted one while the network's mass
+> came from the other. Since `ICompletion : IFlowElement`, every completion is
+> already IN the network: the solver finds them there, in the topological order
+> it already computed, and the disagreement is no longer expressible.
 
 ### 6.1 Inflow (SI Darcy form, per perforation)
 
@@ -725,3 +785,4 @@ CAL2/CAL4/CAL6 bands run on this stack end-to-end.
 | S003-2 | Coning constants (Meyer-Garder simplification) — content defaults need calibration against CAL3's S-curve | R10 |
 | S003-3 | Drainage-area assignment when several completions share a compartment (equal split vs kh-weighted Voronoi) | R6.10 review — recommend kh-weighted equal-pressure (tank ⇒ shared Pr makes this second-order) |
 | S003-4 | **§4.1's correlations are pinned by invariants, continuity and round-trip — not yet against published worked examples.** Each of the five papers prints at least one; transcribing them requires the paper in hand, and a value reconstructed from the same formula the code implements verifies nothing. Until then a transcription error that preserves monotonicity would survive | R5 model tests (MX-class), before any CAL band is trusted |
+| S003-5 | **§6.2's friction term states ρ_mix and pins no viscosity**, so the Reynolds number has no declared source. R6 implements it against a fixed 1e-3 Pa·s and says so in the code; the honest fix is the fluid model's own μ at the traverse midpoint, which needs §6.2's two-pass ρ_mix evaluation to be carrying μ as well | R7 (lift touches the same traverse) |

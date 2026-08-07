@@ -204,17 +204,27 @@ internal sealed class Manifold(ulong id) : IFlowElement
 /// enough to exercise S1's damping, S4's backpressure coupling and the DEAD
 /// outcome, with no PVT anywhere near it.
 ///
-/// <para>It is BOTH an <see cref="IFlowElement"/> and an
-/// <see cref="ICompletionTarget"/>, because in the engine those are one object:
-/// S1 solves a rate for it and S2 asks the same element to turn that rate into a
-/// stream. Splitting them across two objects sharing an id would let a cap S3
-/// computed apply to one while the network's mass came from the other — the
-/// exact defect FV7 exposed.</para>
+/// <para>An <see cref="ICompletion"/>, which is itself an
+/// <see cref="IFlowElement"/>: S1 solves a rate for it and S2 asks the same
+/// element to turn that rate into a stream. Splitting those across two objects
+/// sharing an id would let a cap S3 computed apply to one while the network's
+/// mass came from the other — the exact defect FV7 exposed at R4, and the reason
+/// R6.0's finding 107 removed the solver's separate completion list.</para>
 /// </summary>
 internal sealed class SyntheticCompletion(
     ulong id, double productivityIndex, double reservoirBar)
-    : IFlowElement, ICompletionTarget
+    : ICompletion
 {
+    public EntityId<ICompletion> CompletionId { get; } = new(id);
+    public EntityId<IWellbore> Wellbore { get; } = new(id);
+    public ILiftMethod? Lift => null;
+
+    /// <summary>One perforation, carrying nothing R4 reads. The solver never
+    /// looks inside a completion — it asks for an operating point.</summary>
+    public IReadOnlyList<Perforation> Perforations { get; } =
+        [new Perforation(new EntityId<IReservoirCompartmentEntity>(1),
+                         new Length(0.0), new Length(1.0), Skin: 0.0, Isolated: false)];
+
     /// <summary>kg of oil per m³/s of reservoir rate. A stand-in for PVT, which
     /// R4 deliberately does not have — any positive constant proves the coupling.</summary>
     public const double DensityKgPerCubicMetre = 850.0;
@@ -225,7 +235,7 @@ internal sealed class SyntheticCompletion(
 
     public IReadOnlyList<PortSpec> Ports { get; } = [Synthetic.Outlet(0)];
 
-    public OperatingPoint OperatingPointAt(Pressure wellheadBackpressure)
+    public OperatingPoint SolveOperatingPoint(Pressure wellheadBackpressure)
     {
         double drawdownPa = reservoirBar * 1e5 - wellheadBackpressure.Pascals;
 

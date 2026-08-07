@@ -281,22 +281,46 @@ is produced is set by relative permeability and the well. So R5-V3/R5-V4 as
 written — "recovery lands in band MB1/MB2" — are only half provable here, and the
 band test driven by a simulated production history belongs with R6.
 
-### Phase R6 — Wells ⬜
+### Phase R6 — Wells 🟨
 > 📄 [phases/R6_WELLS.md](phases/R6_WELLS.md)
+> `src/OGSim.Wells` — references Contracts and Kernel only; never `OGSim.Subsurface`.
 
 | # | Task | Status |
 |---|---|---|
-| R6.1 | `IWell` — identity, status machine, classification | ⬜ |
-| R6.2 | `IWellbore`, `IWellPath` — geometry, sidetracks | ⬜ |
-| R6.3 | `ICompletion` | ⬜ |
-| R6.4 | `IPerforation` — reservoir link, isolation, skin | ⬜ |
-| R6.5 | `IInflowModel` — Darcy, Vogel, composite, gas back-pressure | ⬜ |
-| R6.6 | `IOutflowModel` — hydrostatic, friction, acceleration | ⬜ |
-| R6.7 | **Operating point** — IPR ∩ VLP; the well that dies | ⬜ |
-| R6.8 | `IWellComponent` — the equipment tree | ⬜ |
-| R6.9 | Choke — critical and sub-critical flow | ⬜ |
-| R6.10 | Multi-perforation commingling and allocation | ⬜ |
-| R6.11 | Model tests MX1, MX2, FV3 | ⬜ |
+| R6.0 | SDD review — three findings; `ICompletionTarget` removed, `IWellComponent` specified, `IChoke` kept out (see below) | ✅ |
+| R6.1 | `IWell` — identity, status machine, classification | ⬜ — contract declared at R1; the status machine is a **command** table (R6 §2.5) and commands arrive with R12 |
+| R6.2 | `IWellbore`, `Trajectory` — geometry, sidetracks | ⬜ — contracts declared; no implementation needed until world-gen builds one (R15) |
+| R6.3 | `ICompletion` — the network's source element | ✅ |
+| R6.4 | `Perforation` — reservoir link, isolation, skin | ✅ — skin is **per perforation**, and isolating a zone genuinely removes its contribution |
+| R6.5 | `IInflowModel` — SI Darcy and the Vogel composite, per perforation | ✅ — gas back-pressure deferred with the gas well that needs it |
+| R6.6 | `IOutflowModel` — hydrostatic + Darcy-Weisbach friction, Colebrook by exactly 20 Newton steps | ✅ |
+| R6.7 | **Operating point** — IPR ∩ VLP by bisection; the well that dies reports `Dead`, never `Flowing(0)` | ✅ |
+| R6.8 | `IWellComponent` — specified (finding 108) and declared | 🟨 — the instance type exists; the catalogue and condition/degradation belong to R18 |
+| R6.9 | Choke — critical and sub-critical flow | ✅ — a `ChokeSetting` read from a content tier, **not** an `IChoke` |
+| R6.10 | Multi-perforation commingling and allocation | 🟨 — several perforations sum correctly and an isolated one contributes nothing; per-perf kh apportionment of the compartment's own withdrawal needs R5.6's multi-compartment solve |
+| R6.11 | Model tests MX1, MX2, FV3 | ✅ — plus R6-V2/V3/V4/V6/V7/V8/V9/V14 |
+
+**R6.0's findings.**
+
+| # | Finding |
+|---|---|
+| 107 | **`ICompletionTarget` and `ICompletion` were one concept under two names.** R4 declared the former in `OGSim.Flow` because its synthetic tests could not supply a wellbore — a testing convenience that bought an N1 violation and a seam R6 would have bridged with an adapter, making "one engine" true everywhere except where the wells attach. Removed; `IsPressureDecoupled` moved to `ICompletion`, where §6.3 already decides it. **The solver's separate completion list went too**: since `ICompletion : IFlowElement` every completion is already in the network, and taking a second list let the two disagree — exactly the defect FV7 exposed at R4 |
+| 108 | `IWellComponent` is specified by design 02 §3.2 and 01 B6, is an R6 task, and was declared in no SDD. Specified in SDD-003 §5.1: an instance carrying only condition and install date, against a catalogue tier carrying everything else |
+| 109 | R6 §3 named `IWellPath` (declared as `Trajectory`), `IPerforation` (declared as `Perforation`, deliberately id-less) and `IChoke` (which finding 82(c) says must **never** be declared) |
+
+**R6-V14 emerges, and finding a fixture bug proved something about the mechanism.**
+A strong well on a shared line suppresses a weak one, with no rule anywhere
+saying so. It does **not** emerge against a fixed-ΔP element: the coupling is
+entirely rate-mediated — more throughput, more drop across the shared line,
+higher pressure at both wellheads — so with R4's constant-drop restrictor both
+wells solved to exactly the rates they had alone, to the last digit. Nothing was
+wrong with the solver; there was no channel for the interaction. The fixture is
+now `ΔP = k·ṁ²`, and R8 supplies the real hydraulics.
+
+**The "one engine" claim holds.** R4's solver was written and verified against
+elements with no domain meaning, before any well existed. Accommodating a real
+completion required exactly one change to it — finding 107, which **removed** a
+parameter.
 
 ### Phase R7 — Artificial lift ⬜
 > 📄 [phases/R7_LIFT.md](phases/R7_LIFT.md)

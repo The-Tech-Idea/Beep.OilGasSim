@@ -24,12 +24,14 @@ public class SolverTests
         new(new EntityId<IFlowElement>(from), new PortId(fromPort),
             new EntityId<IFlowElement>(to), new PortId(toPort));
 
-    private static (FlowSolver Solver, AuditTrail Trail) NewSolver(
-        params ICompletionTarget[] completions)
+    /// <summary>The solver takes no completion list: they are IN the network
+    /// (R6.0 finding 107), so a fixture cannot hand it a completion the topology
+    /// does not contain — the disagreement FV7 exposed at R4.</summary>
+    private static (FlowSolver Solver, AuditTrail Trail) NewSolver()
     {
         var clock = new SimulationClock(new GameDate(1965, 1));
         var trail = new AuditTrail(clock, new AuditRetention(500));
-        return (new FlowSolver(SolverSettings.Pinned, completions, trail), trail);
+        return (new FlowSolver(SolverSettings.Pinned, trail), trail);
     }
 
     // ------------------------------------------------------- FV1 conservation
@@ -116,7 +118,7 @@ public class SolverTests
         {
             RandomNetwork built = RandomNetwork.Generate(stream, trial);
 
-            (FlowSolver solver, _) = NewSolver([.. built.Completions]);
+            (FlowSolver solver, _) = NewSolver();
             SolveReport report = solver.Solve(WholeTick, built.Topology);
 
             // Network-wide: everything sourced left as disposal or fuel. No
@@ -156,7 +158,7 @@ public class SolverTests
             [completion, new Sink(2)],
             [Edge(1, 0, 2, 0)]);
 
-        (FlowSolver solver, _) = NewSolver(completion);
+        (FlowSolver solver, _) = NewSolver();
         SolveReport report = solver.Solve(WholeTick, topology);
 
         CompletionState state = Assert.Single(report.CompletionStates);
@@ -170,7 +172,7 @@ public class SolverTests
         // To the solver's OWN tolerance, deliberately: S5 declares convergence at
         // 1e-4 relative, so demanding more would be asserting something the
         // algorithm never promised and would fail the moment the tolerance moved.
-        var independent = (Flowing)completion.OperatingPointAt(state.WellheadBackpressure);
+        var independent = (Flowing)completion.SolveOperatingPoint(state.WellheadBackpressure);
         double ipr = independent.Rate.CubicMetresPerSecond;
 
         Assert.True(
@@ -189,7 +191,7 @@ public class SolverTests
             [dead, new Sink(2)],
             [Edge(1, 0, 2, 0)]);
 
-        (FlowSolver solver, _) = NewSolver(dead);
+        (FlowSolver solver, _) = NewSolver();
         SolveReport report = solver.Solve(WholeTick, topology);
 
         Assert.Equal(0.0, Assert.Single(report.CompletionStates).Rate.CubicMetresPerSecond, 12);
@@ -208,7 +210,7 @@ public class SolverTests
             [well, new Restrictor(2, capacityKgPerSecond: 30.0), new Sink(3)],
             [Edge(1, 0, 2, 0), Edge(2, 1, 3, 0)]);
 
-        (FlowSolver solver, _) = NewSolver(well);
+        (FlowSolver solver, _) = NewSolver();
         SolveReport report = solver.Solve(WholeTick, topology);
 
         (EntityId<IFlowElement> element, ConstraintKind kind, Mass deferred) =
@@ -226,7 +228,7 @@ public class SolverTests
         // the converged backpressure, less what the restrictor passed, over the
         // segment. Computed here from the well's own IPR — independently of
         // anything the solver recorded.
-        var wanted = (Flowing)well.OperatingPointAt(state.WellheadBackpressure);
+        var wanted = (Flowing)well.SolveOperatingPoint(state.WellheadBackpressure);
         double analytic =
             (wanted.Rate.CubicMetresPerSecond * SyntheticCompletion.DensityKgPerCubicMetre - 30.0)
             * WholeTick.DurationDays * 86_400.0;
@@ -258,7 +260,6 @@ public class SolverTests
             var clock = new SimulationClock(new GameDate(1965, 1));
             var solver = new FlowSolver(
                 SolverSettings.Pinned with { Damping = damping },
-                [well],
                 new AuditTrail(clock, new AuditRetention(500)));
 
             return solver.Solve(WholeTick, topology).Deferrals.Single().Deferred;
@@ -300,8 +301,7 @@ public class SolverTests
 
             var clock = new SimulationClock(new GameDate(1965, 1));
             var solver = new FlowSolver(
-                SolverSettings.Pinned, [well],
-                new AuditTrail(clock, new AuditRetention(500)));
+                SolverSettings.Pinned, new AuditTrail(clock, new AuditRetention(500)));
 
             return solver.Solve(WholeTick, topology)
                          .CompletionStates.Single().Rate.CubicMetresPerSecond;
@@ -329,8 +329,7 @@ public class SolverTests
 
             var clock = new SimulationClock(new GameDate(1965, 1));
             var solver = new FlowSolver(
-                SolverSettings.Pinned, [well],
-                new AuditTrail(clock, new AuditRetention(500)));
+                SolverSettings.Pinned, new AuditTrail(clock, new AuditRetention(500)));
 
             return solver.Solve(WholeTick, topology)
                          .CompletionStates.Single().Rate.CubicMetresPerSecond;
@@ -354,8 +353,7 @@ public class SolverTests
 
             var clock = new SimulationClock(new GameDate(1965, 1));
             var solver = new FlowSolver(
-                SolverSettings.Pinned, [well],
-                new AuditTrail(clock, new AuditRetention(500)));
+                SolverSettings.Pinned, new AuditTrail(clock, new AuditRetention(500)));
 
             return solver.Solve(WholeTick, topology);
         }
@@ -384,7 +382,7 @@ public class SolverTests
             [oscillator, new Sink(2)],
             [Edge(1, 0, 2, 0)]);
 
-        (FlowSolver solver, AuditTrail trail) = NewSolver(oscillator);
+        (FlowSolver solver, AuditTrail trail) = NewSolver();
         SolveReport report = solver.Solve(WholeTick, topology);
 
         // The ladder shut it in, and the solve COMPLETED — ending the game on a
@@ -462,7 +460,7 @@ public class SolverTests
             [well, probe, new Sink(3)],
             [Edge(1, 0, 2, 0), Edge(2, 1, 3, 0)]);
 
-        (FlowSolver solver, _) = NewSolver(well);
+        (FlowSolver solver, _) = NewSolver();
         solver.Solve(WholeTick, topology);
 
         Assert.Null(probe.LastSolvedRate);
@@ -477,7 +475,7 @@ public class SolverTests
             [oscillator, new Sink(2)],
             [Edge(1, 0, 2, 0)]);
 
-        (FlowSolver solver, _) = NewSolver(oscillator);
+        (FlowSolver solver, _) = NewSolver();
         SolveReport report = solver.Solve(WholeTick, topology);
 
         Assert.Single(report.ForcedShutIns);
@@ -538,17 +536,24 @@ public class SolverTests
     }
 
     /// <summary>Alternates its rate on every call, so S5 can never be satisfied.</summary>
-    private sealed class OscillatingCompletion(ulong id) : IFlowElement, ICompletionTarget
+    private sealed class OscillatingCompletion(ulong id) : ICompletion
     {
         private bool _high;
 
         public EntityId<IFlowElement> Id { get; } = new(id);
+        public EntityId<ICompletion> CompletionId { get; } = new(id);
+        public EntityId<IWellbore> Wellbore { get; } = new(id);
+        public ILiftMethod? Lift => null;
         public bool IsPressureDecoupled => false;
         public ReservoirRate? LastSolvedRate { get; private set; }
 
+        public IReadOnlyList<Perforation> Perforations { get; } =
+            [new Perforation(new EntityId<IReservoirCompartmentEntity>(1),
+                             new Length(0.0), new Length(1.0), Skin: 0.0, Isolated: false)];
+
         public IReadOnlyList<PortSpec> Ports { get; } = [Synthetic.Outlet(0)];
 
-        public OperatingPoint OperatingPointAt(Pressure wellheadBackpressure)
+        public OperatingPoint SolveOperatingPoint(Pressure wellheadBackpressure)
         {
             _high = !_high;
             return new Flowing(new ReservoirRate(_high ? 1.0 : 100.0), Pressure.FromBar(150.0));

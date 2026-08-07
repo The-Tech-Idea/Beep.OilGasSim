@@ -198,4 +198,12 @@ public static class PhysicalConstants
 
     /// <summary>Default choke critical pressure ratio, dimensionless. SDD-003 §6.3 (content-overridable).</summary>
     public const double DefaultChokeCriticalRatio = 0.55;
+
+    /// <summary>π. Named here rather than written as a literal so F-2's scan
+    /// stays absolute: SDD-003 §6.1's radial Darcy form is stated as 2πkh, and
+    /// a formula reading <c>3.14159...</c> would be unreviewable against it.</summary>
+    public const double Pi = Math.PI;
+
+    /// <summary>2π — the radial-flow coefficient of SDD-003 §6.1, as the form states it.</summary>
+    public const double TwoPi = 2.0 * Math.PI;
 }
