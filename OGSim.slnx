@@ -10,6 +10,7 @@
     <Project Path="src/OGSim.Company/OGSim.Company.csproj" />
     <Project Path="src/OGSim.Information/OGSim.Information.csproj" />
     <Project Path="src/OGSim.World/OGSim.World.csproj" />
+    <Project Path="src/OGSim.Capabilities/OGSim.Capabilities.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/OGSim.Contracts.Tests/OGSim.Contracts.Tests.csproj" />
@@ -23,5 +24,6 @@
     <Project Path="tests/OGSim.Company.Tests/OGSim.Company.Tests.csproj" />
     <Project Path="tests/OGSim.Information.Tests/OGSim.Information.Tests.csproj" />
     <Project Path="tests/OGSim.World.Tests/OGSim.World.Tests.csproj" />
+    <Project Path="tests/OGSim.Capabilities.Tests/OGSim.Capabilities.Tests.csproj" />
   </Folder>
 </Solution>

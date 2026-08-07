@@ -734,18 +734,49 @@ adding them directly would make two disclosures of one well worse than one.
 promise, not a fraction of it, and a pro-rata forfeit would make a token well a
 cheap way to keep most of the money.
 
-### Phase R17 — Technology ⬜
+### Phase R17 — Technology 🟨
 > 📄 [phases/R17_TECHNOLOGY.md](phases/R17_TECHNOLOGY.md)
+> `src/OGSim.Capabilities`. SDD-005 needed no amendment — six phases running.
 
 | # | Task | Status |
 |---|---|---|
-| R17.1 | `ITechnology` as content; effect kinds | ⬜ |
-| R17.2 | Model-swap, envelope-extension and option-unlock effects | ⬜ |
-| R17.3 | Four acquisition routes | ⬜ |
-| R17.4 | Ongoing technology costs | ⬜ |
-| R17.5 | The shipped technology graph | ⬜ |
-| R17.6 | Era gating | ⬜ |
-| R17.7 | **Catalogue gating** — `requiresTech`/`availableFromEra` on equipment entries; install-command validation; service-route rental of gated tiers | ⬜ |
+| R17.0 | SDD review — no findings | ✅ |
+| R17.1 | `TechnologyNode` as content; the four effect kinds | ✅ |
+| R17.2 | Model-swap, envelope-extension and option-unlock effects | ✅ |
+| R17.3 | Acquisition routes | 🟨 — the grant and its refusals are built; the *cost* of each route is R13's |
+| R17.4 | Ongoing technology costs | ⬜ — R13's ledger |
+| R17.5 | The shipped technology graph | ⬜ — content, not code |
+| R17.6 | Era gating and diffusion | ✅ |
+| R17.7 | Catalogue gating; install validation; rentals | ✅ |
+
+**`AllCapabilities` was never scaffolding, and now that is provable.** Every
+phase from R1 to R16 ran its gating under it — SDD-005 §2 calls it a *shipped
+mode*, the sandbox all-tech modifier of design 18 §5. Its test asserts exactly
+what it promises, so those sixteen phases were running a real configuration
+rather than a stub with a nice name.
+
+**Two design rules the tests pin, both easy to get backwards.**
+
+*Extensions take the best, not the sum.* Two technologies that each raise a rig
+to 5 000 m do not reach 10 000 — an extension is a claim about a ceiling, and the
+highest claim is the ceiling. Restrictions take the tightest, for the mirror
+reason.
+
+*Restrictions win.* `Min(Max(base, extensions…), restrictions…)`: technology
+extends what is **possible**, the environment caps what is **permitted**, and a
+rig that can technically drill to 6 000 m in conditions it cannot work in still
+cannot work.
+
+**One validator, all misses.** A gate failure reports every reason at once — two
+technologies, a detect tier and an envelope come back as four named items, not as
+"requirements not met" and not one at a time. In a game where acquiring a
+technology takes years, making a player resubmit to discover the next reason
+would be an expensive lesson in interface design.
+
+**Diffusion is a date, not an event.** A node auto-grants at *era start + its
+lag*, deterministically. A player who never spends a penny on research still
+advances — slowly, and always behind — which is what makes "everything eventually
+becomes standard practice" a pressure rather than a promise.
 
 ### Phase R18 — Degradation, hazards, maintenance ⬜
 > 📄 [phases/R18_HAZARDS.md](phases/R18_HAZARDS.md)
