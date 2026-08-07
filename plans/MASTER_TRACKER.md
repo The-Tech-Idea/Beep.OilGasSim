@@ -869,17 +869,48 @@ none is a punishment.
 
 ## Arc IV — Hardening
 
-### Phase R19 — Persistence and determinism ⬜
+### Phase R19 — Persistence and determinism 🟨
 > 📄 [phases/R19_PERSISTENCE.md](phases/R19_PERSISTENCE.md)
+> `src/OGSim.Persistence`. SDD-013 needed no amendment — nine phases running.
 
 | # | Task | Status |
 |---|---|---|
-| R19.1 | Save format, header, module blocks | ⬜ |
-| R19.2 | Restore ordering from declared dependencies | ⬜ |
-| R19.3 | Migration chain and fixtures | ⬜ |
-| R19.4 | Audit trail persistence and summarisation | ⬜ |
-| R19.5 | PV1–PV8 verification suite | ⬜ |
-| R19.6 | Cross-platform determinism in CI | ⬜ |
+| R19.0 | SDD review — no findings; **finding 124** came out of implementation | ✅ |
+| R19.1 | Canonical JSON, header, module blocks, per-module digests | ✅ |
+| R19.2 | Restore ordering | 🟨 — module-name order is pinned and digested; dependency-declared restore needs `IModuleRegistry` wired |
+| R19.3 | Migration chain | ✅ — a gap is a **startup** fault; fixtures are content |
+| R19.4 | Audit persistence and summarisation | ⬜ — the trail and its retention exist (R1); the sidecar split is container work |
+| R19.5 | PV1–PV8 | 🟨 — PV1 ✅ PV5 ✅ PV6 ✅; PV2/PV3/PV4/PV7/PV8 need the tick loop or R15 (PV7 is done in R15) |
+| R19.6 | Cross-platform CI | ⬜ — needs a Linux leg (R1-V6, still open) |
+
+**Finding 124: the canonical form could not distinguish a double from an
+integer.** `1.0` rendered as `"1"`, which the reader took for an integer — and
+integers are ids and **Money cents**, which must stay exact above 2^53 and so
+cannot be read as doubles. A save round-trip would have silently retyped every
+integral physical quantity. Doubles now always carry a `.0`, which keeps
+`Write(Read(s)) == s` true — the property every digest rests on.
+
+**Writer and reader live in one class**, so there is no second serialisation
+path to drift (L5 applied to bytes). Two paths would eventually disagree about a
+double's shortest form or a key's sort order, and the disagreement would surface
+as a digest mismatch nobody could locate.
+
+**Keys sort ORDINAL, not by culture.** A culture-sensitive sort orders
+differently under a Turkish locale, which would make a save machine-specific and
+every cross-platform digest comparison meaningless.
+
+**NaN and Infinity are unrepresentable.** They were faults upstream — every model
+treats a non-finite value as a `ModelFault` — and a save that could carry one
+would let a broken tick be reloaded as a valid game.
+
+**Per-module digests localise divergence.** A test changes one block and asserts
+that only that module's digest moves: the difference between a bug report and an
+investigation. Refusals name the module, the mod *and its version*, and report
+**every** reason at once.
+
+**A migration gap is a startup fault, not a load-time surprise.** A chain missing
+v2→v3 cannot migrate a v2 save, and discovering that when a player opens one is
+the worst possible moment.
 
 ### Phase R24 — Objectives, Challenges and Missions ⬜  *(executes before R20)*
 > 📄 [phases/R24_OBJECTIVES.md](phases/R24_OBJECTIVES.md)
