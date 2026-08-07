@@ -42,9 +42,9 @@ The order is by what each step unblocks, not by phase number.
 
 | Step | What | Why here |
 |---|---|---|
-| 1 | **R12b — activities on the one engine.** ✅ drilling collapsed (findings 142, 148); next the templates: well test, seismic, log/core, workover, install, abandon | The lever: most bypassed subsystems are reached by an activity or not at all. Well test and seismic are the door to G2 |
+| 1 | **R12b — activities on the one engine.** ✅ drilling collapsed (142, 148) · ✅ one activity, one class (149) · ✅ the four measurements: survey, log, core, build-up (150, 151). Next the templates that CHANGE something: workover, complete, install, abandon | The lever: most bypassed subsystems are reached by an activity or not at all. Well test and seismic are the door to G2 |
 | 2 | **R21e — the scenario runner** | R21d's debt; pays before content is written against the ad-hoc goal |
-| 3 | **Beliefs wired (R20d.7)** | The survey activities from step 1 produce `Observation`s; the player stops being told where the oil is. The exploration game begins here |
+| 3 | **Beliefs wired (R20d.7)** | 🟨 half done ahead of schedule — step 1's measurements produce `Observation`s through `ObservationSampler`, so the player already pays to learn. What is left is the return path: a belief on the read model, so a host can render what was learned, plus POS |
 | 4 | **The chain (R20d.1–5)** | `IFlowSolver` over the registered network; separation, gas, water, transport; custody becomes a metered point. Closes FV1's 1000-tick half, R11-V13, SC7/SC8 |
 | 5 | **Environment (R22 + R20d.13)** | The one unbuilt phase; weather, seasons, access windows feeding stage 2 |
 | 6 | **Technology purchasable (R20d.10) + company (R20d.9)** | The four acquisition routes as commands; licences and commitments; the forty-year arc starts meaning something |
