@@ -11,11 +11,19 @@ next.** Updated at the close of every phase.
 
 | | |
 |---|---|
-| **Phase** | R0 ✅ closed · R1-C (contract layer) ✅ complete · R1 ✅ tasks complete (gate open on deferred verification) · R2 ✅ complete · ****R3 ✅ complete**** |
-| **Design docs** | 24 design + 1 research + 25 phase docs, 17 catalogue sheets ([C16 terrain](catalog/C16_TERRAIN_CLASSES.md) newest) + tech tree, 18 SDDs (000–017). Coherence log: **81 findings**, 61–81 from the code passes. |
-| **Code status** | Contract layer complete and **the kernel is implemented behind it**: quantities + `DetMath` + spatial, entity registry, clock, PCG64 streams, log, audit trail, fault policies, event bus, command bus, module composition, state registration, segmentation and the 14-stage tick pipeline. 0 warnings, 0 errors, **236/236 tests** (28 contract + 189 kernel + 19 architecture). Every implemented member traces to a pinned SDD section (F-1). |
-| **Repository** | `The-Tech-Idea/Beep.OilGasSim`, branch `master`. The OGSim tree was copied in from the workspace it was authored in and the prior occupant of this repo removed in the same commit; work lands directly on `master`, one task per commit. |
-| **Next** | **R2 — materials, properties, streams**, once R1’s gate closes. R1’s tasks are all done; four verification items are not, and none can be closed by writing kernel code: **R1-V2** (the compile-failure corpus needs a Roslyn negative-compilation harness), **R1-V6** (cross-platform byte identity needs the CI matrix of [SDD-000](sdd/SDD-000_ENGINEERING_STANDARDS.md) §6), and **R1-V14/V20/V22** (11 architecture checks whose subject assemblies do not exist — [R1 §5b](phases/R1_KERNEL.md)). Laws L1–L5 and determinism rules D-2…D-8 are now **mechanically enforced** on every build. Commit style `R<n>.<m>: <what>` |
+| **Phase** | R0–R19, R23, R24 ✅ · **R20c (composition) ✅ but for content** · **R21a–d ✅ — the engine is played** · R20, R21e/f, R22, R25 ⬜ |
+| **Design docs** | 24 design + 1 research + 25 phase docs, 17 catalogue sheets + tech tree, 18 SDDs (000–017). Coherence log: **141 findings**, 61–141 from the code passes. |
+| **Code status** | 15 engine assemblies, 0 warnings, 0 errors, **779 tests**. The kernel, the contract layer, eleven domain modules and Layer 4 composition are implemented. The composed engine **advances a tick and plays**: a player drills, waits, finds oil or doesn't, produces, declines, and wins or goes broke. Every implemented member traces to a pinned SDD section (F-1). |
+| **Repository** | `The-Tech-Idea/Beep.OilGasSim`, branch `master`. Work lands directly on `master`, one task per commit. |
+| **The playable loop** | **arrive → commit capital under uncertainty → wait four months → find oil or don't → produce → decline → reinvest → win or go broke.** Six of the fourteen tick stages are real (3, 5, 6, 8, 12, 13). One command, one product, one goal, one failure condition. |
+| **Next** | **R21e** — the scenario runner, replacing the `ScenarioGoal` compiled into composition with the contracts R21d declared. Then **R20c.9**: `plans/catalog/`'s sixteen sheets becoming loadable content, which is what turns one well and one goal into a game with variety. |
+
+**Three things are true at once and all three should stay visible.** The engine
+is architecturally complete to its own laws — every manifest promise checked,
+the truth boundary an assembly boundary, determinism mechanically enforced. The
+gameplay loop is real end to end, with no stubbed step. And the *content* is a
+single hand-built field with a single hand-built well: what exists is a spine,
+not a game with things in it.
 
 > **Phase numbers are stable identifiers, not execution order.** They are assigned
 > in the order phases are designed; §"Execution order" below is authoritative for
@@ -975,23 +983,33 @@ cannot start without it: a scenario is a composed engine.
 | R20c.3 | `EngineBuilder` — validate, resolve, build a real `TickPipeline` | ✅ |
 | R20c.4 | Composition refusal suite — all seven failure modes, every problem named | ✅ |
 | R20c.5 | Layer 4 declared in the architecture corpus, with its one exemption | ✅ |
-| R20c.6 | Module state ownership — `IStateOwner` per `OwnsState` key | 🟨 — mechanism complete; **subsurface owns and saves its compartments** |
-| R20c.7 | Stage bodies — the per-tick work each module contributes | 🟨 — **stage 6 is real**: the reservoir depletes on a tick |
-| R20c.8 | Custody transfers recorded, so the ledger can be composed | ⬜ |
-| R20c.10 | `IFlowElementRegistry` — who assembles the topology | ✅ |
-| R20c.9 | Content kinds for entities — equipment, wells, facilities, reservoirs | 🟨 — `tech` done: the 65-node registry ships as content, with the fixture check |
+| R20c.6 | Module state ownership — `IStateOwner` per `OwnsState` key | ✅ — subsurface, wells, company and drilling all own and save their state |
+| R20c.7 | Stage bodies — the per-tick work each module contributes | ✅ — five stages real: 3, 5, 6, 8, 12, 13 |
+| R20c.8 | Custody transfers recorded, so the ledger can be composed | ✅ — finding 138 |
+| R20c.9 | Content kinds for entities — equipment, wells, facilities, reservoirs | 🟨 — `tech` done: the 65-node registry ships as content, with the fixture check. Equipment, wells, facilities and reservoirs remain |
+| R20c.10 | `IFlowElementRegistry` — who assembles the topology | ✅ — finding 130 |
+| R20c.11 | Per-compartment `Bo` and allocation in the production loop | ⬜ — the loop uses one field-average FVF, stated at the call site |
 
-**The fourteen modules compose, and the tick runs zero stages.** That is the
-honest state and it is stated rather than papered over. Composition validates a
+**Fifteen modules compose and the tick does work.** Composition validates a
 module set as a *set*: every Requires met, nothing provided twice, no state key
-owned twice, no cycle, no two modules in one stage slot, and — new in R20c.0 —
-every claimed stage slot actually filled. What it cannot yet validate is work,
-because no module owns entity state: there are `Completion`, `Tank`,
-`CostLedger` and `BowTie` types, and nothing holding collections of them across
-ticks. A stage body with nothing to act on would be law L3's "declaration with
-no behaviour", so **no module claims a stage** and `NoStagesYet` says why at
-each manifest. R20c.6/.7 are what fill them, and they are the real unblocker for
-the eleven deferred rows — not composition itself.
+owned twice, no cycle, no two modules in one stage slot, every claimed stage
+slot filled, every declared fact owned, every declared command handled — one
+rule, stated once (finding 140).
+
+Six of the fourteen stages are real:
+
+| Stage | Who | What |
+|---|---|---|
+| 3 Operations | field | rigs that finished hand over a well or a dry hole |
+| 5 SolveFlow | field | each well solves against its compartment's current pressure |
+| 6 MaterialBalance | subsurface | what was taken is charged to what it was taken from |
+| 8 Economics | field | the oil is sold through a custody transfer; the field is paid for |
+| 12 Objectives | field | the run is judged — won, lost, still playing |
+| 13 Close | field | the read model is published |
+
+The eight remaining are unclaimed, and `NoStagesYet` still says why at each
+manifest that has none: a stage body with nothing to act on is law L3's
+declaration-with-no-behaviour, and the composer refuses one.
 
 **The subsurface is alive.** `IReservoirCompartment` had been declared at R5.1
 and **never implemented** (finding 136) — the material balance was proven against
@@ -1038,16 +1056,22 @@ holds afterwards for the reason it held before) and `CapabilityState` replays
 acquisitions through the graph in acquisition order (so a save cannot grant a
 technology whose prerequisite is absent).
 
-**Neither can be composed into the shipped engine, and the manifests say so
-rather than claiming otherwise.** `CostLedger` must answer "was this posting a
-custody transfer?" and nothing records that fact — `CustodyTransferPoint` writes
-no audit entry and `AuditCategory` has no member for one (R20c.8).
-`CapabilityState` needs a technology graph, which is content that does not exist
-(R20c.9). Composing either would mean handing it a predicate or a graph that
-always answers the same way, which is the stub this project does not allow. So
-every shipped module declares `NothingOwnedYet`, and the mechanism is proven by
-the owners' own round-trip tests instead of by a manifest claim nothing could
-redeem.
+**`CompanyState` is composed now; `CapabilityState` still is not.** The ledger
+was blocked on being able to answer "was this posting a custody transfer?" —
+`CostLedger` refuses a revenue credit whose cause is not one, and nothing could
+record one, so the ledger could not be composed at all. `AuditCategory` gained
+`CustodyTransfer` (finding 138) and the predicate now asks the trail, so a
+posting cannot *claim* to be a sale: it can only cite an entry that was one.
+That closed R20c.8.
+
+`CapabilityState` remains uncomposed for the reason it always was: it needs a
+technology graph, and the shipped composition provides `AllCapabilities` — the
+sandbox all-tech mode, which holds no acquisitions to save. A campaign composes
+`TechnologyState` and owns its state; that arrives with the scenario runner
+(R21e) and the graph content it selects.
+
+Four facts are owned and saved today: `subsurface.compartments`,
+`wells.completions`, `company.ledger` and `field.drilling`.
 
 **R20c.9's first kind is `tech`, and it paid for itself immediately.** The
 65-node registry now ships as content under `content/technologies/`, read by
@@ -1071,12 +1095,23 @@ one era. The range was describing its *grade tiers* (X52/X65/X70), which are
 equipment on the C11 sheet, not the node. Corrected to E1 with the tier span
 moved to the Opens column.
 
-**The wall behind R20c.7 is entity instantiation, not stage bodies.** Content
-declares three kinds — property kinds, materials, rock types. There is no
-definition for a well, a separator, a tank or a compartment, so nothing can
-create one, so no module can hold one, so no stage has anything to act on. That
-is R20c.9 and it is large: it is `plans/catalog/` becoming loadable content. A
-second gap sat behind it and is now **closed** (finding 130, R20c.10).
+**The wall that stood behind R20c.7 has moved, not vanished.** It was: content
+declares three kinds — property kinds, materials, rock types — so nothing could
+create a well, a separator, a tank or a compartment, so no stage had anything to
+act on.
+
+Stages 3, 5, 6, 8, 12 and 13 now run, because composition builds the entities
+they need **in code**: `Defaults.CompletionFor` assembles a completion,
+`FieldControl.AddCompartment` a compartment. That was the right way to get the
+loop honest — every number in it is a real solve — and it is **not** the right
+place for it to stay. A well whose tubing, choke and lift are compiled into
+`OGSim.Composition` cannot be rebalanced by a content edit, which is
+non-negotiable 11.
+
+So R20c.9 is unchanged in size and is now the largest single thing between this
+engine and a game with variety in it: `plans/catalog/`'s sixteen sheets becoming
+loadable content, and `Defaults.CompletionFor` becoming a loader. A second gap
+sat behind it and is **closed** (finding 130, R20c.10).
 
 SDD-002 §6 said the flow topology is "a per-segment view built from all
 elements" and never said by whom, from what: `IFlowSolver.Solve` takes a
@@ -1134,17 +1169,44 @@ hypothetical:
 | R20.11 | SC11–SC13 — hostile environment, HSE neglect, slow-loop visibility | ⬜ |
 | R20.12 | Coherence checks ([22](design/22_DESIGN_COHERENCE.md) §6.1) scripted in CI | ⬜ |
 
-### Phase R21 — Host contract ⬜
+### Phase R21 — Host contract 🟨
 > 📄 [phases/R21_HOST.md](phases/R21_HOST.md)
 
 | # | Task | Status |
 |---|---|---|
-| R21.1 | Immutable read model published at tick close | ⬜ |
-| R21.2 | Command submission surface | ⬜ |
-| R21.3 | Audit query surface — the player-facing "why?" | ⬜ |
+| R21.1 | Immutable read model published at tick close | 🟨 — `FieldReadModel` is published at stage 13; it is five fields where SDD-017 §2 specifies fifteen views |
+| R21.2 | Command submission surface | 🟨 — the bus is composed and `DrillWellCommand` runs through it; one command of the 61-decision catalogue |
+| R21.3 | Audit query surface — the player-facing "why?" | ⬜ — the trail records causes; nothing queries it for a player |
 | R21.4 | Belief and uncertainty projection for map rendering | ⬜ |
 | R21.5 | Reference headless client proving the contract is sufficient | ⬜ |
 | R21.6 | The 16 required read-model projections ([R21](phases/R21_HOST.md) §2.4b) | ⬜ |
+
+**A playable slice exists, and it is a slice.** Three sub-phases got the engine
+from *runs* to *is played*:
+
+| # | What | Status |
+|---|---|---|
+| R21a | Agency, visibility, consequence — a command, a read model, insolvency | ✅ |
+| R21b | Drilling as a decision — four months, 0.6 success, a dry hole paid in full | ✅ |
+| R21c | The game can be won — a goal, a deadline, a verdict at stage 12 | ✅ |
+| R21d | Scenario/campaign **contracts** — findings 141 | ✅ |
+| R21e | `IScenarioRunner` implementation, replacing composition's `ScenarioGoal` | ⬜ |
+| R21f | Scenario and challenge **content** — the 12 missions, the 10 patterns | ⬜ |
+
+The loop a player now lives: **arrive → commit capital under uncertainty → wait
+four months → find oil or don't → produce → decline → reinvest → win or go
+broke.** Every step is real. The reservoir falls because of what was taken, the
+well earns less as it does, a dry hole costs full price, and the outcome is
+drawn once at commitment so a reload cannot re-roll it.
+
+**What it is not.** Drilling is the only decision — no workover, no lift, no
+facility investment. The player is told where the oil is, so R14's belief
+machinery is built and unused. Gas, water and transport are built and bypassed:
+oil goes straight from reservoir to sale. And `ScenarioGoal` in
+`OGSim.Composition` is a stand-in for the contracts R21d just declared — a win
+condition compiled into the engine rather than loaded, which is the thing
+design 03 §3.3 exists to prevent. **R21e is the debt R21d created and should be
+paid before more content is written against it.**
 
 ---
 
@@ -1193,6 +1255,7 @@ order they are built in.
 | 21 | R19 Persistence | IV | Every module has been registering state since R1 |
 | 22 | **R24 Objectives** | IV | R20's scenarios are built *on* this |
 | 22b | **R20c Composition** | IV | Design 03 §8 gave it a layer and the phase list never gave it a phase; a scenario is a composed engine, so R20 cannot start without one |
+| 22c | **R21a–d Playable slice** | IV | Executed out of order, deliberately: the loop was built end to end to find out whether the parts fit, and it found six defects (136–141) that no amount of reading would have. A phase list is not a reason to defer the question "does this work" |
 | 23 | R20 Scenarios | IV | **SC1 — the acceptance test for the whole engine** |
 | 24 | R21 Host contract | IV | Formalise the boundary; prove it with a reference client |
 | 25 | **R25 Advisor & reality profiles** | IV | Consumes the R21 surface; the reference client generalises into the Advisor |
