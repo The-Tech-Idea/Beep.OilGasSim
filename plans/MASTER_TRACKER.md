@@ -20,12 +20,12 @@ next.** Updated at the close of every phase.
 | | |
 |---|---|
 | **Phase** | R0–R19, R23, R24 ✅ · **R21a–d ✅ — the engine is played** · R20c, R12b, R20d, R21 🟨 · R20, R22, R25 ⬜. The composite programme is one document: [phases/R20d_INTEGRATION.md](phases/R20d_INTEGRATION.md) |
-| **Design docs** | 24 design + 1 research + **26 phase docs**, 17 catalogue sheets + tech tree, 18 SDDs (000–017). Coherence log: **151 findings**, 61–151 from the code passes. **49 open SDD items** now registered here rather than only in the documents that raised them. |
-| **Code status** | 15 engine assemblies, 0 warnings, 0 errors, **783 tests**. The kernel, the contract layer, eleven domain modules and Layer 4 composition are implemented; scenario, activity-mass, VOI, lending and souring contracts are declared in their SDDs and compiled. The composed engine **advances a tick and plays**: a player drills, waits, finds oil or doesn't, produces, declines, and wins or goes broke. Every implemented member traces to a pinned SDD section (F-1). |
+| **Design docs** | 24 design + 1 research + **26 phase docs**, 17 catalogue sheets + tech tree, 18 SDDs (000–017). Coherence log: **153 findings**, 61–153 from the code passes. **49 open SDD items** now registered here rather than only in the documents that raised them. |
+| **Code status** | 15 engine assemblies, 0 warnings, 0 errors, **801 tests**. The kernel, the contract layer, eleven domain modules and Layer 4 composition are implemented; scenario, activity-mass, VOI, lending and souring contracts are declared in their SDDs and compiled. The composed engine **advances a tick and plays**: a player drills, waits, finds oil or doesn't, produces, declines, and wins or goes broke. Every implemented member traces to a pinned SDD section (F-1). |
 | **Repository** | `The-Tech-Idea/Beep.OilGasSim`, branch `master`. Work lands directly on `master`, one task per commit. |
 | **The playable loop** | **arrive → commit capital under uncertainty → wait four months → find oil or don't → produce → decline → reinvest → win or go broke.** Six of the fourteen tick stages are real (3, 5, 6, 8, 12, 13). One command, one product, one goal, one failure condition. |
 | **Balance note** | With a $8M well earning far more per month than it costs, **cash is not the binding constraint on early expansion — the rig is.** Reaching a cash refusal takes ~140 months of idling. That is a real observation about the shipped numbers and belongs to R20.4, not a defect. |
-| **Next** | **R12b, continued** — five activities are on the one engine, each its own class (finding 149): drill, survey, log, core, build-up. The exploration half of the loop now works — a player can pay to learn instead of being told. Next are the activities that CHANGE something rather than measure it (workover, install, abandon), then the belief reaching the read model so a host can show it (R20d.7's second half), then **R21e** (the scenario runner) and **R20c.9** (equipment content). |
+| **Next** | **R21e — the scenario runner**, then the chain (R20d.1–5). The exploration loop is now whole in both directions: five activities on the one engine (finding 149), and stage 13 projects what they taught, so a player pays to learn and can see what they learned. **The activities that CHANGE something are blocked, not skipped** — workover, install and abandon each reach a subsystem the loop does not yet call, so all three would complete and mean nothing (finding 153). They land with steps 4 and 6, not before them. |
 
 **Three things are true at once and all three should stay visible.** The engine
 is architecturally complete to its own laws — every manifest promise checked,
@@ -587,11 +587,11 @@ That last sentence was untrue when it was written. See finding 142.
 | R12b.3 | **Log / core** — the measurement run | ✅ — `WirelineLogActivity`, `CoringActivity`; both read porosity and permeability, the core an order sharper for six times the price | **Information** (an `Observation` with the source's own σ), Wells (the hole must exist), Company |
 | R12b.4 | **Well test / build-up** — flow it and watch the pressure | ✅ — `WellTestActivity`; the only source that sees pressure, and it beats a core on kh. The withdrawal while it runs is still owed (R12b.18) | **Information** (the sharpest σ on compartment pressure and kh), Subsurface (a real withdrawal while it runs), Company |
 | R12b.5 | **Seismic survey** — 2-D, 3-D, attributes, PSDM, 4-D | ✅ 3-D — `SeismicSurveyActivity`: no rig, no wellbore, and the only source that sees the size of an accumulation. Detect-class gating is R12b.19 | **Information** (detect class gates what it can see at all), World (an area, not a point), Capabilities (the tier is tech-gated), Company |
-| R12b.6 | **Workover** — restore, deepen, recomplete, change lift | ⬜ | Wells, Integrity (condition reset), Facilities (deferred production while down) |
+| R12b.6 | **Workover** — restore, deepen, recomplete, change lift | ❌ finding 153 — integrity owns no state and runs no stage, so nothing has degraded for a workover to restore. Unblocked by R20d.11 | Wells, Integrity (condition reset), Facilities (deferred production while down) |
 | R12b.7 | **Stimulate** — acidise, frac, multi-stage | ⬜ | Wells (skin, contact length), Capabilities (fracturing is E3 and tech-gated) |
-| R12b.8 | **Install / construct** — separator, compressor, pipeline, tank | ⬜ | Facilities, Transport, Flow (a new element joins the network), Company (capex) |
+| R12b.8 | **Install / construct** — separator, compressor, pipeline, tank | ❌ finding 153 — the loop runs well→sale directly, so an installed unit would be paid for and bypassed. Unblocked by R20d.1–5 | Facilities, Transport, Flow (a new element joins the network), Company (capex) |
 | R12b.9 | **Turnaround / maintenance** — planned shutdown | ⬜ | Integrity (condition restored), Facilities (availability at stage 4), HSE |
-| R12b.10 | **Abandon** — plug, decommission, restore | ⬜ | Wells, Company (discharges the obligation), HSE (legacy dimension) |
+| R12b.10 | **Abandon** — plug, decommission, restore | ❌ finding 153 — no abandonment obligation exists to discharge and the standing charge does not count wells, so it would only remove production. Unblocked by R20d.9 | Wells, Company (discharges the obligation), HSE (legacy dimension) |
 | R12b.11 | **Shoot the whole basin** — the exploration campaign, many activities as one commitment | ⬜ | World, Information, Company (licence work commitments) |
 
 **Why this is the integration lever and not one more subsystem.** Look down the
@@ -607,14 +607,26 @@ knowing — R14 built the belief store, the observation model and the conjugate
 update, and nothing produced an `Observation` because nothing *did* a survey.
 Four measurements now do: survey, log, core, build-up, each seeing different
 kinds at different sigmas, so **which one to buy is a real decision** rather than
-a price list. What is still owed is the belief reaching the read model
-(R20d.7's second half) — a player learns, and cannot yet see what they learned.
+a price list. The return path is in as well (R20d.7): stage 13 projects every
+belief the company paid for, so what was learned reaches a host instead of
+sitting in a store nothing could read.
+
+**The next three rows are blocked rather than pending, and the order was wrong.**
+R12b.6, .8 and .10 — workover, install, abandon — each reach a subsystem the
+loop does not yet call: nothing degrades for a workover to restore, the chain
+bypasses a facility an install would add, and no obligation exists for an
+abandonment to discharge (finding 153). They are catalogue work only once the
+subsystem behind them is wired, which puts them with R20d steps 4 and 6.
 
 **Every activity is a content template, not a type.** `OperationSpec` already
 carries template id, target, base duration, cost profile, resource needs,
 requirements and an outcome table — so adding "acid squeeze" is a JSON entry,
 never a class. The eleven rows above are catalogue work plus the per-subsystem
 effect each one applies on completion; they are not eleven engines.
+
+**The effect is the half that has a dependency**, and finding 153 is what that
+costs: a template is cheap and the subsystem it acts on is not, so a row is
+ready when its subsystem is, not when someone has time to write it.
 
 | # | Task | Status |
 |---|---|---|
@@ -1203,6 +1215,8 @@ hypothetical:
 
 | # | Finding |
 |---|---|
+| 153 | **The next three activities each have nothing to change.** The plan's stated order after the four measurements was "the templates that CHANGE something — workover, install, abandon", and reading the modules they reach says none of the three can be built honestly yet. A **workover** restores condition, and `IntegrityModule` provides two models while owning no state and running no stage: no component degrades, so the restoration would restore nothing. An **install** joins a facility to the network, and the loop still runs well→sale directly (R20d.1–5): the separator would be bought, paid for, and bypassed. An **abandon** discharges an obligation, and `CompanyState` carries no abandonment liability, so it would remove a producing well and save the company nothing — the field's standing charge is flat and does not know how many wells it stands over. All three would be law L3 with a completion effect that runs and means nothing, which is a worse failure than an unbuilt template because it *looks* built. **R12b's remaining catalogue is gated on the subsystems it reaches, not on catalogue work** — the wiring order in R20d §2 step 1 has to interleave with steps 4 and 6 rather than precede them. Not a defect in what was built; a defect in the order, and the argument for R20d's second axis proving itself again: eight subsystems being complete and bypassed is exactly why the verbs that reach them cannot land first |
+| 152 | **The read model was promised a belief panel nothing could enumerate.** SDD-008 §8 has specified since R14 that beliefs project as `(P10, P50, P90, BestSource, AsOf)` **per kind**, and §3's `IBeliefStore` offered `Apply` and `Get(subject, kind)` — a store you can only ask about a pair you already hold. So the projection had to be handed its (subject, kind) pairs from somewhere, and the only place they exist is inside the store. It is finding 147's shape from the other end: there the consumer was specified and the producer was not, here the producer was specified and the *door* was not, and both stayed invisible for the same reason — nothing had yet tried to build the thing the document promised. `Held` closes it, and the no-leak argument is what makes it safe to add: a pair enters the list only through `Apply`, so it lists exactly what `Get` would already answer one call at a time, and an unobserved subject has no entry to find. Enumerability decides whether the known can be walked, not what is knowable. Fixing it turned up a smaller one underneath — `BeliefStore` held its key set twice, in a `Dictionary` and a parallel insertion-order `List`, which is law L5 waiting to happen: `Age` mutated one and a projection would have read the other |
 | 151 | **A rig was booked and never given back.** `OperationScheduler.Release` was written for R12-V8's cancel-frees-the-rig and called by nothing else, so SDD-007 §5's "release resources" at completion was prose with no code behind it. The calendar therefore held every reservation an operation ever made, and a company's one rig stayed committed for months after it had finished — the second activity of a game was refused as "rig 1 is committed; next free on day 246". It survived this long because nothing had ever tried to run a second activity *after* a first finished: the gameplay tests submit their six wells at once and assert the refusals, which is the same calendar working correctly. It took a well test ordered after a well to expose it. `ActivityState.Finish` now takes the activity off the register and releases the operation together, because they are one event and a caller given two calls will one day make one of them |
 | 150 | **`ObservationSampler` was built, tested and provided by nobody.** R14.3 wrote the whole of SDD-008 §3 — the stream choice (surveys draw `exploration`, logs and tests `measurement`), the σ sanity check, the 09 §4.2 fairness record — as a public class in `OGSim.Information`, and no module ever called `Provide` on it. So when the first activity needed to measure something, the effect sampled truth by hand in a lambda in `Modules.cs`: no audit record, a relative σ applied as if absolute, and no log-space handling. It was not *wrong* in a way a test would catch; it was a second implementation of the wall, three lines long, sitting beside the real one. The `provides` list is the whole story — a type nothing provides cannot be required, and a type nothing requires is invisible to the composer that exists to catch exactly this. Now provided; and `beliefs.Apply` with an `Observation` that did not come out of `Sample` is a review-refusable defect until R14.12 can assert it |
 | 149 | **An activity was three files, and nothing held one together.** The first two templates came out as an `ActivityTerms` entry in the content block, a bespoke `ICommandValidator` beside the command, and an effect lambda in a `ContentId → delegate` dictionary in the module — so "what is a well test" had no answer shorter than reading three files, and `Drilling.cs` ended up containing a pressure survey. The parallel dictionary was the real defect: a template composed with no effect registered threw an `InvariantFault` **at completion**, which is to say after the player had paid for it and waited four months. One class per activity (`Activity<TCommand>`), and the failure mode goes away rather than being detected — an activity carries its own meaning, so one without a meaning cannot be constructed. The generic parameter earns its keep in `Register`: it is the only place that knows the command type, which is what lets the module wire five command pairs by walking a list instead of switching on concrete types. Two further defects fell out of it — the observation model keyed on source alone (so a build-up could measure the size of an accumulation better than seismic, making a survey pointless), and INV8's σ floor was one flat number for every kind (so a core could not beat a log, erasing the only thing a core is bought for) |
@@ -1368,7 +1382,7 @@ always implied by "the engine is headless and composed" and never given rows.
 | R20d.4 | Water — production, treatment, injection, disposal | ✅ R10 | ⬜ |
 | R20d.5 | Transport — pipelines, berths, cargoes, custody transfer points | ✅ R11 | ⬜ custody is an audit entry, not a metered point |
 | R20d.6 | **Operations — the one scheduled-activity engine** | ✅ R12 | 🟨 **drilling is on it** (R12b.15): one rig, one well at a time; cost accrues monthly; outcomes graded. The other ten templates are R12b.1–11. See [R12b](#r12b) — most of the ⬜ rows in this table are reached by an activity or not at all |
-| R20d.7 | Information — observations, beliefs, POS | ✅ R14 | 🟨 **half wired.** Four activities now measure — survey, log, core, build-up — each through `ObservationSampler` (finding 150), each seeing different kinds at different σ. A player learns. What is missing is the other direction: no belief reaches the read model, so the host cannot render what was learned, and POS is still untouched |
+| R20d.7 | Information — observations, beliefs, POS | ✅ R14 | 🟨 **both directions work; POS does not.** Four activities measure — survey, log, core, build-up — each through `ObservationSampler` (finding 150), each seeing different kinds at different σ; and stage 13 now projects what they taught as `BeliefEntryView` (P10/P50/P90 + provenance + as-of), so a host can render it. A player learns and can see what they learned. POS is untouched, and it has no subject until a world generator makes prospects (R20d.8) |
 | R20d.8 | World generation — basins, plays, traps, terrain | ✅ R15 | ⬜ compartments are hand-built by `FieldControl` |
 | R20d.9 | Company — licences, commitments, rivals, regulator | ✅ R16 | ⬜ |
 | R20d.10 | Technology — acquisition routes, gating, effects | ✅ R17 | ⬜ content ships; nothing can be bought |
@@ -1388,6 +1402,14 @@ enters, an install is how a facility joins the network, a workover is how
 integrity is restored, an abandonment is how an obligation discharges. Wiring
 the activity engine ([R12b](#r12b)) is not one of thirteen items — it is the
 mechanism by which most of the other twelve become reachable.
+
+**It is not, however, the whole of R12b first.** The verb and the noun have to
+land together: a workover with nothing degraded to restore, or an install of a
+unit the loop routes around, would complete and mean nothing (finding 153). So
+the templates that only MEASURE — survey, log, core, build-up — went in ahead of
+their subsystems, because information had a store already waiting for them; the
+templates that CHANGE something go in beside the row they reach. The engine came
+first, the catalogue arrives by the row.
 
 After that the order is by what changes the game rather than what was built
 first: R20d.7 (information) is the difference between being told where the oil
@@ -1425,7 +1447,7 @@ a phase that has not started at all.
 | R21.3 | Audit query surface — the player-facing "why?" | ⬜ — the trail records causes; nothing queries it for a player |
 | R21.4 | Belief and uncertainty projection for map rendering | ⬜ |
 | R21.5 | Reference headless client proving the contract is sufficient | ⬜ |
-| R21.6 | The 16 required read-model projections ([R21](phases/R21_HOST.md) §2.4b) | 🟨 — `FieldReadModel` carries 8 fields drawn from 4 of the 16; the other 12 have no source until R20d wires their subsystems in |
+| R21.6 | The 16 required read-model projections ([R21](phases/R21_HOST.md) §2.4b) | 🟨 — `FieldReadModel` carries 9 fields drawn from 5 of the 16; **beliefs project in full** (R21-V7: P10/P50/P90, provenance, as-of), the other 11 have no source until R20d wires their subsystems in |
 
 **A playable slice exists, and it is a slice.** Three sub-phases got the engine
 from *runs* to *is played*:
@@ -1508,11 +1530,14 @@ order they are built in.
 
 **What remains, in order** — the sequencing above is the historical plan; for
 the work still open it is superseded by
-[phases/R20d_INTEGRATION.md](phases/R20d_INTEGRATION.md) §2: **R12b activities →
-R21e scenario runner → beliefs (R20d.7) → the chain (R20d.1–5) → R22 +
-environment wiring → technology & company (R20d.10/.9) → equipment content
-(R20c.9) → R20 → R21 → R25.** Phase numbers stay stable; only the order is
-restated.
+[phases/R20d_INTEGRATION.md](phases/R20d_INTEGRATION.md) §2: **R12b's
+measurements ✅ → beliefs (R20d.7) ✅ → R21e scenario runner → the chain
+(R20d.1–5, with R12b.8) → R22 + environment wiring → technology & company
+(R20d.10/.9, with R12b.10) → equipment content (R20c.9) → R20 → R21 → R25.**
+Phase numbers stay stable; only the order is restated — and R12b's remaining
+templates are now distributed across it rather than sitting at the front
+(finding 153). R20d.8 and R20d.11 are still unplaced, which is how that finding
+came to light.
 
 ## Summary
 

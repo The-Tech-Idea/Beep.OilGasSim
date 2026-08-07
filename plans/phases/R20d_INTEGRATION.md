@@ -42,14 +42,22 @@ The order is by what each step unblocks, not by phase number.
 
 | Step | What | Why here |
 |---|---|---|
-| 1 | **R12b — activities on the one engine.** ✅ drilling collapsed (142, 148) · ✅ one activity, one class (149) · ✅ the four measurements: survey, log, core, build-up (150, 151). Next the templates that CHANGE something: workover, complete, install, abandon | The lever: most bypassed subsystems are reached by an activity or not at all. Well test and seismic are the door to G2 |
+| 1 | **R12b — activities on the one engine.** ✅ drilling collapsed (142, 148) · ✅ one activity, one class (149) · ✅ the four measurements: survey, log, core, build-up (150, 151). **The templates that CHANGE something do not come next** — workover, install and abandon each reach a subsystem this list has not yet wired, so all three would complete and mean nothing (finding 153). They move into steps 4 and 6, beside the subsystem that gives each one something to change | The lever: most bypassed subsystems are reached by an activity or not at all. Well test and seismic are the door to G2 |
 | 2 | **R21e — the scenario runner** | R21d's debt; pays before content is written against the ad-hoc goal |
-| 3 | **Beliefs wired (R20d.7)** | 🟨 half done ahead of schedule — step 1's measurements produce `Observation`s through `ObservationSampler`, so the player already pays to learn. What is left is the return path: a belief on the read model, so a host can render what was learned, plus POS |
-| 4 | **The chain (R20d.1–5)** | `IFlowSolver` over the registered network; separation, gas, water, transport; custody becomes a metered point. Closes FV1's 1000-tick half, R11-V13, SC7/SC8 |
+| 3 | **Beliefs wired (R20d.7)** | ✅ both directions, ahead of schedule — step 1's measurements produce `Observation`s through `ObservationSampler`, and stage 13 projects the result as `BeliefEntryView` (R21-V7). A player pays to learn and can see what they learned. POS is the remainder and has no subject until a world generator makes prospects (R20d.8) |
+| 4 | **The chain (R20d.1–5)** — with **R12b.8 install** | `IFlowSolver` over the registered network; separation, gas, water, transport; custody becomes a metered point. Closes FV1's 1000-tick half, R11-V13, SC7/SC8. An install template is catalogue work the moment a facility is something the loop routes through rather than around |
 | 5 | **Environment (R22 + R20d.13)** | The one unbuilt phase; weather, seasons, access windows feeding stage 2 |
-| 6 | **Technology purchasable (R20d.10) + company (R20d.9)** | The four acquisition routes as commands; licences and commitments; the forty-year arc starts meaning something |
+| 6 | **Technology purchasable (R20d.10) + company (R20d.9)** — with **R12b.10 abandon** | The four acquisition routes as commands; licences and commitments; the forty-year arc starts meaning something. An abandonment obligation is a company liability, so the template that discharges one arrives with the ledger that carries it |
 | 7 | **Equipment content (R20c.9)** | The sixteen catalogue sheets become loadable kinds; `Defaults.CompletionFor` becomes a loader. Variety arrives here |
 | 8 | **R20 · R21 · R25** | Scenarios and balance on real content; the full host surface; the advisor |
+
+**Two of the thirteen wiring rows have no step above, and finding 153 is how
+that surfaced.** R20d.8 (world generation) and R20d.11 (integrity & HSE) are in
+the tracker's wiring table and in nobody's order — which was invisible until an
+activity needed one of them. **R12b.6 workover waits on R20d.11**: it restores a
+condition, and no component has one to restore until integrity owns state and
+runs at stage 4. Both belong in this order before step 8, and where exactly is
+the next revision of this section rather than a guess made here.
 
 ---
 
