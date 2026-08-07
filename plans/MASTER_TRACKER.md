@@ -410,19 +410,48 @@ be declared, since 02 §4.1 admits no facility-type hierarchy and non-negotiable
 declared as the record `Specification`. The concrete classes here are
 implementations selected by `ContentId`, which is the intended shape.
 
-### Phase R9 — Gas processing ⬜
+### Phase R9 — Gas processing 🟨
 > 📄 [phases/R9_GAS.md](phases/R9_GAS.md)
+> `src/OGSim.Facilities` extension.
 
 | # | Task | Status |
 |---|---|---|
-| R9.1 | `ICompressionModel` — staged, polytropic, power | ⬜ |
-| R9.2 | Dehydration | ⬜ |
-| R9.3 | Sweetening; sulphur by-product | ⬜ |
-| R9.4 | NGL extraction and component split | ⬜ |
-| R9.5 | Flare — emissions, penalty, **and the oil cap when flaring is limited** | ⬜ |
-| R9.6 | Gas re-injection path | ⬜ |
-| R9.7 | Sales gas specification gate | ⬜ |
-| R9.8 | Model tests MX6, SC3 | ⬜ |
+| R9.0 | SDD review — three findings; **compression was specified nowhere** | ✅ |
+| R9.1 | Staged polytropic compression — equal stage ratio, interstage cooling, heat derating | ✅ |
+| R9.2 | Dehydration | ✅ |
+| R9.3 | Sweetening; sulphur by-product | ✅ |
+| R9.4 | NGL extraction and the component split | ✅ — FD2's boundary, now a declared type |
+| R9.5 | Flare — **and the oil cap when flaring is limited** | ✅ |
+| R9.6 | Gas re-injection path | ⬜ — needs R10's injector completion; the drive already declares `AcceptedInjectants` |
+| R9.7 | Sales gas specification gate | ✅ — R8.7's gate, with gas limits |
+| R9.8 | Model tests MX6, SC3 | ✅ MX6 · SC3 with R9.6 |
+
+**R9's verification.** R9-V1 ✅ · R9-V2 ✅ · R9-V3 ✅ · R9-V4 ✅ · R9-V5 ✅ ·
+R9-V6 ✅ · R9-V7 ✅ · **R9-V8 ✅** · R9-V11 ✅ · R9-V9/R9-V10 ⬜ with R9.6.
+
+**R9-V8 holds — the phase's headline.** With flaring capped and no other gas
+outlet, oil falls monotonically as the cap tightens, and the deferred volume
+names the flare. Nothing in the engine implements this: the flare is an element
+that reports a capacity, S3 throttles the completions feeding a violated
+constraint, and the throttled rate is the well's oil as much as its gas. The
+behaviour is the composition of two rules written phases apart, neither of which
+mentions the other. An environmental rule is a physical production constraint
+rather than a fine.
+
+**R9.0's findings.**
+
+| # | Finding |
+|---|---|
+| 115 | **Compression was specified in no SDD at all.** R9.1 names it, R9-V1 pins it against "the polytropic formula", MX6 tests it — and no document stated the formula, the staging rule, the discharge temperature or the ratio limit. The whole task was unimplementable under F-1. Written as SDD-006 §3b |
+| 116 | **The component split had no declared type.** FD2 makes the NGL plant the one place components exist, SDD-006 §4 names the split, nothing declared what one IS. R8-V4 and R8.5 were both gated on it, so the gap blocked three tasks across two phases |
+| 117 | R9 §3 names `ICompressor`, `IDehydrator`, `IAcidGasRemoval`, `INglExtraction` and `IFlare` — five more of finding 82(c)'s never-declare list |
+| 118 | **INV1 is on TOTAL mass, not per material.** SDD-002 §5 said "per material", true of every element that existed when it was written. The NGL plant is the first that CONVERTS — propane in gas becomes liquid propane — so per-material closure is false for it and always will be. SDD-006 §4 already said "mass closure" and the solver has always checked totals; only that one line disagreed |
+
+Writing R9-V8 also found a fixture recording state inside `Transform`. §8's
+attribution pass re-runs every transform at the completions' **uncapped** targets,
+so an impure element ends up holding the uncapped answer — and the first version
+of the test reported no throttling at any cap. Transform is required to be pure
+(SDD-002 §5); the converged values live in the report.
 
 ### Phase R10 — Water handling ⬜
 > 📄 [phases/R10_WATER.md](phases/R10_WATER.md)

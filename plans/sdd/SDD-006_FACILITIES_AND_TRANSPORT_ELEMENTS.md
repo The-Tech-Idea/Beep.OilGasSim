@@ -181,6 +181,51 @@ Datasheet: {capacity, combustionEfficiency}.
 inlet back to the gas system; remainder follows the flare/fugitive path.
 Datasheet: {capacity, recoveryFraction}.
 
+## 3b. Compression
+
+> **R9.0 amendment (finding 115): compression was specified in no SDD at all.**
+> R9.1 names `ICompressionModel`, R9-V1 pins it against "the polytropic formula"
+> and MX6 tests it, and no document stated that formula, the staging rule, the
+> discharge temperature or the ratio limit. Under F-1 the whole of R9.1 was
+> unimplementable. Stated here.
+>
+> It is **not** one of [03](../design/03_ARCHITECTURE.md) §3.2's eleven
+> replaceable slots — those name `ISeparationModel` and `IHydraulicModel` and not
+> this — so it is a unit's own model rather than a plug-and-play seam, and the
+> `ICompressionModel` name R9 §3 uses is corrected to a concrete unit behind
+> `IFlowElement` like every other piece of equipment (finding 117).
+
+```text
+STAGED POLYTROPIC COMPRESSION — SI throughout
+
+Ratio limit: a single stage is limited by discharge temperature and by
+  mechanical design. r_max from the tier (default 3.5).
+  N = ceil( ln(P2/P1) / ln(r_max) ),  N ≥ 1
+  Each stage takes the EQUAL ratio r = (P2/P1)^(1/N), which minimises total
+  power for a fixed overall ratio — the reason real trains are balanced.
+
+Per stage, with interstage cooling back to T1 (aftercoolers are part of the
+tier; without them stage 2 starts hot and the train would run away):
+  T2 = T1 · r^((n−1)/n)                                   [K]
+  w  = (Z̄ · R · T1 / MW) · (n/(n−1)) · ( r^((n−1)/n) − 1 ) [J/kg]
+
+Train:
+  W_shaft = ṁ · N · w / η_polytropic                       [W]
+  n from the tier (default 1.25 for typical hydrocarbon gas); η from the tier.
+
+HEAT DERATING (13 §3.3, R9 §2.6): a compressor's throughput capacity falls with
+ambient temperature — the air-cooled driver and the aftercoolers both lose duty.
+  capacity(T_amb) = capacity_rated · ( 1 − k_derate · max(0, T_amb − T_ref) )
+  k_derate per K and T_ref from the tier; clamped at zero.
+  This is why a desert field loses gas-handling capacity in exactly the hottest
+  months, and — through §4's flaring cap — loses OIL rate in summer for a reason
+  nowhere near the reservoir.
+```
+
+**The compressor is an ordinary `IFlowElement`.** Its constraint is
+`ConstraintKind.TotalCapacity` at the derated value and its `PowerDraw` is
+`W_shaft`, which stage 4's balance consumes exactly as it consumes an ESP's.
+
 ## 4. Gas treating (dehydration · sweetening · NGL)
 
 ```text
@@ -192,6 +237,35 @@ NGL plant:  per-component recovery fractions from tier (C2, C3, C4, C5+),
             the ONLY place components exist); products leave as distinct
             material streams. Mass closure across the split is element-checked.
 ```
+
+> **R9.0 amendment (finding 116): the component split had no declared type.**
+> FD2 makes the NGL plant the one place components exist, this section names the
+> split, and nothing anywhere declared what a split IS. R8-V4 and R8.5 are both
+> gated on it (R8's tracker entry says so), so the gap blocked three tasks across
+> two phases.
+
+```csharp
+// FD2's boundary, made a type so the boundary is visible in the code rather
+// than only in prose. C1 is everything lighter than ethane — methane plus the
+// inerts — because nothing downstream separates them and a component nobody
+// recovers does not need its own field.
+public enum GasComponent { C1, C2, C3, C4, C5Plus }
+
+// Mass fractions of a GAS stream, summing to 1. Declared by the fluid system
+// and carried NOWHERE ELSE: a stream outside the NGL plant has no component
+// split, and asking for one is a design error rather than a defaulted answer.
+public sealed record ComponentSplit(ImmutableArray<double> MassFractionByComponent);
+
+// Per-component recovery, from the plant's tier.
+public sealed record NglRecovery(ImmutableArray<double> FractionByComponent);
+```
+
+**Why a fraction per component rather than a full compositional model.** FD2's
+whole point is that compositional tracking costs a great deal for detail the
+player never sees. The split enters at one element, is consumed by that element,
+and the products leave as ordinary black-oil material streams — so nothing
+upstream or downstream gains a component field, and the boundary cannot leak by
+accident because there is no member on `MaterialStream` to leak through.
 
 ## 5. Tank
 

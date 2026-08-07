@@ -242,7 +242,7 @@ public sealed record TransformResult(
     // ELEMENT-LEVEL CONSERVATION, the complete form (an earlier draft omitted
     // Sourced and Disposed, so a flare or a completion could not pass its own
     // check):  Σ inlets + Sourced == Σ outlets + FuelConsumed + Disposed
-    // per material, |error| <= max(1e-12 · massTotal, 1e-9 kg/s). Checked after
+    // on TOTAL MASS, |error| <= max(1e-12 · massTotal, 1e-9 kg/s). Checked after
     // EVERY transform — what makes an INV1 breakdown attributable to one element.
 
 public sealed record DisposedMass(
@@ -281,6 +281,27 @@ public enum ConstraintKind
 >   let an element smuggle state out of a pure call.
 > - **`in` dropped from both parameters.** `TransformInput` is a record — a
 >   reference type — so `in` bought nothing and read as though it were a struct.
+
+> **R9.0 amendment (finding 118): INV1 is on TOTAL MASS, not per material.**
+> This section said "per material", which was true of every element that existed
+> when it was written — a separator splits phases of the same materials and a
+> pipeline moves them. R9's NGL plant is the first element that CONVERTS: it
+> takes propane dissolved in a gas stream and produces liquid propane, so gas
+> mass falls and liquid mass rises by the same amount. Per-material closure is
+> false for it and always will be.
+>
+> §4's own text already said "mass closure across the split", and the solver has
+> always checked totals — `AssertElementConservation` sums across materials.
+> So the code and SDD-006 agreed and only this line did not; it is corrected
+> rather than the behaviour changed.
+>
+> **What is lost by relaxing it, and why that is acceptable:** a per-material
+> check would catch an element that silently turned water into oil. Nothing else
+> does — but nothing else needs to, because material identity is only ever
+> changed by elements whose whole purpose is changing it, and each of those is
+> element-checked on totals and tested on its own conversion (R9-V5, R9-V4).
+> A stricter rule that every converting element had to be exempted from would
+> have taught nobody anything.
 
 > **R4 amendment (finding 96): `TransformInput.SolvedRate`.** §7 S2 says "build
 > streams from `q_w`", but nothing in §5 gave the solver a way to hand `q_w` to

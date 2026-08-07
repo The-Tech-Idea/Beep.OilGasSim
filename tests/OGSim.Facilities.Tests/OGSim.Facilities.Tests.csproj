@@ -24,6 +24,9 @@
     <!-- R6-V14 runs a real completion through the real solver: the phase's most
          valuable test needs both halves. -->
     <ProjectReference Include="..\..\src\OGSim.Flow\OGSim.Flow.csproj" />
+    <!-- R9-V8 runs a real completion, a real flare and the real solver together:
+         the phase's headline test needs all three. -->
+    <ProjectReference Include="..\..\src\OGSim.Wells\OGSim.Wells.csproj" />
   </ItemGroup>
 
 </Project>
