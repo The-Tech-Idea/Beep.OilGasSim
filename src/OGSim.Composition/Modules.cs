@@ -303,8 +303,10 @@ internal sealed class FieldModule() : EngineModule(Declare(
         typeof(IAuditTrail),
         typeof(IRandomSource),
         typeof(SimulationClock),
+        typeof(IBeliefStore),
+        typeof(OGSim.Information.ObservationSampler),
     ],
-    ownsState: ["field.drilling"],
+    ownsState: ["field.activities"],
     stages:
     [
         new StageParticipation(StageId.Operations, Order: 0),
@@ -314,12 +316,21 @@ internal sealed class FieldModule() : EngineModule(Declare(
         new StageParticipation(StageId.Close, Order: 0),
     ],
 
-    // Drilling belongs to THIS module and to no other: it spends the company's
-    // money and opens a well, and the field module is the one place entitled to
-    // know both are real. Declaring it here rather than registering it in the
-    // builder is what puts the engine's input surface inside the set the
-    // composer validates (finding 139).
-    commands: [typeof(DrillWellCommand)]))
+    // Activities belong to THIS module and to no other: they spend the company's
+    // money and they open wells and deliver beliefs, and the field module is the
+    // one place entitled to know all three are real. Declaring them here rather
+    // than registering them in the builder is what puts the engine's input
+    // surface inside the set the composer validates (finding 139) — and, since
+    // every one of these is wired by walking the activity catalogue, it is also
+    // what catches a catalogue and a manifest that have drifted apart.
+    commands:
+    [
+        typeof(DrillWellCommand),
+        typeof(WellTestCommand),
+        typeof(WirelineLogCommand),
+        typeof(CutCoreCommand),
+        typeof(SeismicSurveyCommand),
+    ]))
 {
     public override void Compose(IModuleComposition composition)
     {
@@ -360,26 +371,68 @@ internal sealed class FieldModule() : EngineModule(Declare(
 
         scheduler.Register(Defaults.TheRig);
 
-        var drilling = new DrillingState(scheduler, Defaults.Drilling, company);
-        composition.Own(drilling);
+        // WHAT AN ACTIVITY MEANS lives in the activity, and composition is the
+        // one layer entitled to build one: a finished hole becomes a well, a
+        // finished build-up becomes a belief, and only here is it known that
+        // wells, compartments and beliefs are all real (03 §2).
+        var subsurface = composition.Require<OGSim.Subsurface.SubsurfaceState>();
+
+        var door = new ObservationDoor(
+            composition.Require<OGSim.Information.ObservationSampler>(),
+            composition.Require<IBeliefStore>(),
+            Defaults.SpaceOf);
+
+        IActivity[] catalogue =
+        [
+            new DrillWellActivity(
+                Defaults.DrillWellTerms, Defaults.MaximumDrillingDepth, field,
+                Defaults.CompletionFor),
+
+            new WellTestActivity(
+                Defaults.WellTestTerms, Defaults.WellTestSource,
+                Defaults.PressureKind, Defaults.PermeabilityKind,
+                field, subsurface, door),
+
+            new WirelineLogActivity(
+                Defaults.WirelineLogTerms, Defaults.WellLogSource,
+                Defaults.PorosityKind, Defaults.PermeabilityKind,
+                field, subsurface, door),
+
+            new CoringActivity(
+                Defaults.CoringTerms, Defaults.CoreSource,
+                Defaults.PorosityKind, Defaults.PermeabilityKind,
+                field, subsurface, door),
+
+            new SeismicSurveyActivity(
+                Defaults.SeismicSurveyTerms, Defaults.SeismicSource,
+                Defaults.OilInPlaceKind, subsurface, door),
+        ];
+
+        var activities = new ActivityState(scheduler, company, catalogue);
+        composition.Own(activities);
 
         var objectives = new ObjectiveStage(company, Defaults.Goal, audit);
         composition.Contribute(order: 0, objectives);
 
-        var close = new CloseStage(loop, company, field, drilling, objectives);
+        var close = new CloseStage(loop, company, field, activities, objectives);
         composition.Contribute(order: 0, close);
         composition.Provide(close);
 
         // Stage 3: rigs that finished this month hand over a well or a dry hole,
         // BEFORE stage 5 solves — so a well completed in January produces in
         // January rather than waiting a month for the tick to come round again.
-        composition.Contribute(order: 0, new DrillingStage(drilling, field, audit));
+        composition.Contribute(order: 0, new ActivityStage(activities, audit));
 
-        SimulationClock clock = composition.Require<SimulationClock>();
+        // Every activity wires its own command pair, because only the activity
+        // knows its command's type. The manifest above lists the same five, and
+        // the composer holds the two lists against each other (finding 139) — so
+        // a template added to the catalogue and forgotten in the manifest refuses
+        // to compose rather than shipping an order nothing listens to.
+        var orders = new ActivityOrders(
+            company, field, activities, composition.Require<SimulationClock>());
 
-        composition.HandleCommand(
-            new DrillWellValidator(company, field, drilling, clock),
-            new DrillWellApplier(drilling, clock));
+        for (int i = 0; i < activities.Catalogue.Count; i++)
+            activities.Catalogue[i].Register(composition, orders);
     }
 }
 
@@ -391,8 +444,13 @@ internal sealed class FieldModule() : EngineModule(Declare(
 /// </summary>
 internal sealed class InformationModule() : EngineModule(Declare(
     "information",
-    provides: [typeof(IBeliefStore), typeof(IObservationModel)],
-    requires: [typeof(IAuditTrail)],
+    provides:
+    [
+        typeof(IBeliefStore),
+        typeof(IObservationModel),
+        typeof(OGSim.Information.ObservationSampler),
+    ],
+    requires: [typeof(IAuditTrail), typeof(IRandomSource)],
     ownsState: NothingOwnedYet,
     stages: NoStagesYet))
 {
@@ -400,10 +458,27 @@ internal sealed class InformationModule() : EngineModule(Declare(
     {
         ArgumentNullException.ThrowIfNull(composition);
 
-        composition.Provide<IBeliefStore>(new OGSim.Information.BeliefStore(
-            composition.Require<IAuditTrail>(), _ => 0.02, () => new GameDate(1965, 1)));
+        IAuditTrail audit = composition.Require<IAuditTrail>();
 
-        composition.Provide<IObservationModel>(new RegionalObservationModel());
+        composition.Provide<IBeliefStore>(new OGSim.Information.BeliefStore(
+            audit, Defaults.SigmaFloorFor, () => new GameDate(1965, 1)));
+
+        var model = new RegionalObservationModel();
+        composition.Provide<IObservationModel>(model);
+
+        // R14.3's sampler, COMPOSED. It existed, was tested and was provided by
+        // nobody, so the first activity that measured anything sampled truth by
+        // hand and delivered a belief with no fairness record behind it
+        // (SDD-008 §3, finding 149). It owns the stream choice — surveys draw
+        // `exploration`, logs and tests `measurement` — so an activity says only
+        // what it measured and never how.
+        IRandomSource random = composition.Require<IRandomSource>();
+
+        composition.Provide(new OGSim.Information.ObservationSampler(
+            model,
+            random.Stream(StreamId.Exploration),
+            random.Stream(StreamId.Measurement),
+            audit));
     }
 }
 

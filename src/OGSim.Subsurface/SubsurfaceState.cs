@@ -161,14 +161,45 @@ internal sealed class SubsurfaceState : IStateOwner
         }
     }
 
-    /// <summary>
-    /// The ONE door pressure leaves by (SDD-008 §1): a sample for the observation
-    /// model to add error to. Not a getter for the truth — the caller receives a
-    /// number it must still push through <c>Observation</c> to learn anything.
-    /// </summary>
+    // ------------------------------------------------------- the truth door
+    //
+    // SDD-008 §3's whole door, and nothing else may be added to it without going
+    // back to that section first. Each member hands out a bare number the caller
+    // must still push through `ObservationSampler` to learn anything — none of
+    // them is a getter for the truth, and a caller that applies one of these to a
+    // belief directly has walked through the wall rather than the door.
+    //
+    // They are `internal` and OGSim.Composition alone can see them (the csproj
+    // says so): the layer that owns what an activity MEANS is the only layer with
+    // a reason to sample.
+
+    /// <summary>Current compartment pressure — the DYNAMIC one, and the reason a
+    /// build-up is worth shutting a well in for.</summary>
     internal Pressure TruePressureOf(EntityId<IReservoirCompartmentEntity> compartment) =>
+        Find(compartment).Pr;
+
+    /// <summary>Rock porosity, fraction. Static: a rock does not become less
+    /// porous by being ignored, which is why SDD-008 §2 does not age it.</summary>
+    internal double TruePorosityOf(EntityId<IReservoirCompartmentEntity> compartment) =>
+        Find(compartment).Rock.Porosity;
+
+    internal Permeability TruePermeabilityOf(EntityId<IReservoirCompartmentEntity> compartment) =>
+        Find(compartment).Rock.Permeability;
+
+    /// <summary>
+    /// Oil in place as the compartment was CREATED with, not what is left.
+    ///
+    /// <para>A survey sees the accumulation, not the production history — reading
+    /// remaining volume here would let a company deduce its own cumulative
+    /// offtake by re-shooting seismic, and would make every survey after the
+    /// first a different measurement of a different thing.</para>
+    /// </summary>
+    internal SurfaceVolume TrueOilInPlaceOf(EntityId<IReservoirCompartmentEntity> compartment) =>
+        Find(compartment).Initial.OilInPlace;
+
+    private ReservoirCompartment Find(EntityId<IReservoirCompartmentEntity> compartment) =>
         _byId.TryGetValue(compartment, out ReservoirCompartment? found)
-            ? found.Pr
+            ? found
             : throw new InvariantFault("INV3", null,
                 $"compartment {compartment.Value} does not exist");
 

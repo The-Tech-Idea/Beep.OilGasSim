@@ -22,16 +22,6 @@ using OGSim.Wells;
 
 namespace OGSim.Composition;
 
-// ------------------------------------------------------------------ commands
-
-/// <summary>
-/// Drill and complete a well on a known compartment (design 20's D-catalogue —
-/// the first decision a player makes and the one every other decision waits on).
-/// </summary>
-public sealed record DrillWellCommand(
-    EntityId<IReservoirCompartmentEntity> Target,
-    Length TotalDepth) : Command(Subject: null);
-
 // ------------------------------------------------------------- the read model
 
 /// <summary>
@@ -49,7 +39,7 @@ public sealed record FieldReadModel(
     GameDate Date,
     Money Cash,
     int Wells,
-    int WellsDrilling,
+    int ActivitiesRunning,
     SurfaceVolume ProducedThisTick,
     bool Insolvent,
     Outcome Outcome);
@@ -70,7 +60,7 @@ internal sealed class CloseStage(
     ProductionLoop loop,
     CompanyState company,
     FieldControl field,
-    DrillingState drilling,
+    ActivityState activities,
     ObjectiveStage objectives) : ITickStage
 {
     public StageId Id => StageId.Close;
@@ -89,7 +79,7 @@ internal sealed class CloseStage(
             context.Date,
             company.Ledger.Cash,
             field.WellCount,
-            drilling.InProgress,
+            activities.InProgress,
             loop.ProducedThisTick,
             objectives.Insolvent,
             objectives.Outcome);

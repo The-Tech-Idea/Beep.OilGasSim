@@ -61,13 +61,13 @@ public sealed class GameplayTests
 
         // Still drilling: committed, paid for, nothing to show.
         engine.Pipeline.AdvanceTick();
-        Assert.Equal(1, engine.ReadModel!.WellsDrilling);
+        Assert.Equal(1, engine.ReadModel!.ActivitiesRunning);
         Assert.Equal(0, engine.ReadModel.Wells);
         Assert.Equal(0.0, engine.ReadModel.ProducedThisTick.CubicMetres);
 
         for (var month = 0; month < 4; month++) engine.Pipeline.AdvanceTick();
 
-        Assert.Equal(0, engine.ReadModel!.WellsDrilling);
+        Assert.Equal(0, engine.ReadModel!.ActivitiesRunning);
         Assert.Equal(1, engine.ReadModel.Wells);
         Assert.True(engine.ReadModel.ProducedThisTick.CubicMetres > 0.0,
             "once the rig is off, the field must produce");
@@ -90,7 +90,7 @@ public sealed class GameplayTests
 
         for (var month = 0; month < 6; month++) engine.Pipeline.AdvanceTick();
 
-        Assert.Equal(0, engine.ReadModel!.WellsDrilling);
+        Assert.Equal(0, engine.ReadModel!.ActivitiesRunning);
         Assert.True(engine.ReadModel.Wells < 6,
             "if every hole finds oil there is no risk and no decision");
         Assert.True(engine.ReadModel.Wells > 0,

@@ -1,0 +1,8 @@
+{
+  "kind": "property-kind",
+  "id": "reservoir-pressure",
+  "dimension": "Pressure",
+  "space": "Linear",
+  "minimumValid": 1.0e5,
+  "maximumValid": 1.5e8
+}

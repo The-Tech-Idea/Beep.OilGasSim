@@ -76,12 +76,6 @@ internal static class Defaults
         FixedOperatingCostPerTick: Money.FromMillions(0.3));
 
     /// <summary>
-    /// What a well costs and how deep the company can currently drill. $8M is a
-    /// land well; the 4,000 m envelope is what rotary drilling opens before any
-    /// technology is acquired, so drilling deeper is a thing the player has to
-    /// go and earn (TECH_TREE: deep-drilling, E2).
-    /// </summary>
-    /// <summary>
     /// How many materials this composition's catalogue carries. One — oil —
     /// until R20c.9 loads the nine of `content/materials/`. Stated once because
     /// three places must agree on it: the completion's stream width, an
@@ -123,24 +117,170 @@ internal static class Defaults
     ]);
 
     /// <summary>
-    /// What a well costs, how deep the company can reach, and how it can go
-    /// wrong. Four months on a land well — long enough that money leaves well
-    /// before oil arrives, which is what makes timing a decision rather than an
-    /// afterthought.
-    ///
-    /// <para>Declared AFTER <see cref="TheRig"/> and
-    /// <see cref="DrillingOutcomes"/>: static initialisers run in declaration
-    /// order, and reading them from above would have taken a null table and a
-    /// default rig id. The compiler said so; the same trap is noted on
-    /// `EngineCorpus.Subsurface` for the same reason.</para>
+    /// A build-up's outcome table. A test is short, cheap and usually works —
+    /// but it can fail, and a failed test is the honest bad outcome: the money
+    /// is gone and the company knows nothing new, which is what makes buying
+    /// information a decision rather than a formality.
     /// </summary>
-    public static DrillingTerms Drilling { get; } = new(
-        CostPerWell: Money.FromMillions(8.0),
-        MaximumDepth: new Length(4000.0),
-        DurationTicks: 4,
+    public static OutcomeTable WellTestOutcomes { get; } = new(
+    [
+        new OutcomeRow(OutcomeGrade.OnTime, Probability: 0.85,
+                       DurationFactor: 1.00, CostFactor: 1.00, DisasterDay: null),
+        new OutcomeRow(OutcomeGrade.Delayed, Probability: 0.10,
+                       DurationFactor: 2.00, CostFactor: 1.20, DisasterDay: null),
+        new OutcomeRow(OutcomeGrade.Failure, Probability: 0.05,
+                       DurationFactor: 1.00, CostFactor: 1.00, DisasterDay: null),
+    ]);
+
+    /// <summary>
+    /// How deep the company can drill before it earns the technology to go
+    /// further. 4,000 m is what rotary drilling opens; deep drilling is E2 and
+    /// has to be gone and got (TECH_TREE).
+    /// </summary>
+    public static Length MaximumDrillingDepth { get; } = new(4000.0);
+
+    /// <summary>
+    /// A survey's outcome table. Nothing about shooting seismic is difficult in
+    /// the way drilling is; what can go wrong is that the data comes back too
+    /// noisy to process, and then the money is simply gone.
+    /// </summary>
+    public static OutcomeTable SurveyOutcomes { get; } = new(
+    [
+        new OutcomeRow(OutcomeGrade.OnTime, Probability: 0.80,
+                       DurationFactor: 1.00, CostFactor: 1.00, DisasterDay: null),
+        new OutcomeRow(OutcomeGrade.Delayed, Probability: 0.12,
+                       DurationFactor: 1.50, CostFactor: 1.10, DisasterDay: null),
+        new OutcomeRow(OutcomeGrade.Failure, Probability: 0.08,
+                       DurationFactor: 1.00, CostFactor: 1.00, DisasterDay: null),
+    ]);
+
+    // ------------------------------------------------------- property kinds
+    //
+    // Content in a finished game — `content/property-kinds/` carries the same
+    // ids, their dimensions and their spaces. Named here so no activity holds a
+    // bare string and two of them cannot disagree about which kind they measure.
+
+    public static ContentId PressureKind { get; } = new("reservoir-pressure");
+
+    public static ContentId PorosityKind { get; } = new("porosity");
+
+    public static ContentId PermeabilityKind { get; } = new("permeability");
+
+    public static ContentId OilInPlaceKind { get; } = new("oil-in-place");
+
+    // ------------------------------------------------- measurement sources
+    //
+    // What the observation model prices a reading at (SDD-008 §3). Distinct from
+    // a template id on purpose: a template is a job that can be ordered, a source
+    // is a way of seeing, and the same source could one day be reached by more
+    // than one job.
+
+    public static ContentId WellTestSource { get; } = new("well-test");
+
+    public static ContentId WellLogSource { get; } = new("well-log");
+
+    public static ContentId CoreSource { get; } = new("core");
+
+    public static ContentId SeismicSource { get; } = new("seismic-3d");
+
+    /// <summary>
+    /// Which space a kind's belief lives in (SDD-008 §2, content's
+    /// <c>space</c> field).
+    ///
+    /// <para>Additive kinds Linear, multiplicative kinds Log. It THROWS on a kind
+    /// it does not know rather than assuming Linear: a multiplicative quantity
+    /// sampled additively can go negative, and a volume of −4 million m³ would be
+    /// a belief nobody could act on (law L2 — no dependency has a default).</para>
+    /// </summary>
+    public static BeliefSpace SpaceOf(ContentId kind) =>
+        kind.Value switch
+        {
+            "reservoir-pressure" => BeliefSpace.Linear,
+            "porosity" => BeliefSpace.Linear,
+            "permeability" => BeliefSpace.Log,
+            "oil-in-place" => BeliefSpace.Log,
+            _ => throw new ModelFault("SDD-008 §2", null,
+                $"no belief space is declared for property kind '{kind.Value}'"),
+        };
+
+    /// <summary>
+    /// INV8's sigma floor, per kind and in that kind's space.
+    ///
+    /// <para>Per kind because one flat number cannot be both: 0.02 against a
+    /// porosity erases the difference between a core and a log, and against a
+    /// pressure in pascals it is no floor at all. The floor is what stops
+    /// repeated observation driving sigma to zero — without it a player logs the
+    /// same compartment ten times and becomes certain of a rock nobody can be
+    /// certain of.</para>
+    /// </summary>
+    public static double SigmaFloorFor(ContentId kind) =>
+        kind.Value switch
+        {
+            // A gauge is good, but the compartment behind it is not one number.
+            "reservoir-pressure" => 5.0e4,
+            "porosity" => 0.005,
+            "permeability" => 0.10,
+
+            // Nobody ever knows STOIIP to better than about 15%, and a game that
+            // let a player get there would have no reason for appraisal.
+            "oil-in-place" => 0.15,
+            _ => throw new ModelFault("INV8", null,
+                $"no sigma floor is declared for property kind '{kind.Value}'"),
+        };
+
+    /// <summary>
+    /// The activity templates this composition ships. Content in a finished game
+    /// (R20c.9); here they are the five the loop can honestly support.
+    ///
+    /// <para>Declared AFTER the rig and the outcome tables: static initialisers
+    /// run in declaration order, and reading them from above takes a null table
+    /// and a default rig id. The compiler said so, and `EngineCorpus.Subsurface`
+    /// carries a note about the same trap.</para>
+    /// </summary>
+    public static ActivityTerms DrillWellTerms { get; } = new(
         Template: new ContentId("drill-development-well"),
+        Cost: Money.FromMillions(8.0),
+        DurationTicks: 4,
         Rig: TheRig,
         Outcomes: DrillingOutcomes);
+
+    public static ActivityTerms WellTestTerms { get; } = new(
+        Template: new ContentId("well-test-buildup"),
+        Cost: Money.FromMillions(0.4),
+        DurationTicks: 1,
+        Rig: TheRig,
+        Outcomes: WellTestOutcomes);
+
+    /// <summary>Cheap, quick, and run on the rig that is already there.</summary>
+    public static ActivityTerms WirelineLogTerms { get; } = new(
+        Template: new ContentId("wireline-log"),
+        Cost: Money.FromMillions(0.15),
+        DurationTicks: 1,
+        Rig: TheRig,
+        Outcomes: WellTestOutcomes);
+
+    /// <summary>Several times the price of a log for the same two properties,
+    /// which is the decision.</summary>
+    public static ActivityTerms CoringTerms { get; } = new(
+        Template: new ContentId("cut-core"),
+        Cost: Money.FromMillions(0.9),
+        DurationTicks: 1,
+        Rig: TheRig,
+        Outcomes: WellTestOutcomes);
+
+    /// <summary>
+    /// NO RIG (SDD-007 §1's null case) and no wellbore: a survey is shot from the
+    /// surface, so it can run while the rig is turning elsewhere. That
+    /// independence is what lets a company explore and develop in the same month
+    /// — and what makes seismic the opening move rather than a queue behind
+    /// drilling.
+    /// </summary>
+    public static ActivityTerms SeismicSurveyTerms { get; } = new(
+        Template: new ContentId("seismic-3d"),
+        Cost: Money.FromMillions(2.5),
+        DurationTicks: 2,
+        Rig: null,
+        Outcomes: SurveyOutcomes);
 
     /// <summary>
     /// The well a drilling command produces. One completion on one compartment,
@@ -192,22 +332,56 @@ internal static class Defaults
 }
 
 /// <summary>
-/// SDD-008 §3's slot, at its shipped setting. Regional data is deliberately
-/// coarse: a player who could book reserves off a gravity and magnetics pass
-/// would never buy seismic (R15-V10).
+/// SDD-008 §3's slot, at its shipped setting.
+///
+/// <para>A TABLE OVER (SOURCE, KIND), not over source alone. Keying on the source
+/// gave every source sight of every kind at one number, which let a build-up
+/// measure the size of an accumulation better than seismic could and made
+/// shooting a survey pointless (finding 149). What distinguishes a core from a
+/// log is which kinds it can see and how small its sigma is — both halves.</para>
+///
+/// <para>Every σ is ABSOLUTE IN THE KIND'S DECLARED SPACE: porosity in porosity
+/// units, pressure in pascals, permeability and oil-in-place in natural-log units
+/// where an absolute σ is a relative one.</para>
 /// </summary>
 internal sealed class RegionalObservationModel : IObservationModel
 {
     public ContentId Id { get; } = new("regional-observation");
 
     public double? SigmaFor(ContentId source, ContentId propertyKind, EntityRef subject) =>
-        source.Value switch
+        (source.Value, propertyKind.Value) switch
         {
-            "regional" => 1.2,
-            "seismic-2d" => 0.6,
-            "seismic-3d" => 0.35,
-            "well-log" => 0.12,
-            "core" => 0.04,
+            // Regional data is deliberately coarse: a player who could book
+            // reserves off a gravity and magnetics pass would never buy seismic
+            // (R15-V10). 1.2 in log units is a factor of three either way.
+            ("regional", "oil-in-place") => 1.2,
+
+            // Seismic sees SIZE and nothing else — no downhole measurement can
+            // reach the areal extent of an accumulation, and nothing on the
+            // surface can read the rock at the wellbore. That split is what makes
+            // the two worth buying separately (design 05 §2).
+            ("seismic-2d", "oil-in-place") => 0.6,
+            ("seismic-3d", "oil-in-place") => 0.35,
+
+            // A log reads porosity well and permeability only through a
+            // transform, which is why 0.5 in log units — a factor of 1.65 — is
+            // the honest number rather than a small one.
+            ("well-log", "porosity") => 0.02,
+            ("well-log", "permeability") => 0.5,
+
+            // The laboratory has the rock in its hands. An order of magnitude
+            // sharper than the log on both, and several times the price.
+            ("core", "porosity") => 0.005,
+            ("core", "permeability") => 0.15,
+
+            // A build-up is the sharpest measurement of a compartment there is:
+            // it watches the reservoir answer for itself over days. It is the
+            // ONLY source that can see pressure at all, and it beats even a core
+            // on permeability because it measures what the reservoir flows at
+            // rather than what one plug does. That is why it is worth shutting a
+            // well in for (SDD-008 §3).
+            ("well-test", "reservoir-pressure") => 1.0e5,
+            ("well-test", "permeability") => 0.10,
 
             // NULL, not a wide sigma: a source that cannot see a kind sees
             // NOTHING, and the difference is what makes a subtle trap invisible
