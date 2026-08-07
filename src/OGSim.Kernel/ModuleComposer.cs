@@ -41,6 +41,15 @@ public abstract record CompositionResult;
 public interface IResolvedContracts
 {
     T Resolve<T>() where T : class;
+
+    /// <summary>
+    /// Whether a contract was provided at all. Asked only where a module set is
+    /// legitimately allowed to lack something — a composition with no field has
+    /// nothing to drill into, and that is a smaller engine rather than a broken
+    /// one. It is NOT a licence to default: a caller that needs a contract still
+    /// declares it in Requires and gets it or a refusal.
+    /// </summary>
+    bool Has<T>() where T : class;
 }
 
 /// <summary>
@@ -319,6 +328,8 @@ public sealed class ModuleComposer
         /// <summary>The same lookup <c>Require</c> uses — after composition, when
         /// the set can no longer change.</summary>
         T IResolvedContracts.Resolve<T>() => Require<T>();
+
+        bool IResolvedContracts.Has<T>() => _implementations.ContainsKey(typeof(T));
 
 
         private readonly Dictionary<Type, object> _implementations = [];

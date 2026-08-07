@@ -138,9 +138,9 @@ public sealed class ShippedSetTests
     }
 
     /// <summary>
-    /// The shipped engine runs exactly the stages its modules declared. One
-    /// today — subsurface's material balance — and the assertion names it rather
-    /// than counting, so adding a stage without declaring it fails here.
+    /// The shipped engine runs exactly the stages its modules declared, in
+    /// design 03 §6's order — solve, commit, pay, close. Named rather than
+    /// counted, so adding a stage without declaring it fails here.
     /// </summary>
     [Fact]
     public void The_shipped_engine_runs_the_stages_its_modules_declared()
@@ -148,7 +148,7 @@ public sealed class ShippedSetTests
         Built built = Assert.IsType<Built>(EngineBuilder.Build(Fixture.Settings()));
 
         Assert.Equal(
-            [StageId.SolveFlow, StageId.MaterialBalance, StageId.Economics],
+            [StageId.SolveFlow, StageId.MaterialBalance, StageId.Economics, StageId.Close],
             built.Engine.Pipeline.DeclaredOrder());
     }
 

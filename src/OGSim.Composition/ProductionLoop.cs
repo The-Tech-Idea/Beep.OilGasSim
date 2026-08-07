@@ -281,6 +281,16 @@ public sealed class FieldControl
     public int CompartmentCount => _subsurface.Count;
 
     public int WellCount => _wells.Count;
+
+    /// <summary>
+    /// The next completion id, issued by the module that owns the wells.
+    ///
+    /// <para>Not a counter on the composition: a static would be shared by every
+    /// engine in a process and would make two games' ids depend on each other,
+    /// which is both law L2's ban on static mutable state and the end of
+    /// determinism.</para>
+    /// </summary>
+    public ulong NextWellId() => (ulong)_wells.Count + 1;
 }
 
 internal sealed class SolveFlowStage(ProductionLoop loop) : ITickStage

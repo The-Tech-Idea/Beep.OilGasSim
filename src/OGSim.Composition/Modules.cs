@@ -291,7 +291,7 @@ internal sealed class CompanyModule() : EngineModule(Declare(
 /// </summary>
 internal sealed class FieldModule() : EngineModule(Declare(
     "field",
-    provides: [typeof(FieldControl)],
+    provides: [typeof(FieldControl), typeof(CloseStage)],
     requires:
     [
         typeof(OGSim.Subsurface.SubsurfaceState),
@@ -306,6 +306,7 @@ internal sealed class FieldModule() : EngineModule(Declare(
     [
         new StageParticipation(StageId.SolveFlow, Order: 0),
         new StageParticipation(StageId.Economics, Order: 0),
+        new StageParticipation(StageId.Close, Order: 0),
     ]))
 {
     public override void Compose(IModuleComposition composition)
@@ -328,9 +329,18 @@ internal sealed class FieldModule() : EngineModule(Declare(
 
         // The scenario's door onto the field. Provided rather than reachable, so
         // building a field is something composition hands out deliberately.
-        composition.Provide(new FieldControl(
+        var field = new FieldControl(
             composition.Require<OGSim.Subsurface.SubsurfaceState>(),
-            composition.Require<OGSim.Wells.WellsState>()));
+            composition.Require<OGSim.Wells.WellsState>());
+
+        composition.Provide(field);
+
+        var close = new CloseStage(
+            loop, composition.Require<OGSim.Company.CompanyState>(), field,
+            composition.Require<IAuditTrail>());
+
+        composition.Contribute(order: 0, close);
+        composition.Provide(close);
     }
 }
 

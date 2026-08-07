@@ -75,6 +75,48 @@ internal static class Defaults
         OilPricePerCubicMetre: Money.FromMillions(377.0 / 1_000_000.0),
         FixedOperatingCostPerTick: Money.FromMillions(0.3));
 
+    /// <summary>
+    /// What a well costs and how deep the company can currently drill. $8M is a
+    /// land well; the 4,000 m envelope is what rotary drilling opens before any
+    /// technology is acquired, so drilling deeper is a thing the player has to
+    /// go and earn (TECH_TREE: deep-drilling, E2).
+    /// </summary>
+    public static DrillingTerms Drilling { get; } = new(
+        CostPerWell: Money.FromMillions(8.0),
+        MaximumDepth: new Length(4000.0));
+
+    /// <summary>
+    /// The well a drilling command produces. One completion on one compartment,
+    /// naturally flowing, wide open — the E1 well, and the only one the current
+    /// content can describe.
+    /// </summary>
+    public static Wells.Completion CompletionFor(
+        ulong id, EntityId<IReservoirCompartmentEntity> compartment, Length totalDepth)
+    {
+        var tubing = new Wells.TubingGeometry(
+            totalDepth, totalDepth, new Length(0.0889), 4.6e-5);
+
+        return new Wells.Completion(
+            new EntityId<ICompletion>(id),
+            new EntityId<IWellbore>(id),
+            [new Perforation(compartment, totalDepth, totalDepth + new Length(30.0),
+                             Skin: 0.0, Isolated: false)],
+            new Wells.CompositeInflowModel(Inflow),
+            new Wells.HydrostaticFrictionOutflowModel(
+                tubing, Density.FromSpecificGravity(0.85), lift: null),
+            new Wells.CompletionFluid(
+                Density.FromSpecificGravity(0.85),
+                new FormationVolumeFactor(1.2),
+                Allocation.Validated(
+                    [(new EntityRef(EntityKind.Compartment, compartment.Value), 1.0)]),
+                new Pressure(30.0e6),
+                ReservoirTemperature),
+            Wells.ChokeSetting.Open,
+            materialOrdinal: 0,
+            materialCount: 1,
+            lift: null);
+    }
+
     public static Temperature ReservoirTemperature { get; } = Temperature.FromCelsius(93.3);
 
     /// <summary>Separator inlet pressure the wells flow against.</summary>
@@ -133,24 +175,38 @@ public sealed record EngineSettings(
     LogLevel MinimumLogLevel,
     FaultHandling FaultHandling);
 
-/// <summary>A composed engine: the validated module set and the tick it runs.</summary>
+/// <summary>
+/// A composed engine: the validated module set, the tick it runs, and the two
+/// things a player does — issue a command and read what happened.
+/// </summary>
 public sealed record Engine(
     IReadOnlyList<IModule> Modules,
     TickPipeline Pipeline,
     IAuditTrail Audit,
     EventBus Events,
     StateRegistry State,
-    IResolvedContracts Provided)
+    IResolvedContracts Provided,
+    ICommandBus Commands)
 {
+    /// <summary>
+    /// The tick just closed, as the player sees it — null before the first tick,
+    /// because a game that has not started has nothing to show and a zeroed
+    /// model would be a lie about a month that never happened.
+    /// </summary>
+    public FieldReadModel? ReadModel => Provided.Resolve<CloseStage>().Published;
+
+
     // Finding 131.
     public bool Equals(Engine? other) =>
         other is not null && ReferenceEquals(Pipeline, other.Pipeline)
         && ReferenceEquals(Audit, other.Audit) && ReferenceEquals(Events, other.Events)
         && ReferenceEquals(State, other.State) && ReferenceEquals(Provided, other.Provided)
+        && ReferenceEquals(Commands, other.Commands)
         && Structural.Equal(Modules, other.Modules);
 
     public override int GetHashCode() =>
-        HashCode.Combine(Pipeline, Audit, Events, State, Provided, Structural.HashOf(Modules));
+        HashCode.Combine(Pipeline, Audit, Events, State, Provided, Commands,
+            Structural.HashOf(Modules));
 }
 
 /// <summary>
@@ -202,6 +258,28 @@ public static class EngineBuilder
         new FieldModule(),
         new DiagnosticsModule(audit),
     ];
+
+    /// <summary>
+    /// Binds each command to the validator that may refuse it and the applier
+    /// that cannot (SDD-001 §7).
+    ///
+    /// <para>Registration happens HERE rather than in a module because a command
+    /// needs several modules' state — drilling spends the company's money and
+    /// opens a well — and Layer 4 is the only place entitled to know both are
+    /// real. A module set that lacks the field module simply has no commands,
+    /// which is correct: there is nothing to drill into.</para>
+    /// </summary>
+    private static void RegisterCommands(CommandBus commands, IResolvedContracts provided)
+    {
+        if (!provided.Has<FieldControl>()) return;
+
+        var field = provided.Resolve<FieldControl>();
+        var company = provided.Resolve<Company.CompanyState>();
+
+        commands.Register(
+            new DrillWellValidator(company, field, Defaults.Drilling),
+            new DrillWellApplier(company, field, Defaults.Drilling, Defaults.CompletionFor));
+    }
 
     /// <summary>Composes the shipped set.</summary>
     public static BuildResult Build(EngineSettings settings)
@@ -261,8 +339,11 @@ public static class EngineBuilder
 
         var pipeline = new TickPipeline(clock, events, audit, faults, log, composed.Stages);
 
+        var commands = new CommandBus(audit, events);
+        RegisterCommands(commands, composed.Provided);
+
         return new Built(new Engine(
             composed.OrderedModules, pipeline, audit, events, composed.State,
-            composed.Provided));
+            composed.Provided, commands));
     }
 }
