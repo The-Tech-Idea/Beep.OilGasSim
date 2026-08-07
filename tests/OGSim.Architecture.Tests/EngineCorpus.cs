@@ -61,6 +61,7 @@ internal static class EngineCorpus
         typeof(OGSim.Flow.FlowSolver).Assembly,
         typeof(OGSim.Wells.Completion).Assembly,
         typeof(OGSim.Facilities.Tank).Assembly,
+        typeof(OGSim.Operations.Operation).Assembly,
         Subsurface,
     ];
 

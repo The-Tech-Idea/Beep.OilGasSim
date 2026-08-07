@@ -533,19 +533,44 @@ asserts the type has no such field.
 
 ## Arc III — The company
 
-### Phase R12 — Operations and scheduling ⬜
+### Phase R12 — Operations and scheduling 🟨
 > 📄 [phases/R12_OPERATIONS.md](phases/R12_OPERATIONS.md)
+> `src/OGSim.Operations`. **SDD-007 needed no amendment** — the first phase since
+> R4 whose SDD specified everything its tasks required.
 
 | # | Task | Status |
 |---|---|---|
-| R12.1 | `IOperation` — duration, cost profile, resources, prerequisites, outcome | ⬜ |
-| R12.2 | Scheduler; resource contention | ⬜ |
-| R12.3 | `IRig` — contracting, day rate, availability | ⬜ |
-| R12.4 | Drilling operations; depth progress; hazards | ⬜ |
-| R12.5 | Completion and workover operations | ⬜ |
-| R12.6 | Construction operations | ⬜ |
-| R12.7 | `IPersonnel` — disciplines, skill, effect on duration and risk | ⬜ |
-| R12.8 | Abandonment operations | ⬜ |
+| R12.0 | SDD review — no findings | ✅ |
+| R12.1 | `IOperation` — duration, cost profile, resources, prerequisites, outcome | ✅ |
+| R12.2 | Scheduler; resource contention | ✅ |
+| R12.3 | `IRig` — availability and reservation | 🟨 — the calendar and contention are built; day-rate contracting is R13's |
+| R12.4 | Drilling operations; depth progress; hazards | 🟨 — drilling **is** an operation template; depth progress and the disaster-day hazard need R18 to consume `DisasterDay` |
+| R12.5 | Completion and workover operations | 🟨 — same shape, same engine; each is a content template with its own outcome table |
+| R12.6 | Construction operations | 🟨 — as R12.5 |
+| R12.7 | `IPersonnel` — skill effect on duration and risk | ⬜ — `ResourceNeeds.Crew` declares the disciplines; the skill model is undeclared (would need an SDD-007 amendment) |
+| R12.8 | Abandonment operations | ⬜ — needs `IObligationRegistry` (SDD-007 §7) and R13's accrual |
+
+**R12's verification.** R12-V1 ✅ · R12-V2 ✅ · R12-V3 ✅ · R12-V4 ✅ · R12-V5 ✅ ·
+R12-V6 ✅ · R12-V7 ✅ · R12-V8 ✅ · R12-V11 ✅ · R12-V9 ⬜ (R12.7) ·
+R12-V10 ⬜ (R12.8).
+
+**Three things this phase gets right that matter later.**
+
+*Cost accrues over the operation.* A six-month well spends money for six months,
+so an over-committed company runs out of money **mid-well** rather than
+discovering the bill on completion. R12-V2 asserts the halfway figure directly.
+
+*Contention is a rejection with an actionable reason.* Not "unavailable" — "rig 7
+is committed; next free on day 150", and a test submits at exactly that day to
+prove the quoted date is real. Reservations cover the **worst-case** duration, so
+a delayed operation never finds its rig double-booked; a test submits at day 100,
+past the base duration but inside the worst case, and is correctly refused.
+
+*The dice are checkable.* Every outcome is audited with its stream, its draw and
+the threshold it crossed, and R12-V7 verifies the recorded draw actually falls
+under the recorded threshold. R12-V5 runs 20 000 trials and requires all six
+grades — including Disaster at 1%, which is the one a sloppy cumulative
+comparison drops off the end.
 
 ### Phase R13 — Economics ⬜
 > 📄 [phases/R13_ECONOMICS.md](phases/R13_ECONOMICS.md)
