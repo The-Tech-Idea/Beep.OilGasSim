@@ -42,7 +42,7 @@ The order is by what each step unblocks, not by phase number.
 
 | Step | What | Why here |
 |---|---|---|
-| 1 | **R12b — activities on the one engine.** Collapse the drilling timer (finding 142), then templates: well test, seismic, log/core, workover, install, abandon | The lever: most bypassed subsystems are reached by an activity or not at all. Well test and seismic are the door to G2 |
+| 1 | **R12b — activities on the one engine.** ✅ drilling collapsed (findings 142, 148); next the templates: well test, seismic, log/core, workover, install, abandon | The lever: most bypassed subsystems are reached by an activity or not at all. Well test and seismic are the door to G2 |
 | 2 | **R21e — the scenario runner** | R21d's debt; pays before content is written against the ad-hoc goal |
 | 3 | **Beliefs wired (R20d.7)** | The survey activities from step 1 produce `Observation`s; the player stops being told where the oil is. The exploration game begins here |
 | 4 | **The chain (R20d.1–5)** | `IFlowSolver` over the registered network; separation, gas, water, transport; custody becomes a metered point. Closes FV1's 1000-tick half, R11-V13, SC7/SC8 |

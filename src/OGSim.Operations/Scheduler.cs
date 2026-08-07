@@ -133,6 +133,37 @@ public sealed class OperationScheduler
         IReadOnlyList<TechnologyId> availableCapabilities,
         Func<EntityRef, bool> targetExists)
     {
+        IReadOnlyList<string> reasons =
+            Refusals(spec, startDay, availableCapabilities, targetExists);
+
+        if (reasons.Count > 0) return new Refused(new ScheduleRefusal(reasons));
+
+        var id = new EntityId<IOperation>(_nextOperationId++);
+        DrawnOutcome outcome = Draw(spec, id);
+
+        if (spec.Resources.Rig is EntityId<IRig> committed)
+            _calendars[committed].Reserve(startDay, WorstCaseDays(spec), id);
+
+        return new Scheduled(new Operation(id, spec, outcome, _audit, _materialCount));
+    }
+
+    /// <summary>
+    /// Every reason this submission would be refused, and <b>no side effect</b>
+    /// (SDD-007 §2; R1 §2.5's two-phase rule).
+    ///
+    /// <para>Separated from <see cref="Submit"/> so a command VALIDATOR can ask
+    /// the question without reserving a rig. The two were fused, which was
+    /// invisible while operations were only ever submitted directly — but a
+    /// validator that had to call <c>Submit</c> to find out whether it could
+    /// would have booked the calendar as a side effect of saying "no", and a
+    /// validator is required to be pure.</para>
+    /// </summary>
+    public IReadOnlyList<string> Refusals(
+        OperationSpec spec,
+        int startDay,
+        IReadOnlyList<TechnologyId> availableCapabilities,
+        Func<EntityRef, bool> targetExists)
+    {
         ArgumentNullException.ThrowIfNull(spec);
         ArgumentNullException.ThrowIfNull(availableCapabilities);
         ArgumentNullException.ThrowIfNull(targetExists);
@@ -165,15 +196,45 @@ public sealed class OperationScheduler
                     $"{Format(calendar.NextFreeFrom(startDay, worstCase))}");
         }
 
-        if (reasons.Count > 0) return new Refused(new ScheduleRefusal(reasons));
+        return reasons;
+    }
 
-        var id = new EntityId<IOperation>(_nextOperationId++);
-        DrawnOutcome outcome = Draw(spec, id);
+    /// <summary>
+    /// Puts a saved operation back, with the outcome it was already given and
+    /// the progress it had made, and re-reserves its rig (SDD-013 §4).
+    ///
+    /// <para>The outcome is <b>restored, never redrawn</b>. It was drawn once
+    /// when the operation began (SDD-007 §4), and redrawing it on load would
+    /// let a player reload the month before a well finished and try again —
+    /// the same exploit drawing-at-start exists to prevent, arriving through
+    /// the save instead of through the clock.</para>
+    ///
+    /// <para>The id counter moves past the restored id, so operations started
+    /// after a load cannot collide with ones started before it.</para>
+    /// </summary>
+    public Operation Reinstate(
+        EntityId<IOperation> id,
+        OperationSpec spec,
+        DrawnOutcome outcome,
+        int startDay,
+        int progressDays,
+        Money accrued,
+        OperationState state)
+    {
+        ArgumentNullException.ThrowIfNull(spec);
+        ArgumentNullException.ThrowIfNull(outcome);
 
-        if (spec.Resources.Rig is EntityId<IRig> committed)
-            _calendars[committed].Reserve(startDay, worstCase, id);
+        if (spec.Resources.Rig is EntityId<IRig> rig)
+        {
+            Register(rig);
+            _calendars[rig].Reserve(startDay, WorstCaseDays(spec), id);
+        }
 
-        return new Scheduled(new Operation(id, spec, outcome, _audit, _materialCount));
+        _nextOperationId = Math.Max(_nextOperationId, id.Value + 1);
+
+        var operation = new Operation(id, spec, outcome, _audit, _materialCount);
+        operation.Reinstate(progressDays, accrued, state);
+        return operation;
     }
 
     /// <summary>R12-V8: cancelling frees the rig immediately.</summary>

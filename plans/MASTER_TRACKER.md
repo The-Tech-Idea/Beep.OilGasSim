@@ -20,10 +20,11 @@ next.** Updated at the close of every phase.
 | | |
 |---|---|
 | **Phase** | R0–R19, R23, R24 ✅ · **R21a–d ✅ — the engine is played** · R20c, R12b, R20d, R21 🟨 · R20, R22, R25 ⬜. The composite programme is one document: [phases/R20d_INTEGRATION.md](phases/R20d_INTEGRATION.md) |
-| **Design docs** | 24 design + 1 research + **26 phase docs**, 17 catalogue sheets + tech tree, 18 SDDs (000–017). Coherence log: **147 findings**, 61–147 from the code passes. **49 open SDD items** now registered here rather than only in the documents that raised them. |
-| **Code status** | 15 engine assemblies, 0 warnings, 0 errors, **780 tests**. The kernel, the contract layer, eleven domain modules and Layer 4 composition are implemented; scenario, activity-mass, VOI, lending and souring contracts are declared in their SDDs and compiled. The composed engine **advances a tick and plays**: a player drills, waits, finds oil or doesn't, produces, declines, and wins or goes broke. Every implemented member traces to a pinned SDD section (F-1). |
+| **Design docs** | 24 design + 1 research + **26 phase docs**, 17 catalogue sheets + tech tree, 18 SDDs (000–017). Coherence log: **148 findings**, 61–148 from the code passes. **49 open SDD items** now registered here rather than only in the documents that raised them. |
+| **Code status** | 15 engine assemblies, 0 warnings, 0 errors, **783 tests**. The kernel, the contract layer, eleven domain modules and Layer 4 composition are implemented; scenario, activity-mass, VOI, lending and souring contracts are declared in their SDDs and compiled. The composed engine **advances a tick and plays**: a player drills, waits, finds oil or doesn't, produces, declines, and wins or goes broke. Every implemented member traces to a pinned SDD section (F-1). |
 | **Repository** | `The-Tech-Idea/Beep.OilGasSim`, branch `master`. Work lands directly on `master`, one task per commit. |
 | **The playable loop** | **arrive → commit capital under uncertainty → wait four months → find oil or don't → produce → decline → reinvest → win or go broke.** Six of the fourteen tick stages are real (3, 5, 6, 8, 12, 13). One command, one product, one goal, one failure condition. |
+| **Balance note** | With a $8M well earning far more per month than it costs, **cash is not the binding constraint on early expansion — the rig is.** Reaching a cash refusal takes ~140 months of idling. That is a real observation about the shipped numbers and belongs to R20.4, not a defect. |
 | **Next** | **R12b** — the activity engine, wired. Drilling, well test, seismic, workover, install, abandonment on one scheduler, each reaching the subsystem it affects. It is the lever: most of R20d's eight bypassed subsystems are reached by an activity or not at all, and it starts by collapsing the bespoke drilling timer (finding 142) onto the engine that was already there. Then **R21e** (the scenario runner) and **R20c.9** (equipment content). |
 
 **Three things are true at once and all three should stay visible.** The engine
@@ -581,7 +582,7 @@ That last sentence was untrue when it was written. See finding 142.
 
 | # | Activity | Template exists | Reaches |
 |---|---|---|---|
-| R12b.1 | **Drill** — spud to TD, depth progress, disaster day | 🟨 | Wells (a wellbore), Subsurface (what it penetrates), Information (what the bit learns), Company (capex) |
+| R12b.1 | **Drill** — spud to TD, depth progress, disaster day | ✅ — on the scheduler; `DisasterDay` is carried and waits on R18 to consume it | Wells (a wellbore), Subsurface (what it penetrates), Information (what the bit learns), Company (capex) |
 | R12b.2 | **Complete** — perforate, case, install tubing and lift | ⬜ | Wells (a completion becomes a flow element), Capabilities (tier gating), Company |
 | R12b.3 | **Log / core** — the measurement run | ⬜ | **Information** (an `Observation` with the source's own σ), Wells (the hole must exist), Company |
 | R12b.4 | **Well test / build-up** — flow it and watch the pressure | ⬜ | **Information** (the sharpest σ on compartment pressure and kh), Subsurface (a real withdrawal while it runs), Company |
@@ -617,7 +618,7 @@ effect each one applies on completion; they are not eleven engines.
 | R12b.12 | Activity templates as a content kind, with the outcome table load-checked to sum to 1.0 | ⬜ |
 | R12b.13 | Completion effects — what each activity does to the subsystem it reaches | ⬜ |
 | R12b.14 | Activities as commands, through the one gating validator (design 07 §2c) | ⬜ |
-| R12b.15 | **Collapse drilling onto the operations engine** — finding 142 | ⬜ |
+| R12b.15 | **Collapse drilling onto the operations engine** — finding 142 | ✅ — rig contention, cost over time and graded outcomes are back; the bespoke timer is gone |
 
 **R12's verification.** R12-V1 ✅ · R12-V2 ✅ · R12-V3 ✅ · R12-V4 ✅ · R12-V5 ✅ ·
 R12-V6 ✅ · R12-V7 ✅ · R12-V8 ✅ · R12-V11 ✅ · R12-V9 ⬜ (R12.7) ·
@@ -1195,6 +1196,7 @@ hypothetical:
 
 | # | Finding |
 |---|---|
+| 148 | **A validator could not ask whether an operation would be accepted without booking a rig to find out.** Collapsing drilling onto `OperationScheduler` (R12b.15) hit it immediately: SDD-007 §2's `Submit` fused validation with reservation, which was invisible while operations were only ever submitted directly — nothing had yet needed the question answered *purely*. But R1 §2.5 splits every command into a pure validator and an applier that cannot fail, so a validator forced through `Submit` would have reserved the calendar as a side effect of saying "no", and two rejected orders would have booked a rig twice. `Refusals(...)` extracted as a pure query; `Submit` now calls it and reserves only on success. The applier throws `InvariantFault` if the scheduler refuses what validation passed — that is a composition defect, not a player error, and an applier that returned a rejection there would be the failure R1 §2.5 forbids |
 | 147 | **The read model declared outputs for mechanics with no contract to produce them.** `CompanyView.BorrowingBase` and `.BorrowingRate` have been on the read model since the contract passes and `IReserveBasedLending` did not exist; `ExplorationView.PendingValueOfInformation` likewise, with no `IInformationValueModel`. The consumer was specified and the producer was not — which is the same defect as finding 145 seen from the other end, and more visible from here: a read model is a promise to a host, and this one promised two numbers nothing could compute. Contracts written for both, plus `ISouringModel` (SDD-012 §5) and `IOperation.MassThisTick` (SDD-007 §5b), each from an algorithm its SDD already pinned |
 | 146 | **N3 read `Information` as the weasel word `Info`.** The rule matched banned words as substrings, so `IInformationValueModel` failed — and "value of information" is the industry's own term, the title of SDD-008 §7 and already the name of a read-model field. That put N3 in direct conflict with N4 ("industry terms beat invented ones"), and N4 has to win: renaming the concept to dodge a letter sequence would produce exactly the invented name N4 forbids. Now matched as whole PascalCase words. The relaxation is itself tested — nine names N3 exists to catch (`IWellInfo`, `IPumpData`, `IFlowService`, `IRigManager`…) must still fail — and that test caught a bad example in its own first draft: `IServiceRentalLedger` does carry "Service" as a standalone word and should still be refused |
 | 145 | **Six specified mechanics had no task anywhere.** Reading every SDD section against this tracker — not the open-item tables, the *content* — found souring (SDD-012 §5), operations that move mass (SDD-007 §5b), value of information (SDD-008 §7), reserve-based lending (SDD-009 §5), the asset market (SDD-011 §4) and hedges/insurance (SDD-009 §7) fully specified with pinned algorithms and named in no phase row. Four of them appear **zero times** in this document. They are not deferrals and not open items: somebody wrote the algorithm and nobody wrote the task, which is a quieter failure than a gap because the design reads complete. `PendingValueOfInformation` is already a field on the read-model contract with nothing producing it — the contract layer knew about a mechanic the plan did not |
@@ -1355,7 +1357,7 @@ always implied by "the engine is headless and composed" and never given rows.
 | R20d.3 | Gas — compression, dehydration, sweetening, NGL, flare | ✅ R9 | ⬜ |
 | R20d.4 | Water — production, treatment, injection, disposal | ✅ R10 | ⬜ |
 | R20d.5 | Transport — pipelines, berths, cargoes, custody transfer points | ✅ R11 | ⬜ custody is an audit entry, not a metered point |
-| R20d.6 | **Operations — the one scheduled-activity engine** | ✅ R12 | 🟨 **the integration lever**: drilling runs on a bespoke timer beside it (finding 142) and `OperationScheduler` is unused. See [R12b](#r12b) — most of the ⬜ rows in this table are reached by an activity or not at all |
+| R20d.6 | **Operations — the one scheduled-activity engine** | ✅ R12 | 🟨 **drilling is on it** (R12b.15): one rig, one well at a time; cost accrues monthly; outcomes graded. The other ten templates are R12b.1–11. See [R12b](#r12b) — most of the ⬜ rows in this table are reached by an activity or not at all |
 | R20d.7 | Information — observations, beliefs, POS | ✅ R14 | ⬜ **the biggest gap in gameplay terms**: the exploration game does not exist until this is wired |
 | R20d.8 | World generation — basins, plays, traps, terrain | ✅ R15 | ⬜ compartments are hand-built by `FieldControl` |
 | R20d.9 | Company — licences, commitments, rivals, regulator | ✅ R16 | ⬜ |

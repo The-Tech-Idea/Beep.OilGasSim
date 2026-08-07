@@ -81,18 +81,66 @@ internal static class Defaults
     /// technology is acquired, so drilling deeper is a thing the player has to
     /// go and earn (TECH_TREE: deep-drilling, E2).
     /// </summary>
-    /// <param name="DurationTicks">Four months on a land well — long enough that
-    /// money leaves well before oil arrives, which is what makes timing a
-    /// decision rather than an afterthought.</param>
-    /// <param name="ProbabilityOfSuccess">0.6 on a known compartment. It is not
-    /// 1.0 because a hole that always finds oil is not a decision, and not 0.2
-    /// because this is a compartment somebody already found — wildcat odds
-    /// belong to exploration, where the prospect itself is uncertain (R14).</param>
+    /// <summary>
+    /// How many materials this composition's catalogue carries. One — oil —
+    /// until R20c.9 loads the nine of `content/materials/`. Stated once because
+    /// three places must agree on it: the completion's stream width, an
+    /// operation's mass report, and any zero composition either of them builds.
+    /// </summary>
+    public const int MaterialCount = 1;
+
+    /// <summary>
+    /// The company's one rig. **One**, deliberately: a rig drills a single well
+    /// at a time, so a company that wants two wells at once needs a second rig,
+    /// and that is a decision rather than an accounting entry. The bespoke timer
+    /// this replaced had no rig at all, which made cash the only limit on how
+    /// fast a field could be developed.
+    /// </summary>
+    public static EntityId<IRig> TheRig { get; } = new(1);
+
+    /// <summary>
+    /// SDD-007 §4's outcome table for a development well, as content would carry
+    /// it. Probabilities sum to 1.0 (load-checked).
+    ///
+    /// <para>Success is the 0.60 the bespoke path drew directly — but it is now
+    /// the sum of three grades rather than a single number, so a well can come
+    /// in late or over budget instead of only being dry. `DisasterDay` on the
+    /// disaster row is the day a blowout would occur; R18 consumes it, and until
+    /// then a disaster is simply the worst kind of dry hole.</para>
+    /// </summary>
+    public static OutcomeTable DrillingOutcomes { get; } = new(
+    [
+        new OutcomeRow(OutcomeGrade.OnTime, Probability: 0.40,
+                       DurationFactor: 1.00, CostFactor: 1.00, DisasterDay: null),
+        new OutcomeRow(OutcomeGrade.Delayed, Probability: 0.14,
+                       DurationFactor: 1.50, CostFactor: 1.15, DisasterDay: null),
+        new OutcomeRow(OutcomeGrade.OverBudget, Probability: 0.06,
+                       DurationFactor: 1.10, CostFactor: 1.60, DisasterDay: null),
+        new OutcomeRow(OutcomeGrade.Failure, Probability: 0.38,
+                       DurationFactor: 0.80, CostFactor: 0.90, DisasterDay: null),
+        new OutcomeRow(OutcomeGrade.Disaster, Probability: 0.02,
+                       DurationFactor: 1.80, CostFactor: 2.50, DisasterDay: 45),
+    ]);
+
+    /// <summary>
+    /// What a well costs, how deep the company can reach, and how it can go
+    /// wrong. Four months on a land well — long enough that money leaves well
+    /// before oil arrives, which is what makes timing a decision rather than an
+    /// afterthought.
+    ///
+    /// <para>Declared AFTER <see cref="TheRig"/> and
+    /// <see cref="DrillingOutcomes"/>: static initialisers run in declaration
+    /// order, and reading them from above would have taken a null table and a
+    /// default rig id. The compiler said so; the same trap is noted on
+    /// `EngineCorpus.Subsurface` for the same reason.</para>
+    /// </summary>
     public static DrillingTerms Drilling { get; } = new(
         CostPerWell: Money.FromMillions(8.0),
         MaximumDepth: new Length(4000.0),
         DurationTicks: 4,
-        ProbabilityOfSuccess: 0.6);
+        Template: new ContentId("drill-development-well"),
+        Rig: TheRig,
+        Outcomes: DrillingOutcomes);
 
     /// <summary>
     /// The well a drilling command produces. One completion on one compartment,

@@ -350,7 +350,17 @@ internal sealed class FieldModule() : EngineModule(Declare(
         var company = composition.Require<OGSim.Company.CompanyState>();
         IAuditTrail audit = composition.Require<IAuditTrail>();
 
-        var drilling = new DrillingState(Defaults.Drilling);
+        // The ONE scheduled-activity engine (SDD-007). Drilling runs on it, and
+        // so will every other activity — the well test and the survey that open
+        // the exploration game, the workover, the install, the abandonment.
+        var scheduler = new OGSim.Operations.OperationScheduler(
+            composition.Require<IRandomSource>().Stream(StreamId.Operations),
+            audit,
+            materialCount: Defaults.MaterialCount);
+
+        scheduler.Register(Defaults.TheRig);
+
+        var drilling = new DrillingState(scheduler, Defaults.Drilling, company);
         composition.Own(drilling);
 
         var objectives = new ObjectiveStage(company, Defaults.Goal, audit);
@@ -365,12 +375,11 @@ internal sealed class FieldModule() : EngineModule(Declare(
         // January rather than waiting a month for the tick to come round again.
         composition.Contribute(order: 0, new DrillingStage(drilling, field, audit));
 
+        SimulationClock clock = composition.Require<SimulationClock>();
+
         composition.HandleCommand(
-            new DrillWellValidator(company, field, Defaults.Drilling),
-            new DrillWellApplier(
-                company, drilling,
-                composition.Require<SimulationClock>(),
-                composition.Require<IRandomSource>().Stream(StreamId.Exploration)));
+            new DrillWellValidator(company, field, drilling, clock),
+            new DrillWellApplier(drilling, clock));
     }
 }
 

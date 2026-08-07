@@ -1,87 +1,117 @@
-// R21b — drilling as a decision (design 20's D-catalogue, SDD-007 §4).
+// R12b.15 — drilling, on the one scheduled-activity engine (SDD-007, finding 142).
 //
-// Until now a well appeared the instant it was ordered and always produced.
-// That is not a decision: there is exactly one right answer and no reason ever
-// to hesitate. Three things make it one.
+// R21b built this as a bespoke timer beside `OperationScheduler`, because the
+// loop was being assembled end to end and the scheduler was one of the eight
+// subsystems the loop did not yet call. Writing past it was the fastest route to
+// a working tick, and it is exactly how a second engine gets built. Three things
+// were lost and are back:
 //
-// IT TAKES TIME. Money leaves now and oil arrives months later, so the choice is
-// about when as well as whether, and a company can be committed to a well it can
-// no longer afford to wait for.
+//   RIG CONTENTION. A rig drills one well at a time. The bespoke path let a
+//   company drill six at once with one rig, which made the only real constraint
+//   on early expansion the cash — and cash alone is a spreadsheet, not a field.
 //
-// IT CAN BE DRY. The outcome is drawn ONCE, at the moment the well is ordered
-// (SDD-007 §4), from the Exploration stream — and the draw is recorded then even
-// though the result is not revealed until the rig finishes. Drawing at
-// completion instead would let a player reload the month before it landed and
-// try again, which turns a probability into a slot machine.
+//   COST OVER TIME. A four-month well spends for four months. Paying on day one
+//   removed the "runs out of money mid-well" dynamic R12-V2 exists to assert.
 //
-// IT COSTS THE SAME EITHER WAY. A dry hole is paid for in full. That is the
-// whole of exploration economics in one sentence.
+//   GRADED TROUBLE. A well can be delayed or run over budget, not merely be dry.
+//   The outcome table is content, so what "trouble" means is a balance decision
+//   rather than a code one.
 
 using OGSim.Company;
 using OGSim.Contracts;
 using OGSim.Kernel;
-using OGSim.Wells;
+using OGSim.Operations;
 
 namespace OGSim.Composition;
 
-/// <summary>What a well costs, how long it takes, and how often it finds oil.</summary>
+/// <summary>What a well costs, how deep the company can reach, and how it can go wrong.</summary>
 public sealed record DrillingTerms(
     Money CostPerWell,
     Length MaximumDepth,
     int DurationTicks,
-    double ProbabilityOfSuccess);
+    ContentId Template,
+    EntityId<IRig> Rig,
+    OutcomeTable Outcomes)
+{
+    /// <summary>
+    /// The chance the hole finds oil — every grade except the two that mean it
+    /// did not. Read from the table rather than carried beside it, so the
+    /// content and the odds cannot disagree.
+    /// </summary>
+    public double ProbabilityOfSuccess
+    {
+        get
+        {
+            var success = 0.0;
 
-/// <summary>
-/// A well being drilled: committed to, paid for, outcome already decided, and
-/// not yet known to the player.
-/// </summary>
+            for (int i = 0; i < Outcomes.Rows.Count; i++)
+                if (Outcomes.Rows[i].Grade is not (OutcomeGrade.Failure or OutcomeGrade.Disaster))
+                    success += Outcomes.Rows[i].Probability;
+
+            return success;
+        }
+    }
+}
+
+/// <summary>A well being drilled: the operation, and what it is drilling into.</summary>
 internal sealed record WellUnderConstruction(
+    Operation Operation,
     EntityId<IReservoirCompartmentEntity> Target,
     Length TotalDepth,
-    Tick Completes,
-    bool WillProduce,
-    AuditId Cause);
+    int StartDay)
+{
+    /// <summary>Cost already posted to the ledger, so each tick posts only the
+    /// increment. The operation accrues; the ledger is told the difference.</summary>
+    public Money Posted { get; set; } = Money.Zero;
+}
 
 /// <summary>
 /// Owner of <c>field.drilling</c> — the rigs currently turning.
 ///
-/// <para>Its own state key because it is a fact that outlives a tick and must
-/// survive a save: a company that reloads mid-well has to still be committed to
-/// it, still be waiting, and still get the same answer.</para>
+/// <para>It holds operations and the compartment each is aimed at; the schedule,
+/// the contention and the outcome all belong to <see cref="OperationScheduler"/>.
+/// This is a register of what the company is drilling, not a second scheduler.</para>
 /// </summary>
-internal sealed class DrillingState(DrillingTerms terms) : IStateOwner
+internal sealed class DrillingState(
+    OperationScheduler scheduler, DrillingTerms terms, CompanyState company) : IStateOwner
 {
     private readonly List<WellUnderConstruction> _drilling = [];
 
     public StateKey Key { get; } = new("field.drilling");
 
-    public int SchemaVersion => 1;
+    public int SchemaVersion => 2;
 
     public int InProgress => _drilling.Count;
 
+    public DrillingTerms Terms => terms;
+
+    public OperationScheduler Scheduler => scheduler;
+
+    /// <summary>The operation spec for one well — everything SDD-007 §1 needs.</summary>
+    public OperationSpec SpecFor(EntityId<IReservoirCompartmentEntity> target, Length totalDepth) =>
+        new(Template: terms.Template,
+            Target: new EntityRef(EntityKind.Compartment, target.Value),
+            BaseDurationDays: terms.DurationTicks * (int)Duration.DaysPerTick,
+            Costs: new CostProfile(
+                // Split so that most of the money follows the work: a well
+                // abandoned halfway has cost most of a well, not all of one and
+                // not none (SDD-007 §3).
+                Mobilisation: Money.RoundHalfEven(terms.CostPerWell.Cents * 0.15),
+                PerActiveDay: Money.RoundHalfEven(
+                    terms.CostPerWell.Cents * 0.75 / (terms.DurationTicks * Duration.DaysPerTick)),
+                PerStandbyDay: Money.RoundHalfEven(
+                    terms.CostPerWell.Cents * 0.20 / (terms.DurationTicks * Duration.DaysPerTick)),
+                Completion: Money.RoundHalfEven(terms.CostPerWell.Cents * 0.10)),
+            Resources: new ResourceNeeds(terms.Rig, []),
+            Requirements: new Requirements([], MinDetectClass: null, []),
+            Rentals: [],
+            Outcomes: terms.Outcomes);
+
     public void Begin(WellUnderConstruction well) => _drilling.Add(well);
 
-    /// <summary>
-    /// Everything that finishes this tick, removed as it is returned. A well is
-    /// completed exactly once, however many ticks pass in one call.
-    /// </summary>
-    public IReadOnlyList<WellUnderConstruction> CompletedBy(Tick now)
-    {
-        var done = new List<WellUnderConstruction>();
+    public IReadOnlyList<WellUnderConstruction> InFlight => _drilling;
 
-        for (int i = _drilling.Count - 1; i >= 0; i--)
-            if (_drilling[i].Completes.Value <= now.Value)
-            {
-                done.Add(_drilling[i]);
-                _drilling.RemoveAt(i);
-            }
-
-        // Removal walked backwards, so the results are in reverse order; the
-        // reverse puts them back into the order they were started, which is what
-        // makes two runs of one seed complete wells identically.
-        done.Reverse();
-        return done;
-    }
+    public void Remove(WellUnderConstruction well) => _drilling.Remove(well);
 
     public void Capture(IStateWriter writer)
     {
@@ -92,18 +122,23 @@ internal sealed class DrillingState(DrillingTerms terms) : IStateOwner
         for (int i = 0; i < _drilling.Count; i++)
         {
             WellUnderConstruction well = _drilling[i];
-            string at = "drilling." +
-                i.ToString("D6", System.Globalization.CultureInfo.InvariantCulture) + ".";
+            string at = Prefix(i);
 
+            writer.WriteInt64(at + "operation", (long)well.Operation.Id.Value);
             writer.WriteInt64(at + "target", (long)well.Target.Value);
             writer.WriteDouble(at + "depth", well.TotalDepth.Metres);
-            writer.WriteInt64(at + "completes", well.Completes.Value);
-            writer.WriteInt64(at + "cause", (long)well.Cause.Value);
+            writer.WriteInt64(at + "start-day", well.StartDay);
+            writer.WriteInt64(at + "progress-days", well.Operation.ProgressDays);
+            writer.WriteInt64(at + "accrued", well.Operation.Accrued.Cents);
+            writer.WriteInt64(at + "posted", well.Posted.Cents);
+            writer.WriteInt64(at + "state", (long)well.Operation.State);
 
-            // The OUTCOME is saved, because it was already drawn. A save that
-            // omitted it would let a reload re-roll the well, which is the exact
-            // exploit drawing once at commitment exists to prevent.
-            writer.WriteInt64(at + "will-produce", well.WillProduce ? 1 : 0);
+            // The OUTCOME, saved. It was drawn when the well began (SDD-007 §4),
+            // and redrawing it on load would let a player reload the month
+            // before the rig finished and try again.
+            writer.WriteInt64(at + "grade", (long)well.Operation.Outcome.Row.Grade);
+            writer.WriteDouble(at + "draw", well.Operation.Outcome.Draw);
+            writer.WriteInt64(at + "effective-days", well.Operation.Outcome.EffectiveDurationDays);
         }
     }
 
@@ -117,23 +152,71 @@ internal sealed class DrillingState(DrillingTerms terms) : IStateOwner
 
         for (long i = 0; i < count; i++)
         {
-            string at = "drilling." +
-                i.ToString("D6", System.Globalization.CultureInfo.InvariantCulture) + ".";
+            string at = Prefix(i);
+
+            var target = new EntityId<IReservoirCompartmentEntity>(
+                (ulong)reader.ReadInt64(at + "target"));
+
+            var depth = new Length(reader.ReadDouble(at + "depth"));
+            OperationSpec spec = SpecFor(target, depth);
+
+            var grade = (OutcomeGrade)reader.ReadInt64(at + "grade");
+            OutcomeRow row = RowFor(grade);
+
+            Operation operation = scheduler.Reinstate(
+                new EntityId<IOperation>((ulong)reader.ReadInt64(at + "operation")),
+                spec,
+                new DrawnOutcome(row, reader.ReadDouble(at + "draw"),
+                                 (int)reader.ReadInt64(at + "effective-days")),
+                startDay: (int)reader.ReadInt64(at + "start-day"),
+                progressDays: (int)reader.ReadInt64(at + "progress-days"),
+                accrued: new Money(reader.ReadInt64(at + "accrued")),
+                state: (OperationState)reader.ReadInt64(at + "state"));
 
             _drilling.Add(new WellUnderConstruction(
-                new EntityId<IReservoirCompartmentEntity>((ulong)reader.ReadInt64(at + "target")),
-                new Length(reader.ReadDouble(at + "depth")),
-                new Tick((int)reader.ReadInt64(at + "completes")),
-                reader.ReadInt64(at + "will-produce") == 1,
-                new AuditId((ulong)reader.ReadInt64(at + "cause"))));
+                operation, target, depth, (int)reader.ReadInt64(at + "start-day"))
+            {
+                Posted = new Money(reader.ReadInt64(at + "posted")),
+            });
         }
     }
 
-    public DrillingTerms Terms => terms;
+    /// <summary>
+    /// The table row for a saved grade. A save naming a grade this content does
+    /// not contain is refused rather than approximated — the outcome decides
+    /// whether the well produces, and guessing it would decide the game.
+    /// </summary>
+    private OutcomeRow RowFor(OutcomeGrade grade)
+    {
+        for (int i = 0; i < terms.Outcomes.Rows.Count; i++)
+            if (terms.Outcomes.Rows[i].Grade == grade) return terms.Outcomes.Rows[i];
+
+        throw new SaveDataFault("SDD-007 §4", null,
+            $"the save holds a drilling outcome of {grade}, which this content's " +
+            "outcome table does not contain");
+    }
+
+    /// <summary>Posts the month's share of a well's cost to the ledger, as the
+    /// increment since last tick.</summary>
+    public void PostAccrual(WellUnderConstruction well, Tick tick, AuditId cause)
+    {
+        Money increment = well.Operation.Accrued - well.Posted;
+        if (increment.Cents == 0) return;
+
+        company.Ledger.Post(new Movement(
+            tick, Account.Capex_PPE, Account.Cash, increment,
+            MovementCategory.Development, Asset: null, Cause: cause));
+
+        well.Posted = well.Operation.Accrued;
+    }
+
+    private static string Prefix(long index) =>
+        "drilling." + index.ToString("D6", System.Globalization.CultureInfo.InvariantCulture) + ".";
 }
 
 /// <summary>
-/// Stage 3. Rigs that finished this month hand over a well or a dry hole.
+/// Stage 3. Rigs advance a month; the ones that finished hand over a well or a
+/// dry hole.
 /// </summary>
 internal sealed class DrillingStage(
     DrillingState drilling,
@@ -146,23 +229,50 @@ internal sealed class DrillingStage(
     {
         ArgumentNullException.ThrowIfNull(context);
 
-        IReadOnlyList<WellUnderConstruction> finished = drilling.CompletedBy(context.Tick);
+        // Copied because completing a well removes it from the register.
+        var turning = new List<WellUnderConstruction>(drilling.InFlight);
 
-        for (int i = 0; i < finished.Count; i++)
+        for (int i = 0; i < turning.Count; i++)
         {
-            WellUnderConstruction well = finished[i];
+            WellUnderConstruction well = turning[i];
 
-            audit.Record(
-                AuditCategory.StochasticOutcome, subject: null, cause: well.Cause,
+            if (well.Operation.State is OperationState.Scheduled) well.Operation.Begin();
+
+            if (well.Operation.State is OperationState.Active or OperationState.Standby)
+                well.Operation.Advance(
+                    activeDays: (int)Duration.DaysPerTick, standbyDays: 0, costIndex: 1.0);
+
+            AuditId cause = audit.Record(
+                AuditCategory.StateTransition, subject: null, cause: null,
                 new Dictionary<string, AuditValue>(StringComparer.Ordinal)
                 {
-                    ["outcome"] = new(well.WillProduce ? "completed" : "dry-hole"),
+                    ["operation"] = new(well.Operation.Id.Value.ToString(
+                        System.Globalization.CultureInfo.InvariantCulture)),
+                    ["template"] = new(well.Operation.Spec.Template.Value),
+                    ["state"] = new(well.Operation.State.ToString()),
+                });
+
+            // The month's share, whatever happened. A well that finished this
+            // tick still spent this tick's money.
+            drilling.PostAccrual(well, context.Tick, cause);
+
+            if (well.Operation.State is not (OperationState.Completed or OperationState.Failed))
+                continue;
+
+            drilling.Remove(well);
+
+            audit.Record(
+                AuditCategory.StochasticOutcome, subject: null, cause: cause,
+                new Dictionary<string, AuditValue>(StringComparer.Ordinal)
+                {
+                    ["outcome"] = new(well.Operation.State == OperationState.Completed
+                        ? "completed" : "dry-hole"),
+                    ["grade"] = new(well.Operation.Outcome.Row.Grade.ToString()),
                 });
 
             // A dry hole opens nothing. The money is spent, the months are gone,
-            // and the player has learned something about the field — which is
-            // the only thing they get for it.
-            if (!well.WillProduce) continue;
+            // and what the player has bought is knowledge about the field.
+            if (well.Operation.State is OperationState.Failed) continue;
 
             field.OpenWell(
                 Defaults.CompletionFor(field.NextWellId(), well.Target, well.TotalDepth),
@@ -173,17 +283,20 @@ internal sealed class DrillingStage(
 
 /// <summary>
 /// Pure (R1 §2.5) and reports EVERY reason: a player told only that a well is
-/// too deep, who then finds they could not have afforded it either, has been
-/// made to learn the truth in instalments.
+/// too deep, who then finds the rig was busy as well, has been made to learn
+/// the truth in instalments.
 /// </summary>
 internal sealed class DrillWellValidator(
-    CompanyState company, FieldControl field, DrillingTerms terms)
-    : ICommandValidator<DrillWellCommand>
+    CompanyState company,
+    FieldControl field,
+    DrillingState drilling,
+    SimulationClock clock) : ICommandValidator<DrillWellCommand>
 {
     public IReadOnlyList<RejectionReason> Validate(DrillWellCommand command)
     {
         ArgumentNullException.ThrowIfNull(command);
 
+        DrillingTerms terms = drilling.Terms;
         var reasons = new List<RejectionReason>();
 
         if (company.Ledger.Cash < terms.CostPerWell)
@@ -203,44 +316,61 @@ internal sealed class DrillWellValidator(
                 "$loc:reject.invalid-depth", "a well must have a positive depth"));
 
         if (field.CompartmentCount == 0)
+        {
             reasons.Add(new RejectionReason(
                 "$loc:reject.no-target", "there is nothing here to drill into"));
 
+            // The scheduler's target check would repeat this in its own words.
+            return reasons;
+        }
+
+        // The SCHEDULER decides whether a rig is free, and it is asked without
+        // being made to reserve one — a validator that booked a calendar to find
+        // out whether it could would not be pure (SDD-007 §2).
+        IReadOnlyList<string> refusals = drilling.Scheduler.Refusals(
+            drilling.SpecFor(command.Target, command.TotalDepth),
+            startDay: StartDay(clock),
+            availableCapabilities: [],
+            targetExists: _ => true);
+
+        for (int i = 0; i < refusals.Count; i++)
+            reasons.Add(new RejectionReason("$loc:reject.resource-committed", refusals[i]));
+
         return reasons;
     }
+
+    /// <summary>Day index on the 30/360 grid — the scheduler's calendars are
+    /// day-granular and the tick is a month (SDD-001 §3).</summary>
+    internal static int StartDay(SimulationClock clock) =>
+        clock.CurrentTick.Value * (int)Duration.DaysPerTick;
 }
 
 /// <summary>Cannot fail (R1 §2.5) — everything that could refuse already has.</summary>
 internal sealed class DrillWellApplier(
-    CompanyState company,
-    DrillingState drilling,
-    SimulationClock clock,
-    IRandomStream exploration) : ICommandApplier<DrillWellCommand>
+    DrillingState drilling, SimulationClock clock) : ICommandApplier<DrillWellCommand>
 {
     public Applied Apply(DrillWellCommand command, AuditId submission)
     {
         ArgumentNullException.ThrowIfNull(command);
 
-        DrillingTerms terms = drilling.Terms;
+        int startDay = DrillWellValidator.StartDay(clock);
 
-        // Capex, not opex: the well is an asset the company now owns, and the
-        // distinction is what makes depreciation and abandonment mean anything
-        // later (SDD-009 §1). Paid on commitment, whatever the hole turns out
-        // to hold.
-        company.Ledger.Post(new Movement(
-            clock.CurrentTick, Account.Capex_PPE, Account.Cash, terms.CostPerWell,
-            MovementCategory.Development, Asset: null, Cause: submission));
+        ScheduleResult result = drilling.Scheduler.Submit(
+            drilling.SpecFor(command.Target, command.TotalDepth),
+            startDay,
+            availableCapabilities: [],
+            targetExists: _ => true);
 
-        // Drawn ONCE, here (SDD-007 §4). Drawing at completion would let a
-        // player reload the month before the rig finished and try again.
-        bool willProduce = exploration.NextUnit() < terms.ProbabilityOfSuccess;
+        // The validator asked the same question a moment ago and was told yes.
+        // Reaching here is a composition defect, not a player error, so it is an
+        // invariant fault rather than a rejection.
+        if (result is not Scheduled scheduled)
+            throw new InvariantFault("R1 §2.5", null,
+                "the drilling command passed validation and the scheduler then refused it; " +
+                "an applier cannot fail");
 
         drilling.Begin(new WellUnderConstruction(
-            command.Target,
-            command.TotalDepth,
-            new Tick(clock.CurrentTick.Value + terms.DurationTicks),
-            willProduce,
-            submission));
+            scheduled.Operation, command.Target, command.TotalDepth, startDay));
 
         return new Applied(submission, []);
     }

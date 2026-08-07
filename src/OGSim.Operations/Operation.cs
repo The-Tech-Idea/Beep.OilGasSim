@@ -81,6 +81,29 @@ public sealed class Operation : IOperation
     /// the operation's behaviour rather than merely report it.</summary>
     public DrawnOutcome Outcome { get; }
 
+    /// <summary>
+    /// Restores saved progress (SDD-013 §4). Called only by the scheduler's
+    /// <c>Reinstate</c>, which owns the rig re-reservation that has to happen
+    /// with it — an operation put back without its calendar entry would let a
+    /// second well be drilled on a rig that is already turning.
+    /// </summary>
+    internal void Reinstate(int progressDays, Money accrued, OperationState state)
+    {
+        if (progressDays < 0)
+            throw new SaveDataFault("SDD-007 §3", null,
+                $"operation {Id.Value} declares {progressDays} days of progress");
+
+        if (progressDays > Outcome.EffectiveDurationDays)
+            throw new SaveDataFault("SDD-007 §3", null,
+                $"operation {Id.Value} has {progressDays} days of progress against an " +
+                $"effective duration of {Outcome.EffectiveDurationDays}; a save cannot " +
+                "restore an operation past its own end");
+
+        _progressDays = progressDays;
+        _accrued = accrued;
+        State = state;
+    }
+
     /// <summary>SDD-007 §3: mobilisation is charged on entering Active.</summary>
     public void Begin()
     {

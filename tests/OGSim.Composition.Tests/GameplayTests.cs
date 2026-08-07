@@ -181,24 +181,100 @@ public sealed class GameplayTests
         });
     }
 
-    /// <summary>A well the company cannot afford is refused, not allowed and
-    /// then regretted.</summary>
+    /// <summary>
+    /// A RIG DRILLS ONE WELL AT A TIME (finding 142). The company has the cash
+    /// for six wells and one rig, so the second order is refused — and refused
+    /// with a date, because "unavailable" without one is not actionable.
+    ///
+    /// <para>The timer this replaced had no rig at all, which made cash the only
+    /// limit on how fast a field could be developed. That is a spreadsheet.</para>
+    /// </summary>
+    [Fact]
+    public void A_rig_drills_one_well_at_a_time()
+    {
+        (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled();
+
+        Assert.IsType<Accepted>(engine.Commands.Submit(Drill(target)));
+
+        Rejected rejected = Assert.IsType<Rejected>(engine.Commands.Submit(Drill(target)));
+
+        RejectionReason reason = Assert.Single(rejected.Reasons);
+        Assert.Equal("$loc:reject.resource-committed", reason.LocId);
+        Assert.Contains("next free on day", reason.Detail, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The rig frees when the well finishes, and the next order is taken. A
+    /// contention refusal that never cleared would be a deadlock rather than a
+    /// constraint.
+    /// </summary>
+    [Fact]
+    public void The_rig_takes_the_next_well_once_it_is_free()
+    {
+        (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled();
+
+        Assert.IsType<Accepted>(engine.Commands.Submit(Drill(target)));
+
+        // Past the worst-case reservation: four months at the 1.8 disaster
+        // factor is 216 days, so eight months clears any outcome.
+        for (var month = 0; month < 8; month++) engine.Pipeline.AdvanceTick();
+
+        Assert.IsType<Accepted>(engine.Commands.Submit(Drill(target)));
+    }
+
+    /// <summary>
+    /// A well the company cannot afford is refused, not allowed and then
+    /// regretted.
+    ///
+    /// <para>Reached by WAITING rather than by drilling: $50M against a $300k
+    /// standing charge takes about 140 months to fall below one well's $8M, and
+    /// a company that drills instead gets richer — with wells earning far more
+    /// per month than they cost, the binding constraint on early expansion is
+    /// the rig, not the money. That is a balance observation for R20.4, and it
+    /// is why this test idles.</para>
+    /// </summary>
     [Fact]
     public void A_well_the_company_cannot_afford_is_refused()
     {
         (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled();
 
-        // $50M opening cash, $8M a well: the seventh is the one that cannot be
-        // paid for out of what is left after six.
-        var accepted = 0;
-        for (var attempt = 0; attempt < 8; attempt++)
-            if (engine.Commands.Submit(Drill(target)) is Accepted) accepted++;
+        for (var month = 0; month < 145; month++) engine.Pipeline.AdvanceTick();
 
-        Assert.Equal(6, accepted);
+        Assert.True(engine.ReadModel!.Cash < Money.FromMillions(8.0));
 
         Rejected rejected = Assert.IsType<Rejected>(engine.Commands.Submit(Drill(target)));
+
         Assert.Contains(rejected.Reasons,
             reason => reason.LocId == "$loc:reject.insufficient-cash");
+    }
+
+    /// <summary>
+    /// COST ACCRUES OVER THE OPERATION, not on day one (SDD-007 §3, R12-V2).
+    /// A four-month well spends for four months, which is what makes an
+    /// over-committed company run out of money mid-well rather than discover
+    /// the bill on completion.
+    /// </summary>
+    [Fact]
+    public void A_wells_cost_is_spread_across_the_months_it_takes()
+    {
+        (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled();
+
+        engine.Pipeline.AdvanceTick();
+        Money atStart = engine.ReadModel!.Cash;
+
+        Assert.IsType<Accepted>(engine.Commands.Submit(Drill(target)));
+
+        engine.Pipeline.AdvanceTick();
+        Money afterOneMonth = engine.ReadModel!.Cash;
+
+        Money firstMonth = atStart - afterOneMonth;
+
+        // Mobilisation plus one month's day-rate is well under the whole $8M.
+        Assert.True(firstMonth < Money.FromMillions(8.0),
+            $"month one took {firstMonth.Cents}c — the whole well was charged at once");
+
+        Assert.True(firstMonth > Money.Zero,
+            "a month of drilling has to cost something");
     }
 
     // ------------------------------------------------------------- visibility
