@@ -372,3 +372,61 @@ public static class DetMath
     private static string Describe(double value) =>
         value.ToString("R", System.Globalization.CultureInfo.InvariantCulture);
 }
+
+/// <summary>
+/// The Colebrook-White friction factor, by EXACTLY 20 Newton steps from
+/// f₀ = 0.02 (SDD-003 §6.2, SDD-006 §6).
+///
+/// <para><b>One implementation, shared</b> — SDD-006 §6 says so in those words,
+/// and it lived privately inside the well's VLP until R11.0's finding 122, where
+/// the pipeline needed the identical procedure. A second copy would have been
+/// two chances to get the same equation wrong, and the difference would have
+/// shown up as a pipeline and a tubing string disagreeing about the same
+/// fluid.</para>
+///
+/// <para>It is here rather than in a physics module because what is pinned is
+/// the ITERATION — a fixed step count from a fixed seed — which is determinism
+/// (D-1) rather than domain modelling. A loop that stopped on a tolerance would
+/// take a different number of steps on different inputs.</para>
+/// </summary>
+public static class Friction
+{
+    private const int NewtonSteps = 20;
+    private const double Seed = 0.02;
+
+    /// <summary>Reynolds number below which flow is laminar and Colebrook does
+    /// not apply. The transition is genuinely discontinuous in nature, not an
+    /// artefact of the correlation.</summary>
+    public const double LaminarLimit = 2300.0;
+
+    public static double Factor(double reynolds, double relativeRoughness)
+    {
+        if (double.IsNaN(reynolds) || reynolds <= 0.0)
+            throw new InvariantFault("SDD-003 §6.2", null,
+                "Reynolds number must be positive and finite");
+
+        if (relativeRoughness < 0.0)
+            throw new InvariantFault("SDD-003 §6.2", null,
+                "relative roughness cannot be negative");
+
+        if (reynolds < LaminarLimit) return 64.0 / reynolds;
+
+        // Solved in x = 1/√f, where Colebrook is
+        //   x + 2·log10(ε/3.7D + 2.51x/Re) = 0
+        // — linear enough in x that Newton cannot wander, which the same
+        // equation in f is not.
+        double x = 1.0 / DetMath.Sqrt(Seed);
+        double ln10 = DetMath.Ln(10.0);
+
+        for (int i = 0; i < NewtonSteps; i++)
+        {
+            double inner = relativeRoughness / 3.7 + 2.51 * x / reynolds;
+            double g = x + 2.0 * (DetMath.Ln(inner) / ln10);
+            double dg = 1.0 + 2.0 * (2.51 / reynolds) / (inner * ln10);
+
+            x -= g / dg;
+        }
+
+        return 1.0 / (x * x);
+    }
+}

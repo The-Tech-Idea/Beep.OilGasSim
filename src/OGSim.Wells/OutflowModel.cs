@@ -33,13 +33,6 @@ public sealed record TubingGeometry(
 /// </summary>
 public sealed class HydrostaticFrictionOutflowModel : IOutflowModel
 {
-    /// <summary>SDD-003 §6.2: EXACTLY 20 Newton steps from f₀ = 0.02. Fixed, not
-    /// converged-when-close — a loop that stopped on a tolerance would take a
-    /// different number of steps on different inputs, and D-1 wants the same
-    /// arithmetic every run.</summary>
-    private const int ColebrookIterations = 20;
-    private const double ColebrookSeed = 0.02;
-
     private readonly TubingGeometry _tubing;
     private readonly Density _mixtureDensity;
     private readonly ILiftMethod? _lift;
@@ -141,45 +134,17 @@ public sealed class HydrostaticFrictionOutflowModel : IOutflowModel
     private const double DensityFactorFloor = 1e-3;
 
     /// <summary>
-    /// Colebrook-White by exactly 20 Newton steps (§6.2). Converged long before
-    /// 20 for any physical input; the count is fixed so the arithmetic is too.
-    ///
-    /// <para>Solved in <c>x = 1/√f</c>, where Colebrook is
-    /// <c>x + 2·log10(ε/3.7D + 2.51x/Re) = 0</c> — linear enough in x that
-    /// Newton cannot wander, which the same equation in f is not.</para>
+    /// Colebrook-White — the KERNEL's implementation, shared with the pipeline
+    /// (SDD-006 §6 says one implementation in those words). It lived here
+    /// privately until R11.0's finding 122, when the pipeline needed the
+    /// identical procedure and a second copy would have been two chances to get
+    /// the same equation wrong.
     /// </summary>
     private double FrictionFactor(double velocity, double diameter)
     {
         double reynolds = _mixtureDensity.KgPerCubicMetre * velocity * diameter / ViscosityPaS;
-
-        // Laminar has a closed form and Colebrook does not apply to it. The
-        // transition is genuinely discontinuous in nature, not an artefact.
-        if (reynolds < LaminarLimit) return 64.0 / Math.Max(reynolds, 1.0);
-
-        double relativeRoughness = _tubing.RoughnessMetres / diameter;
-        double x = 1.0 / DetMath.Sqrt(ColebrookSeed);
-
-        for (int i = 0; i < ColebrookIterations; i++)
-        {
-            double inner = relativeRoughness / 3.7 + 2.51 * x / reynolds;
-            double g = x + 2.0 * Log10(inner);
-            double dg = 1.0 + 2.0 * (2.51 / reynolds) / (inner * Ln10);
-
-            x -= g / dg;
-        }
-
-        return 1.0 / (x * x);
+        return Friction.Factor(Math.Max(reynolds, 1.0), _tubing.RoughnessMetres / diameter);
     }
-
-    /// <summary>Base-10 log via DetMath: D-2 forbids System.Math transcendentals
-    /// in simulation code, and Colebrook is stated in log10.</summary>
-    private static double Log10(double value) => DetMath.Ln(value) / Ln10;
-
-    private static readonly double Ln10 = DetMath.Ln(10.0);
-
-    /// <summary>Reynolds number below which flow is laminar. The conventional
-    /// value (SDD-003 §6.2's Colebrook applies to turbulent flow only).</summary>
-    private const double LaminarLimit = 2300.0;
 
     /// <summary>Mixture viscosity for the Reynolds number. Held at the fluid's
     /// own value would be better; §6.2 states the friction term against ρ_mix

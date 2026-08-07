@@ -495,20 +495,39 @@ constructor default that replaced it; required is better anyway, since "this
 drive takes no injectant" is a statement each mechanism should make rather than
 omit.
 
-### Phase R11 — Transport and export ⬜
+### Phase R11 — Transport and export 🟨
 > 📄 [phases/R11_TRANSPORT.md](phases/R11_TRANSPORT.md)
 
 | # | Task | Status |
 |---|---|---|
-| R11.1 | `IPipeline`; `IHydraulicModel` — Darcy-Weisbach and Panhandle | ⬜ |
-| R11.2 | Pump and compressor stations | ⬜ |
-| R11.3 | Linefill and inventory in transit | ⬜ |
-| R11.4 | Flow-assurance risk flags — hydrate, wax, corrosion, erosion | ⬜ |
-| R11.5 | Terminal, tank farm | ⬜ |
-| R11.6 | `IBerth`, `ICargo` — scheduling, laytime, demurrage | ⬜ |
-| R11.7 | `ICustodyTransferPoint` — metering, spec gate, the revenue event | ⬜ |
-| R11.8 | Third-party transport contracts and tariffs | ⬜ |
-| R11.9 | Model tests MX4, MX5; SC8 | ⬜ |
+| R11.0 | SDD review — finding 121 (`IBerth`/`ICargo` undeclared) and 122 (Colebrook duplicated) | ✅ |
+| R11.1 | `IPipeline`; `IHydraulicModel` — Darcy-Weisbach and the pressure-squared gas form | ✅ |
+| R11.2 | Pump and compressor stations | 🟨 — R9's compressor serves a station unchanged; the liquid pump is the same shape and arrives with R11.8's tariffs |
+| R11.3 | Linefill and inventory in transit | ✅ |
+| R11.4 | Flow-assurance risk flags | 🟨 — erosional velocity reports as a constraint feeding hazard severity; hydrate/wax margins need R18's hazard model to consume them |
+| R11.5 | Terminal, tank farm | ✅ — R8's tank, in a farm; no new type (finding 82(c)) |
+| R11.6 | `IBerth`, `ICargo` — scheduling, laytime, demurrage | ⬜ — **blocked**: `ICargo` is an `IOperation` and R12 declares `IOperation` |
+| R11.7 | `ICustodyTransferPoint` — metering, spec gate, revenue event | 🟨 — the gate is R8.7; the metering-uncertainty draw needs R14's `measurement` RNG stream in a tick |
+| R11.8 | Third-party transport contracts and tariffs | ⬜ — R13's economics |
+| R11.9 | Model tests MX4, MX5; SC8 | 🟨 — MX4 ✅ MX5 ✅; SC8 needs the tick loop |
+
+**R11's verification.** MX4/R11-V1 ✅ · MX5/R11-V2 ✅ · R11-V3 ✅ · R11-V4 ✅ ·
+R11-V5 ✅ · R11-V7 ✅ · R11-V12 partial ✅ · R11-V6/V8/V9/V10/V11/V13 ⬜ with the
+tasks above. **R11-V13 (whole-chain conservation) needs the tick loop** and is
+the moment "one engine" is fully verified — it belongs with R7's loop, not here.
+
+**G1 holds: capacity is never configured.** A pipeline declares geometry and a
+rating and nothing else; throughput is asked of the hydraulics for the fluid
+actually flowing. The gas line's collapse (R11-V3) and the viscosity sensitivity
+(R11-V4) are both *impossible to express* against a stored `maxRate`, and a test
+asserts the type has no such field.
+
+**R11.0's findings.**
+
+| # | Finding |
+|---|---|
+| 121 | `IBerth` and `ICargo` are declared in no SDD. SDD-006 §7 describes berth occupancy and cargo laytime in text only, and `ICargo` is specified as an `IOperation` — a contract R12 introduces. R11.6 is genuinely blocked rather than merely unwritten |
+| 122 | **Colebrook-White was duplicated in spirit and about to be in fact.** SDD-006 §6 says "the SAME 20-Newton-steps-from-0.02 procedure pinned in SDD-003 §6.2 — one implementation, shared", and it lived privately inside the well's VLP where the pipeline could not reach it. Moved to the kernel as `Friction`: what is pinned is the ITERATION — fixed steps from a fixed seed — which is determinism rather than domain physics. Two copies would have been two chances to get one equation wrong, showing up as a tubing string and a pipeline disagreeing about the same fluid |
 
 ---
 
