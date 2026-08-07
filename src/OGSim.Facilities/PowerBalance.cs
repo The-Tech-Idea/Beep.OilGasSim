@@ -49,6 +49,15 @@ public sealed record PowerBalanceResult(
     Power DemandAfter,
     IReadOnlyList<EntityId<IFlowElement>> Offline)
 {
+    // Finding 131.
+    public bool Equals(PowerBalanceResult? other) =>
+        other is not null && Supply == other.Supply
+        && DemandBefore == other.DemandBefore && DemandAfter == other.DemandAfter
+        && Structural.Equal(Offline, other.Offline);
+
+    public override int GetHashCode() =>
+        HashCode.Combine(Supply, DemandBefore, DemandAfter, Structural.HashOf(Offline));
+
     public bool Shortfall => Offline.Count > 0;
 }
 

@@ -23,7 +23,22 @@ public sealed record TechnologyNode(
     IReadOnlyList<TechnologyId> Prerequisites,
     IReadOnlyList<Effect> Effects,
     DetectClass? GrantsDetectClass,           // observation nodes raise the tier
-    IReadOnlyList<AcquisitionRoute> Routes);  // TECH_TREE's R L S D column
+    IReadOnlyList<AcquisitionRoute> Routes)   // TECH_TREE's R L S D column
+{
+    // Finding 131.
+    public bool Equals(TechnologyNode? other) =>
+        other is not null && Id.Equals(other.Id) && AvailableFrom == other.AvailableFrom
+        && DiffusionLagTicks == other.DiffusionLagTicks
+        && GrantsDetectClass == other.GrantsDetectClass
+        && Structural.Equal(Prerequisites, other.Prerequisites)
+        && Structural.Equal(Effects, other.Effects)
+        && Structural.Equal(Routes, other.Routes);
+
+    public override int GetHashCode() =>
+        HashCode.Combine(Id, AvailableFrom, DiffusionLagTicks, GrantsDetectClass,
+            Structural.HashOf(Prerequisites), Structural.HashOf(Effects),
+            Structural.HashOf(Routes));
+}
 
 /// <summary>
 /// SDD-005 §2's real implementation: the nodes this company holds, era-filtered.

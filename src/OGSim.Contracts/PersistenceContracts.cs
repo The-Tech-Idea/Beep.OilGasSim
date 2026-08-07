@@ -1,37 +1,22 @@
-// SDD-013 §5 — save migrations. Chain composition v→v+1; a gap in the chain is
-// a composition fault at startup; every step ships with a real fixture save of
-// version From (PV5). JsonNode because migration operates on the canonical
-// block BEFORE the typed readers exist for that shape.
-
-using System.Text.Json.Nodes;
+// SDD-013 §5 — save migrations.
+//
+// `IMigrationStep` is NOT here. It was, over System.Text.Json's JsonNode, with
+// no implementations and no callers, while OGSim.Persistence declared a second
+// one over the engine's own JsonValue — the one MigrationChain uses and every
+// migration test implements. Two declarations of one concept is what glossary
+// rule N1 forbids (finding 134).
+//
+// The live one is right on the merits rather than merely by being used: the
+// canonical form is JsonValue, and SDD-013 §3 requires that writer and reader
+// live in ONE class. Migrating through JsonNode would have been the second
+// serialisation path that rule exists to prevent — a block parsed by one library
+// and rewritten by another, with the canonical byte rules (ordinal key order,
+// shortest-round-trip doubles) holding on one side of a migration and not the
+// other.
+//
+// It cannot move here: JsonValue belongs to the persistence module, which sits
+// above Contracts, and a contract cannot name a type from the layer above it.
+// So the declaration lives with the canonical form it operates on, and this file
+// records why nothing here duplicates it.
 
 namespace OGSim.Contracts;
-
-/// <summary>
-/// <b>SUPERSEDED, and deliberately still here (finding 134).</b>
-///
-/// <para><c>OGSim.Persistence</c> declares a second <c>IMigrationStep</c> —
-/// <c>int From</c> and <c>JsonValue Migrate(JsonValue, string)</c> — and that is
-/// the one <c>MigrationChain</c> uses and the one every migration test
-/// implements. This one has no implementations and no callers. Two declarations
-/// of one concept is exactly what glossary rule N1 forbids.</para>
-///
-/// <para>The live one is right on the merits, not merely by being used: the
-/// canonical form is the engine's own <c>JsonValue</c>, and SDD-013 §3 requires
-/// that writer and reader live in ONE class. Migrating through
-/// <c>System.Text.Json.Nodes.JsonNode</c> would be the second serialisation path
-/// that rule exists to prevent — the block would be parsed by one library,
-/// rewritten by another, and the canonical byte rules (ordinal key order,
-/// shortest-round-trip doubles) would hold on one side of a migration and not
-/// the other.</para>
-///
-/// <para>It is left in place rather than deleted because removing a contract
-/// type is the owner's call. The resolution, when taken, is to delete this
-/// declaration — <c>OGSim.Contracts</c> cannot host the live one, since
-/// <c>JsonValue</c> belongs to the persistence module above it.</para>
-/// </summary>
-public interface IMigrationStep
-{
-    int From { get; }
-    JsonNode Migrate(JsonNode block, string module);
-}

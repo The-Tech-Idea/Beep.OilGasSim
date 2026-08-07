@@ -37,10 +37,28 @@ public abstract record CompositionResult;
 public sealed record Composed(
     IReadOnlyList<IModule> OrderedModules,
     IReadOnlyList<ITickStage> Stages,
-    StateRegistry State) : CompositionResult;
+    StateRegistry State) : CompositionResult
+{
+    // Finding 131.
+    public bool Equals(Composed? other) =>
+        other is not null
+        && Structural.Equal(OrderedModules, other.OrderedModules)
+        && Structural.Equal(Stages, other.Stages)
+        && ReferenceEquals(State, other.State);
+
+    public override int GetHashCode() =>
+        HashCode.Combine(Structural.HashOf(OrderedModules), Structural.HashOf(Stages), State);
+}
 
 /// <summary>Every problem, never just the first (R1 §2.9).</summary>
-public sealed record CompositionRefused(IReadOnlyList<CompositionProblem> Problems) : CompositionResult;
+public sealed record CompositionRefused(IReadOnlyList<CompositionProblem> Problems) : CompositionResult
+{
+    // Finding 131.
+    public bool Equals(CompositionRefused? other) =>
+        other is not null && Structural.Equal(Problems, other.Problems);
+
+    public override int GetHashCode() => Structural.HashOf(Problems);
+}
 
 public sealed class ModuleComposer
 {

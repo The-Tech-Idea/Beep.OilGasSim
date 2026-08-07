@@ -45,4 +45,16 @@ public sealed record LicenceTerms(
     Money Bond,
     IReadOnlyList<RelinquishmentStep> Relinquishment,
     ContentId FiscalRegime,
-    ContentId HseRegime);
+    ContentId HseRegime)
+{
+    // Finding 131.
+    public bool Equals(LicenceTerms? other) =>
+        other is not null && TermMonths == other.TermMonths && Bond == other.Bond
+        && FiscalRegime == other.FiscalRegime && HseRegime == other.HseRegime
+        && Structural.Equal(WorkCommitment, other.WorkCommitment)
+        && Structural.Equal(Relinquishment, other.Relinquishment);
+
+    public override int GetHashCode() =>
+        HashCode.Combine(TermMonths, Bond, FiscalRegime, HseRegime,
+            Structural.HashOf(WorkCommitment), Structural.HashOf(Relinquishment));
+}

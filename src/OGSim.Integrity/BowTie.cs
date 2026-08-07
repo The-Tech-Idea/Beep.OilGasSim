@@ -34,6 +34,14 @@ public sealed record Barrier(
     IReadOnlyList<EntityId<IWellComponent>> Elements,
     bool IsPreventive)
 {
+    // Finding 131.
+    public bool Equals(Barrier? other) =>
+        other is not null && Id == other.Id && IsPreventive == other.IsPreventive
+        && Structural.Equal(Elements, other.Elements);
+
+    public override int GetHashCode() =>
+        HashCode.Combine(Id, IsPreventive, Structural.HashOf(Elements));
+
     public double StrengthGiven(
         Func<EntityId<IWellComponent>, double> conditionOf,
         double crewCompetency,
@@ -86,7 +94,18 @@ public sealed record ThreatResolution(
     ContentId Threat,
     ThreatOutcome Outcome,
     IReadOnlyList<ContentId> FailedBarriers,
-    int MitigatingBarriersHeld);
+    int MitigatingBarriersHeld)
+{
+    // Finding 131.
+    public bool Equals(ThreatResolution? other) =>
+        other is not null && Threat == other.Threat && Outcome == other.Outcome
+        && MitigatingBarriersHeld == other.MitigatingBarriersHeld
+        && Structural.Equal(FailedBarriers, other.FailedBarriers);
+
+    public override int GetHashCode() =>
+        HashCode.Combine(Threat, Outcome, MitigatingBarriersHeld,
+                         Structural.HashOf(FailedBarriers));
+}
 
 /// <summary>
 /// SDD-012 §4b's stage-4 threat resolution.

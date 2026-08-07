@@ -113,4 +113,11 @@ public sealed record LoadFailure(
 /// <summary>Catalogues on success, failures otherwise — NEVER both; any failure means the engine does not start (10 §3, G2).</summary>
 public abstract record ContentLoadResult;
 public sealed record ContentLoaded(ICatalogSet Catalogues) : ContentLoadResult;
-public sealed record ContentFailures(IReadOnlyList<LoadFailure> Failures) : ContentLoadResult;
+public sealed record ContentFailures(IReadOnlyList<LoadFailure> Failures) : ContentLoadResult
+{
+    // Finding 131.
+    public bool Equals(ContentFailures? other) =>
+        other is not null && Structural.Equal(Failures, other.Failures);
+
+    public override int GetHashCode() => Structural.HashOf(Failures);
+}

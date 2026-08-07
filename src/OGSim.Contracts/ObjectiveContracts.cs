@@ -45,17 +45,42 @@ public sealed record Const(double Value) : Predicate;
 
 public sealed record Compare(Predicate L, CompareOp Op, Predicate R) : Predicate;
 
-public sealed record All(IReadOnlyList<Predicate> Items) : Predicate;
+// Finding 131 on all four combinators: an objective tree is compared when a
+// scenario asks whether a loaded mission is the one it shipped, and the tree is
+// exactly where the collections are.
+public sealed record All(IReadOnlyList<Predicate> Items) : Predicate
+{
+    public bool Equals(All? other) => other is not null && Structural.Equal(Items, other.Items);
 
-public sealed record Any(IReadOnlyList<Predicate> Items) : Predicate;
+    public override int GetHashCode() => Structural.HashOf(Items);
+}
 
-public sealed record CountOf(int N, IReadOnlyList<Predicate> Items) : Predicate;
+public sealed record Any(IReadOnlyList<Predicate> Items) : Predicate
+{
+    public bool Equals(Any? other) => other is not null && Structural.Equal(Items, other.Items);
+
+    public override int GetHashCode() => Structural.HashOf(Items);
+}
+
+public sealed record CountOf(int N, IReadOnlyList<Predicate> Items) : Predicate
+{
+    public bool Equals(CountOf? other) =>
+        other is not null && N == other.N && Structural.Equal(Items, other.Items);
+
+    public override int GetHashCode() => HashCode.Combine(N, Structural.HashOf(Items));
+}
 
 /// <summary>Stateful: a consecutive-true counter, persisted with the objective.</summary>
 public sealed record SustainedFor(Predicate Inner, int Ticks) : Predicate;
 
 /// <summary>Stateful: a current-step index, persisted with the objective.</summary>
-public sealed record InSequence(IReadOnlyList<Predicate> Steps) : Predicate;
+public sealed record InSequence(IReadOnlyList<Predicate> Steps) : Predicate
+{
+    public bool Equals(InSequence? other) =>
+        other is not null && Structural.Equal(Steps, other.Steps);
+
+    public override int GetHashCode() => Structural.HashOf(Steps);
+}
 
 /// <summary>A failure condition — true while the inner predicate has never held.</summary>
 public sealed record Never(Predicate Inner) : Predicate;

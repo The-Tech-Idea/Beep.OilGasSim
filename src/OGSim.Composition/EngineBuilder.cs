@@ -106,14 +106,36 @@ public sealed record Engine(
     IReadOnlyList<IModule> Modules,
     TickPipeline Pipeline,
     IAuditTrail Audit,
-    EventBus Events);
+    EventBus Events)
+{
+    // Finding 131.
+    public bool Equals(Engine? other) =>
+        other is not null && ReferenceEquals(Pipeline, other.Pipeline)
+        && ReferenceEquals(Audit, other.Audit) && ReferenceEquals(Events, other.Events)
+        && Structural.Equal(Modules, other.Modules);
 
+    public override int GetHashCode() =>
+        HashCode.Combine(Pipeline, Audit, Events, Structural.HashOf(Modules));
+}
+
+/// <summary>
+/// The build outcome. <c>Built</c> is composition's own — it carries an
+/// <see cref="Engine"/>, which is a Layer 4 type the contract layer cannot name
+/// — but a refusal is reported with the CONTRACT's
+/// <see cref="EngineCompositionRefused"/> rather than a second record saying the
+/// same thing. Two names for one concept is what glossary rule N1 forbids, and
+/// a host that had to translate between them would be doing so at exactly the
+/// moment it is trying to print why the engine would not start.
+/// </summary>
 public abstract record BuildResult;
 
 public sealed record Built(Engine Engine) : BuildResult;
 
 /// <summary>Every problem, never just the first (R1 §2.9).</summary>
-public sealed record BuildRefused(IReadOnlyList<CompositionProblem> Problems) : BuildResult;
+public sealed record BuildRefused(EngineCompositionRefused Refusal) : BuildResult
+{
+    public IReadOnlyList<CompositionProblem> Problems => Refusal.Problems;
+}
 
 /// <summary>Design 03 §8's Layer 4 — the one place that knows what implements what.</summary>
 public static class EngineBuilder
@@ -182,7 +204,8 @@ public static class EngineBuilder
         // be half-constructed and handed back.
         CompositionResult result = new ModuleComposer().Compose(modules);
 
-        if (result is CompositionRefused refused) return new BuildRefused(refused.Problems);
+        if (result is CompositionRefused refused)
+            return new BuildRefused(new EngineCompositionRefused(refused.Problems));
 
         var composed = (Composed)result;
 

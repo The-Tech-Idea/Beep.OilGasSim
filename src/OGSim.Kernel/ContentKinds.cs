@@ -95,7 +95,17 @@ public sealed record MaterialDefinition(
     ContentId Id,
     PhaseAtStandardConditions Phase,
     bool IsSold,
-    IReadOnlyList<MaterialPropertyEntry> Properties) : ContentDefinition(Id);
+    IReadOnlyList<MaterialPropertyEntry> Properties) : ContentDefinition(Id)
+{
+    // Finding 131 — a mod override replaces an entry whole (SDD-004 §7), and
+    // "did this source actually change the material?" is asked by comparing.
+    public bool Equals(MaterialDefinition? other) =>
+        other is not null && Id == other.Id && Phase == other.Phase && IsSold == other.IsSold
+        && Structural.Equal(Properties, other.Properties);
+
+    public override int GetHashCode() =>
+        HashCode.Combine(Id, Phase, IsSold, Structural.HashOf(Properties));
+}
 
 /// <summary>
 /// The PPDM/PRODML product list as content (research §5). A material is a

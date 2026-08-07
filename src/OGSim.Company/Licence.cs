@@ -28,7 +28,16 @@ public sealed record CommitmentProgress(CommitmentItem Item, double Delivered)
 public sealed record CommitmentAssessment(
     IReadOnlyList<CommitmentProgress> Unmet,
     Money BondForfeit,
-    bool LicenceLost);
+    bool LicenceLost)
+{
+    // Finding 131.
+    public bool Equals(CommitmentAssessment? other) =>
+        other is not null && BondForfeit == other.BondForfeit && LicenceLost == other.LicenceLost
+        && Structural.Equal(Unmet, other.Unmet);
+
+    public override int GetHashCode() =>
+        HashCode.Combine(BondForfeit, LicenceLost, Structural.HashOf(Unmet));
+}
 
 /// <summary>SDD-011 §1. A live licence with its terms and its clocks.</summary>
 public sealed class Licence : ILicence

@@ -33,7 +33,24 @@ public sealed record ModuleManifest(
     IReadOnlyList<Type> Requires,
     IReadOnlyList<StateKey> OwnsState,
     IReadOnlyList<StageParticipation> Stages,
-    IReadOnlyList<Type> Commands);
+    IReadOnlyList<Type> Commands)
+{
+    // Finding 131. A manifest is compared when a scenario asks whether its
+    // module set matches the one a save was written under.
+    public bool Equals(ModuleManifest? other) =>
+        other is not null && Name == other.Name
+        && Structural.Equal(Provides, other.Provides)
+        && Structural.Equal(Requires, other.Requires)
+        && Structural.Equal(OwnsState, other.OwnsState)
+        && Structural.Equal(Stages, other.Stages)
+        && Structural.Equal(Commands, other.Commands);
+
+    public override int GetHashCode() =>
+        HashCode.Combine(Name,
+            Structural.HashOf(Provides), Structural.HashOf(Requires),
+            Structural.HashOf(OwnsState), Structural.HashOf(Stages),
+            Structural.HashOf(Commands));
+}
 
 /// <summary>Resolution happens AFTER validation of the whole module set.</summary>
 public interface IModuleComposition
@@ -104,9 +121,25 @@ public sealed class TickContext
 public sealed record Segment(
     int StartDay,
     int DurationDays,
-    IReadOnlyCollection<EntityRef> Available);
+    IReadOnlyCollection<EntityRef> Available)
+{
+    // Finding 131.
+    public bool Equals(Segment? other) =>
+        other is not null && StartDay == other.StartDay && DurationDays == other.DurationDays
+        && Structural.Equal(Available, other.Available);
 
-public sealed record SegmentPlan(IReadOnlyList<Segment> Segments);
+    public override int GetHashCode() =>
+        HashCode.Combine(StartDay, DurationDays, Structural.HashOf(Available));
+}
+
+public sealed record SegmentPlan(IReadOnlyList<Segment> Segments)
+{
+    // Finding 131.
+    public bool Equals(SegmentPlan? other) =>
+        other is not null && Structural.Equal(Segments, other.Segments);
+
+    public override int GetHashCode() => Structural.HashOf(Segments);
+}
 
 // ---------------------------------------------------------------- state
 

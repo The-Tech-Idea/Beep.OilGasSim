@@ -29,7 +29,24 @@ public sealed record SaveHeader(
     Tick Tick,
     IReadOnlyDictionary<string, ulong> RngPositions,
     IReadOnlyDictionary<string, string> ModuleDigests,
-    string StateDigest);
+    string StateDigest)
+{
+    // Finding 131.
+    public bool Equals(SaveHeader? other) =>
+        other is not null && SchemaVersion == other.SchemaVersion
+        && string.Equals(EngineVersion, other.EngineVersion, StringComparison.Ordinal)
+        && string.Equals(ContentVersion, other.ContentVersion, StringComparison.Ordinal)
+        && WorldSeed == other.WorldSeed && Tick == other.Tick
+        && string.Equals(StateDigest, other.StateDigest, StringComparison.Ordinal)
+        && Structural.Equal(ActiveMods, other.ActiveMods)
+        && Structural.Equal(RngPositions, other.RngPositions)
+        && Structural.Equal(ModuleDigests, other.ModuleDigests);
+
+    public override int GetHashCode() =>
+        HashCode.Combine(SchemaVersion, EngineVersion, ContentVersion, WorldSeed, Tick,
+            StateDigest, Structural.HashOf(ActiveMods),
+            HashCode.Combine(Structural.HashOf(RngPositions), Structural.HashOf(ModuleDigests)));
+}
 
 public sealed record ModReference(string Id, string Version, int Order);
 
@@ -38,10 +55,24 @@ public sealed record ModuleBlock(string Module, JsonValue State);
 
 public abstract record LoadResult;
 
-public sealed record Loaded(SaveHeader Header, IReadOnlyList<ModuleBlock> Blocks) : LoadResult;
+public sealed record Loaded(SaveHeader Header, IReadOnlyList<ModuleBlock> Blocks) : LoadResult
+{
+    // Finding 131.
+    public bool Equals(Loaded? other) =>
+        other is not null && Header == other.Header && Structural.Equal(Blocks, other.Blocks);
+
+    public override int GetHashCode() => HashCode.Combine(Header, Structural.HashOf(Blocks));
+}
 
 /// <summary>Every reason, named specifically. Never "the save is corrupt".</summary>
-public sealed record Refused(IReadOnlyList<string> Reasons) : LoadResult;
+public sealed record Refused(IReadOnlyList<string> Reasons) : LoadResult
+{
+    // Finding 131.
+    public bool Equals(Refused? other) =>
+        other is not null && Structural.Equal(Reasons, other.Reasons);
+
+    public override int GetHashCode() => Structural.HashOf(Reasons);
+}
 
 /// <summary>
 /// SDD-013 §2's digesting and §6's refusal.

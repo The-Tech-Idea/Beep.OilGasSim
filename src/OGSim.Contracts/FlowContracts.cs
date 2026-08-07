@@ -49,7 +49,17 @@ public sealed record SegmentContext(
 public sealed record TransformInput(
     IReadOnlyList<MaterialStream> Inlets,
     SegmentContext Segment,
-    ReservoirRate? SolvedRate);
+    ReservoirRate? SolvedRate)
+{
+    // Finding 131. Comparing two transform inputs is how a test asks "did the
+    // damped iteration actually move?", which by reference is always yes.
+    public bool Equals(TransformInput? other) =>
+        other is not null && Segment == other.Segment && SolvedRate.Equals(other.SolvedRate)
+        && Structural.Equal(Inlets, other.Inlets);
+
+    public override int GetHashCode() =>
+        HashCode.Combine(Segment, SolvedRate, Structural.HashOf(Inlets));
+}
 
 /// <summary>Kind-tagged mass leaving the network — each maps 1:1 onto its
 /// 04 §7 conservation term (SDD-002 §5, third pass).</summary>
@@ -69,7 +79,20 @@ public sealed record TransformResult(
     Composition Sourced,
     Composition FuelConsumed,
     DisposedMass Disposed,
-    Power PowerDraw);
+    Power PowerDraw)
+{
+    // Finding 131 — and this one is load-bearing: S5 convergence compares one
+    // iteration's result against the last, and reference equality would report
+    // a converged network as still moving.
+    public bool Equals(TransformResult? other) =>
+        other is not null && Sourced == other.Sourced && FuelConsumed == other.FuelConsumed
+        && Disposed == other.Disposed && PowerDraw == other.PowerDraw
+        && Structural.Equal(Outlets, other.Outlets);
+
+    public override int GetHashCode() =>
+        HashCode.Combine(Sourced, FuelConsumed, Disposed, PowerDraw,
+                         Structural.HashOf(Outlets));
+}
 
 /// <summary>
 /// Anything the stream passes through (design 02 §1.5). Transform is PURE —
@@ -109,7 +132,21 @@ public sealed record SolveReport(
     IReadOnlyList<CompletionState> CompletionStates,
     IReadOnlyList<(EntityId<IFlowElement> Element, ConstraintKind Kind, Mass Deferred)> Deferrals,
     IReadOnlyList<ForcedShutIn> ForcedShutIns,
-    int OuterIterations);
+    int OuterIterations)
+{
+    // Finding 131.
+    public bool Equals(SolveReport? other) =>
+        other is not null && OuterIterations == other.OuterIterations
+        && Structural.Equal(Solutions, other.Solutions)
+        && Structural.Equal(CompletionStates, other.CompletionStates)
+        && Structural.Equal(Deferrals, other.Deferrals)
+        && Structural.Equal(ForcedShutIns, other.ForcedShutIns);
+
+    public override int GetHashCode() =>
+        HashCode.Combine(OuterIterations, Structural.HashOf(Solutions),
+            Structural.HashOf(CompletionStates), Structural.HashOf(Deferrals),
+            Structural.HashOf(ForcedShutIns));
+}
 
 /// <summary>
 /// SDD-002 §9 — the ONLY mutation path out of a solve. Transform is pure; at
@@ -151,7 +188,18 @@ public sealed record FlowConnection(
 /// (second contract pass: the solver had elements but no topology).</summary>
 public sealed record FlowTopology(
     IReadOnlyList<IFlowElement> Elements,
-    IReadOnlyList<FlowConnection> Connections);
+    IReadOnlyList<FlowConnection> Connections)
+{
+    // Finding 131 — two segments whose availability sets coincide produce the
+    // same topology, and that is worth being able to notice.
+    public bool Equals(FlowTopology? other) =>
+        other is not null
+        && Structural.Equal(Elements, other.Elements)
+        && Structural.Equal(Connections, other.Connections);
+
+    public override int GetHashCode() =>
+        HashCode.Combine(Structural.HashOf(Elements), Structural.HashOf(Connections));
+}
 
 /// <summary>
 /// The one flow engine (concept G12), replaceable per FD1. The algorithm —

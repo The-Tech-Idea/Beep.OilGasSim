@@ -129,7 +129,23 @@ public sealed record GeneratedSurface(
     IReadOnlyList<TransportLink> Transport,
     IReadOnlyList<Harbour> Harbours,
     IReadOnlyList<ThirdPartyAsset> ThirdParty,
-    IReadOnlyList<SensitivityZone> LandStatus);
+    IReadOnlyList<SensitivityZone> LandStatus)
+{
+    // Finding 131 — PV2 asks whether a regenerated surface IS the one it was
+    // generated from, and that question needs this override to mean anything.
+    public bool Equals(GeneratedSurface? other) =>
+        other is not null && Terrain == other.Terrain
+        && Structural.Equal(Settlements, other.Settlements)
+        && Structural.Equal(Transport, other.Transport)
+        && Structural.Equal(Harbours, other.Harbours)
+        && Structural.Equal(ThirdParty, other.ThirdParty)
+        && Structural.Equal(LandStatus, other.LandStatus);
+
+    public override int GetHashCode() =>
+        HashCode.Combine(Terrain, Structural.HashOf(Settlements),
+            Structural.HashOf(Transport), Structural.HashOf(Harbours),
+            Structural.HashOf(ThirdParty), Structural.HashOf(LandStatus));
+}
 
 // ------------------------------------------------- regions and jurisdictions
 

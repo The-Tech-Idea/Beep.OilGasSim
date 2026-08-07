@@ -131,7 +131,19 @@ public sealed record EnvelopeAssessment(
     bool Within,
     double PerformanceFactor,         // ≤ 1
     double HazardMultiplier,          // ≥ 1
-    IReadOnlyList<ContentId> Exceeded);
+    IReadOnlyList<ContentId> Exceeded)
+{
+    // Finding 131.
+    public bool Equals(EnvelopeAssessment? other) =>
+        other is not null && Within == other.Within
+        && PerformanceFactor.Equals(other.PerformanceFactor)
+        && HazardMultiplier.Equals(other.HazardMultiplier)
+        && Structural.Equal(Exceeded, other.Exceeded);
+
+    public override int GetHashCode() =>
+        HashCode.Combine(Within, PerformanceFactor, HazardMultiplier,
+                         Structural.HashOf(Exceeded));
+}
 
 /// <summary>A lift method modifies the VLP — its tier datasheet IS the effect (07 §4b).</summary>
 public interface ILiftMethod : IWellComponent

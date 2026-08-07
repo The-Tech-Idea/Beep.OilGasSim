@@ -17,10 +17,27 @@ public abstract record CommandResult;
 
 public sealed record Accepted(
     AuditId Audit,
-    IReadOnlyList<EngineEvent> Immediate) : CommandResult;
+    IReadOnlyList<EngineEvent> Immediate) : CommandResult
+{
+    // Finding 131 — a record carrying a collection compares it element by
+    // element, or it compares array identities and always answers "different".
+    public bool Equals(Accepted? other) =>
+        other is not null && Audit == other.Audit
+        && Structural.Equal(Immediate, other.Immediate);
 
+    public override int GetHashCode() => HashCode.Combine(Audit, Structural.HashOf(Immediate));
+}
+
+/// <summary>ALL reasons, not the first.</summary>
 public sealed record Rejected(
-    IReadOnlyList<RejectionReason> Reasons) : CommandResult;   // ALL reasons, not the first
+    IReadOnlyList<RejectionReason> Reasons) : CommandResult
+{
+    // Finding 131.
+    public bool Equals(Rejected? other) =>
+        other is not null && Structural.Equal(Reasons, other.Reasons);
+
+    public override int GetHashCode() => Structural.HashOf(Reasons);
+}
 
 public interface ICommandBus
 {
@@ -39,7 +56,14 @@ public interface ICommandValidator<in TCommand> where TCommand : Command
 /// publication sits on the bus exactly where design 03 §5 draws it, and an
 /// applier needs no IEventBus of its own (R1.9).
 /// </summary>
-public sealed record Applied(AuditId Audit, IReadOnlyList<EngineEvent> Raised);
+public sealed record Applied(AuditId Audit, IReadOnlyList<EngineEvent> Raised)
+{
+    // Finding 131.
+    public bool Equals(Applied? other) =>
+        other is not null && Audit == other.Audit && Structural.Equal(Raised, other.Raised);
+
+    public override int GetHashCode() => HashCode.Combine(Audit, Structural.HashOf(Raised));
+}
 
 /// <summary>
 /// May not fail — a command that reaches application has been proven applicable

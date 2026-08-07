@@ -32,7 +32,23 @@ public sealed record TechnologyDefinition(
     IReadOnlyList<ContentId> Prerequisites,
     IReadOnlyList<AcquisitionRoute> Routes,
     DetectClass? GrantsDetectClass,
-    IReadOnlyList<Effect> Effects) : ContentDefinition(Id);
+    IReadOnlyList<Effect> Effects) : ContentDefinition(Id)
+{
+    // Finding 131 — the fixture test compares shipped content against the
+    // registry, and a mod override replaces an entry whole (SDD-004 §7).
+    public bool Equals(TechnologyDefinition? other) =>
+        other is not null && Id == other.Id && AvailableFrom == other.AvailableFrom
+        && DiffusionLagTicks == other.DiffusionLagTicks
+        && GrantsDetectClass == other.GrantsDetectClass
+        && Structural.Equal(Prerequisites, other.Prerequisites)
+        && Structural.Equal(Routes, other.Routes)
+        && Structural.Equal(Effects, other.Effects);
+
+    public override int GetHashCode() =>
+        HashCode.Combine(Id, AvailableFrom, DiffusionLagTicks, GrantsDetectClass,
+            Structural.HashOf(Prerequisites), Structural.HashOf(Routes),
+            Structural.HashOf(Effects));
+}
 
 /// <summary>
 /// SDD-004 §8's mapping rule: content id = deterministic slug of the registry

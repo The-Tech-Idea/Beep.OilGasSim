@@ -24,7 +24,41 @@ namespace OGSim.Objectives;
 public sealed record ObjectiveSnapshot(
     IReadOnlyDictionary<string, double> Values,
     IReadOnlyDictionary<string, IReadOnlyList<IReadOnlyDictionary<string, double>>> Collections,
-    IReadOnlyList<EngineEvent> Events);
+    IReadOnlyList<EngineEvent> Events)
+{
+    // Finding 131. Collections nests a list of maps inside a map, so the
+    // per-element comparison has to reach all the way down — which is exactly
+    // what the default equality does not do at any level.
+    public bool Equals(ObjectiveSnapshot? other) =>
+        other is not null
+        && Structural.Equal(Values, other.Values)
+        && CollectionsEqual(Collections, other.Collections)
+        && Structural.Equal(Events, other.Events);
+
+    private static bool CollectionsEqual(
+        IReadOnlyDictionary<string, IReadOnlyList<IReadOnlyDictionary<string, double>>> left,
+        IReadOnlyDictionary<string, IReadOnlyList<IReadOnlyDictionary<string, double>>> right)
+    {
+        if (left.Count != right.Count) return false;
+
+        foreach (KeyValuePair<string, IReadOnlyList<IReadOnlyDictionary<string, double>>> pair in left)
+        {
+            if (!right.TryGetValue(pair.Key, out IReadOnlyList<IReadOnlyDictionary<string, double>>? other))
+                return false;
+
+            if (pair.Value.Count != other.Count) return false;
+
+            for (int i = 0; i < pair.Value.Count; i++)
+                if (!Structural.Equal(pair.Value[i], other[i])) return false;
+        }
+
+        return true;
+    }
+
+    public override int GetHashCode() =>
+        HashCode.Combine(Structural.HashOf(Values), Collections.Count,
+                         Structural.HashOf(Events));
+}
 
 /// <summary>The stateful nodes' counters, persisted with the objective (SDD-013).</summary>
 public sealed class ObjectiveState

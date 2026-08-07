@@ -50,6 +50,74 @@ public static class Structural
         return true;
     }
 
+    /// <summary>
+    /// For members typed as a collection rather than a list. Compared in
+    /// enumeration order, which the engine's collections have by construction
+    /// (rule D-5 admits only ordered stores in simulation state).
+    /// </summary>
+    public static bool Equal<T>(IReadOnlyCollection<T>? left, IReadOnlyCollection<T>? right)
+    {
+        if (left is null || right is null) return left is null && right is null;
+        if (ReferenceEquals(left, right)) return true;
+        if (left.Count != right.Count) return false;
+
+        using IEnumerator<T> a = left.GetEnumerator();
+        using IEnumerator<T> b = right.GetEnumerator();
+
+        while (a.MoveNext() && b.MoveNext())
+            if (!EqualityComparer<T>.Default.Equals(a.Current, b.Current)) return false;
+
+        return true;
+    }
+
+    public static int HashOf<T>(IReadOnlyCollection<T>? items)
+    {
+        if (items is null) return 0;
+
+        var hash = new HashCode();
+        foreach (T item in items) hash.Add(item);
+        return hash.ToHashCode();
+    }
+
+    /// <summary>
+    /// Order-INSENSITIVE, unlike the list overloads: a dictionary's enumeration
+    /// order is not part of its value, so two maps with the same pairs are the
+    /// same map however they were built.
+    /// </summary>
+    public static bool Equal<TKey, TValue>(
+        IReadOnlyDictionary<TKey, TValue>? left, IReadOnlyDictionary<TKey, TValue>? right)
+        where TKey : notnull
+    {
+        if (left is null || right is null) return left is null && right is null;
+        if (ReferenceEquals(left, right)) return true;
+        if (left.Count != right.Count) return false;
+
+        foreach (KeyValuePair<TKey, TValue> pair in left)
+        {
+            if (!right.TryGetValue(pair.Key, out TValue? other)) return false;
+            if (!EqualityComparer<TValue>.Default.Equals(pair.Value, other)) return false;
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// XOR-combined per pair, so the hash does not depend on enumeration order
+    /// either — a dictionary hash that did would break the moment two equal maps
+    /// were built by different routes.
+    /// </summary>
+    public static int HashOf<TKey, TValue>(IReadOnlyDictionary<TKey, TValue>? pairs)
+        where TKey : notnull
+    {
+        if (pairs is null) return 0;
+
+        int combined = pairs.Count;
+        foreach (KeyValuePair<TKey, TValue> pair in pairs)
+            combined ^= HashCode.Combine(pair.Key, pair.Value);
+
+        return combined;
+    }
+
     public static int HashOf<T>(ImmutableArray<T> items)
     {
         if (items.IsDefault) return 0;

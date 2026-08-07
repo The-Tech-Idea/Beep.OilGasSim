@@ -41,10 +41,29 @@ public sealed record JsonDouble(double Value) : JsonValue;
 public sealed record JsonBoolean(bool Value) : JsonValue;
 
 /// <summary>Ordered by entity id at construction (D-5), never by insertion.</summary>
-public sealed record JsonArray(IReadOnlyList<JsonValue> Items) : JsonValue;
+public sealed record JsonArray(IReadOnlyList<JsonValue> Items) : JsonValue
+{
+    // Finding 131 — and here it is at its sharpest: comparing two parsed saves
+    // is how "did this round-trip?" is asked, and by reference the answer is
+    // always no.
+    public bool Equals(JsonArray? other) =>
+        other is not null && Structural.Equal(Items, other.Items);
+
+    public override int GetHashCode() => Structural.HashOf(Items);
+}
 
 /// <summary>Keys are ordinal-sorted when written; the dictionary's order is irrelevant.</summary>
-public sealed record JsonObject(IReadOnlyDictionary<string, JsonValue> Members) : JsonValue;
+public sealed record JsonObject(IReadOnlyDictionary<string, JsonValue> Members) : JsonValue
+{
+    // Finding 131. Order-insensitive on purpose: the canonical WRITER sorts
+    // keys, so two objects carrying the same members are the same object
+    // whatever order they were built in — the sorting is the serialiser's job,
+    // not the value's.
+    public bool Equals(JsonObject? other) =>
+        other is not null && Structural.Equal(Members, other.Members);
+
+    public override int GetHashCode() => Structural.HashOf(Members);
+}
 
 /// <summary>
 /// SDD-013 §3. The one writer and the one reader.

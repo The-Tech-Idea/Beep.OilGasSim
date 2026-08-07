@@ -25,7 +25,18 @@ public sealed record LogRecord(
     LogLevel Level,
     string EventName,
     IReadOnlyList<LogField> Fields,
-    IReadOnlyList<LogScope> Scopes);
+    IReadOnlyList<LogScope> Scopes)
+{
+    // Finding 131.
+    public bool Equals(LogRecord? other) =>
+        other is not null && Level == other.Level
+        && string.Equals(EventName, other.EventName, StringComparison.Ordinal)
+        && Structural.Equal(Fields, other.Fields)
+        && Structural.Equal(Scopes, other.Scopes);
+
+    public override int GetHashCode() =>
+        HashCode.Combine(Level, EventName, Structural.HashOf(Fields), Structural.HashOf(Scopes));
+}
 
 /// <summary>
 /// Where records go. Fields stay typed all the way here; only a sink renders
@@ -70,7 +81,18 @@ public sealed record AuditEntry(
     AuditCategory Category,
     EntityRef? Subject,
     AuditId? Cause,
-    IReadOnlyDictionary<string, AuditValue> Data);
+    IReadOnlyDictionary<string, AuditValue> Data)
+{
+    // Finding 131. Data compares order-INSENSITIVELY: two entries carrying the
+    // same pairs are the same entry however the dictionary was filled.
+    public bool Equals(AuditEntry? other) =>
+        other is not null && Id == other.Id && Tick == other.Tick
+        && Category == other.Category && Subject == other.Subject && Cause == other.Cause
+        && Structural.Equal(Data, other.Data);
+
+    public override int GetHashCode() =>
+        HashCode.Combine(Id, Tick, Category, Subject, Cause, Structural.HashOf(Data));
+}
 
 public sealed record AuditQuery(
     EntityRef? Subject,

@@ -16,7 +16,14 @@ using OGSim.Kernel;
 namespace OGSim.Operations;
 
 /// <summary>Why a submission was refused, in terms the player can act on.</summary>
-public sealed record ScheduleRefusal(IReadOnlyList<string> Reasons);
+public sealed record ScheduleRefusal(IReadOnlyList<string> Reasons)
+{
+    // Finding 131.
+    public bool Equals(ScheduleRefusal? other) =>
+        other is not null && Structural.Equal(Reasons, other.Reasons);
+
+    public override int GetHashCode() => Structural.HashOf(Reasons);
+}
 
 public abstract record ScheduleResult;
 

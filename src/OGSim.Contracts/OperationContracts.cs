@@ -18,7 +18,14 @@ public sealed record OutcomeRow(
     double CostFactor,
     int? DisasterDay);
 
-public sealed record OutcomeTable(IReadOnlyList<OutcomeRow> Rows);   // probabilities sum to 1.0, load-checked
+public sealed record OutcomeTable(IReadOnlyList<OutcomeRow> Rows)   // probabilities sum to 1.0, load-checked
+{
+    // Finding 131.
+    public bool Equals(OutcomeTable? other) =>
+        other is not null && Structural.Equal(Rows, other.Rows);
+
+    public override int GetHashCode() => Structural.HashOf(Rows);
+}
 
 /// <summary>Standby = day rates only; consumables stop (SDD-007 §3, pinned).</summary>
 public sealed record CostProfile(
@@ -31,7 +38,14 @@ public interface IRig { }   // resource marker; calendars live in the scheduler
 
 public sealed record ResourceNeeds(
     EntityId<IRig>? Rig,
-    IReadOnlyList<(ContentId Discipline, int Count)> Crew);
+    IReadOnlyList<(ContentId Discipline, int Count)> Crew)
+{
+    // Finding 131.
+    public bool Equals(ResourceNeeds? other) =>
+        other is not null && Rig.Equals(other.Rig) && Structural.Equal(Crew, other.Crew);
+
+    public override int GetHashCode() => HashCode.Combine(Rig, Structural.HashOf(Crew));
+}
 
 public sealed record OperationSpec(
     ContentId Template,
@@ -41,7 +55,20 @@ public sealed record OperationSpec(
     ResourceNeeds Resources,
     Requirements Requirements,
     IReadOnlyList<ServiceRental> Rentals,
-    OutcomeTable Outcomes);
+    OutcomeTable Outcomes)
+{
+    // Finding 131.
+    public bool Equals(OperationSpec? other) =>
+        other is not null && Template == other.Template && Target == other.Target
+        && BaseDurationDays == other.BaseDurationDays && Costs == other.Costs
+        && Resources == other.Resources && Requirements == other.Requirements
+        && Outcomes == other.Outcomes
+        && Structural.Equal(Rentals, other.Rentals);
+
+    public override int GetHashCode() =>
+        HashCode.Combine(Template, Target, BaseDurationDays, Costs, Resources,
+                         Requirements, Outcomes, Structural.HashOf(Rentals));
+}
 
 public interface IOperation
 {

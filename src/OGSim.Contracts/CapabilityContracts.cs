@@ -27,7 +27,17 @@ public sealed record EnvelopeCheck(EnvelopeKind Kind, double RequiredValue);
 public sealed record Requirements(
     IReadOnlyList<TechnologyId> Tech,
     DetectClass? MinDetectClass,
-    IReadOnlyList<EnvelopeCheck> Envelopes);
+    IReadOnlyList<EnvelopeCheck> Envelopes)
+{
+    // Finding 131.
+    public bool Equals(Requirements? other) =>
+        other is not null && MinDetectClass == other.MinDetectClass
+        && Structural.Equal(Tech, other.Tech)
+        && Structural.Equal(Envelopes, other.Envelopes);
+
+    public override int GetHashCode() =>
+        HashCode.Combine(MinDetectClass, Structural.HashOf(Tech), Structural.HashOf(Envelopes));
+}
 
 public abstract record MissingItem;
 public sealed record MissingTechnology(TechnologyId Tech) : MissingItem;
@@ -37,7 +47,14 @@ public sealed record EnvelopeExceeded(EnvelopeKind Kind, double Required, double
 /// <summary>ALL misses reported, never just the first (SDD-005 §3, the R3-V2 principle).</summary>
 public abstract record GateResult;
 public sealed record GatePass : GateResult;
-public sealed record GateFail(IReadOnlyList<MissingItem> Missing) : GateResult;
+public sealed record GateFail(IReadOnlyList<MissingItem> Missing) : GateResult
+{
+    // Finding 131.
+    public bool Equals(GateFail? other) =>
+        other is not null && Structural.Equal(Missing, other.Missing);
+
+    public override int GetHashCode() => Structural.HashOf(Missing);
+}
 
 /// <summary>
 /// The ONE gating validator every gated command uses (SDD-005 §3). Runs at

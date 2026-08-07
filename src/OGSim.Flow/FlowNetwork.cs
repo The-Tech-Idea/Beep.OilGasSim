@@ -17,7 +17,14 @@ public sealed record NetworkProblem(EntityId<IFlowElement>? Element, string Deta
 
 public abstract record NetworkBuildResult;
 public sealed record NetworkBuilt(FlowNetwork Network) : NetworkBuildResult;
-public sealed record NetworkRefused(IReadOnlyList<NetworkProblem> Problems) : NetworkBuildResult;
+public sealed record NetworkRefused(IReadOnlyList<NetworkProblem> Problems) : NetworkBuildResult
+{
+    // Finding 131.
+    public bool Equals(NetworkRefused? other) =>
+        other is not null && Structural.Equal(Problems, other.Problems);
+
+    public override int GetHashCode() => Structural.HashOf(Problems);
+}
 
 /// <summary>
 /// A validated, per-segment view of the elements that are available and how they

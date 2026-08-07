@@ -349,6 +349,14 @@ public readonly record struct MaterialStream(
 /// </summary>
 public readonly record struct MaterialInventory(ImmutableArray<double> KilogramsByOrdinal)
 {
+    // Finding 131 — the same override Composition carries, for the same reason:
+    // an inventory is a value, and two tanks holding the same kilograms hold the
+    // same inventory.
+    public bool Equals(MaterialInventory other) =>
+        Structural.Equal(KilogramsByOrdinal, other.KilogramsByOrdinal);
+
+    public override int GetHashCode() => Structural.HashOf(KilogramsByOrdinal);
+
     public static MaterialInventory Empty(int materialCount) =>
         new([.. new double[materialCount]]);
 
