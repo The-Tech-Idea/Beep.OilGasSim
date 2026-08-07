@@ -63,6 +63,7 @@ internal static class EngineCorpus
         typeof(OGSim.Facilities.Tank).Assembly,
         typeof(OGSim.Operations.Operation).Assembly,
         typeof(OGSim.Company.CostLedger).Assembly,
+        typeof(OGSim.Information.BeliefStore).Assembly,
         Subsurface,
     ];
 

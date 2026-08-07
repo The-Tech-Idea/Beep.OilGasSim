@@ -617,21 +617,46 @@ Every fiscal figure asserted is **hand-computed in the test from the declared
 rates**, per SDD-009 §3.2's mandate — a fixture that called the code twice would
 verify only that the arithmetic is repeatable.
 
-### Phase R14 — Information and uncertainty ⬜
+### Phase R14 — Information and uncertainty 🟨
 > 📄 [phases/R14_INFORMATION.md](phases/R14_INFORMATION.md)
+> `src/OGSim.Information`. SDD-008 needed no amendment — three phases running.
 
 | # | Task | Status |
 |---|---|---|
-| R14.1 | `ITruthModel` — **internal to the assembly**, architecture-tested | ⬜ |
-| R14.2 | `IBelief<T>` — prior, posterior, Bayesian update | ⬜ |
-| R14.3 | `IInformationSource` and `IObservationModel` | ⬜ |
-| R14.4 | Seismic surveys — 2-D, 3-D, 4-D; **observation tiers define the detectable set (D0–D3); re-screening and re-processing** | ⬜ |
-| R14.5 | Well logs, cores, well tests, **pressure build-up surveys** (cost = the shut-in itself) | ⬜ |
-| R14.6 | Production-history inference; the `p/Z` deduction | ⬜ |
-| R14.7 | `IRiskFactorSet` — the five-element POS | ⬜ |
-| R14.8 | `IVolumetricEstimate` — P10/P50/P90 | ⬜ |
-| R14.9 | Value-of-information computation | ⬜ |
-| R14.10 | Play-level belief correlation | ⬜ |
+| R14.0 | SDD review — no findings | ✅ |
+| R14.1 | Truth stays behind the wall | ✅ — `ObservationSampler.Sample` **is** the wall: a bare double goes in, an `Observation` comes out, and `Apply` is the only writer |
+| R14.2 | `Belief` — prior, posterior, the one conjugate update | ✅ |
+| R14.3 | `IObservationModel` and the sampler | ✅ |
+| R14.4 | Seismic surveys; detect-class tiers | 🟨 — the gate is `SigmaFor` returning **null**, which the sampler honours; the survey catalogue is content |
+| R14.5 | Logs, cores, tests, build-ups | 🟨 — each is a source id with its own σ per kind; the catalogue is content, and the `measurement` stream is already wired |
+| R14.6 | Production-history inference; the `p/Z` deduction | ⬜ — R5.7's line is built and R14's store can hold the deduction; joining them needs the tick loop's history |
+| R14.7 | POS — the five-element Beta-Bernoulli | ✅ |
+| R14.8 | P10/P50/P90 | ✅ |
+| R14.9 | Value-of-information | ⬜ — needs R13.7's reserves to value the change |
+| R14.10 | Play-level belief correlation | ✅ — a **shared Beta** is the correlation |
+
+**The wall is an absence, and that is the enforcement.** `IBeliefStore` has
+`Apply` and `Get` and nothing else: no `Set`, no seed-from-truth, no bulk import.
+World generation delivers initial beliefs through the same door every in-game
+measurement uses (R15-V10), so there is no belief-copy path for truth to leak
+down. A method that does not exist cannot be called by mistake, reached by
+reflection in a hurry, or added "just for the loader".
+
+**`Get` returns null rather than a wide prior**, deliberately: "we have never
+looked" and "we looked and learned little" are different states, and only the
+first should leave a map region unrendered.
+
+**Two details that carry a lot of the design.** Provenance records the *best*
+contributor, not the latest — a cheap seismic pass after an expensive core does
+not make the belief seismic-grade, and the player-facing "how do we know this?"
+would be a lie if it did. And INV8's σ floor stops repeated observation
+collapsing a reservoir property to certainty, with `Measured` exempt because a
+custody meter's reading *is* the quantity.
+
+**R14.10 is one line, and that is the point.** A shared factor Beta *is* the play
+correlation: a dry hole failing on source rock moves every prospect sharing that
+factor, because they were never independent. Correlating outcomes instead would
+have needed a covariance nobody could state.
 
 ### Phase R15 — World generation ⬜
 > 📄 [phases/R15_WORLD.md](phases/R15_WORLD.md)
