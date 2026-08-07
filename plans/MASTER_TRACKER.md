@@ -778,17 +778,48 @@ lag*, deterministically. A player who never spends a penny on research still
 advances — slowly, and always behind — which is what makes "everything eventually
 becomes standard practice" a pressure rather than a promise.
 
-### Phase R18 — Degradation, hazards, maintenance ⬜
+### Phase R18 — Degradation, hazards, maintenance 🟨
 > 📄 [phases/R18_HAZARDS.md](phases/R18_HAZARDS.md)
+> `src/OGSim.Integrity`. SDD-012 needed no amendment — seven phases running.
 
 | # | Task | Status |
 |---|---|---|
-| R18.1 | `IDegradationModel` — severity-weighted condition decay | ⬜ |
-| R18.2 | `IHazardModel` — condition-driven failure rates | ⬜ |
-| R18.3 | Incident types and consequences | ⬜ |
-| R18.4 | Maintenance strategies — run-to-failure, scheduled, condition-based | ⬜ |
-| R18.5 | Availability feeding tick stage 4 | ⬜ |
-| R18.6 | SC7 | ⬜ |
+| R18.0 | SDD review — no findings | ✅ |
+| R18.1 | `IDegradationModel` — severity-weighted decay | ✅ |
+| R18.2 | `IHazardModel` — condition-driven failure rate, and the stage-4 draw | ✅ |
+| R18.3 | Incident types and consequences | ⬜ — the bow-tie is R23's; R18 produces the failure and its day |
+| R18.4 | Maintenance strategies | ✅ — all three, each producing an ordinary operation |
+| R18.5 | Availability feeding stage 4 | 🟨 — the pass returns failures and the ages; wiring them into the segment's network is R7's tick loop |
+| R18.6 | SC7 (compressor cascade) | ⬜ — needs the tick loop; the two halves exist (R9's compressor capacity, this failure) |
+
+**The engine draws, not the model.** `IHazardModel` maps condition to a
+probability and stops. The `hazard` stream is consumed here, in **ascending
+component id**, so adding a component cannot re-roll an existing one's fate —
+and a test runs the same set in two orders to prove it. A dictionary walk would
+have made a campaign's whole failure history depend on hash order (D-5).
+
+A healthy fleet consumes **exactly one draw per component per tick**: the failure
+day is drawn only on failure, so the stream position stays predictable. A test
+checks that against a reference stream advanced by hand.
+
+**The hazard law has no threshold, and the test enforces it.** `λ = λ_base ·
+exp(k·(1−c))`, so every 0.05 of condition costs a similar *ratio* — the test
+asserts every step lies in a narrow band, which a threshold or a piecewise curve
+would fail. A player sitting just above a line is not rewarded for it, and the
+cost of deferral grows smoothly rather than arriving all at once.
+
+The probability is `1 − exp(−λΔt)`, so it saturates toward 1 rather than
+exceeding it — a linear `λΔt` would have produced probabilities above 1 for a
+badly degraded component over a long tick.
+
+**Condition-based maintenance without monitoring never triggers, and does not
+fall back to scheduled.** A fallback would make the monitoring purchase free and
+hand the player condition-based behaviour without the instrument that makes it
+possible.
+
+Severity terms **add to one** rather than scaling it, so equipment in mild
+service still ages — a multiplicative form with a zero term would have said it
+did not.
 
 ### Phase R23 — Health, Safety and Environment ⬜  *(executes after R18)*
 > 📄 [phases/R23_HSE.md](phases/R23_HSE.md)

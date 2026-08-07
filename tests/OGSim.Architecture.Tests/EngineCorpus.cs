@@ -66,6 +66,7 @@ internal static class EngineCorpus
         typeof(OGSim.Information.BeliefStore).Assembly,
         typeof(OGSim.World.BasinWorldGenerator).Assembly,
         typeof(OGSim.Capabilities.GatingValidator).Assembly,
+        typeof(OGSim.Integrity.IntegrityPass).Assembly,
         Subsurface,
     ];
 
