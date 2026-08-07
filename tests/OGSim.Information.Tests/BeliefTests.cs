@@ -167,6 +167,67 @@ public class BeliefUpdateTests
         Assert.Equal(20.0, Assert.NotNull(store.Get(Fx.Compartment, Fx.Permeability)).Sigma, 12);
     }
 
+    // ------------------------------------------------------------ Held
+
+    [Fact] // A company that has never looked has nothing to walk
+    public void R21V7_an_unobserved_store_holds_nothing()
+    {
+        (BeliefStore store, _) = Fx.New();
+
+        // The no-leak property, stated at the door the projection uses: a pair
+        // enters Held only through Apply, so a subject nobody has observed has
+        // no entry for a host to find. Enumerability is not a second way in.
+        Assert.Empty(store.Held);
+    }
+
+    [Fact] // SDD-008 §3: ordered by first learning, so a projection is stable (D-5)
+    public void R21V7_held_beliefs_are_in_the_order_they_were_learned()
+    {
+        (BeliefStore store, _) = Fx.New();
+
+        store.Apply(Fx.Obs(300.0, 20.0, kind: Fx.Permeability));
+        store.Apply(Fx.Obs(0.22, 0.05, kind: Fx.Porosity));
+
+        Assert.Equal(
+            [Fx.Permeability, Fx.Porosity],
+            store.Held.Select(held => held.PropertyKind));
+    }
+
+    [Fact] // A second reading SHARPENS an entry; it does not add one
+    public void R21V7_observing_a_known_pair_again_updates_it_in_place()
+    {
+        (BeliefStore store, _) = Fx.New();
+
+        store.Apply(Fx.Obs(0.22, 0.05));
+        store.Apply(Fx.Obs(0.24, 0.05));
+
+        // Two entries for one (subject, kind) would let a host render one
+        // compartment's porosity twice, at two different numbers, and give the
+        // player no way to tell which was current.
+        HeldBelief only = Assert.Single(store.Held);
+
+        Assert.Equal(Fx.Compartment, only.Subject);
+        Assert.Equal(Fx.Porosity, only.PropertyKind);
+        Assert.Equal(Assert.NotNull(store.Get(Fx.Compartment, Fx.Porosity)), only.Belief);
+    }
+
+    [Fact] // Held and Get are one fact, not two that can disagree (law L5)
+    public void R21V7_every_held_belief_is_the_one_Get_answers()
+    {
+        (BeliefStore store, _) = Fx.New();
+
+        store.Apply(Fx.Obs(0.22, 0.05, kind: Fx.Porosity));
+        store.Apply(Fx.Obs(300.0, 20.0, kind: Fx.Permeability));
+        store.Age(Fx.Porosity, driftPerYear: 0.01, years: 3.0);
+
+        // Ageing walks the same list the projection reads. A store that widened
+        // one copy and projected the other would show a host a certainty the
+        // engine no longer holds.
+        foreach (HeldBelief held in store.Held)
+            Assert.Equal(
+                Assert.NotNull(store.Get(held.Subject, held.PropertyKind)), held.Belief);
+    }
+
     // ------------------------------------------------------------ refusals
 
     [Fact] // A source claiming zero error is claiming to be truth

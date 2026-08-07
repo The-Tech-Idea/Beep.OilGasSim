@@ -322,6 +322,108 @@ public sealed class GameplayTests
         Assert.DoesNotContain("Compartment", members);
     }
 
+    // --------------------------------------------------------- what was learned
+
+    /// <summary>
+    /// R20d.7. The other direction of the exploration loop: a company that paid
+    /// for a survey can SEE what it bought.
+    ///
+    /// <para>Until this, four activities delivered observations into a store no
+    /// host could read — the player learned, and the learning was invisible.</para>
+    /// </summary>
+    [Fact]
+    public void R21V7_a_survey_puts_what_was_learned_on_the_read_model()
+    {
+        (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled();
+
+        engine.Pipeline.AdvanceTick();
+
+        // Nothing bought, nothing shown. Not an empty distribution — no entry.
+        Assert.Empty(engine.ReadModel!.Beliefs);
+
+        BeliefEntryView learned = Survey(engine, target);
+
+        Assert.Equal(new EntityRef(EntityKind.Compartment, target.Value), learned.Subject);
+        Assert.Equal(Provenance.Seismic, learned.BestSource);
+    }
+
+    /// <summary>
+    /// P90 is the LOW case and P10 the high — the petroleum convention, facing a
+    /// host. Reading them the statistical way round would render a possible case
+    /// as a proved one (SDD-008 §8).
+    /// </summary>
+    [Fact]
+    public void R21V7_a_projected_belief_is_a_distribution_not_a_number()
+    {
+        (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled();
+
+        BeliefEntryView learned = Survey(engine, target);
+
+        Assert.True(learned.P90 < learned.P50,
+            $"P90 {learned.P90} is the low case and must sit below P50 {learned.P50}");
+
+        Assert.True(learned.P50 < learned.P10,
+            $"P10 {learned.P10} is the high case and must sit above P50 {learned.P50}");
+
+        // Oil-in-place is a LOG-space kind, so the band is asymmetric and both
+        // ends are positive. A linear projection of it could show a host a
+        // negative accumulation.
+        Assert.True(learned.P90 > 0.0, "a log-space quantile cannot be negative");
+        Assert.True(learned.P10 - learned.P50 > learned.P50 - learned.P90,
+            "a log-normal's upside is the longer tail, and the projection must keep it");
+    }
+
+    /// <summary>
+    /// A host holds a snapshot, not a handle (R21-V1). Last month's beliefs must
+    /// not sharpen under a host that is still rendering them.
+    /// </summary>
+    [Fact]
+    public void R21V7_a_published_belief_does_not_change_under_the_host()
+    {
+        (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled();
+
+        BeliefEntryView asPublished = Survey(engine, target);
+        IReadOnlyList<BeliefEntryView> held = engine.ReadModel!.Beliefs;
+
+        // Buy the same knowledge again. Precision adds, so the belief behind it
+        // genuinely moves — which is exactly what must not reach the copy the
+        // host already has.
+        Survey(engine, target);
+
+        Assert.Equal(asPublished, held[0]);
+        Assert.NotSame(held, engine.ReadModel!.Beliefs);
+    }
+
+    /// <summary>
+    /// Shoots seismic until one survey lands, and answers with what the read
+    /// model then shows. A failed survey delivers nothing — the money is gone and
+    /// the company knows no more — so this returns the product of exactly one
+    /// successful reading however many were paid for.
+    /// </summary>
+    private static BeliefEntryView Survey(
+        Engine engine, EntityId<IReservoirCompartmentEntity> target)
+    {
+        BeliefEntryView? before = Projected(engine);
+
+        for (var attempt = 0; attempt < 40; attempt++)
+        {
+            Assert.IsType<Accepted>(engine.Commands.Submit(new SeismicSurveyCommand(target)));
+
+            engine.Pipeline.AdvanceTick();
+            while (engine.ReadModel!.ActivitiesRunning > 0) engine.Pipeline.AdvanceTick();
+
+            // The first survey adds an entry, a later one sharpens the same one,
+            // and a failed one leaves both alone — so "did it land?" is asked of
+            // the projection rather than of the entry count.
+            if (Projected(engine) is BeliefEntryView learned && learned != before) return learned;
+        }
+
+        throw new InvalidOperationException("forty surveys and not one of them saw anything");
+    }
+
+    private static BeliefEntryView? Projected(Engine engine) =>
+        engine.ReadModel is { Beliefs.Count: > 0 } published ? published.Beliefs[0] : null;
+
     // ------------------------------------------------------------- consequence
 
     /// <summary>

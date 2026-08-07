@@ -25,6 +25,27 @@ namespace OGSim.Composition;
 // ------------------------------------------------------------- the read model
 
 /// <summary>
+/// One belief, as a host renders it (SDD-017 §2, SDD-008 §8).
+///
+/// <para><b>P90 is the LOW case and P10 the high</b> — the probability of
+/// exceeding. This is where the petroleum convention faces a host, and reading
+/// the two the statistical way round would show a possible case as a proved
+/// one.</para>
+///
+/// <para>Mu and sigma are deliberately absent. A host given the parameters could
+/// quote any quantile it liked, including ones SDD-008 has not pinned; the three
+/// that ship are the three the design asks a player to decide on.</para>
+/// </summary>
+public sealed record BeliefEntryView(
+    EntityRef Subject,
+    ContentId PropertyKind,
+    double P10,
+    double P50,
+    double P90,
+    Provenance BestSource,
+    GameDate AsOf);
+
+/// <summary>
 /// What the player can see, rebuilt at the close of every tick.
 ///
 /// <para>Deliberately NOT the full SDD-017 read model — that is R21's whole
@@ -33,6 +54,11 @@ namespace OGSim.Composition;
 /// their own cash, their own well count, what they sold. Reservoir pressure is
 /// absent because it is truth, and it reaches a host through beliefs or not at
 /// all.</para>
+///
+/// <para><see cref="Beliefs"/> is that "or not at all" answered: it is the only
+/// route by which anything the company has LEARNED about the rock reaches a
+/// screen, and every entry in it was paid for by an activity that completed
+/// (R20d.7).</para>
 /// </summary>
 public sealed record FieldReadModel(
     Tick Tick,
@@ -42,7 +68,22 @@ public sealed record FieldReadModel(
     int ActivitiesRunning,
     SurfaceVolume ProducedThisTick,
     bool Insolvent,
-    Outcome Outcome);
+    Outcome Outcome,
+    IReadOnlyList<BeliefEntryView> Beliefs)
+{
+    // Finding 131: a record carrying a collection compares it by reference.
+    public bool Equals(FieldReadModel? other) =>
+        other is not null && Tick == other.Tick && Date == other.Date
+        && Cash == other.Cash && Wells == other.Wells
+        && ActivitiesRunning == other.ActivitiesRunning
+        && ProducedThisTick == other.ProducedThisTick
+        && Insolvent == other.Insolvent && Outcome == other.Outcome
+        && Structural.Equal(Beliefs, other.Beliefs);
+
+    public override int GetHashCode() =>
+        HashCode.Combine(Tick, Date, Cash, Wells, ActivitiesRunning, ProducedThisTick,
+            HashCode.Combine(Insolvent, Outcome, Structural.HashOf(Beliefs)));
+}
 
 // -------------------------------------------------------------- losing
 
@@ -61,7 +102,8 @@ internal sealed class CloseStage(
     CompanyState company,
     FieldControl field,
     ActivityState activities,
-    ObjectiveStage objectives) : ITickStage
+    ObjectiveStage objectives,
+    IBeliefStore beliefs) : ITickStage
 {
     public StageId Id => StageId.Close;
 
@@ -82,6 +124,43 @@ internal sealed class CloseStage(
             activities.InProgress,
             loop.ProducedThisTick,
             objectives.Insolvent,
-            objectives.Outcome);
+            objectives.Outcome,
+            Project(beliefs));
+    }
+
+    /// <summary>
+    /// SDD-008 §8's projection, at the close: everything the company has learned,
+    /// as three quantiles and how it came to know them.
+    ///
+    /// <para>Rebuilt whole rather than diffed (SDD-017 §2's AD2), and a COPY —
+    /// the store's own list would go on changing under a host that held last
+    /// month's snapshot, which is the mutable handle R21-V1 exists to refuse.</para>
+    ///
+    /// <para>The quantiles come from <see cref="OGSim.Information.Quantiles"/>
+    /// rather than being computed here: the log-space exponentiation and the
+    /// P90-is-low convention are one implementation in the module that owns the
+    /// distribution, and a second copy at the projection would be free to drift
+    /// from it (law L5).</para>
+    /// </summary>
+    private static IReadOnlyList<BeliefEntryView> Project(IBeliefStore beliefs)
+    {
+        IReadOnlyList<HeldBelief> held = beliefs.Held;
+        var entries = new List<BeliefEntryView>(held.Count);
+
+        for (int i = 0; i < held.Count; i++)
+        {
+            HeldBelief entry = held[i];
+
+            entries.Add(new BeliefEntryView(
+                entry.Subject,
+                entry.PropertyKind,
+                P10: OGSim.Information.Quantiles.P10(entry.Belief),
+                P50: OGSim.Information.Quantiles.P50(entry.Belief),
+                P90: OGSim.Information.Quantiles.P90(entry.Belief),
+                entry.Belief.BestSource,
+                entry.Belief.AsOf));
+        }
+
+        return entries;
     }
 }

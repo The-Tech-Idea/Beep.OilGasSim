@@ -414,7 +414,9 @@ internal sealed class FieldModule() : EngineModule(Declare(
         var objectives = new ObjectiveStage(company, Defaults.Goal, audit);
         composition.Contribute(order: 0, objectives);
 
-        var close = new CloseStage(loop, company, field, activities, objectives);
+        var close = new CloseStage(
+            loop, company, field, activities, objectives,
+            composition.Require<IBeliefStore>());
         composition.Contribute(order: 0, close);
         composition.Provide(close);
 

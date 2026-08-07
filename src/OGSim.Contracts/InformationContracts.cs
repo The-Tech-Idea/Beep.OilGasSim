@@ -100,11 +100,38 @@ public interface IObservationModel
     double? SigmaFor(ContentId source, ContentId propertyKind, EntityRef subject);
 }
 
+/// <summary>
+/// One belief and what it is about (SDD-008 §3).
+///
+/// <para>It carries the whole <see cref="Belief"/> rather than the key alone
+/// because a caller handed a key it must then re-<c>Get</c> can be answered
+/// <c>null</c> for a pair the store has just named — a state the type should not
+/// be able to express.</para>
+/// </summary>
+public readonly record struct HeldBelief(
+    EntityRef Subject,
+    ContentId PropertyKind,
+    Belief Belief);
+
 public interface IBeliefStore
 {
     /// <summary>The one conjugate update (SDD-008 §2.1).</summary>
     void Apply(Observation observation);
     Belief? Get(EntityRef subject, ContentId propertyKind);
+
+    /// <summary>
+    /// What <see cref="Get"/> cannot answer: WHICH pairs are known. Ordered by
+    /// first learning, so two runs of one save project the same list in the same
+    /// order (D-5).
+    ///
+    /// <para>Not a widening of what a player may see: a pair enters this list
+    /// only through <see cref="Apply"/>, so it holds exactly what <c>Get</c>
+    /// would already answer, one call at a time. An unobserved subject has no
+    /// entry to find — which is why the stage-13 projection can walk it without
+    /// the walk itself deciding what is knowable (SDD-008 §3's R20d.7
+    /// amendment).</para>
+    /// </summary>
+    IReadOnlyList<HeldBelief> Held { get; }
 }
 
 // ILicence moved to CompanyContracts.cs at R16, per SDD-011 §1's standing note:

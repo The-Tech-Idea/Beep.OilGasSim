@@ -176,17 +176,39 @@ public class RivalTests
     private static readonly ContentId InPlace = new("oil-in-place");
     private static readonly ContentId BlockId = new("block-16-2");
 
+    /// <summary>
+    /// A rival's own head. Deliberately not the shipped <c>BeliefStore</c>: what
+    /// R16-V4 asserts is that a rival bids from beliefs rather than from truth,
+    /// and a fake that takes the value it is given makes the number under test
+    /// the bid instead of the conjugate update.
+    /// </summary>
     private sealed class Beliefs : IBeliefStore
     {
-        private readonly Dictionary<(EntityRef, ContentId), Belief> _held = [];
+        private readonly List<HeldBelief> _held = [];
+        private readonly Dictionary<(EntityRef, ContentId), int> _at = [];
 
-        public void Apply(Observation observation) =>
-            _held[(observation.Subject, observation.PropertyKind)] = new Belief(
-                observation.Value, observation.Sigma, observation.Space,
-                observation.Source, new GameDate(1970, 1));
+        public IReadOnlyList<HeldBelief> Held => _held;
+
+        public void Apply(Observation observation)
+        {
+            var entry = new HeldBelief(
+                observation.Subject,
+                observation.PropertyKind,
+                new Belief(observation.Value, observation.Sigma, observation.Space,
+                           observation.Source, new GameDate(1970, 1)));
+
+            if (_at.TryGetValue((observation.Subject, observation.PropertyKind), out int at))
+            {
+                _held[at] = entry;
+                return;
+            }
+
+            _at[(observation.Subject, observation.PropertyKind)] = _held.Count;
+            _held.Add(entry);
+        }
 
         public Belief? Get(EntityRef subject, ContentId kind) =>
-            _held.TryGetValue((subject, kind), out Belief belief) ? belief : null;
+            _at.TryGetValue((subject, kind), out int at) ? _held[at].Belief : null;
     }
 
     private static Rival New(

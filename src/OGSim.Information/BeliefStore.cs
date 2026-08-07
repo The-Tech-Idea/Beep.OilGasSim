@@ -21,8 +21,11 @@ namespace OGSim.Information;
 /// </summary>
 public sealed class BeliefStore : IBeliefStore
 {
-    private readonly Dictionary<(EntityRef Subject, ContentId Kind), Belief> _beliefs = [];
-    private readonly List<(EntityRef Subject, ContentId Kind)> _order = [];
+    // ONE owner of the belief set (law L5), in the order the company learned
+    // them; the dictionary is a lookup into it and holds no belief of its own.
+    // Two collections both holding the key set is how they come to disagree.
+    private readonly List<HeldBelief> _held = [];
+    private readonly Dictionary<(EntityRef Subject, ContentId Kind), int> _at = [];
 
     private readonly IAuditTrail _audit;
     private readonly Func<ContentId, double> _sigmaFloorFor;
@@ -64,13 +67,23 @@ public sealed class BeliefStore : IBeliefStore
                 $"observation of {observation.PropertyKind.Value} is not finite");
 
         var key = (observation.Subject, observation.PropertyKind);
+        bool known = _at.TryGetValue(key, out int at);
 
-        Belief posterior = _beliefs.TryGetValue(key, out Belief prior)
-            ? Combine(prior, observation)
+        Belief posterior = known
+            ? Combine(_held[at].Belief, observation)
             : FromFirstObservation(observation);
 
-        if (!_beliefs.ContainsKey(key)) _order.Add(key);
-        _beliefs[key] = posterior;
+        var entry = new HeldBelief(observation.Subject, observation.PropertyKind, posterior);
+
+        if (known)
+        {
+            _held[at] = entry;
+        }
+        else
+        {
+            _at[key] = _held.Count;
+            _held.Add(entry);
+        }
 
         // The fairness record (design 09 §4.2): a player who suspects the
         // engine is cheating can read what was observed, with what sigma, and
@@ -96,7 +109,18 @@ public sealed class BeliefStore : IBeliefStore
     /// company has not paid for.</para>
     /// </summary>
     public Belief? Get(EntityRef subject, ContentId propertyKind) =>
-        _beliefs.TryGetValue((subject, propertyKind), out Belief belief) ? belief : null;
+        _at.TryGetValue((subject, propertyKind), out int at) ? _held[at].Belief : null;
+
+    /// <summary>
+    /// SDD-008 §3's R20d.7 amendment — what <see cref="Get"/> cannot answer:
+    /// which pairs are known, in the order they were first learned.
+    ///
+    /// <para>The list itself, not a copy: it is the store's own ordering and the
+    /// caller holds it as <see cref="IReadOnlyList{T}"/>. Rebuilding it would
+    /// allocate the whole belief set at every stage 13, which is once a month for
+    /// forty years.</para>
+    /// </summary>
+    public IReadOnlyList<HeldBelief> Held => _held;
 
     /// <summary>
     /// SDD-008 §2's staleness: sigma grows for DYNAMIC kinds only.
@@ -114,14 +138,19 @@ public sealed class BeliefStore : IBeliefStore
 
         if (driftPerYear == 0.0 || years <= 0.0) return;
 
-        // Walked over the insertion-ordered key list, not the Dictionary (D-5).
-        for (int i = 0; i < _order.Count; i++)
+        // Walked over the insertion-ordered list, not the Dictionary (D-5).
+        for (int i = 0; i < _held.Count; i++)
         {
-            (EntityRef subject, ContentId kind) = _order[i];
-            if (kind != propertyKind) continue;
+            HeldBelief entry = _held[i];
+            if (entry.PropertyKind != propertyKind) continue;
 
-            Belief belief = _beliefs[_order[i]];
-            _beliefs[_order[i]] = belief with { Sigma = belief.Sigma + driftPerYear * years };
+            _held[i] = entry with
+            {
+                Belief = entry.Belief with
+                {
+                    Sigma = entry.Belief.Sigma + driftPerYear * years,
+                },
+            };
         }
     }
 
