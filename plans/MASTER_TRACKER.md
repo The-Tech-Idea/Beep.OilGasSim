@@ -24,7 +24,7 @@ next.** Updated at the close of every phase.
 | **Code status** | 15 engine assemblies, 0 warnings, 0 errors, **779 tests**. The kernel, the contract layer, eleven domain modules and Layer 4 composition are implemented. The composed engine **advances a tick and plays**: a player drills, waits, finds oil or doesn't, produces, declines, and wins or goes broke. Every implemented member traces to a pinned SDD section (F-1). |
 | **Repository** | `The-Tech-Idea/Beep.OilGasSim`, branch `master`. Work lands directly on `master`, one task per commit. |
 | **The playable loop** | **arrive → commit capital under uncertainty → wait four months → find oil or don't → produce → decline → reinvest → win or go broke.** Six of the fourteen tick stages are real (3, 5, 6, 8, 12, 13). One command, one product, one goal, one failure condition. |
-| **Next** | **R21e** — the scenario runner, replacing the `ScenarioGoal` compiled into composition with the contracts R21d declared. Then the two that change the game most: **R20d.7** (wire beliefs in — the player stops being told where the oil is) and **R20c.9** (`plans/catalog/`'s sixteen sheets becoming loadable content). |
+| **Next** | **R12b** — the activity engine, wired. Drilling, well test, seismic, workover, install, abandonment on one scheduler, each reaching the subsystem it affects. It is the lever: most of R20d's eight bypassed subsystems are reached by an activity or not at all, and it starts by collapsing the bespoke drilling timer (finding 142) onto the engine that was already there. Then **R21e** (the scenario runner) and **R20c.9** (equipment content). |
 
 **Three things are true at once and all three should stay visible.** The engine
 is architecturally complete to its own laws — every manifest promise checked,
@@ -565,6 +565,57 @@ asserts the type has no such field.
 | R12.6 | Construction operations | 🟨 — as R12.5 |
 | R12.7 | `IPersonnel` — skill effect on duration and risk | ⬜ — `ResourceNeeds.Crew` declares the disciplines; the skill model is undeclared (would need an SDD-007 amendment) |
 | R12.8 | Abandonment operations | ⬜ — needs `IObligationRegistry` (SDD-007 §7) and R13's accrual |
+
+#### R12b — The activity catalogue, and how it reaches every subsystem 🟨
+
+**Nothing the player does to the world happens except as an activity.** Drilling,
+logging, a well test, a seismic shoot, a workover, a stimulation, an install, a
+turnaround, an abandonment — all of them take time, consume a rig or a crew,
+accrue cost while they run, and end in an outcome drawn once at the start. That
+is one engine, and R12 is it. There is no second scheduler and no activity that
+quietly bypasses this one.
+
+That last sentence was untrue when it was written. See finding 142.
+
+| # | Activity | Template exists | Reaches |
+|---|---|---|---|
+| R12b.1 | **Drill** — spud to TD, depth progress, disaster day | 🟨 | Wells (a wellbore), Subsurface (what it penetrates), Information (what the bit learns), Company (capex) |
+| R12b.2 | **Complete** — perforate, case, install tubing and lift | ⬜ | Wells (a completion becomes a flow element), Capabilities (tier gating), Company |
+| R12b.3 | **Log / core** — the measurement run | ⬜ | **Information** (an `Observation` with the source's own σ), Wells (the hole must exist), Company |
+| R12b.4 | **Well test / build-up** — flow it and watch the pressure | ⬜ | **Information** (the sharpest σ on compartment pressure and kh), Subsurface (a real withdrawal while it runs), Company |
+| R12b.5 | **Seismic survey** — 2-D, 3-D, attributes, PSDM, 4-D | ⬜ | **Information** (detect class gates what it can see at all), World (an area, not a point), Capabilities (the tier is tech-gated), Company |
+| R12b.6 | **Workover** — restore, deepen, recomplete, change lift | ⬜ | Wells, Integrity (condition reset), Facilities (deferred production while down) |
+| R12b.7 | **Stimulate** — acidise, frac, multi-stage | ⬜ | Wells (skin, contact length), Capabilities (fracturing is E3 and tech-gated) |
+| R12b.8 | **Install / construct** — separator, compressor, pipeline, tank | ⬜ | Facilities, Transport, Flow (a new element joins the network), Company (capex) |
+| R12b.9 | **Turnaround / maintenance** — planned shutdown | ⬜ | Integrity (condition restored), Facilities (availability at stage 4), HSE |
+| R12b.10 | **Abandon** — plug, decommission, restore | ⬜ | Wells, Company (discharges the obligation), HSE (legacy dimension) |
+| R12b.11 | **Shoot the whole basin** — the exploration campaign, many activities as one commitment | ⬜ | World, Information, Company (licence work commitments) |
+
+**Why this is the integration lever and not one more subsystem.** Look down the
+"Reaches" column: it is nearly the whole engine. An activity is the verb that
+every noun already built is waiting for — R20d lists eight complete subsystems
+the loop does not call, and **most of them are reached by an activity or not at
+all.** Wiring the activity engine is therefore how the chain, the beliefs and the
+technology tree come into the game, rather than a twelfth thing to do afterwards.
+
+**Two are load-bearing for the exploration game.** R12b.4 and R12b.5 are the
+only way a player learns anything they did not start knowing: R14 built the
+belief store, the observation model and the conjugate update, and nothing
+currently produces an `Observation` because nothing currently *does* a survey.
+Wiring those two is what R20d.7 actually consists of.
+
+**Every activity is a content template, not a type.** `OperationSpec` already
+carries template id, target, base duration, cost profile, resource needs,
+requirements and an outcome table — so adding "acid squeeze" is a JSON entry,
+never a class. The eleven rows above are catalogue work plus the per-subsystem
+effect each one applies on completion; they are not eleven engines.
+
+| # | Task | Status |
+|---|---|---|
+| R12b.12 | Activity templates as a content kind, with the outcome table load-checked to sum to 1.0 | ⬜ |
+| R12b.13 | Completion effects — what each activity does to the subsystem it reaches | ⬜ |
+| R12b.14 | Activities as commands, through the one gating validator (design 07 §2c) | ⬜ |
+| R12b.15 | **Collapse drilling onto the operations engine** — finding 142 | ⬜ |
 
 **R12's verification.** R12-V1 ✅ · R12-V2 ✅ · R12-V3 ✅ · R12-V4 ✅ · R12-V5 ✅ ·
 R12-V6 ✅ · R12-V7 ✅ · R12-V8 ✅ · R12-V11 ✅ · R12-V9 ⬜ (R12.7) ·
@@ -1143,6 +1194,7 @@ hypothetical:
 | # | Finding |
 |---|---|
 | 125 | **A module declared its stages and had no way to supply them.** `ModuleManifest.Stages` names the `(StageId, Order)` slots a module claims and check 5 forbids two modules claiming one — and then `TickPipeline` took `IReadOnlyList<ITickStage>` from *nowhere*, with no member on `IModule` producing one. Composition validated a stage plan that nothing could fill: law L3 at the architecture level, a declaration with no behaviour behind it. `IModuleComposition` gains `Contribute(int order, ITickStage work)` and `Composed` carries the collected stages, so the pipeline is built from exactly what was validated. Two refusals fall out — a slot declared and never filled, and a contribution to a slot never declared. Letting the pipeline take an independently-assembled stage list instead would have made the manifest decorative: the composer would police an order the tick was free to ignore |
+| 142 | **Drilling was built as its own timer beside the one scheduled-activity engine.** R21b gave drilling a duration, a cost, a resource commitment and an outcome drawn once at the start — and did it with a bespoke `DrillingState` holding `WellUnderConstruction`, when `OGSim.Operations` had shipped exactly that engine at R12: `OperationSpec` with base duration, `CostProfile`, `ResourceNeeds`, `OutcomeTable`, and `OperationScheduler` with rig contention and worst-case reservation. R12.4 even says in as many words that "drilling **is** an operation template". The duplication is the shape glossary rule N1 forbids, and it is worse than a naming collision: the bespoke path has no rig contention, so two wells can be drilled at once with one rig; no cost accrual, so a six-month well is paid for on day one rather than over six months — which is precisely the "runs out of money mid-well" dynamic R12-V2 exists to assert; and no `DisasterDay`, so drilling cannot go wrong in any way except being dry. It happened because the loop was being built end to end at speed and `OperationScheduler` was one of the eight subsystems the loop did not yet call — the fastest way to a working tick was to write past it. That is exactly how a second engine gets built. R12b.15 collapses it |
 | 141 | **Scenarios and campaigns were described in prose and declared nowhere.** SDD-014 §5 specified them as a text block — "scenario content: world source, starting state, objectives[], failure conditions, scoring weights, modifiers, scripted entries" — so R24.7's `IScenario` / `ICampaign` had nothing to implement, and when the first playable goal was needed it went in as an ad-hoc `ScenarioGoal` record inside composition. A scenario that cannot be authored, loaded or varied without editing the engine is exactly what design 03 §3.3 forbids: a mode is content, never code. Declared in SDD-014 §5 and written as `Scenario`, `Campaign`, `WorldSource`, `ScriptedEntry`, `ScoreWeight`, `ObjectiveState`, `ScenarioProgress` and `IScenarioRunner`. Two shapes are load-bearing and were nearly got wrong: **failure conditions are their own list**, because a `Never` that ends the run and a goal the player works toward are different things and merging them makes every consumer test which it is holding; and **the deadline sits on the scenario**, because a run whose objectives were all open-ended would never resolve and "did they manage it in time" is the question a challenge asks. Proven by building all ten of design 18 §3.3's challenge patterns from the same nine members — a pattern needing a tenth would have meant the vocabulary was wrong rather than the pattern unusual |
 | 140 | **One rule was implemented four times, and one of the four was still half-done.** Findings 125, 127 and 139 each fixed a manifest list nobody checked — stages, state, commands — and each did it with its own near-identical pair of loops: a declared-it check inside the delivery method, and an assertion sweep afterwards. Writing the third made the shape obvious; checking the fourth made it worse. **`Provides` was still validated in one direction only** — every declared contract had to be delivered, but a module could deliver a contract it never declared, so a consumer's `Require` could be satisfied by something no manifest mentions and the dependency graph the composer orders modules by would have a missing edge. Four bespoke implementations of one rule is exactly how a fifth list goes unchecked. Replaced by `ManifestPromise<TKey>`, which states the rule once — **a module may deliver only what it declared, only once, and must deliver everything it declared** — with the first two throwing at the line that made the mistake and the third accumulating into the refusal. `Provide`, `Contribute`, `Own` and `HandleCommand` are now four calls to one method, the four assertion sweeps are one, and a sixth promise on the manifest joins the check by being added to a list rather than by someone remembering |
 | 139 | **`ModuleManifest.Commands` was the third declaration nothing honoured.** It has been on the manifest since R1 and every module passed `[]`; when the first real command arrived I registered it in `EngineBuilder` instead — and then had to invent `IResolvedContracts.Has<T>` so a module set without a field could skip registration. That was the tell. An optional lookup is a defaulted dependency wearing a different coat (law L2), and it put the engine's entire **input surface** outside the set the composer validates: a module could declare a command nothing handled, and a host would discover it by submitting one and being told nothing was listening. `IModuleComposition` gains `HandleCommand`, with the same two refusals as stages and state — a command declared and left unhandled, and a handler for a command never declared — plus a third the others do not need: two handlers for one command, which would otherwise be applied by whichever registered first. `Has<T>` is gone. Registration is deferred as a `CommandRegistration` because a `CommandBus` needs an audit trail and an event bus and so cannot exist until composition is over; what the composer validates is that the pairs exist and match, and binding them is the one step left. Findings 125, 127 and this are one defect in three places: every list on the manifest was a claim, and only Provides had anything checking it |
@@ -1181,7 +1233,7 @@ always implied by "the engine is headless and composed" and never given rows.
 | R20d.3 | Gas — compression, dehydration, sweetening, NGL, flare | ✅ R9 | ⬜ |
 | R20d.4 | Water — production, treatment, injection, disposal | ✅ R10 | ⬜ |
 | R20d.5 | Transport — pipelines, berths, cargoes, custody transfer points | ✅ R11 | ⬜ custody is an audit entry, not a metered point |
-| R20d.6 | Operations — the one scheduled-activity engine | ✅ R12 | 🟨 drilling has its own timer; `OperationScheduler` is unused |
+| R20d.6 | **Operations — the one scheduled-activity engine** | ✅ R12 | 🟨 **the integration lever**: drilling runs on a bespoke timer beside it (finding 142) and `OperationScheduler` is unused. See [R12b](#r12b) — most of the ⬜ rows in this table are reached by an activity or not at all |
 | R20d.7 | Information — observations, beliefs, POS | ✅ R14 | ⬜ **the biggest gap in gameplay terms**: the exploration game does not exist until this is wired |
 | R20d.8 | World generation — basins, plays, traps, terrain | ✅ R15 | ⬜ compartments are hand-built by `FieldControl` |
 | R20d.9 | Company — licences, commitments, rivals, regulator | ✅ R16 | ⬜ |
@@ -1196,11 +1248,18 @@ the reverse, and it is also the reason the engine currently has one product, one
 decision and one failure mode: the parts are all there and only one path through
 them is connected.
 
-**The order they should be wired is not the order they were built.** R20d.7
-(information) changes the game most — it is the difference between being told
-where the oil is and having to find it. R20d.1–5 (the chain) change the
-simulation most. R20d.10 (technology) is what makes the forty-year arc mean
-something. R20d.13 is a phase that has not started at all.
+**R20d.6 comes first, because it is how most of the others arrive.** An activity
+is the verb every one of these nouns is waiting for: a survey is how information
+enters, an install is how a facility joins the network, a workover is how
+integrity is restored, an abandonment is how an obligation discharges. Wiring
+the activity engine ([R12b](#r12b)) is not one of thirteen items — it is the
+mechanism by which most of the other twelve become reachable.
+
+After that the order is by what changes the game rather than what was built
+first: R20d.7 (information) is the difference between being told where the oil
+is and having to find it; R20d.1–5 (the chain) change the simulation most;
+R20d.10 (technology) is what makes the forty-year arc mean something. R20d.13 is
+a phase that has not started at all.
 
 ---
 
