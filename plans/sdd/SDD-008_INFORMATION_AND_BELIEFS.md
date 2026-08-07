@@ -190,6 +190,33 @@ EV uses the player's current economics (prices, costs) — deliberately wrong
 when their beliefs are wrong (06 §3.2).
 ```
 
+> **R20d review amendment (finding 147) — the shape, declared.** The algorithm
+> above was pinned and no type carried it, while
+> `ExplorationView.PendingValueOfInformation` had sat on the read model since the
+> contract passes — a promised output with no producer.
+>
+> ```csharp
+> public sealed record InformationValue(
+>     ContentId Source, EntityRef Subject, Money Cost, Money ExpectedValue)
+> {
+>     public bool WorthBuying { get; }        // ExpectedValue > Cost
+> }
+>
+> public interface IInformationValueModel
+> {
+>     ContentId Id { get; }
+>     IReadOnlyList<InformationValue> Rank(
+>         IReadOnlyList<ContentId> availableSources,
+>         EntityRef subject,
+>         IBeliefStore beliefs);
+> }
+> ```
+>
+> `Rank` rather than a single evaluate: the player's question is "which survey,
+> if any", and answering it one source at a time would push the comparison into
+> every host. The no-RNG pin above is the contract's hardest requirement — a
+> player opening the VOI panel must not shift a single later draw.
+
 ## 8. Projections (read model)
 
 Beliefs project as `(P10, P50, P90, BestSource, AsOf)` per kind; POS as five

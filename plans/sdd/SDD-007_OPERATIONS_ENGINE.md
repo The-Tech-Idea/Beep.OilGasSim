@@ -176,6 +176,28 @@ the operation as the audited element — small volumes, same conservation, no
 special ledger. If the site has a routed test separator, the network path wins
 and the operation reports nothing (no double count, checked).
 
+> **R20d review amendment (finding 147) — the shape, declared.** This section
+> pinned the rule and declared no type, so the tick's conservation check had no
+> member to read. The prose above is now this:
+>
+> ```csharp
+> public sealed record OperationMass(Composition Sourced, DisposedMass Disposed)
+> {
+>     // Takes the catalogue's width: a zero movement is still a composition of a
+>     // particular width, and a shared empty singleton would be the one value in
+>     // the engine that does not know how many materials exist.
+>     public static OperationMass None(int materialCount);
+> }
+>
+> // on IOperation:
+> OperationMass MassThisTick { get; }
+> ```
+>
+> Every operation answers — `None(width)` is the true answer for drilling,
+> completion and construction, not a placeholder — which is what lets INV1 cover
+> operations as a term rather than skip them. The network-path-wins rule is the
+> implementer's obligation on this member, restated there verbatim.
+
 ## 6. Abandonment obligations
 
 ```csharp

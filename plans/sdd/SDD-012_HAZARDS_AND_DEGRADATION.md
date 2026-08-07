@@ -144,6 +144,22 @@ the fluid composition (sales spec), §1's sourFraction severity, and the
 metallurgy envelope check — the DHS3 decision arriving on schedule, years late.
 ```
 
+> **R20d review amendment (finding 147) — the shape, declared.**
+>
+> ```csharp
+> public interface ISouringModel
+> {
+>     ContentId Id { get; }
+>     double HydrogenSulphidePpm(ContentId rockType, double injectedWaterOverPoreVolume);
+> }
+> ```
+>
+> Monotonic in the ratio, and that is pinned: water already injected cannot
+> un-sour a reservoir, so a curve that dipped would be a content error the
+> loader refuses, not a modelling choice. Truth-side it stays — what a player
+> knows about souring arrives through produced-fluid samples, like everything
+> else.
+
 ## 6. Test mapping
 
 R18-V1 (decay law with declared factors) · V2 (exponential hazard shape — no

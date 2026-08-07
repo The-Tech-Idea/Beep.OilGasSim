@@ -48,6 +48,18 @@ design inside implementation, where it gets decided by whoever types first.
 | [SDD-012](SDD-012_HAZARDS_AND_DEGRADATION.md) | Hazards — the decay law, **the exponential hazard law** (no threshold to sit above), fixed-order draws, souring curve, strategy machinery as ordinary operations | R18 | 🟦 drafted |
 | [SDD-013](SDD-013_PERSISTENCE_FORMATS.md) | Persistence — the canonical-JSON byte rules, per-module digests, **the consolidated never-save table** (derived state and its rebuild sources), migration fixtures | R19 | 🟦 drafted |
 | [SDD-014](SDD-014_OBJECTIVES_AND_SCENARIOS.md) | Objectives — the closed predicate AST, **`ReadModelPath` load-validation** (objectives can never see what the player cannot), the eight score formulas, campaign whitelists. §5 now **declares** `Scenario`, `Campaign` and the scripted-entry vocabulary rather than describing them in prose (finding 141) | R24, R21d | 🟦 drafted |
+
+**Build-time amendments** (F-5: each edits its own block in place; this is the
+cross-reference): SDD-001 §9–10 — `Contribute`/`Own`/`HandleCommand`, `Composed`
+carrying stages/state/commands, `Structural` equality rule (findings 125–127,
+131, 139–140) · SDD-002 §6 — `IFlowElementRegistry` (130) · SDD-003 §4/§3.3,
+SDD-006 §1/§6, SDD-008 §3 — `ContentId Id` on the five unnamed slots (132) ·
+SDD-005 §2 — the `tech` content kind and the diffusion-route gate (128–129) ·
+SDD-006 — the duplicate `§3b` renumbered `§3c` (144) · SDD-007 §5b —
+`OperationMass` / `IOperation.MassThisTick` (147) · SDD-008 §7 —
+`IInformationValueModel` (147) · SDD-009 §5 — `IReserveBasedLending` (147) ·
+SDD-011 — S011-3 closed · SDD-012 §5 — `ISouringModel` (147) · SDD-017 §1b —
+`EngineCompositionRefused` (133).
 | [SDD-015](SDD-015_ADVISOR.md) | Advisor — **reuses the objective AST** for triggers, closed selector vocabulary (no scripting trap), the judgement cap as engine constants, four-part bound reasoning | R25 | 🟦 drafted |
 | [SDD-016](SDD-016_ENVIRONMENT_RUNTIME.md) | Weather — **daily AR(1) on the /30 grid** (unifying weather with segmentation), extremes as audited draws, **the forecast as the analytic AR(1) prediction** — its honesty is a theorem of the generator | R22 | 🟦 drafted |
 | [SDD-017](SDD-017_HOST_SURFACE.md) | Host surface — the complete `IEngine` API, the read-model record tree (16 sections), **the path registry generated from it** that objectives and Advisor bind against, the audit query with pre-shaped loss reports | R21 | 🟦 drafted |

@@ -163,6 +163,34 @@ ticks) → forced amortisation schedule. Pinned: the bank never calls instantly;
 the cure window is the player's warning (IR-consistent).
 ```
 
+> **R20d review amendment (finding 147) — the shape, declared.** The algorithm
+> above was pinned and no type carried it, while `CompanyView.BorrowingBase` and
+> `.BorrowingRate` had sat on the read model since the contract passes.
+>
+> ```csharp
+> public sealed record BorrowingTerms(
+>     Money BorrowingBase,
+>     double Rate,
+>     double EsgSpread);      // carried separately: a company that cannot see WHY
+>                             // its debt got more expensive cannot act on it
+>
+> public enum CovenantState { Clear, Curing, Amortising }
+>
+> public sealed record CovenantStatus(CovenantState State, int TicksRemaining);
+>
+> public interface IReserveBasedLending
+> {
+>     ContentId Id { get; }
+>     BorrowingTerms Redetermine(
+>         SurfaceVolume provedReserves, Money debt, double esgStanding);
+>     CovenantStatus Assess(BorrowingTerms terms, Money debt, CovenantStatus previous);
+> }
+> ```
+>
+> The model computes and the ledger books — `Assess` returns a status and never
+> posts a movement, so the cure-window pin above stays a statement about state
+> transitions rather than about money moving.
+
 ## 6. Prices
 
 ```csharp
