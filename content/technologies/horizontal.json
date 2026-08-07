@@ -1,0 +1,9 @@
+{
+  "kind": "tech",
+  "id": "horizontal",
+  "name": "$loc:tech.horizontal",
+  "availableFrom": "E3",
+  "diffusionLagTicks": 0,
+  "prerequisites": ["directional"],
+  "routes": ["Research", "Licence", "ServiceRental"]
+}

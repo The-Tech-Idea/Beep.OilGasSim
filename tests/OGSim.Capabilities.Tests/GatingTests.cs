@@ -17,18 +17,36 @@ public static class Fx
 
     /// <summary>A small graph with a real chain: horizontal needs directional
     /// needs rotary.</summary>
+    /// <summary>Every node here carries the diffusion route, because these are
+    /// the diffusion tests; the nodes that must NOT diffuse are their own
+    /// fixture below.</summary>
+    private static readonly AcquisitionRoute[] Diffuses = [AcquisitionRoute.Diffusion];
+
     public static IReadOnlyList<TechnologyNode> Graph =>
     [
-        new(Rotary, Era.E1, DiffusionLagTicks: 0, [], [], null),
+        new(Rotary, Era.E1, DiffusionLagTicks: 0, [], [], null, Diffuses),
         new(Directional, Era.E2, DiffusionLagTicks: 24, [Rotary],
             [new MoveEnvelope(EnvelopeKind.MaxDrillingDepth,
-                              EnvelopeContributionKind.Extension, 4500.0)], null),
+                              EnvelopeContributionKind.Extension, 4500.0)], null, Diffuses),
         new(Horizontal, Era.E3, DiffusionLagTicks: 60, [Directional],
             [new MoveEnvelope(EnvelopeKind.MaxDrillingDepth,
                               EnvelopeContributionKind.Extension, 6000.0),
-             new UnlockOption(new ContentId("horizontal-completion"))], null),
+             new UnlockOption(new ContentId("horizontal-completion"))], null, Diffuses),
         new(Seismic3d, Era.E2, DiffusionLagTicks: 36, [],
-            [], GrantsDetectClass: DetectClass.D2),
+            [], GrantsDetectClass: DetectClass.D2, Routes: Diffuses),
+    ];
+
+    /// <summary>
+    /// The same chain with the tip reachable only by paying — TECH_TREE's
+    /// Horizontal is `R L S`, with no D.
+    /// </summary>
+    public static IReadOnlyList<TechnologyNode> GraphWhereHorizontalIsBought =>
+    [
+        new(Rotary, Era.E1, DiffusionLagTicks: 0, [], [], null, Diffuses),
+        new(Directional, Era.E2, DiffusionLagTicks: 24, [Rotary], [], null, Diffuses),
+        new(Horizontal, Era.E3, DiffusionLagTicks: 0, [Directional], [], null,
+            [AcquisitionRoute.Research, AcquisitionRoute.Licence,
+             AcquisitionRoute.ServiceRental]),
     ];
 
     public static EffectState Effects(double baseDepth = 3000.0)
@@ -128,6 +146,22 @@ public class TechnologyStateTests
         // pressure rather than a promise.
     }
 
+    [Fact] // Finding 128: a node with no D route never becomes free
+    public void R17V6_diffusion_skips_a_node_the_registry_gives_no_diffusion_route()
+    {
+        var state = new TechnologyState(Fx.GraphWhereHorizontalIsBought);
+
+        // Far past every lag: only the missing route can withhold it now.
+        state.ApplyDiffusion(Era.E4, new Tick(0), new Tick(10_000));
+
+        Assert.True(state.Has(Fx.Rotary));
+        Assert.True(state.Has(Fx.Directional));
+
+        // Horizontal is R L S in TECH_TREE. Waiting must never produce it, or
+        // "eventually standard" and "go and get this" become the same thing.
+        Assert.False(state.Has(Fx.Horizontal));
+    }
+
     [Fact] // Diffusion respects prerequisites — it waits rather than throwing
     public void R17V6_diffusion_waits_for_prerequisites_rather_than_failing()
     {
@@ -161,7 +195,8 @@ public class TechnologyStateTests
     {
         var fault = Assert.Throws<ModelFault>(() => new TechnologyState(
         [
-            new TechnologyNode(Fx.Horizontal, Era.E1, 0, [Fx.Tech("never-shipped")], [], null),
+            new TechnologyNode(Fx.Horizontal, Era.E1, 0, [Fx.Tech("never-shipped")], [], null,
+                [AcquisitionRoute.Research]),
         ]));
 
         // A node gated behind a technology nobody ships can never be acquired,

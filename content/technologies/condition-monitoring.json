@@ -1,0 +1,9 @@
+{
+  "kind": "tech",
+  "id": "condition-monitoring",
+  "name": "$loc:tech.condition-monitoring",
+  "availableFrom": "E3",
+  "diffusionLagTicks": 0,
+  "prerequisites": ["telemetry-scada"],
+  "routes": ["Research", "Licence"]
+}

@@ -1,0 +1,9 @@
+{
+  "kind": "tech",
+  "id": "managed-pressure-drilling",
+  "name": "$loc:tech.managed-pressure-drilling",
+  "availableFrom": "E3",
+  "diffusionLagTicks": 0,
+  "prerequisites": ["directional"],
+  "routes": ["Research", "Licence", "ServiceRental"]
+}

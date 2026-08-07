@@ -1,0 +1,9 @@
+{
+  "kind": "tech",
+  "id": "rod-pump",
+  "name": "$loc:tech.rod-pump",
+  "availableFrom": "E1",
+  "diffusionLagTicks": 0,
+  "prerequisites": [],
+  "routes": ["Diffusion"]
+}

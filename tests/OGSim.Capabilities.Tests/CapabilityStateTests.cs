@@ -18,10 +18,14 @@ public sealed class CapabilityStateTests
     /// replay's ordering has something real to get wrong.</summary>
     private static IReadOnlyList<TechnologyNode> Graph() =>
     [
-        new(Tech("cable-tool"), Era.E1, 0, [], [], null),
-        new(Tech("rotary"), Era.E1, 0, [Tech("cable-tool")], [], null),
-        new(Tech("deviated"), Era.E2, 0, [Tech("rotary")], [], null),
+        new(Tech("cable-tool"), Era.E1, 0, [], [], null, Researched),
+        new(Tech("rotary"), Era.E1, 0, [Tech("cable-tool")], [], null, Researched),
+        new(Tech("deviated"), Era.E2, 0, [Tech("rotary")], [], null, Researched),
     ];
+
+    /// <summary>Acquired deliberately, never by diffusion — these tests are
+    /// about what a save carries, so every grant here is an explicit one.</summary>
+    private static readonly AcquisitionRoute[] Researched = [AcquisitionRoute.Research];
 
     private static CapabilityState Fresh(Era era = Era.E2) => new(Graph(), era);
 

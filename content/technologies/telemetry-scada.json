@@ -1,0 +1,9 @@
+{
+  "kind": "tech",
+  "id": "telemetry-scada",
+  "name": "$loc:tech.telemetry-scada",
+  "availableFrom": "E2",
+  "diffusionLagTicks": 0,
+  "prerequisites": ["downhole-gauges"],
+  "routes": ["Research", "Licence"]
+}

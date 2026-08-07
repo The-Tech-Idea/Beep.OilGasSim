@@ -1,0 +1,9 @@
+{
+  "kind": "tech",
+  "id": "cryogenic-recovery",
+  "name": "$loc:tech.cryogenic-recovery",
+  "availableFrom": "E3",
+  "diffusionLagTicks": 0,
+  "prerequisites": ["ngl-extraction"],
+  "routes": ["Research", "Licence"]
+}

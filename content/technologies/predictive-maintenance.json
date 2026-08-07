@@ -1,0 +1,9 @@
+{
+  "kind": "tech",
+  "id": "predictive-maintenance",
+  "name": "$loc:tech.predictive-maintenance",
+  "availableFrom": "E4",
+  "diffusionLagTicks": 0,
+  "prerequisites": ["condition-monitoring"],
+  "routes": ["Research", "Licence"]
+}

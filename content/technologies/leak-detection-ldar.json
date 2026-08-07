@@ -1,0 +1,9 @@
+{
+  "kind": "tech",
+  "id": "leak-detection-ldar",
+  "name": "$loc:tech.leak-detection-ldar",
+  "availableFrom": "E4",
+  "diffusionLagTicks": 0,
+  "prerequisites": ["telemetry-scada"],
+  "routes": ["Research", "Licence", "ServiceRental"]
+}

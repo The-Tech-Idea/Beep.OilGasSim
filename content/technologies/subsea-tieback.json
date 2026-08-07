@@ -1,0 +1,9 @@
+{
+  "kind": "tech",
+  "id": "subsea-tieback",
+  "name": "$loc:tech.subsea-tieback",
+  "availableFrom": "E3",
+  "diffusionLagTicks": 0,
+  "prerequisites": ["deepwater-operations"],
+  "routes": ["Research", "Licence", "ServiceRental"]
+}

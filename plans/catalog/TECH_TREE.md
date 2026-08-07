@@ -160,7 +160,7 @@ flowchart TB
 | Cryogenic recovery | E3 | NGL | R L | Turboexpander tier — **LNG prereq** |
 | LNG liquefaction ⚑ | E3 | Mol sieve + Cryo | R L | Marine gas exit; trains, jetty |
 | Vapour recovery | E3 | — | R L | Tank losses → sales |
-| High-strength linepipe | E1→E3 | — (grade tiers) | L D | X52 → X65 → X70 capacity ladder |
+| High-strength linepipe | E1 | — | L D | X52 → X65 → X70 capacity ladder ([C11](C11_PIPELINES_AND_STATIONS.md)) — the **tiers** span E1–E3, the node does not |
 | Flow improvers | E3 | — | L S | DRA skids |
 | Precision metering | E3 | SCADA | R L | Coriolis — custody variance |
 | Marine loading | E2 | — | R L | SPM buoys — export without harbours |

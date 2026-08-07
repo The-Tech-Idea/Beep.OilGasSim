@@ -1,0 +1,9 @@
+{
+  "kind": "tech",
+  "id": "deepwater-operations",
+  "name": "$loc:tech.deepwater-operations",
+  "availableFrom": "E3",
+  "diffusionLagTicks": 0,
+  "prerequisites": ["offshore-operations"],
+  "routes": ["Research", "Licence"]
+}

@@ -42,6 +42,46 @@ public interface ICapabilitySet
 mechanism rivals use with their personality lag (SDD-011 §2.1). "Everything
 eventually becomes standard practice" is a date, not an event.
 
+> **R20c.9 review corrections (findings 128, 129).** Writing the registry as
+> loadable content found the `tech` kind unspecified and diffusion ignoring the
+> one column that limits it.
+>
+> - **The `tech` content kind was never declared** (finding 129). §2 above says
+>   `TechnologyId` wraps "a `tech` content id" and no SDD states what a `tech`
+>   entry contains, so `TechnologyState` was constructed from a
+>   `TechnologyNode` that only tests could build. The shape, mapping one-to-one
+>   onto [TECH_TREE](../catalog/TECH_TREE.md)'s registry columns:
+>
+>   ```csharp
+>   public enum AcquisitionRoute { Research, Licence, ServiceRental, Diffusion }
+>
+>   public sealed record TechnologyDefinition(
+>       ContentId Id,                                  // slug of the display name (SDD-004 §8)
+>       Era AvailableFrom,                             // the registry's Era column
+>       int DiffusionLagTicks,                         // months after era start
+>       IReadOnlyList<ContentId> Prerequisites,        // the Prereqs column
+>       IReadOnlyList<AcquisitionRoute> Routes,        // the Routes column, R L S D
+>       DetectClass? GrantsDetectClass,                // the Opens column, where it opens a D-class
+>       IReadOnlyList<Effect> Effects) : ContentDefinition(Id);
+>   ```
+>
+>   `Effects` is empty for most nodes and that is correct rather than missing:
+>   the registry's `Opens` column is overwhelmingly *gating* — a tier or
+>   activity becomes purchasable — which content expresses as a `requiresTech`
+>   on the equipment, not as an effect on the node. A node carries an effect
+>   only where it changes a number nobody bought.
+>
+> - **Diffusion granted nodes that have no diffusion route** (finding 128).
+>   `ApplyDiffusion` granted everything whose era had started and whose lag had
+>   elapsed, but the registry's Routes column lists **D** for only some nodes:
+>   Horizontal is `R L S`, hydraulic fracturing is `R L S`. Every such node was
+>   being handed to the player free, on a timer, which erases the difference
+>   between "eventually standard" and "you must go and get this" — the whole
+>   point of having four routes. Diffusion now requires
+>   `Routes.Contains(AcquisitionRoute.Diffusion)`. It was invisible while the
+>   graph was only ever built by tests, because no test fixture carried a route
+>   list to contradict.
+
 **Rentals** (07 §4b.4): a rental is **not** a capability-set change. It is a
 field on the *operation*:
 

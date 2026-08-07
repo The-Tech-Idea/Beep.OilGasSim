@@ -978,7 +978,7 @@ cannot start without it: a scenario is a composed engine.
 | R20c.6 | Module state ownership — `IStateOwner` per `OwnsState` key | 🟨 — mechanism complete and proven; no shipped module can own state yet |
 | R20c.7 | Stage bodies — the per-tick work each module contributes | ⬜ — blocked on entity instantiation, see below |
 | R20c.8 | Custody transfers recorded, so the ledger can be composed | ⬜ |
-| R20c.9 | Content kinds for entities — equipment, wells, facilities, reservoirs | ⬜ |
+| R20c.9 | Content kinds for entities — equipment, wells, facilities, reservoirs | 🟨 — `tech` done: the 65-node registry ships as content, with the fixture check |
 
 **The fourteen modules compose, and the tick runs zero stages.** That is the
 honest state and it is stated rather than papered over. Composition validates a
@@ -1015,6 +1015,28 @@ every shipped module declares `NothingOwnedYet`, and the mechanism is proven by
 the owners' own round-trip tests instead of by a manifest claim nothing could
 redeem.
 
+**R20c.9's first kind is `tech`, and it paid for itself immediately.** The
+65-node registry now ships as content under `content/technologies/`, read by
+`TechnologyContentKind`, with SDD-004 §8's fixture test reading the registry
+*and* the content and asserting they agree in both directions — every shipped id
+is a registry node, every registry node has a file, eras match, every
+prerequisite resolves, and no node requires one from a later era. Writing it
+found finding 128 the same day: diffusion had been granting every node on a
+timer, including the ones TECH_TREE gives no D route. A markdown table cannot
+contradict the code; content can, and did.
+
+Two balance numbers are stated here rather than buried: a node whose only route
+is **D** is baseline kit and diffuses at lag 0 (rotary drilling is standard in
+1950, not in 1960); a node with **D alongside a paid route** diffuses at 120
+ticks, ten years into its era — "very long" in design 07 §3's table, made a
+number. Both are content and both are R20.4's to revisit.
+
+One coherence defect in the registry itself: **high-strength linepipe carried
+the era `E1→E3`** where every other node carries one era and `AvailableFrom` is
+one era. The range was describing its *grade tiers* (X52/X65/X70), which are
+equipment on the C11 sheet, not the node. Corrected to E1 with the tier span
+moved to the Opens column.
+
 **The wall behind R20c.7 is entity instantiation, not stage bodies.** Content
 declares three kinds — property kinds, materials, rock types. There is no
 definition for a well, a separator, a tank or a compartment, so nothing can
@@ -1031,6 +1053,8 @@ hypothetical:
 | # | Finding |
 |---|---|
 | 125 | **A module declared its stages and had no way to supply them.** `ModuleManifest.Stages` names the `(StageId, Order)` slots a module claims and check 5 forbids two modules claiming one — and then `TickPipeline` took `IReadOnlyList<ITickStage>` from *nowhere*, with no member on `IModule` producing one. Composition validated a stage plan that nothing could fill: law L3 at the architecture level, a declaration with no behaviour behind it. `IModuleComposition` gains `Contribute(int order, ITickStage work)` and `Composed` carries the collected stages, so the pipeline is built from exactly what was validated. Two refusals fall out — a slot declared and never filled, and a contribution to a slot never declared. Letting the pipeline take an independently-assembled stage list instead would have made the manifest decorative: the composer would police an order the tick was free to ignore |
+| 129 | **The `tech` content kind was never declared.** SDD-005 §2 says `TechnologyId` wraps "a `tech` content id" and no SDD states what a `tech` entry contains, so `TechnologyState` could only ever be built from a `TechnologyNode` that tests hand-assembled — the shipped tree existed as a markdown table and nothing else. Declared in SDD-005 §2 mapping one-to-one onto TECH_TREE's columns, implemented as `TechnologyContentKind` in `OGSim.Capabilities` (a kind belongs with the module that consumes it, per R3.7), and the 65 nodes now ship under `content/technologies/`. SDD-004 §8's fixture test reads BOTH the registry and the content and asserts they agree in both directions — the plans-side coherence check finally has its code-side twin |
+| 128 | **Diffusion granted nodes that have no diffusion route.** `ApplyDiffusion` granted everything whose era had started and whose lag had elapsed, but TECH_TREE lists **D** for only some nodes — Horizontal is `R L S`, hydraulic fracturing is `R L S`. Every such node was being handed over free on a timer, erasing the difference between "eventually standard practice" and "go and get this", which is the entire reason design 07 §3 has four routes. Invisible for as long as the graph was only ever built by test fixtures, because no fixture carried a route list to contradict — the defect arrived the moment real content did, which is the argument for shipping the registry as content rather than as a table |
 | 127 | **`OwnsState` was a claim nothing had to honour.** A module declared which facts it owned and the composer checked the claims were unique — and no member on `IModule` handed over an `IStateOwner`, so `StateRegistry` was populated by nobody and a save would have walked an empty owner list. The same gap as 125, on the state side, and it closes the same way: `Own(IStateOwner)`, a key outside the module's own `OwnsState` refused, a declared key with no owner refused, and `Composed` carrying the populated registry. An engine whose save is silently empty is worse than one that will not save, because the loss surfaces only on load |
 | 126 | **Resolution ran in caller-list order, not dependency order.** `Compose` validated the set and then called `module.Compose(c)` over the modules *as given*, so a module whose provider sat later in the list threw from `Require` — the composer proved the graph acyclic and then discarded the construction order that proof establishes. Found the moment `flow` was listed before `diagnostics`. Requires exists precisely so a module need not know who builds it first; making the answer depend on argument order put that knowledge back in every caller, where each scenario, test and host would have had to keep it consistent by hand. Now a DFS post-order over the same providers map, and a test composes the shipped set reversed and gets the identical engine |
 

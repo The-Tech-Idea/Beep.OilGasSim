@@ -1,0 +1,9 @@
+{
+  "kind": "tech",
+  "id": "inline-inspection",
+  "name": "$loc:tech.inline-inspection",
+  "availableFrom": "E3",
+  "diffusionLagTicks": 0,
+  "prerequisites": ["telemetry-scada"],
+  "routes": ["Research", "Licence", "ServiceRental"]
+}

@@ -1,0 +1,9 @@
+{
+  "kind": "tech",
+  "id": "rotary-drilling",
+  "name": "$loc:tech.rotary-drilling",
+  "availableFrom": "E1",
+  "diffusionLagTicks": 0,
+  "prerequisites": [],
+  "routes": ["Diffusion"]
+}

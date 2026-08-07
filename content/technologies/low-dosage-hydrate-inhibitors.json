@@ -1,0 +1,9 @@
+{
+  "kind": "tech",
+  "id": "low-dosage-hydrate-inhibitors",
+  "name": "$loc:tech.low-dosage-hydrate-inhibitors",
+  "availableFrom": "E3",
+  "diffusionLagTicks": 0,
+  "prerequisites": [],
+  "routes": ["Research", "Licence"]
+}

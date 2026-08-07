@@ -22,7 +22,8 @@ public sealed record TechnologyNode(
     int DiffusionLagTicks,                    // 07 §3's free route
     IReadOnlyList<TechnologyId> Prerequisites,
     IReadOnlyList<Effect> Effects,
-    DetectClass? GrantsDetectClass);          // observation nodes raise the tier
+    DetectClass? GrantsDetectClass,           // observation nodes raise the tier
+    IReadOnlyList<AcquisitionRoute> Routes);  // TECH_TREE's R L S D column
 
 /// <summary>
 /// SDD-005 §2's real implementation: the nodes this company holds, era-filtered.
@@ -137,6 +138,14 @@ public sealed class TechnologyState : ICapabilitySet
 
             if (_acquired.Contains(node.Id)) continue;
             if (node.AvailableFrom > currentEra) continue;
+
+            // TECH_TREE lists D for only some nodes. Horizontal drilling is
+            // R L S — it never becomes standard practice by waiting, and
+            // granting it on a timer would erase the difference between
+            // "eventually everyone has this" and "go and get this", which is
+            // the whole reason there are four routes (finding 128).
+            if (!node.Routes.Contains(AcquisitionRoute.Diffusion)) continue;
+
             if (now.Value < eraStart.Value + node.DiffusionLagTicks) continue;
 
             // Prerequisites first — and a node whose prerequisites have not

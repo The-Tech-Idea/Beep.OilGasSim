@@ -1,0 +1,9 @@
+{
+  "kind": "tech",
+  "id": "pcp",
+  "name": "$loc:tech.pcp",
+  "availableFrom": "E2",
+  "diffusionLagTicks": 0,
+  "prerequisites": ["rod-pump"],
+  "routes": ["Research", "Licence"]
+}
