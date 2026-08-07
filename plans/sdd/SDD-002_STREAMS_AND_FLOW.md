@@ -359,6 +359,43 @@ as a matched entry. Lift-gas provenance is the compression point's blend at
 **Element order is topological, ties broken by ascending `EntityId`** — the
 single deterministic order every pass uses.
 
+> **R20c review correction (finding 130).** This section says the topology is
+> "built per segment from (all elements) ∩ (segment availability set)" and never
+> said **by whom, from what**. `IFlowSolver.Solve` takes a `FlowTopology`;
+> nothing produced one. Elements are created by four different modules — Wells
+> makes completions, Facilities makes separators and tanks, Transport makes
+> pipelines — and no contract let a stage see across them, so stage 5 could not
+> be written at all: the solver was reachable only by a test that hand-built its
+> input.
+>
+> ```csharp
+> public interface IFlowElementRegistry
+> {
+>     void Add(IFlowElement element);              // the module that made it registers it
+>     void Connect(FlowConnection connection);     // and the tie-ins it made
+>     FlowTopology ViewFor(IReadOnlyCollection<EntityRef> available);   // per segment
+> }
+> ```
+>
+> **The registry holds edges; the modules keep their equipment.** L5 is not
+> strained by this: "the state behind [an edge]" is the *flowline* — its length,
+> diameter and condition — and that stays in the module that owns the pipeline.
+> A `FlowConnection` is an immutable statement about which port feeds which,
+> registered once, held in one place. What the law forbids is the topology
+> owning a second copy of the equipment, and it does not.
+>
+> **`ViewFor` filters rather than mutates**, which is what makes it a view: an
+> unavailable element is absent from the returned topology, and every connection
+> touching it goes with it (design 04 §4 — "an unavailable element is absent
+> from the network", not an element at zero rate). The registry is untouched, so
+> the four segments of a tick each get their own view of one unchanging field
+> and the tick can be abandoned whole without anything to undo.
+>
+> The registry is **provided by the flow module**, because it is the solver's
+> input and the solver is what gives it meaning; the modules that create
+> elements require it. That is a contract dependency, never an assembly one —
+> Wells still references only Kernel and Contracts.
+
 > **Contract pass 10 — §6 was the SDD contradicting itself.** This section
 > declared `public sealed class FlowNetwork` while §7's pass-2 amendment and the
 > committed code both say `FlowTopology(Elements, Connections)`. Two names for

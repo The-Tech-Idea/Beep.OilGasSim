@@ -129,7 +129,12 @@ internal sealed class WellsModule() : EngineModule(Declare(
 /// </summary>
 internal sealed class FlowModule() : EngineModule(Declare(
     "flow",
-    provides: [typeof(IFlowSolver)],
+    // The registry is provided HERE because it is the solver's input and the
+    // solver is what gives it meaning (SDD-002 §6). Wells and Facilities will
+    // REQUIRE it — a contract dependency, never an assembly one — on the day
+    // they hold elements to register; declaring that requirement before they
+    // resolve it would be the same empty claim as an unfilled stage slot.
+    provides: [typeof(IFlowSolver), typeof(IFlowElementRegistry)],
     // The solver audits every non-convergence, so the trail is a REQUIREMENT
     // and is declared as one — a Require that the manifest does not name is a
     // dependency the composer cannot order.
@@ -143,6 +148,8 @@ internal sealed class FlowModule() : EngineModule(Declare(
 
         composition.Provide<IFlowSolver>(new OGSim.Flow.FlowSolver(
             OGSim.Flow.SolverSettings.Pinned, composition.Require<IAuditTrail>()));
+
+        composition.Provide<IFlowElementRegistry>(new FlowElementRegistry());
     }
 }
 

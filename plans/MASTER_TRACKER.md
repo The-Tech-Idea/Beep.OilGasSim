@@ -978,6 +978,7 @@ cannot start without it: a scenario is a composed engine.
 | R20c.6 | Module state ownership — `IStateOwner` per `OwnsState` key | 🟨 — mechanism complete and proven; no shipped module can own state yet |
 | R20c.7 | Stage bodies — the per-tick work each module contributes | ⬜ — blocked on entity instantiation, see below |
 | R20c.8 | Custody transfers recorded, so the ledger can be composed | ⬜ |
+| R20c.10 | `IFlowElementRegistry` — who assembles the topology | ✅ |
 | R20c.9 | Content kinds for entities — equipment, wells, facilities, reservoirs | 🟨 — `tech` done: the 65-node registry ships as content, with the fixture check |
 
 **The fourteen modules compose, and the tick runs zero stages.** That is the
@@ -1042,9 +1043,22 @@ declares three kinds — property kinds, materials, rock types. There is no
 definition for a well, a separator, a tank or a compartment, so nothing can
 create one, so no module can hold one, so no stage has anything to act on. That
 is R20c.9 and it is large: it is `plans/catalog/` becoming loadable content. A
-second gap sits behind it — SDD-002 §6 says the flow topology is "a per-segment
-view built from all elements", and no contract lets a stage collect elements
-across modules; who assembles the topology is specified nowhere.
+second gap sat behind it and is now **closed** (finding 130, R20c.10).
+
+SDD-002 §6 said the flow topology is "a per-segment view built from all
+elements" and never said by whom, from what: `IFlowSolver.Solve` takes a
+`FlowTopology` and nothing produced one, so stage 5 could not be written and the
+solver was reachable only by a test that hand-built its input.
+`IFlowElementRegistry` is that missing piece. Modules register the elements they
+create and the tie-ins they make; `ViewFor(available)` returns one segment's
+topology — the available elements and the connections among them, with every
+connection touching an absent element dropped alongside it, because design 04 §4
+says an unavailable element is *absent* from the network rather than present at
+zero rate. It is a view: the registry is untouched, so the four segments of a
+tick each see one unchanging field and an abandoned tick has nothing to undo.
+The flow module provides it, since it is the solver's input; Wells and
+Facilities will require it on the day they hold elements to register, and do not
+declare that requirement before they resolve it.
 
 **Two SDD defects, both found by building the first real module set** — which is
 the argument for building one. Neither was visible while modules were
@@ -1053,6 +1067,7 @@ hypothetical:
 | # | Finding |
 |---|---|
 | 125 | **A module declared its stages and had no way to supply them.** `ModuleManifest.Stages` names the `(StageId, Order)` slots a module claims and check 5 forbids two modules claiming one — and then `TickPipeline` took `IReadOnlyList<ITickStage>` from *nowhere*, with no member on `IModule` producing one. Composition validated a stage plan that nothing could fill: law L3 at the architecture level, a declaration with no behaviour behind it. `IModuleComposition` gains `Contribute(int order, ITickStage work)` and `Composed` carries the collected stages, so the pipeline is built from exactly what was validated. Two refusals fall out — a slot declared and never filled, and a contribution to a slot never declared. Letting the pipeline take an independently-assembled stage list instead would have made the manifest decorative: the composer would police an order the tick was free to ignore |
+| 130 | **Nothing assembled the flow topology.** SDD-002 §6 said it is "built per segment from (all elements) ∩ (segment availability set)" and never said by whom, from what. `IFlowSolver.Solve` takes a `FlowTopology`; nothing produced one. Elements come from four modules — Wells makes completions, Facilities separators and tanks, Transport pipelines — and no contract let a stage see across them, so **stage 5 could not be written at all** and the solver was reachable only by a test that hand-built its input. `IFlowElementRegistry` closes it: modules register elements and tie-ins, `ViewFor(available)` returns the segment's topology with connections to absent elements dropped alongside them (design 04 §4 — absent, not present at zero rate). A view rather than a mutation, so four segments see one field and an abandoned tick has nothing to undo. L5 is unstrained: the registry holds immutable edges, and "the state behind an edge" — the flowline's length, diameter, condition — stays with the module that owns the pipeline |
 | 129 | **The `tech` content kind was never declared.** SDD-005 §2 says `TechnologyId` wraps "a `tech` content id" and no SDD states what a `tech` entry contains, so `TechnologyState` could only ever be built from a `TechnologyNode` that tests hand-assembled — the shipped tree existed as a markdown table and nothing else. Declared in SDD-005 §2 mapping one-to-one onto TECH_TREE's columns, implemented as `TechnologyContentKind` in `OGSim.Capabilities` (a kind belongs with the module that consumes it, per R3.7), and the 65 nodes now ship under `content/technologies/`. SDD-004 §8's fixture test reads BOTH the registry and the content and asserts they agree in both directions — the plans-side coherence check finally has its code-side twin |
 | 128 | **Diffusion granted nodes that have no diffusion route.** `ApplyDiffusion` granted everything whose era had started and whose lag had elapsed, but TECH_TREE lists **D** for only some nodes — Horizontal is `R L S`, hydraulic fracturing is `R L S`. Every such node was being handed over free on a timer, erasing the difference between "eventually standard practice" and "go and get this", which is the entire reason design 07 §3 has four routes. Invisible for as long as the graph was only ever built by test fixtures, because no fixture carried a route list to contradict — the defect arrived the moment real content did, which is the argument for shipping the registry as content rather than as a table |
 | 127 | **`OwnsState` was a claim nothing had to honour.** A module declared which facts it owned and the composer checked the claims were unique — and no member on `IModule` handed over an `IStateOwner`, so `StateRegistry` was populated by nobody and a save would have walked an empty owner list. The same gap as 125, on the state side, and it closes the same way: `Own(IStateOwner)`, a key outside the module's own `OwnsState` refused, a declared key with no owner refused, and `Composed` carrying the populated registry. An engine whose save is silently empty is worse than one that will not save, because the loss surfaces only on load |
