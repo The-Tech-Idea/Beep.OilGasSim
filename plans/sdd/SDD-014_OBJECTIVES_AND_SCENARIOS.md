@@ -112,6 +112,77 @@ Chapter load = scenario load + whitelist application over the carried state.
 Anything not whitelisted resets — R24-V17's isolation follows.
 ```
 
+> **R21c review correction (finding 141).** This section described scenario and
+> campaign content in PROSE and declared no types, so R24.7's `IScenario` /
+> `ICampaign` had nothing to implement and the first playable goal was written
+> as an ad-hoc `ScenarioGoal` record inside composition — a scenario that could
+> not be authored, loaded, or varied without editing the engine, which is
+> exactly what design 03 §3.3 says a mode must never be. The shapes:
+>
+> ```csharp
+> // Where a scenario's world comes from. Authored is a content id rather than a
+> // blob: an authored world is still content, loaded through the same pipeline.
+> public abstract record WorldSource;
+> public sealed record GeneratedWorld(ulong Seed) : WorldSource;
+> public sealed record AuthoredWorld(ContentId World) : WorldSource;
+>
+> // One scripted intervention. A COMMAND or a model-parameter override, executed
+> // at stages 1-2 — never a raw published event, because a notification without
+> // its occurrence would violate 16 §1: you script the price shock's PARAMETER
+> // and let the market model publish the event honestly.
+> public abstract record ScriptedEntry(Tick At);
+> public sealed record ScriptedCommand(Tick At, Command Command) : ScriptedEntry(At);
+> public sealed record ScriptedParameter(
+>     Tick At, ModelSlot Slot, ParameterKey Key, double Value) : ScriptedEntry(At);
+>
+> // What a run is scored on (§4). A challenge names the dimensions that count,
+> // so "maximise recovery" and "minimise finding cost" reward different play
+> // (18 §3.3) — an empty set means the run is not scored, which is what a
+> // sandbox is.
+> public sealed record ScoreWeight(ScoreDimension Dimension, double Weight);
+>
+> public enum ScoreDimension
+> {
+>     Reserves, Recovery, CapitalEfficiency, FindingCost,
+>     OperatingCost, Uptime, Hse, Legacy,
+> }
+>
+> public sealed record Scenario(
+>     ContentId Id,
+>     WorldSource World,
+>     ContentId StartingState,              // the state block a run opens from
+>     IReadOnlyList<Objective> Objectives,  // success conditions
+>     IReadOnlyList<Objective> Failures,    // `Never` predicates — 18 §3.3's hard limits
+>     IReadOnlyList<ScoreWeight> Scoring,
+>     ContentId RealityProfile,             // modifiers (SDD-005, 18 §5b)
+>     IReadOnlyList<ScriptedEntry> Script,
+>     Tick Deadline);
+>
+> // outcomeKey is a declared objective's TERMINAL STATE — branching on a small
+> // enum, never on arbitrary state (R24 risk).
+> public sealed record ChapterLink(ObjectiveState Outcome, ContentId NextChapter);
+>
+> public sealed record Campaign(
+>     ContentId Id,
+>     IReadOnlyList<ContentId> Chapters,        // scenario ids, in order
+>     IReadOnlyList<ReadModelPath> Persisted,   // the WHITELIST; anything else resets
+>     IReadOnlyList<ChapterLink> Branches);
+>
+> // What an objective has come to, and the only thing a campaign may branch on.
+> public enum ObjectiveState { Pending, Met, Failed, Expired }
+> ```
+>
+> **`Failures` is a separate list from `Objectives`, not an objective with a
+> flag.** A failure condition is a `Never` that ends the run the moment it
+> breaks, and a success condition is something the player is working toward;
+> merging them would mean every consumer testing which kind it was holding.
+>
+> **`Deadline` sits on the scenario rather than on each objective.** An objective
+> may carry its own (§3's `Tick? Deadline`), but the RUN has to end whatever the
+> objectives say — a scenario whose goals were all open-ended would never
+> resolve, and "did they manage it in time" is the question a challenge is
+> asking.
+
 ## 6. Test mapping
 
 GM2/GM3 (AST nodes incl. stateful counters) · GM4 + R24-V14 (§2 registry) ·
