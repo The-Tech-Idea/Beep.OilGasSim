@@ -83,8 +83,12 @@ internal abstract class EngineModule(ModuleManifest manifest) : IModule
 /// </summary>
 internal sealed class SubsurfaceModule() : EngineModule(Declare(
     "subsurface",
-    provides: [typeof(IDriveMechanism), typeof(IAquiferModel)],
-    requires: [typeof(IFluidPropertyModel)],
+    provides:
+    [
+        typeof(IDriveMechanism), typeof(IAquiferModel),
+        typeof(OGSim.Subsurface.SubsurfaceState),
+    ],
+    requires: [typeof(IFluidPropertyModel), typeof(TickProduction)],
 
     // The FIRST module to own a fact and act on it. Both arrive together on
     // purpose: a stage with nothing to act on is law L3's declaration with no
@@ -111,15 +115,20 @@ internal sealed class SubsurfaceModule() : EngineModule(Declare(
 
         composition.Own(state);
 
-        // Withdrawal comes from stage 5's solve, duration-weighted across
-        // segments (SDD-002 §9). Until a completion exists to produce any, the
-        // honest answer is NONE — an empty tick, not a fabricated one. The
-        // reservoir still re-solves, and at zero withdrawal §3.1 returns the
-        // pressure it already had, which is the correct physics rather than a
-        // special case.
+        // Published so the field module can wire stage 5's answer into stage 6's
+        // commit. A module state is not an interface and this is the one project
+        // allowed to name a concrete type (design 03 §8) — the alternative was a
+        // contract per module state, which would be eleven interfaces existing
+        // only so composition could avoid saying what it already knows.
+        composition.Provide(state);
+
+        // Withdrawal comes from stage 5, and stage 5 is the field module's:
+        // subsurface owns the commit, not the solve that feeds it.
+        TickProduction production = composition.Require<TickProduction>();
+
         composition.Contribute(
             order: 0,
-            new OGSim.Subsurface.MaterialBalanceStage(state, () => []));
+            new OGSim.Subsurface.MaterialBalanceStage(state, () => production.Withdrawals));
     }
 }
 
@@ -128,9 +137,12 @@ internal sealed class SubsurfaceModule() : EngineModule(Declare(
 /// <summary>R6/R7. The completions are the network's source elements.</summary>
 internal sealed class WellsModule() : EngineModule(Declare(
     "wells",
-    provides: [typeof(IInflowModel), typeof(IOutflowModel)],
-    requires: [typeof(IFluidPropertyModel)],
-    ownsState: NothingOwnedYet,
+    provides: [typeof(IInflowModel), typeof(IOutflowModel), typeof(OGSim.Wells.WellsState)],
+
+    // The registry is required now, because there is finally something to
+    // register: a completion is a source element and stage 5 must see it.
+    requires: [typeof(IFluidPropertyModel), typeof(IFlowElementRegistry)],
+    ownsState: ["wells.completions"],
     stages: NoStagesYet))
 {
     public override void Compose(IModuleComposition composition)
@@ -140,6 +152,11 @@ internal sealed class WellsModule() : EngineModule(Declare(
         composition.Provide<IInflowModel>(new OGSim.Wells.CompositeInflowModel(Defaults.Inflow));
         composition.Provide<IOutflowModel>(new OGSim.Wells.HydrostaticFrictionOutflowModel(
             Defaults.Tubing, Density.FromSpecificGravity(0.85), lift: null));
+
+        var wells = new OGSim.Wells.WellsState(composition.Require<IFlowElementRegistry>());
+
+        composition.Own(wells);
+        composition.Provide(wells);
     }
 }
 
@@ -156,7 +173,7 @@ internal sealed class FlowModule() : EngineModule(Declare(
     // REQUIRE it — a contract dependency, never an assembly one — on the day
     // they hold elements to register; declaring that requirement before they
     // resolve it would be the same empty claim as an unfilled stage slot.
-    provides: [typeof(IFlowSolver), typeof(IFlowElementRegistry)],
+    provides: [typeof(IFlowSolver), typeof(IFlowElementRegistry), typeof(TickProduction)],
     // The solver audits every non-convergence, so the trail is a REQUIREMENT
     // and is declared as one — a Require that the manifest does not name is a
     // dependency the composer cannot order.
@@ -172,6 +189,10 @@ internal sealed class FlowModule() : EngineModule(Declare(
             OGSim.Flow.SolverSettings.Pinned, composition.Require<IAuditTrail>()));
 
         composition.Provide<IFlowElementRegistry>(new FlowElementRegistry());
+
+        // The solve's per-tick output, handed to stage 6. Provided by the flow
+        // layer because that is whose answer it is.
+        composition.Provide(new TickProduction());
     }
 }
 
@@ -210,19 +231,14 @@ internal sealed class OperationsModule() : EngineModule(Declare(
 // ---------------------------------------------------------------- company
 
 /// <summary>
-/// R13/R16. `OGSim.Company.CompanyState` is the owner of `company.ledger` and is
-/// built and round-tripped in R20c.6 — but it is not composed HERE yet, because
-/// `CostLedger` must be able to answer "was this posting a custody transfer?"
-/// and nothing records that fact: `CustodyTransferPoint` writes no audit entry,
-/// and `AuditCategory` has no member for one. Composing it would mean handing
-/// the ledger a predicate that always answers the same way, which is the stub
-/// this project does not allow. The gap is R20c.8.
+/// R13/R16. Owns the ledger — the one fact that must survive a save exactly,
+/// because cash conservation is checked to the cent (INV2).
 /// </summary>
 internal sealed class CompanyModule() : EngineModule(Declare(
     "company",
-    provides: [typeof(IFiscalRegime)],
+    provides: [typeof(IFiscalRegime), typeof(OGSim.Company.CompanyState)],
     requires: [typeof(IAuditTrail)],
-    ownsState: NothingOwnedYet,
+    ownsState: ["company.ledger"],
     stages: NoStagesYet))
 {
     public override void Compose(IModuleComposition composition)
@@ -231,6 +247,90 @@ internal sealed class CompanyModule() : EngineModule(Declare(
 
         composition.Provide<IFiscalRegime>(new OGSim.Company.RoyaltyTaxRegime(
             new ContentId("concession"), royaltyRate: 0.125, taxRate: 0.40));
+
+        IAuditTrail audit = composition.Require<IAuditTrail>();
+
+        // Revenue may only be caused by a custody transfer (SDD-009 §1), and the
+        // ledger asks the TRAIL rather than trusting the posting: a movement
+        // cannot claim to be a sale, it can only cite an entry that was one.
+        var company = new OGSim.Company.CompanyState(
+            Defaults.OpeningCash, cause => IsCustodyTransfer(audit, cause));
+
+        composition.Own(company);
+        composition.Provide(company);
+    }
+
+    private static bool IsCustodyTransfer(IAuditTrail audit, AuditId cause)
+    {
+        IReadOnlyList<AuditEntry> transfers = audit.Query(
+            new AuditQuery(Subject: null, AuditCategory.CustodyTransfer, Range: null,
+                           CauseChainLeaf: null));
+
+        for (int i = 0; i < transfers.Count; i++)
+            if (transfers[i].Id == cause) return true;
+
+        return false;
+    }
+}
+
+// ---------------------------------------------------------------- field
+
+/// <summary>
+/// The loop: a well produces, its compartment loses pressure, the oil is sold.
+///
+/// <para>It is a module of its own because it is the only thing that legitimately
+/// knows wells and compartments are both real. Neither domain module can see the
+/// other — <c>OGSim.Wells</c> cannot name a compartment and
+/// <c>OGSim.Subsurface</c> cannot name a completion — so the numbers crossing
+/// between them cross HERE, at Layer 4, and the assembly boundary that keeps
+/// reservoir truth out of the well stays exactly where it was.</para>
+///
+/// <para>It claims stages 5 and 8; subsurface keeps stage 6. Solve, commit and
+/// pay are three stages in design 03 §6's order rather than one function,
+/// because a failed solve must commit nothing.</para>
+/// </summary>
+internal sealed class FieldModule() : EngineModule(Declare(
+    "field",
+    provides: [typeof(FieldControl)],
+    requires:
+    [
+        typeof(OGSim.Subsurface.SubsurfaceState),
+        typeof(OGSim.Wells.WellsState),
+        typeof(OGSim.Company.CompanyState),
+        typeof(TickProduction),
+        typeof(IFluidPropertyModel),
+        typeof(IAuditTrail),
+    ],
+    ownsState: NothingOwnedYet,
+    stages:
+    [
+        new StageParticipation(StageId.SolveFlow, Order: 0),
+        new StageParticipation(StageId.Economics, Order: 0),
+    ]))
+{
+    public override void Compose(IModuleComposition composition)
+    {
+        ArgumentNullException.ThrowIfNull(composition);
+
+        var loop = new ProductionLoop(
+            composition.Require<OGSim.Subsurface.SubsurfaceState>(),
+            composition.Require<OGSim.Wells.WellsState>(),
+            composition.Require<OGSim.Company.CompanyState>(),
+            composition.Require<TickProduction>(),
+            composition.Require<IFluidPropertyModel>(),
+            composition.Require<IAuditTrail>(),
+            Defaults.Economics,
+            Defaults.ReservoirTemperature,
+            Defaults.WellheadBackpressure);
+
+        composition.Contribute(order: 0, new SolveFlowStage(loop));
+        composition.Contribute(order: 0, new EconomicsStage(loop));
+
+        // The scenario's door onto the field. Provided rather than reachable, so
+        // building a field is something composition hands out deliberately.
+        composition.Provide(new FieldControl(
+            composition.Require<OGSim.Subsurface.SubsurfaceState>(),
+            composition.Require<OGSim.Wells.WellsState>()));
     }
 }
 

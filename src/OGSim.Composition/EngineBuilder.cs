@@ -56,6 +56,30 @@ internal static class Defaults
     /// </summary>
     public const double MaxTickPressureDropFraction = 0.2;
 
+    /// <summary>Opening cash — what a new company starts the game with.</summary>
+    public static Money OpeningCash { get; } = Money.FromMillions(50.0);
+
+    /// <summary>
+    /// Starting prices and costs. Balance content in a finished game (R20.4);
+    /// stated here so the loop is playable and revisable rather than absent.
+    ///
+    /// <para>$377/m³ is ~$60/bbl at 6.29 bbl/m³. The fixed cost is $300k a month:
+    /// a small onshore field's standing charge — people, power, chemicals, the
+    /// road. It was $2M on the first pass, which is a multi-platform figure, and
+    /// it made a single-well field lose money every month it produced. That is a
+    /// real dynamic and it will be some fields' story, but as the SHIPPED
+    /// starting point it says the game is unwinnable, which is a different claim
+    /// from the one intended.</para>
+    /// </summary>
+    public static FieldEconomics Economics { get; } = new(
+        OilPricePerCubicMetre: Money.FromMillions(377.0 / 1_000_000.0),
+        FixedOperatingCostPerTick: Money.FromMillions(0.3));
+
+    public static Temperature ReservoirTemperature { get; } = Temperature.FromCelsius(93.3);
+
+    /// <summary>Separator inlet pressure the wells flow against.</summary>
+    public static Pressure WellheadBackpressure { get; } = Pressure.FromBar(15.0);
+
     public static Integrity.DegradationCoefficients Decay { get; } =
         new(BaseRatePerYear: 0.05, WaterCutFactor: 1.0, SourFactor: 2.0,
             DutyFactor: 0.5, TemperatureFactor: 1.5, ServiceIntervalFactor: 0.2);
@@ -114,16 +138,19 @@ public sealed record Engine(
     IReadOnlyList<IModule> Modules,
     TickPipeline Pipeline,
     IAuditTrail Audit,
-    EventBus Events)
+    EventBus Events,
+    StateRegistry State,
+    IResolvedContracts Provided)
 {
     // Finding 131.
     public bool Equals(Engine? other) =>
         other is not null && ReferenceEquals(Pipeline, other.Pipeline)
         && ReferenceEquals(Audit, other.Audit) && ReferenceEquals(Events, other.Events)
+        && ReferenceEquals(State, other.State) && ReferenceEquals(Provided, other.Provided)
         && Structural.Equal(Modules, other.Modules);
 
     public override int GetHashCode() =>
-        HashCode.Combine(Pipeline, Audit, Events, Structural.HashOf(Modules));
+        HashCode.Combine(Pipeline, Audit, Events, State, Provided, Structural.HashOf(Modules));
 }
 
 /// <summary>
@@ -172,6 +199,7 @@ public static class EngineBuilder
         new HseModule(),
         new ObjectivesModule(),
         new MaterialsModule(),
+        new FieldModule(),
         new DiagnosticsModule(audit),
     ];
 
@@ -233,6 +261,8 @@ public static class EngineBuilder
 
         var pipeline = new TickPipeline(clock, events, audit, faults, log, composed.Stages);
 
-        return new Built(new Engine(composed.OrderedModules, pipeline, audit, events));
+        return new Built(new Engine(
+            composed.OrderedModules, pipeline, audit, events, composed.State,
+            composed.Provided));
     }
 }

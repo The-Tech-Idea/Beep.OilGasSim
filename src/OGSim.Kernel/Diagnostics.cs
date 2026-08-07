@@ -65,7 +65,21 @@ public readonly record struct AuditId(ulong Value) : IComparable<AuditId>
 public enum AuditCategory
 {
     Command, StateTransition, ConstraintBinding, Rejection, Financial,
-    StochasticOutcome, BeliefUpdate, Fault, InvariantCheck, ForcedShutIn, Merge
+    StochasticOutcome, BeliefUpdate, Fault, InvariantCheck, ForcedShutIn, Merge,
+
+    /// <summary>
+    /// The metered, contractual hand-over — the ONLY event revenue may be caused
+    /// by (SDD-009 §1, finding 138).
+    ///
+    /// <para>It was missing, and its absence was load-bearing in the wrong
+    /// direction: `CostLedger` refuses a revenue credit whose cause is not a
+    /// custody transfer, and nothing in the engine could record one, so the
+    /// ledger could not be composed at all. `Financial` would not do — every
+    /// cost posting is financial, and "was this particular entry a sale?" has to
+    /// be answerable from the entry itself or the rule giving revenue exactly
+    /// one origin is unenforceable.</para>
+    /// </summary>
+    CustodyTransfer,
 }
 
 /// <summary>A typed audit value — never a formatted display string.</summary>

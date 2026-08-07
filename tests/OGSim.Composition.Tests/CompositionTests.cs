@@ -68,7 +68,7 @@ public sealed class ShippedSetTests
         BuildResult result = EngineBuilder.Build(Fixture.Settings());
 
         Built built = Assert.IsType<Built>(result);
-        Assert.Equal(14, built.Engine.Modules.Count);
+        Assert.Equal(15, built.Engine.Modules.Count);
     }
 
     /// <summary>
@@ -147,7 +147,9 @@ public sealed class ShippedSetTests
     {
         Built built = Assert.IsType<Built>(EngineBuilder.Build(Fixture.Settings()));
 
-        Assert.Equal([StageId.MaterialBalance], built.Engine.Pipeline.DeclaredOrder());
+        Assert.Equal(
+            [StageId.SolveFlow, StageId.MaterialBalance, StageId.Economics],
+            built.Engine.Pipeline.DeclaredOrder());
     }
 
     /// <summary>

@@ -30,14 +30,29 @@ public sealed record CompositionProblem(
 public abstract record CompositionResult;
 
 /// <summary>
-/// Modules in the order their stages run, and every stage they contributed —
+/// What the modules provided, after composition. Read-only and resolve-only: the
+/// set is closed the moment composition finishes, so a caller can ask for a
+/// contract and can never add one.
+///
+/// <para>Named for CONTRACTS rather than services because "service" is one of
+/// glossary rule N3's banned words, and the rule is right here: what this holds
+/// is exactly the interfaces design 03 §3.2 calls contracts.</para>
+/// </summary>
+public interface IResolvedContracts
+{
+    T Resolve<T>() where T : class;
+}
+
+/// <summary>
+/// Modules in the order their stages run, every stage they contributed —
 /// ordered by (StageId, Order), so what composition validated IS what the tick
-/// runs (SDD-001 §9, finding 125).
+/// runs (SDD-001 §9, finding 125) — and what they provided.
 /// </summary>
 public sealed record Composed(
     IReadOnlyList<IModule> OrderedModules,
     IReadOnlyList<ITickStage> Stages,
-    StateRegistry State) : CompositionResult
+    StateRegistry State,
+    IResolvedContracts Provided) : CompositionResult
 {
     // Finding 131.
     public bool Equals(Composed? other) =>
@@ -162,7 +177,7 @@ public sealed class ModuleComposer
         if (problems.Count > 0) return new CompositionRefused(problems);
 
         return new Composed(
-            OrderByStage(modules), composition.OrderedStages(), composition.State);
+            OrderByStage(modules), composition.OrderedStages(), composition.State, composition);
     }
 
     /// <summary>
@@ -298,8 +313,14 @@ public sealed class ModuleComposer
     /// AFTER validation of the whole set (SDD-001 §9), so Require can only ever
     /// see contracts that were proven present.
     /// </summary>
-    private sealed class Composition(Dictionary<Type, ModuleName> providers) : IModuleComposition
+    private sealed class Composition(Dictionary<Type, ModuleName> providers)
+        : IModuleComposition, IResolvedContracts
     {
+        /// <summary>The same lookup <c>Require</c> uses — after composition, when
+        /// the set can no longer change.</summary>
+        T IResolvedContracts.Resolve<T>() => Require<T>();
+
+
         private readonly Dictionary<Type, object> _implementations = [];
         private readonly List<(StageId Stage, int Order, ITickStage Work)> _stages = [];
         private readonly Dictionary<(StageId, int), ModuleName> _contributors = [];

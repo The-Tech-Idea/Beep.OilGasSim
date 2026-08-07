@@ -44,7 +44,14 @@ public sealed class Completion : ICompletion
 {
     private readonly IInflowModel _inflow;
     private readonly IOutflowModel _outflow;
-    private readonly CompletionFluid _fluid;
+
+    // NOT readonly (finding 137). CompletionFluid.ReservoirPressure is
+    // documented as "from the compartment, through a contract", and a readonly
+    // field made that a one-time snapshot: the well would produce for forty
+    // years at initial reservoir pressure and never decline. Decline is not a
+    // detail of this game — it is the game, so the field a well reads Pr from
+    // has to be the one the material balance moved.
+    private CompletionFluid _fluid;
     private readonly ChokeSetting _choke;
     private readonly int _materialOrdinal;
     private readonly int _materialCount;
@@ -113,6 +120,28 @@ public sealed class Completion : ICompletion
     /// backpressure until sub-critical again. That is what lets a choked well
     /// survive S4's backpressure swings on a shared line.</para>
     /// </summary>
+    /// <summary>
+    /// The compartment's current conditions, pushed in before stage 5 solves
+    /// (finding 137).
+    ///
+    /// <para>Pushed rather than pulled: <c>Transform</c> is PURE (SDD-002 §5),
+    /// and a completion that reached into a compartment mid-solve would both
+    /// break that purity and cross the truth boundary — <c>OGSim.Wells</c>
+    /// cannot see a compartment and must not. The composition that owns both
+    /// sides passes the number, which is the same door
+    /// <c>CompletionFluid</c> always documented.</para>
+    /// </summary>
+    public void SetReservoirConditions(Pressure reservoirPressure, Temperature temperature) =>
+        _fluid = _fluid with
+        {
+            ReservoirPressure = reservoirPressure,
+            ReservoirTemperature = temperature,
+        };
+
+    /// <summary>What the well currently believes the compartment is at — the
+    /// value the next solve will use.</summary>
+    public Pressure ReservoirPressure => _fluid.ReservoirPressure;
+
     public OperatingPoint SolveOperatingPoint(Pressure wellheadBackpressure)
     {
         OperatingPoint point = OperatingPointSolver.Solve(
