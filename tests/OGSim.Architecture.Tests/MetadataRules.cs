@@ -240,11 +240,85 @@ public class MetadataRules
         {
             if (!type.IsInterface) continue;
             foreach (string word in banned)
-                if (type.Name.Contains(word, StringComparison.Ordinal))
+                if (ContainsAsWord(type.Name, word))
                     violations.Add($"{type.FullName} contains '{word}'");
         }
 
         EngineCorpus.AssertNone(violations, "N3 — contract names carry no weasel words");
+    }
+
+    /// <summary>
+    /// The banned word as a WHOLE PascalCase word, not as a substring
+    /// (finding 146).
+    ///
+    /// <para>A substring match reads <c>IInformationValueModel</c> as carrying
+    /// "Info" — and "value of information" is the industry's own term, the title
+    /// of SDD-008 §7 and the name of a field already on the read model. Glossary
+    /// rule N4 says industry terms beat invented ones, so a substring match puts
+    /// N3 and N4 in direct conflict and N4 has to win: renaming the concept to
+    /// dodge a letter sequence would be the invented name N4 forbids.</para>
+    ///
+    /// <para>What N3 is actually for is the lazy suffix — <c>IWellInfo</c>,
+    /// <c>IPumpData</c>, <c>IFlowService</c> — where the word IS the concept
+    /// because no better one was found. Those all still fail: the word stands
+    /// alone as a PascalCase component.</para>
+    /// </summary>
+    private static bool ContainsAsWord(string typeName, string word)
+    {
+        int at = typeName.IndexOf(word, StringComparison.Ordinal);
+
+        while (at >= 0)
+        {
+            int after = at + word.Length;
+
+            // A following lowercase letter means the word continues — "Info" in
+            // "Information" — so this occurrence is part of a longer word.
+            bool endsHere = after == typeName.Length || !char.IsLower(typeName[after]);
+
+            if (endsHere) return true;
+
+            at = typeName.IndexOf(word, at + 1, StringComparison.Ordinal);
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// The word-boundary relaxation above must not have opened the door
+    /// (finding 146). Every name N3 exists to catch still fails; only a banned
+    /// word buried inside a longer real word passes.
+    /// </summary>
+    [Fact]
+    public void N3_StillCatchesTheNamesItExistsFor()
+    {
+        string[] mustFail =
+        [
+            "IWellInfo", "IPumpData", "IFlowService", "IRigManager",
+            "IStreamHandler", "IUnitHelper", "IMathUtil",
+            "IDataStore", "IInfoSource",
+        ];
+
+        foreach (string name in mustFail)
+            Assert.True(
+                ContainsAsWord(name, "Manager") || ContainsAsWord(name, "Helper")
+                || ContainsAsWord(name, "Util") || ContainsAsWord(name, "Service")
+                || ContainsAsWord(name, "Handler") || ContainsAsWord(name, "Data")
+                || ContainsAsWord(name, "Info"),
+                $"{name} must still be refused by N3");
+
+        // And the real words that merely CONTAIN a banned sequence pass, because
+        // the sequence is not a word there.
+        Assert.False(ContainsAsWord("IInformationValueModel", "Info"));
+        Assert.False(ContainsAsWord("IDataset", "Data"));
+        Assert.False(ContainsAsWord("IServiceable", "Service"));
+
+        // `IServiceRentalLedger` would still FAIL, and correctly: "Service"
+        // stands alone there. A rental from a service company is
+        // `ServiceRental` — a record, which this rule does not police — and an
+        // interface reaching for the same word should be asked whether
+        // `IRentalLedger` says it better. This was a bad example on the first
+        // pass, and the assertion above caught it.
+        Assert.True(ContainsAsWord("IServiceRentalLedger", "Service"));
     }
 
     [Fact] // SDD-000 §8 rule F-6: identity is EntityId<T>, and there is no second scheme.

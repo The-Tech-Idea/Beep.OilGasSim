@@ -47,7 +47,7 @@ public static class Fx
         var clock = new SimulationClock(new GameDate(1970, 1));
         var trail = new AuditTrail(clock, new AuditRetention(5000));
         var scheduler = new OperationScheduler(
-            new RandomSource(seed).Stream(StreamId.Operations), trail);
+            new RandomSource(seed).Stream(StreamId.Operations), trail, materialCount: 3);
 
         scheduler.Register(Rig);
         return (scheduler, trail);
@@ -178,7 +178,7 @@ public class OutcomeTests
         var clock = new SimulationClock(new GameDate(1970, 1));
         var trail = new AuditTrail(clock, new AuditRetention(100));
         var scheduler = new OperationScheduler(
-            new RandomSource(20240701UL).Stream(StreamId.Operations), trail);
+            new RandomSource(20240701UL).Stream(StreamId.Operations), trail, materialCount: 3);
 
         const int trials = 20_000;
         for (int i = 0; i < trials; i++)
@@ -214,7 +214,8 @@ public class OutcomeTests
             var clock = new SimulationClock(new GameDate(1970, 1));
             var scheduler = new OperationScheduler(
                 new RandomSource(seed).Stream(StreamId.Operations),
-                new AuditTrail(clock, new AuditRetention(100)));
+                new AuditTrail(clock, new AuditRetention(100)),
+                materialCount: 3);
 
             var grades = new List<OutcomeGrade>();
             for (int i = 0; i < 200; i++)

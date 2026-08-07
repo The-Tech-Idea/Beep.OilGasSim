@@ -42,7 +42,8 @@ public sealed class Operation : IOperation
         EntityId<IOperation> id,
         OperationSpec spec,
         DrawnOutcome outcome,
-        IAuditTrail audit)
+        IAuditTrail audit,
+        int materialCount)
     {
         ArgumentNullException.ThrowIfNull(spec);
         ArgumentNullException.ThrowIfNull(outcome);
@@ -53,11 +54,26 @@ public sealed class Operation : IOperation
         Outcome = outcome;
         _audit = audit;
         State = OperationState.Scheduled;
+        MassThisTick = OperationMass.None(materialCount);
     }
 
     public EntityId<IOperation> Id { get; }
     public OperationSpec Spec { get; }
     public OperationState State { get; private set; }
+
+    /// <summary>
+    /// SDD-007 §5b. This template moves no mass of its own — drilling,
+    /// completion and construction all put their volumes through the routed
+    /// network or nowhere.
+    ///
+    /// <para>The operations that DO move mass are the well test and frac-fluid
+    /// recovery, and neither has a template yet (R12b.4). Reporting
+    /// <c>None</c> is the true answer for every template that exists today, not
+    /// a placeholder for the ones that do not — and it is what lets the tick's
+    /// conservation check cover operations at all rather than skipping a term
+    /// it has no value for.</para>
+    /// </summary>
+    public OperationMass MassThisTick { get; }
     public int ProgressDays => _progressDays;
     public Money Accrued => _accrued;
 

@@ -86,18 +86,29 @@ public sealed class OperationScheduler
 {
     private readonly IRandomStream _outcomes;
     private readonly IAuditTrail _audit;
+    private readonly int _materialCount;
     private readonly Dictionary<EntityId<IRig>, RigCalendar> _calendars = [];
     private readonly List<EntityId<IRig>> _rigOrder = [];
 
     private ulong _nextOperationId = 1;
 
-    public OperationScheduler(IRandomStream outcomeStream, IAuditTrail audit)
+    /// <param name="materialCount">How wide a composition is in this game.
+    /// Operations that move mass (SDD-007 §5b) report one, and a zero movement
+    /// is still a composition of a particular width — so the scheduler carries
+    /// the catalogue's width rather than letting each operation guess.</param>
+    public OperationScheduler(
+        IRandomStream outcomeStream, IAuditTrail audit, int materialCount)
     {
         ArgumentNullException.ThrowIfNull(outcomeStream);
         ArgumentNullException.ThrowIfNull(audit);
 
+        if (materialCount < 0)
+            throw new ModelFault("SDD-002 §2", null,
+                $"a catalogue cannot have {materialCount} materials");
+
         _outcomes = outcomeStream;
         _audit = audit;
+        _materialCount = materialCount;
     }
 
     /// <summary>Rigs are registered before they can be reserved. A rig the
@@ -162,7 +173,7 @@ public sealed class OperationScheduler
         if (spec.Resources.Rig is EntityId<IRig> committed)
             _calendars[committed].Reserve(startDay, worstCase, id);
 
-        return new Scheduled(new Operation(id, spec, outcome, _audit));
+        return new Scheduled(new Operation(id, spec, outcome, _audit, _materialCount));
     }
 
     /// <summary>R12-V8: cancelling frees the rig immediately.</summary>

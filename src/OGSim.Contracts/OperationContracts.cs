@@ -70,6 +70,35 @@ public sealed record OperationSpec(
                          Requirements, Outcomes, Structural.HashOf(Rentals));
 }
 
+/// <summary>
+/// What an operation put into or took out of the world this tick, outside the
+/// routed network (SDD-007 §5b).
+///
+/// <para>A well test produces and flares real barrels. Frac-fluid recovery
+/// returns real mass. These are small volumes and they are not exceptions to
+/// conservation — they post into the same tick terms as everything else, with
+/// the operation as the audited element, so INV1 covers them without a special
+/// ledger.</para>
+/// </summary>
+public sealed record OperationMass(Composition Sourced, DisposedMass Disposed)
+{
+    /// <summary>
+    /// The ordinary case: an operation that moves no mass of its own. Not a
+    /// fallback — most operations genuinely move none, and saying so explicitly
+    /// is how the conservation check knows it has covered them.
+    ///
+    /// <para>Takes the catalogue's material count because a zero composition is
+    /// still a composition of a particular width; a shared empty singleton would
+    /// be the one value in the engine that does not know how many materials
+    /// exist.</para>
+    /// </summary>
+    public static OperationMass None(int materialCount)
+    {
+        Composition zero = Composition.Zero(materialCount);
+        return new OperationMass(zero, new DisposedMass(zero, zero, zero));
+    }
+}
+
 public interface IOperation
 {
     EntityId<IOperation> Id { get; }
@@ -77,6 +106,16 @@ public interface IOperation
     OperationState State { get; }
     int ProgressDays { get; }
     Money Accrued { get; }
+
+    /// <summary>
+    /// This tick's mass movement (SDD-007 §5b).
+    ///
+    /// <para><b>If the site has a routed test separator, the network path wins
+    /// and this reports nothing.</b> Both paths reporting would double-count the
+    /// same barrels — the operation is the fallback route for mass that has
+    /// nowhere else to go, never a second one alongside it.</para>
+    /// </summary>
+    OperationMass MassThisTick { get; }
 }
 
 /// <summary>

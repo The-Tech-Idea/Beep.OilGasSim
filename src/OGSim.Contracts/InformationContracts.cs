@@ -48,6 +48,46 @@ public sealed record Observation(
 /// consume a different count and shift every later draw in that stream, which is
 /// exactly the independence property R1-V5 exists to protect.
 /// </summary>
+/// <summary>
+/// One decision a survey might inform, and what it is worth to inform it
+/// (SDD-008 §7).
+/// </summary>
+public sealed record InformationValue(
+    ContentId Source,
+    EntityRef Subject,
+    Money Cost,
+    Money ExpectedValue)
+{
+    /// <summary>Worth buying when what it tells you is worth more than it costs.
+    /// The whole exploration decision, and the reason a cheap survey over a
+    /// hopeless prospect is still a bad buy.</summary>
+    public bool WorthBuying => ExpectedValue > Cost;
+}
+
+/// <summary>
+/// SDD-008 §7 — <c>VOI = E[max_a EV(a | posterior)] − max_a EV(a | prior)</c>.
+///
+/// <para><b>It consumes no random stream.</b> The 128 scenarios are drawn by a
+/// Halton sequence, which is deterministic and reproducible: this is advisory
+/// arithmetic, not world randomness, and a player opening the value-of-
+/// information panel must not shift a single later draw. Pinned so replay is
+/// untouched.</para>
+///
+/// <para><b>It is deliberately wrong when the player's beliefs are wrong.</b>
+/// The expectation runs over the player's prior and their current economics, so
+/// a company that misjudges a prospect also misjudges what learning about it is
+/// worth — which is the honest answer and the interesting one.</para>
+/// </summary>
+public interface IInformationValueModel
+{
+    ContentId Id { get; }
+
+    IReadOnlyList<InformationValue> Rank(
+        IReadOnlyList<ContentId> availableSources,
+        EntityRef subject,
+        IBeliefStore beliefs);
+}
+
 public interface IObservationModel
 {
     ContentId Id { get; }

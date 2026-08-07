@@ -35,3 +35,30 @@ public interface IHazardModel
     ContentId Id { get; }
     double FailureProbability(double condition, Duration dt);
 }
+
+/// <summary>
+/// SDD-012 §5 — the long-arc hazard.
+/// <c>H2S(t) = sourCurve(cumulative injected water ÷ pore volume)</c>, per
+/// waterflooded compartment, with the curve content per rock type.
+///
+/// <para><b>This is the tail on every waterflood.</b> A player fights decline by
+/// injecting water, the water sours the reservoir over years, and the rising H2S
+/// arrives in three places at once: the sales specification (sour crude is
+/// discounted or unsellable), the corrosion severity term that ages every wetted
+/// component, and the metallurgy envelope that decides whether the equipment is
+/// rated for it at all. The decision to install sour-service metallurgy arrives
+/// on schedule and years late, which is the design intent — it is a consequence
+/// bought years earlier, not an event.</para>
+///
+/// <para>Truth-side, and it stays that way: what a player knows about souring
+/// comes from produced-fluid samples, like everything else.</para>
+/// </summary>
+public interface ISouringModel
+{
+    ContentId Id { get; }
+
+    /// <summary>Hydrogen sulphide concentration in ppm at the current
+    /// throughput ratio. Monotonic in the ratio — water already injected cannot
+    /// un-sour a reservoir.</summary>
+    double HydrogenSulphidePpm(ContentId rockType, double injectedWaterOverPoreVolume);
+}
