@@ -81,9 +81,18 @@ internal static class Defaults
     /// technology is acquired, so drilling deeper is a thing the player has to
     /// go and earn (TECH_TREE: deep-drilling, E2).
     /// </summary>
+    /// <param name="DurationTicks">Four months on a land well — long enough that
+    /// money leaves well before oil arrives, which is what makes timing a
+    /// decision rather than an afterthought.</param>
+    /// <param name="ProbabilityOfSuccess">0.6 on a known compartment. It is not
+    /// 1.0 because a hole that always finds oil is not a decision, and not 0.2
+    /// because this is a compartment somebody already found — wildcat odds
+    /// belong to exploration, where the prospect itself is uncertain (R14).</param>
     public static DrillingTerms Drilling { get; } = new(
         CostPerWell: Money.FromMillions(8.0),
-        MaximumDepth: new Length(4000.0));
+        MaximumDepth: new Length(4000.0),
+        DurationTicks: 4,
+        ProbabilityOfSuccess: 0.6);
 
     /// <summary>
     /// The well a drilling command produces. One completion on one compartment,
@@ -170,6 +179,7 @@ public enum FaultHandling
 /// <summary>What the host must supply. No member has a default.</summary>
 public sealed record EngineSettings(
     GameDate Epoch,
+    ulong WorldSeed,
     AuditRetention Retention,
     ILogSink LogSink,
     LogLevel MinimumLogLevel,
@@ -240,7 +250,8 @@ public static class EngineBuilder
     /// same engine, which is the property that makes Requires worth declaring
     /// (SDD-001 §9, finding 126).</para>
     /// </summary>
-    internal static IReadOnlyList<IModule> ShippedModules(IAuditTrail audit) =>
+    internal static IReadOnlyList<IModule> ShippedModules(
+        IAuditTrail audit, SimulationClock clock, IRandomSource random) =>
     [
         new SubsurfaceModule(),
         new WellsModule(),
@@ -256,7 +267,7 @@ public static class EngineBuilder
         new ObjectivesModule(),
         new MaterialsModule(),
         new FieldModule(),
-        new DiagnosticsModule(audit),
+        new DiagnosticsModule(audit, clock, random),
     ];
 
     /// <summary>Composes the shipped set.</summary>
@@ -267,7 +278,9 @@ public static class EngineBuilder
         var clock = new SimulationClock(settings.Epoch);
         var audit = new AuditTrail(clock, settings.Retention);
 
-        return Build(settings, ShippedModules(audit), clock, audit);
+        return Build(
+            settings, ShippedModules(audit, clock, new RandomSource(settings.WorldSeed)),
+            clock, audit);
     }
 
     /// <summary>

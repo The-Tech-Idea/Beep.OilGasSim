@@ -32,83 +32,6 @@ public sealed record DrillWellCommand(
     EntityId<IReservoirCompartmentEntity> Target,
     Length TotalDepth) : Command(Subject: null);
 
-/// <summary>
-/// What a well costs and what it can reach. Content in a finished game;
-/// explicit here because law L2 forbids a defaulted dependency.
-/// </summary>
-public sealed record DrillingTerms(
-    Money CostPerWell,
-    Length MaximumDepth);
-
-/// <summary>
-/// Pure (R1 §2.5) and reports EVERY reason, not the first: a player told only
-/// that a well is too deep, who then finds they could not afford it either, has
-/// been made to discover the truth in instalments.
-/// </summary>
-internal sealed class DrillWellValidator(
-    CompanyState company, FieldControl field, DrillingTerms terms)
-    : ICommandValidator<DrillWellCommand>
-{
-    public IReadOnlyList<RejectionReason> Validate(DrillWellCommand command)
-    {
-        ArgumentNullException.ThrowIfNull(command);
-
-        var reasons = new List<RejectionReason>();
-
-        if (company.Ledger.Cash < terms.CostPerWell)
-            reasons.Add(new RejectionReason(
-                "$loc:reject.insufficient-cash",
-                $"a well costs {terms.CostPerWell.Cents} cents and the company holds " +
-                $"{company.Ledger.Cash.Cents}"));
-
-        if (command.TotalDepth.Metres > terms.MaximumDepth.Metres)
-            reasons.Add(new RejectionReason(
-                "$loc:reject.beyond-drilling-envelope",
-                $"{command.TotalDepth.Metres} m is past the {terms.MaximumDepth.Metres} m " +
-                "the company can currently drill"));
-
-        if (command.TotalDepth.Metres <= 0.0)
-            reasons.Add(new RejectionReason(
-                "$loc:reject.invalid-depth", "a well must have a positive depth"));
-
-        if (field.CompartmentCount == 0)
-            reasons.Add(new RejectionReason(
-                "$loc:reject.no-target", "there is nothing here to drill into"));
-
-        return reasons;
-    }
-}
-
-/// <summary>
-/// Cannot fail (R1 §2.5) — everything that could refuse has already refused.
-/// </summary>
-internal sealed class DrillWellApplier(
-    CompanyState company,
-    FieldControl field,
-    DrillingTerms terms,
-    Func<ulong, EntityId<IReservoirCompartmentEntity>, Length, Completion> buildCompletion)
-    : ICommandApplier<DrillWellCommand>
-{
-    public Applied Apply(DrillWellCommand command, AuditId submission)
-    {
-        ArgumentNullException.ThrowIfNull(command);
-
-        // Capex, not opex: the well is an asset the company now owns, and the
-        // distinction is what makes depreciation and abandonment mean anything
-        // later (SDD-009 §1).
-        company.Ledger.Post(new Movement(
-            company.Ledger.Movements.Count > 0 ? company.Ledger.Movements[^1].Tick : new Tick(0),
-            Account.Capex_PPE, Account.Cash, terms.CostPerWell,
-            MovementCategory.Development, Asset: null, Cause: submission));
-
-        field.OpenWell(
-            buildCompletion(field.NextWellId(), command.Target, command.TotalDepth),
-            command.Target);
-
-        return new Applied(submission, []);
-    }
-}
-
 // ------------------------------------------------------------- the read model
 
 /// <summary>
@@ -126,6 +49,7 @@ public sealed record FieldReadModel(
     GameDate Date,
     Money Cash,
     int Wells,
+    int WellsDrilling,
     SurfaceVolume ProducedThisTick,
     bool Insolvent);
 
@@ -145,6 +69,7 @@ internal sealed class CloseStage(
     ProductionLoop loop,
     CompanyState company,
     FieldControl field,
+    DrillingState drilling,
     IAuditTrail audit) : ITickStage
 {
     public StageId Id => StageId.Close;
@@ -180,6 +105,7 @@ internal sealed class CloseStage(
             context.Date,
             company.Ledger.Cash,
             field.WellCount,
+            drilling.InProgress,
             loop.ProducedThisTick,
             Insolvent);
     }

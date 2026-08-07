@@ -301,10 +301,13 @@ internal sealed class FieldModule() : EngineModule(Declare(
         typeof(TickProduction),
         typeof(IFluidPropertyModel),
         typeof(IAuditTrail),
+        typeof(IRandomSource),
+        typeof(SimulationClock),
     ],
-    ownsState: NothingOwnedYet,
+    ownsState: ["field.drilling"],
     stages:
     [
+        new StageParticipation(StageId.Operations, Order: 0),
         new StageParticipation(StageId.SolveFlow, Order: 0),
         new StageParticipation(StageId.Economics, Order: 0),
         new StageParticipation(StageId.Close, Order: 0),
@@ -343,18 +346,28 @@ internal sealed class FieldModule() : EngineModule(Declare(
 
         composition.Provide(field);
 
-        var close = new CloseStage(
-            loop, composition.Require<OGSim.Company.CompanyState>(), field,
-            composition.Require<IAuditTrail>());
+        var company = composition.Require<OGSim.Company.CompanyState>();
+        IAuditTrail audit = composition.Require<IAuditTrail>();
+
+        var drilling = new DrillingState(Defaults.Drilling);
+        composition.Own(drilling);
+
+        var close = new CloseStage(loop, company, field, drilling, audit);
 
         composition.Contribute(order: 0, close);
         composition.Provide(close);
 
-        var company = composition.Require<OGSim.Company.CompanyState>();
+        // Stage 3: rigs that finished this month hand over a well or a dry hole,
+        // BEFORE stage 5 solves — so a well completed in January produces in
+        // January rather than waiting a month for the tick to come round again.
+        composition.Contribute(order: 0, new DrillingStage(drilling, field, audit));
 
         composition.HandleCommand(
             new DrillWellValidator(company, field, Defaults.Drilling),
-            new DrillWellApplier(company, field, Defaults.Drilling, Defaults.CompletionFor));
+            new DrillWellApplier(
+                company, drilling,
+                composition.Require<SimulationClock>(),
+                composition.Require<IRandomSource>().Stream(StreamId.Exploration)));
     }
 }
 
@@ -519,9 +532,15 @@ internal sealed class MaterialsModule() : EngineModule(Declare(
 /// ambient singleton — law L2 forbids the singleton, and this is what replaces
 /// it.
 /// </summary>
-internal sealed class DiagnosticsModule(IAuditTrail audit) : EngineModule(Declare(
+internal sealed class DiagnosticsModule(
+    IAuditTrail audit, SimulationClock clock, IRandomSource random) : EngineModule(Declare(
     "diagnostics",
-    provides: [typeof(IAuditTrail)],
+
+    // The clock and the RNG join the trail here for the same reason it is here:
+    // they are kernel facilities every module may need and none may own, and
+    // composing them makes them declared dependencies rather than the ambient
+    // singletons law L2 forbids.
+    provides: [typeof(IAuditTrail), typeof(SimulationClock), typeof(IRandomSource)],
     requires: [],
     ownsState: NothingOwnedYet,
     stages: NoStagesYet))
@@ -529,6 +548,9 @@ internal sealed class DiagnosticsModule(IAuditTrail audit) : EngineModule(Declar
     public override void Compose(IModuleComposition composition)
     {
         ArgumentNullException.ThrowIfNull(composition);
+
         composition.Provide(audit);
+        composition.Provide(clock);
+        composition.Provide(random);
     }
 }

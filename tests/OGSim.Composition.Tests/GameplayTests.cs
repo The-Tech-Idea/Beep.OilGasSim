@@ -45,11 +45,12 @@ public sealed class GameplayTests
     // ------------------------------------------------------------- agency
 
     /// <summary>
-    /// The first thing a player does. An undrilled field earns nothing; after
-    /// the command it produces, and the difference is the player's doing.
+    /// The first thing a player does — and it takes four months. Money leaves
+    /// now, oil arrives later, and in between the rig is turning and the read
+    /// model says so.
     /// </summary>
     [Fact]
-    public void Drilling_a_well_turns_a_dead_field_into_a_producing_one()
+    public void Drilling_a_well_takes_months_and_then_the_field_produces()
     {
         (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled();
 
@@ -58,11 +59,70 @@ public sealed class GameplayTests
 
         Assert.IsType<Accepted>(engine.Commands.Submit(Drill(target)));
 
+        // Still drilling: committed, paid for, nothing to show.
         engine.Pipeline.AdvanceTick();
+        Assert.Equal(1, engine.ReadModel!.WellsDrilling);
+        Assert.Equal(0, engine.ReadModel.Wells);
+        Assert.Equal(0.0, engine.ReadModel.ProducedThisTick.CubicMetres);
 
-        Assert.Equal(1, engine.ReadModel!.Wells);
+        for (var month = 0; month < 4; month++) engine.Pipeline.AdvanceTick();
+
+        Assert.Equal(0, engine.ReadModel!.WellsDrilling);
+        Assert.Equal(1, engine.ReadModel.Wells);
         Assert.True(engine.ReadModel.ProducedThisTick.CubicMetres > 0.0,
-            "the month after drilling, the field must produce");
+            "once the rig is off, the field must produce");
+    }
+
+    /// <summary>
+    /// Some holes are dry, and a dry hole is paid for in full. That is the whole
+    /// of exploration economics — and the reason drilling is a decision instead
+    /// of a button.
+    /// </summary>
+    [Fact]
+    public void Some_wells_come_up_dry_and_are_paid_for_anyway()
+    {
+        (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled();
+
+        // Six wells at 0.6 — with this seed some land and some do not, which is
+        // the only assertion worth making: the outcome is neither guaranteed nor
+        // impossible.
+        for (var attempt = 0; attempt < 6; attempt++) engine.Commands.Submit(Drill(target));
+
+        for (var month = 0; month < 6; month++) engine.Pipeline.AdvanceTick();
+
+        Assert.Equal(0, engine.ReadModel!.WellsDrilling);
+        Assert.True(engine.ReadModel.Wells < 6,
+            "if every hole finds oil there is no risk and no decision");
+        Assert.True(engine.ReadModel.Wells > 0,
+            "if no hole ever finds oil the game is unplayable");
+    }
+
+    /// <summary>
+    /// The outcome is drawn ONCE, when the well is ordered (SDD-007 §4). Two
+    /// engines on one seed, given the same orders, must find the same oil —
+    /// otherwise a player could reload the month before a rig finished and try
+    /// again, which turns a probability into a slot machine.
+    /// </summary>
+    [Fact]
+    public void One_seed_and_the_same_orders_give_the_same_wells()
+    {
+        (Engine first, EntityId<IReservoirCompartmentEntity> firstTarget) = Undrilled();
+        (Engine second, EntityId<IReservoirCompartmentEntity> secondTarget) = Undrilled();
+
+        for (var attempt = 0; attempt < 6; attempt++)
+        {
+            first.Commands.Submit(Drill(firstTarget));
+            second.Commands.Submit(Drill(secondTarget));
+        }
+
+        for (var month = 0; month < 6; month++)
+        {
+            first.Pipeline.AdvanceTick();
+            second.Pipeline.AdvanceTick();
+        }
+
+        Assert.Equal(first.ReadModel!.Wells, second.ReadModel!.Wells);
+        Assert.Equal(first.ReadModel.Cash, second.ReadModel.Cash);
     }
 
     /// <summary>Drilling costs money, and the player sees it go.</summary>

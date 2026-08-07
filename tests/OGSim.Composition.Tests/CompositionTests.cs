@@ -32,6 +32,7 @@ internal static class Fixture
 {
     public static EngineSettings Settings(FaultHandling handling = FaultHandling.Strict) =>
         new(new GameDate(1965, 1),
+            WorldSeed: 20260806UL,
             new AuditRetention(DetailWindowTicks: 12),
             new RecordingSink(),
             LogLevel.Info,
@@ -83,7 +84,8 @@ public sealed class ShippedSetTests
         var audit = new AuditTrail(
             new SimulationClock(new GameDate(1965, 1)), new AuditRetention(12));
 
-        IReadOnlyList<IModule> modules = EngineBuilder.ShippedModules(audit);
+        IReadOnlyList<IModule> modules = EngineBuilder.ShippedModules(
+            audit, new SimulationClock(new GameDate(1965, 1)), new RandomSource(1UL));
 
         var provided = new HashSet<Type>();
         foreach (IModule module in modules)
@@ -108,7 +110,8 @@ public sealed class ShippedSetTests
         var audit = new AuditTrail(
             new SimulationClock(new GameDate(1965, 1)), new AuditRetention(12));
 
-        var reversed = new List<IModule>(EngineBuilder.ShippedModules(audit));
+        var reversed = new List<IModule>(EngineBuilder.ShippedModules(
+            audit, new SimulationClock(new GameDate(1965, 1)), new RandomSource(1UL)));
         reversed.Reverse();
 
         Built forward = Assert.IsType<Built>(EngineBuilder.Build(Fixture.Settings()));
@@ -148,7 +151,8 @@ public sealed class ShippedSetTests
         Built built = Assert.IsType<Built>(EngineBuilder.Build(Fixture.Settings()));
 
         Assert.Equal(
-            [StageId.SolveFlow, StageId.MaterialBalance, StageId.Economics, StageId.Close],
+            [StageId.Operations, StageId.SolveFlow, StageId.MaterialBalance,
+             StageId.Economics, StageId.Close],
             built.Engine.Pipeline.DeclaredOrder());
     }
 
