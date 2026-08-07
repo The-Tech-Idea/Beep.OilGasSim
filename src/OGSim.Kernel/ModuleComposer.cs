@@ -41,16 +41,19 @@ public abstract record CompositionResult;
 public interface IResolvedContracts
 {
     T Resolve<T>() where T : class;
-
-    /// <summary>
-    /// Whether a contract was provided at all. Asked only where a module set is
-    /// legitimately allowed to lack something — a composition with no field has
-    /// nothing to drill into, and that is a smaller engine rather than a broken
-    /// one. It is NOT a licence to default: a caller that needs a contract still
-    /// declares it in Requires and gets it or a refusal.
-    /// </summary>
-    bool Has<T>() where T : class;
 }
+
+/// <summary>
+/// One declared command, with the handlers a module gave it, waiting for the bus
+/// (finding 139).
+///
+/// <para>Deferred rather than registered during Compose because a
+/// <see cref="CommandBus"/> needs an audit trail and an event bus, which are
+/// themselves composed — so the bus cannot exist until composition is over. What
+/// the composer validates is that the pairs EXIST and match what was declared;
+/// binding them is the one step left afterwards.</para>
+/// </summary>
+public sealed record CommandRegistration(Type CommandType, Action<CommandBus> BindTo);
 
 /// <summary>
 /// Modules in the order their stages run, every stage they contributed —
@@ -61,7 +64,8 @@ public sealed record Composed(
     IReadOnlyList<IModule> OrderedModules,
     IReadOnlyList<ITickStage> Stages,
     StateRegistry State,
-    IResolvedContracts Provided) : CompositionResult
+    IResolvedContracts Provided,
+    IReadOnlyList<CommandRegistration> Commands) : CompositionResult
 {
     // Finding 131.
     public bool Equals(Composed? other) =>
@@ -182,11 +186,13 @@ public sealed class ModuleComposer
         composition.AssertEveryProviderDelivered(modules, problems);
         composition.AssertEverySlotFilled(modules, problems);
         composition.AssertEveryFactOwned(modules, problems);
+        composition.AssertEveryCommandHandled(modules, problems);
 
         if (problems.Count > 0) return new CompositionRefused(problems);
 
         return new Composed(
-            OrderByStage(modules), composition.OrderedStages(), composition.State, composition);
+            OrderByStage(modules), composition.OrderedStages(), composition.State,
+            composition, composition.Registrations());
     }
 
     /// <summary>
@@ -329,13 +335,13 @@ public sealed class ModuleComposer
         /// the set can no longer change.</summary>
         T IResolvedContracts.Resolve<T>() => Require<T>();
 
-        bool IResolvedContracts.Has<T>() => _implementations.ContainsKey(typeof(T));
-
 
         private readonly Dictionary<Type, object> _implementations = [];
         private readonly List<(StageId Stage, int Order, ITickStage Work)> _stages = [];
         private readonly Dictionary<(StageId, int), ModuleName> _contributors = [];
         private readonly HashSet<StateKey> _owned = [];
+        private readonly HashSet<Type> _handled = [];
+        private readonly List<CommandRegistration> _commands = [];
 
         /// <summary>The registry the save walks — populated here and nowhere
         /// else, so a fact reaches a save only by being declared and owned.</summary>
@@ -410,6 +416,59 @@ public sealed class ModuleComposer
 
             _contributors.Add(slot, manifest.Name);
             _stages.Add((work.Id, order, work));
+        }
+
+        public void HandleCommand<TCommand>(
+            ICommandValidator<TCommand> validator,
+            ICommandApplier<TCommand> applier)
+            where TCommand : Command
+        {
+            ArgumentNullException.ThrowIfNull(validator);
+            ArgumentNullException.ThrowIfNull(applier);
+
+            if (_current is null)
+                throw new InvariantFault("SDD-001 §9", null,
+                    "A command handler was registered outside any module's Compose.");
+
+            ModuleManifest manifest = _current.Manifest;
+
+            // A module may only handle a command it DECLARED — the same rule as
+            // stages and state. Without it the engine's input surface would sit
+            // outside the set the composer validates.
+            if (!manifest.Commands.Contains(typeof(TCommand)))
+                throw new InvariantFault("SDD-001 §9", null,
+                    $"{manifest.Name.Value} handles {typeof(TCommand).Name}, " +
+                    "which its manifest never declared.");
+
+            if (!_handled.Add(typeof(TCommand)))
+                throw new InvariantFault("SDD-001 §7", null,
+                    $"{typeof(TCommand).Name} already has a handler; a command with two " +
+                    "would be applied by whichever registered first.");
+
+            _commands.Add(new CommandRegistration(
+                typeof(TCommand), bus => bus.Register(validator, applier)));
+        }
+
+        public IReadOnlyList<CommandRegistration> Registrations() => _commands;
+
+        /// <summary>
+        /// A command declared and left unhandled. It would reach the bus, find
+        /// nothing listening, and fail at the moment a player used it — which is
+        /// the latest possible moment to discover it.
+        /// </summary>
+        public void AssertEveryCommandHandled(
+            IReadOnlyList<IModule> modules, List<CompositionProblem> problems)
+        {
+            foreach (IModule module in modules)
+            {
+                IReadOnlyList<Type> commands = module.Manifest.Commands;
+                for (int i = 0; i < commands.Count; i++)
+                    if (!_handled.Contains(commands[i]))
+                        problems.Add(new CompositionProblem(
+                            CompositionProblemKind.UnmetRequirement, module.Manifest.Name,
+                            $"{commands[i].Name} was declared in Commands but no handler " +
+                            "was registered for it."));
+            }
         }
 
         public void Own(IStateOwner state)

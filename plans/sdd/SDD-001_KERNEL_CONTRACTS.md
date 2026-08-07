@@ -716,6 +716,15 @@ public interface IModuleComposition
     // declaration-must-have-behaviour rule as Contribute, on the state side
     // (finding 127).
     void Own(IStateOwner state);
+
+    // The declared COMMAND's two halves (§7). TCommand must appear in this
+    // module's own Commands, and every command it declares must be handled —
+    // the same rule a third time (finding 139). Registering commands outside
+    // composition would put the engine's input surface outside the set the
+    // composer validates.
+    void HandleCommand<TCommand>(ICommandValidator<TCommand> validator,
+                                 ICommandApplier<TCommand> applier)
+        where TCommand : Command;
 }
 
 // NOT the composition validator — that is ModuleComposer (§12b). This is the
@@ -1043,9 +1052,16 @@ public abstract record CompositionResult;
 // Stages: every contributed ITickStage, ordered by (StageId, Order) — the tick
 // pipeline's input, so what composition validated IS what the tick runs
 // (finding 125).
+// Deferred because a CommandBus needs an audit trail and an event bus, which are
+// themselves composed — the composer validates that the pairs exist and match
+// what was declared; binding them is the one step left (finding 139).
+public sealed record CommandRegistration(Type CommandType, Action<CommandBus> BindTo);
+
 public sealed record Composed(IReadOnlyList<IModule> OrderedModules,
                               IReadOnlyList<ITickStage> Stages,
-                              StateRegistry State) : CompositionResult;
+                              StateRegistry State,
+                              IResolvedContracts Provided,
+                              IReadOnlyList<CommandRegistration> Commands) : CompositionResult;
 public sealed record CompositionRefused(IReadOnlyList<CompositionProblem> Problems) : CompositionResult;
 
 public sealed class StateRegistry                 // §10, registration only

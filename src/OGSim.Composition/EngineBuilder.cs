@@ -259,28 +259,6 @@ public static class EngineBuilder
         new DiagnosticsModule(audit),
     ];
 
-    /// <summary>
-    /// Binds each command to the validator that may refuse it and the applier
-    /// that cannot (SDD-001 §7).
-    ///
-    /// <para>Registration happens HERE rather than in a module because a command
-    /// needs several modules' state — drilling spends the company's money and
-    /// opens a well — and Layer 4 is the only place entitled to know both are
-    /// real. A module set that lacks the field module simply has no commands,
-    /// which is correct: there is nothing to drill into.</para>
-    /// </summary>
-    private static void RegisterCommands(CommandBus commands, IResolvedContracts provided)
-    {
-        if (!provided.Has<FieldControl>()) return;
-
-        var field = provided.Resolve<FieldControl>();
-        var company = provided.Resolve<Company.CompanyState>();
-
-        commands.Register(
-            new DrillWellValidator(company, field, Defaults.Drilling),
-            new DrillWellApplier(company, field, Defaults.Drilling, Defaults.CompletionFor));
-    }
-
     /// <summary>Composes the shipped set.</summary>
     public static BuildResult Build(EngineSettings settings)
     {
@@ -339,8 +317,14 @@ public static class EngineBuilder
 
         var pipeline = new TickPipeline(clock, events, audit, faults, log, composed.Stages);
 
+        // The bus binds what composition already validated. It could not be
+        // built any earlier — it needs the audit trail and the event bus, which
+        // are themselves composed — so the modules declared and handed over
+        // their handlers, the composer checked the set, and this is the last
+        // step: attaching pairs that are already known to exist and to match.
         var commands = new CommandBus(audit, events);
-        RegisterCommands(commands, composed.Provided);
+
+        for (int i = 0; i < composed.Commands.Count; i++) composed.Commands[i].BindTo(commands);
 
         return new Built(new Engine(
             composed.OrderedModules, pipeline, audit, events, composed.State,

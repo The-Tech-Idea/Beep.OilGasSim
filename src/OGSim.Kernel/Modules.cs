@@ -73,6 +73,23 @@ public interface IModuleComposition
     /// <see cref="Contribute"/>, on the state side (SDD-001 §9, finding 127).
     /// </summary>
     void Own(IStateOwner state);
+
+    /// <summary>
+    /// The two halves of a declared command: the validator that may refuse it
+    /// and the applier that cannot (SDD-001 §7).
+    ///
+    /// <para><typeparamref name="TCommand"/> must appear in this module's own
+    /// <c>Commands</c>, and every command it declares must be handled — the same
+    /// rule again, on the command side (finding 139). Registering commands
+    /// anywhere but here would put the engine's entire input surface outside the
+    /// set the composer validates: a module could declare a command nothing
+    /// handles, and a host would discover it by submitting one and being told
+    /// nothing is listening.</para>
+    /// </summary>
+    void HandleCommand<TCommand>(
+        ICommandValidator<TCommand> validator,
+        ICommandApplier<TCommand> applier)
+        where TCommand : Command;
 }
 
 /// <summary>Model-plugin binding for content stage 6 (SDD-004 §5): a content

@@ -62,15 +62,16 @@ internal abstract class EngineModule(ModuleManifest manifest) : IModule
 
     public abstract void Compose(IModuleComposition composition);
 
-    /// <summary>Convenience for the common shape: no state, no commands.</summary>
+    /// <summary>Convenience for the common shape: no commands.</summary>
     protected static ModuleManifest Declare(
         string name,
         IReadOnlyList<Type> provides,
         IReadOnlyList<Type> requires,
         IReadOnlyList<string> ownsState,
-        IReadOnlyList<StageParticipation> stages) =>
+        IReadOnlyList<StageParticipation> stages,
+        IReadOnlyList<Type>? commands = null) =>
         new(new ModuleName(name), provides, requires,
-            [.. ownsState.Select(s => new StateKey(s))], stages, []);
+            [.. ownsState.Select(s => new StateKey(s))], stages, commands ?? []);
 }
 
 // ---------------------------------------------------------------- subsurface
@@ -307,7 +308,14 @@ internal sealed class FieldModule() : EngineModule(Declare(
         new StageParticipation(StageId.SolveFlow, Order: 0),
         new StageParticipation(StageId.Economics, Order: 0),
         new StageParticipation(StageId.Close, Order: 0),
-    ]))
+    ],
+
+    // Drilling belongs to THIS module and to no other: it spends the company's
+    // money and opens a well, and the field module is the one place entitled to
+    // know both are real. Declaring it here rather than registering it in the
+    // builder is what puts the engine's input surface inside the set the
+    // composer validates (finding 139).
+    commands: [typeof(DrillWellCommand)]))
 {
     public override void Compose(IModuleComposition composition)
     {
@@ -341,6 +349,12 @@ internal sealed class FieldModule() : EngineModule(Declare(
 
         composition.Contribute(order: 0, close);
         composition.Provide(close);
+
+        var company = composition.Require<OGSim.Company.CompanyState>();
+
+        composition.HandleCommand(
+            new DrillWellValidator(company, field, Defaults.Drilling),
+            new DrillWellApplier(company, field, Defaults.Drilling, Defaults.CompletionFor));
     }
 }
 

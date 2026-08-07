@@ -41,15 +41,47 @@ public class CompositionTests
         public void Restore(IStateReader reader) => Count = reader.ReadInt64("count");
     }
 
-    private sealed class TestModule(
-        string name,
-        Type[] provides,
-        Type[] requires,
-        StateKey[] ownsState,
-        StageParticipation[] stages) : IModule
+    private sealed record TestCommand() : Command(Subject: null);
+
+    private sealed class TestValidator : ICommandValidator<TestCommand>
     {
-        public ModuleManifest Manifest { get; } = new(
-            new ModuleName(name), provides, requires, ownsState, stages, []);
+        public IReadOnlyList<RejectionReason> Validate(TestCommand command) => [];
+    }
+
+    private sealed class TestApplier : ICommandApplier<TestCommand>
+    {
+        public Applied Apply(TestCommand command, AuditId submission) => new(submission, []);
+    }
+
+    private sealed class TestModule : IModule
+    {
+        private readonly Type[] _provides;
+
+        public TestModule(
+            string name,
+            Type[] provides,
+            Type[] requires,
+            StateKey[] ownsState,
+            StageParticipation[] stages)
+        {
+            _provides = provides;
+            Name = name;
+            Requires = requires;
+            OwnsState = ownsState;
+            Stages = stages;
+        }
+
+        private string Name { get; }
+        private Type[] Requires { get; }
+        private StateKey[] OwnsState { get; }
+        private StageParticipation[] Stages { get; }
+
+        /// <summary>Declared commands, so the fixture can exercise the
+        /// declaration rules the same way it does stages and state.</summary>
+        public Type[] Commands { get; init; } = [];
+
+        public ModuleManifest Manifest =>
+            new(new ModuleName(Name), _provides, Requires, OwnsState, Stages, Commands);
 
         public Func<IModuleComposition, bool>? OnCompose { get; init; }
 
@@ -81,6 +113,11 @@ public class CompositionTests
             // state side (finding 127).
             IReadOnlyList<StateKey> keys = Manifest.OwnsState;
             for (int i = 0; i < keys.Count; i++) composition.Own(new CounterState(keys[i]));
+
+            // And every declared command gets a handler (finding 139).
+            for (int i = 0; i < Commands.Length; i++)
+                if (Commands[i] == typeof(TestCommand))
+                    composition.HandleCommand(new TestValidator(), new TestApplier());
         }
     }
 
@@ -244,6 +281,53 @@ public class CompositionTests
             () => new ModuleComposer().Compose([sneak]));
 
         Assert.Contains("never declared", fault.Message);
+    }
+
+    [Fact] // Failure mode 10: a command declared and left unhandled (finding 139)
+    public void R1V12_a_declared_command_with_no_handler_is_named()
+    {
+        var declared = new TestModule("orders", [], [], [], [])
+        {
+            Commands = [typeof(TestCommand)],
+            OnCompose = _ => true,   // stops before the fixture registers a handler
+        };
+
+        var refused = Assert.IsType<CompositionRefused>(new ModuleComposer().Compose([declared]));
+
+        CompositionProblem problem = Assert.Single(refused.Problems);
+        Assert.Contains("no handler was registered", problem.Detail);
+    }
+
+    [Fact] // Failure mode 11: handling a command the manifest never declared
+    public void R1V12_handling_an_undeclared_command_throws()
+    {
+        var sneak = new TestModule("sneak", [], [], [], [])
+        {
+            OnCompose = composition =>
+            {
+                composition.HandleCommand(new TestValidator(), new TestApplier());
+                return true;
+            },
+        };
+
+        InvariantFault fault = Assert.Throws<InvariantFault>(
+            () => new ModuleComposer().Compose([sneak]));
+
+        Assert.Contains("never declared", fault.Message);
+    }
+
+    [Fact] // R1-V11: a declared and handled command reaches the composed set
+    public void R1V11_a_handled_command_arrives_as_a_registration()
+    {
+        var module = new TestModule("orders", [], [], [], [])
+        {
+            Commands = [typeof(TestCommand)],
+        };
+
+        var composed = Assert.IsType<Composed>(new ModuleComposer().Compose([module]));
+
+        CommandRegistration registration = Assert.Single(composed.Commands);
+        Assert.Equal(typeof(TestCommand), registration.CommandType);
     }
 
     [Fact] // Failure mode 7: acting in a stage the manifest never declared
