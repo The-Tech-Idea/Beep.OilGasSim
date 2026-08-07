@@ -21,10 +21,9 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\OGSim.Capabilities\OGSim.Capabilities.csproj" />
-    <!-- R6-V14 runs a real completion through the real solver: the phase's most
-         valuable test needs both halves. -->
-    <!-- R9-V8 runs a real completion, a real flare and the real solver together:
-         the phase's headline test needs all three. -->
+    <!-- StateBlock, so the owner round-trips through the REAL canonical writer
+         rather than a test double that could agree with a bug. -->
+    <ProjectReference Include="..\..\src\OGSim.Persistence\OGSim.Persistence.csproj" />
   </ItemGroup>
 
 </Project>

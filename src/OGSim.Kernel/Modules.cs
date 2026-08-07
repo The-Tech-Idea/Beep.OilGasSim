@@ -48,6 +48,14 @@ public interface IModuleComposition
     /// a module cannot act in a stage it never named (SDD-001 §9, finding 125).
     /// </summary>
     void Contribute(int order, ITickStage work);
+
+    /// <summary>
+    /// The owner of a declared fact. <c>state.Key</c> must appear in this
+    /// module's own <c>OwnsState</c>, and every key it declares must receive an
+    /// owner — the same declaration-must-have-behaviour rule as
+    /// <see cref="Contribute"/>, on the state side (SDD-001 §9, finding 127).
+    /// </summary>
+    void Own(IStateOwner state);
 }
 
 /// <summary>Model-plugin binding for content stage 6 (SDD-004 §5): a content

@@ -975,8 +975,10 @@ cannot start without it: a scenario is a composed engine.
 | R20c.3 | `EngineBuilder` — validate, resolve, build a real `TickPipeline` | ✅ |
 | R20c.4 | Composition refusal suite — all seven failure modes, every problem named | ✅ |
 | R20c.5 | Layer 4 declared in the architecture corpus, with its one exemption | ✅ |
-| R20c.6 | Module state ownership — `IStateOwner` per `OwnsState` key | ⬜ |
-| R20c.7 | Stage bodies — the per-tick work each module contributes | ⬜ |
+| R20c.6 | Module state ownership — `IStateOwner` per `OwnsState` key | 🟨 — mechanism complete and proven; no shipped module can own state yet |
+| R20c.7 | Stage bodies — the per-tick work each module contributes | ⬜ — blocked on entity instantiation, see below |
+| R20c.8 | Custody transfers recorded, so the ledger can be composed | ⬜ |
+| R20c.9 | Content kinds for entities — equipment, wells, facilities, reservoirs | ⬜ |
 
 **The fourteen modules compose, and the tick runs zero stages.** That is the
 honest state and it is stated rather than papered over. Composition validates a
@@ -990,12 +992,37 @@ no behaviour", so **no module claims a stage** and `NoStagesYet` says why at
 each manifest. R20c.6/.7 are what fill them, and they are the real unblocker for
 the eleven deferred rows — not composition itself.
 
-`OwnsState` **is** declared, because the composer validates it for uniqueness
-(check 3) and nothing yet enforces an owner behind it. The asymmetry is
-deliberate and is the new check's doing: an unfilled stage claim is now a
-refusal, an unowned state key is not yet one. Connecting `OwnsState` to
-`StateRegistry.Register` is R20c.6's job and would make the second symmetric
-with the first.
+**R20c.6 closed the state half, and then found nothing could use it.** The
+mechanism is complete: `Own(IStateOwner)`, both refusals (a declared key with no
+owner; an owner for a key never declared), `Composed.State` carrying the
+registry in key order, and `StateBlock` — the first `IStateWriter`/`IStateReader`
+in the engine — bridging an owner to canonical JSON with no `TryRead` and no
+defaults, so a save that quietly lost a field fails instead of loading. Two real
+owners are built and round-tripped: `CompanyState` replays the ledger through
+`Post` (so a save that breaks a posting rule is refused, not loaded, and INV2
+holds afterwards for the reason it held before) and `CapabilityState` replays
+acquisitions through the graph in acquisition order (so a save cannot grant a
+technology whose prerequisite is absent).
+
+**Neither can be composed into the shipped engine, and the manifests say so
+rather than claiming otherwise.** `CostLedger` must answer "was this posting a
+custody transfer?" and nothing records that fact — `CustodyTransferPoint` writes
+no audit entry and `AuditCategory` has no member for one (R20c.8).
+`CapabilityState` needs a technology graph, which is content that does not exist
+(R20c.9). Composing either would mean handing it a predicate or a graph that
+always answers the same way, which is the stub this project does not allow. So
+every shipped module declares `NothingOwnedYet`, and the mechanism is proven by
+the owners' own round-trip tests instead of by a manifest claim nothing could
+redeem.
+
+**The wall behind R20c.7 is entity instantiation, not stage bodies.** Content
+declares three kinds — property kinds, materials, rock types. There is no
+definition for a well, a separator, a tank or a compartment, so nothing can
+create one, so no module can hold one, so no stage has anything to act on. That
+is R20c.9 and it is large: it is `plans/catalog/` becoming loadable content. A
+second gap sits behind it — SDD-002 §6 says the flow topology is "a per-segment
+view built from all elements", and no contract lets a stage collect elements
+across modules; who assembles the topology is specified nowhere.
 
 **Two SDD defects, both found by building the first real module set** — which is
 the argument for building one. Neither was visible while modules were
@@ -1004,6 +1031,7 @@ hypothetical:
 | # | Finding |
 |---|---|
 | 125 | **A module declared its stages and had no way to supply them.** `ModuleManifest.Stages` names the `(StageId, Order)` slots a module claims and check 5 forbids two modules claiming one — and then `TickPipeline` took `IReadOnlyList<ITickStage>` from *nowhere*, with no member on `IModule` producing one. Composition validated a stage plan that nothing could fill: law L3 at the architecture level, a declaration with no behaviour behind it. `IModuleComposition` gains `Contribute(int order, ITickStage work)` and `Composed` carries the collected stages, so the pipeline is built from exactly what was validated. Two refusals fall out — a slot declared and never filled, and a contribution to a slot never declared. Letting the pipeline take an independently-assembled stage list instead would have made the manifest decorative: the composer would police an order the tick was free to ignore |
+| 127 | **`OwnsState` was a claim nothing had to honour.** A module declared which facts it owned and the composer checked the claims were unique — and no member on `IModule` handed over an `IStateOwner`, so `StateRegistry` was populated by nobody and a save would have walked an empty owner list. The same gap as 125, on the state side, and it closes the same way: `Own(IStateOwner)`, a key outside the module's own `OwnsState` refused, a declared key with no owner refused, and `Composed` carrying the populated registry. An engine whose save is silently empty is worse than one that will not save, because the loss surfaces only on load |
 | 126 | **Resolution ran in caller-list order, not dependency order.** `Compose` validated the set and then called `module.Compose(c)` over the modules *as given*, so a module whose provider sat later in the list threw from `Require` — the composer proved the graph acyclic and then discarded the construction order that proof establishes. Found the moment `flow` was listed before `diagnostics`. Requires exists precisely so a module need not know who builds it first; making the answer depend on argument order put that knowledge back in every caller, where each scenario, test and host would have had to keep it consistent by hand. Now a DFS post-order over the same providers map, and a test composes the shipped set reversed and gets the identical engine |
 
 ### Phase R20 — Scenarios and balance ⬜

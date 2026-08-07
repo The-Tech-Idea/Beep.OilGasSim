@@ -26,6 +26,21 @@ public class CompositionTests
         public void Execute(TickContext context) { }
     }
 
+    /// <summary>An owner for a declared key, holding one number so the
+    /// round-trip has something to be about.</summary>
+    private sealed class CounterState(StateKey key) : IStateOwner
+    {
+        public StateKey Key => key;
+
+        public int SchemaVersion => 1;
+
+        public long Count { get; set; }
+
+        public void Capture(IStateWriter writer) => writer.WriteInt64("count", Count);
+
+        public void Restore(IStateReader reader) => Count = reader.ReadInt64("count");
+    }
+
     private sealed class TestModule(
         string name,
         Type[] provides,
@@ -61,6 +76,11 @@ public class CompositionTests
             IReadOnlyList<StageParticipation> stages = Manifest.Stages;
             for (int i = 0; i < stages.Count; i++)
                 composition.Contribute(stages[i].Order, new NoOpStage(stages[i].Stage));
+
+            // And every declared fact gets an owner, for the same reason on the
+            // state side (finding 127).
+            IReadOnlyList<StateKey> keys = Manifest.OwnsState;
+            for (int i = 0; i < keys.Count; i++) composition.Own(new CounterState(keys[i]));
         }
     }
 
@@ -172,6 +192,58 @@ public class CompositionTests
         CompositionProblem problem = Assert.Single(refused.Problems);
         Assert.Equal(CompositionProblemKind.UnmetRequirement, problem.Kind);
         Assert.Contains("no work was contributed", problem.Detail);
+    }
+
+    [Fact] // R1-V11: a composed set hands back a registry the save can walk
+    public void R1V11_declared_facts_arrive_in_the_state_registry()
+    {
+        var result = new ModuleComposer().Compose(
+        [
+            Module("wells", ownsState: [new StateKey("wells.completions")]),
+            Module("company", ownsState: [new StateKey("company.ledger")]),
+        ]);
+
+        var composed = Assert.IsType<Composed>(result);
+
+        // KEY order, not registration order (SDD-001 §10): composing the modules
+        // in a different order must not change one byte of the save.
+        Assert.Equal(
+            ["company.ledger", "wells.completions"],
+            composed.State.Owners.Select(o => o.Key.Value).ToArray());
+    }
+
+    [Fact] // Failure mode 8: a fact declared and left unowned (finding 127)
+    public void R1V12_a_declared_fact_with_no_owner_is_named()
+    {
+        var unowned = new TestModule(
+            "forgetful", [], [], [new StateKey("company.ledger")], [])
+        {
+            OnCompose = _ => true,   // stops before the fixture registers an owner
+        };
+
+        var refused = Assert.IsType<CompositionRefused>(new ModuleComposer().Compose([unowned]));
+
+        CompositionProblem problem = Assert.Single(refused.Problems);
+        Assert.Equal(CompositionProblemKind.DuplicateStateKey, problem.Kind);
+        Assert.Contains("no owner was registered", problem.Detail);
+    }
+
+    [Fact] // Failure mode 9: owning a fact the manifest never declared
+    public void R1V12_owning_an_undeclared_fact_throws()
+    {
+        var sneak = new TestModule("sneak", [], [], [], [])
+        {
+            OnCompose = composition =>
+            {
+                composition.Own(new CounterState(new StateKey("company.ledger")));
+                return true;
+            },
+        };
+
+        InvariantFault fault = Assert.Throws<InvariantFault>(
+            () => new ModuleComposer().Compose([sneak]));
+
+        Assert.Contains("never declared", fault.Message);
     }
 
     [Fact] // Failure mode 7: acting in a stage the manifest never declared

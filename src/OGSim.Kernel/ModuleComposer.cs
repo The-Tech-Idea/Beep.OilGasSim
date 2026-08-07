@@ -36,7 +36,8 @@ public abstract record CompositionResult;
 /// </summary>
 public sealed record Composed(
     IReadOnlyList<IModule> OrderedModules,
-    IReadOnlyList<ITickStage> Stages) : CompositionResult;
+    IReadOnlyList<ITickStage> Stages,
+    StateRegistry State) : CompositionResult;
 
 /// <summary>Every problem, never just the first (R1 §2.9).</summary>
 public sealed record CompositionRefused(IReadOnlyList<CompositionProblem> Problems) : CompositionResult;
@@ -138,10 +139,12 @@ public sealed class ModuleComposer
 
         composition.AssertEveryProviderDelivered(modules, problems);
         composition.AssertEverySlotFilled(modules, problems);
+        composition.AssertEveryFactOwned(modules, problems);
 
         if (problems.Count > 0) return new CompositionRefused(problems);
 
-        return new Composed(OrderByStage(modules), composition.OrderedStages());
+        return new Composed(
+            OrderByStage(modules), composition.OrderedStages(), composition.State);
     }
 
     /// <summary>
@@ -282,6 +285,11 @@ public sealed class ModuleComposer
         private readonly Dictionary<Type, object> _implementations = [];
         private readonly List<(StageId Stage, int Order, ITickStage Work)> _stages = [];
         private readonly Dictionary<(StageId, int), ModuleName> _contributors = [];
+        private readonly HashSet<StateKey> _owned = [];
+
+        /// <summary>The registry the save walks — populated here and nowhere
+        /// else, so a fact reaches a save only by being declared and owned.</summary>
+        public StateRegistry State { get; } = new();
 
         /// <summary>
         /// Which module is being composed right now — needed so a contribution
@@ -354,6 +362,39 @@ public sealed class ModuleComposer
             _stages.Add((work.Id, order, work));
         }
 
+        public void Own(IStateOwner state)
+        {
+            ArgumentNullException.ThrowIfNull(state);
+
+            if (_current is null)
+                throw new InvariantFault("SDD-001 §9", null,
+                    "A state owner was registered outside any module's Compose.");
+
+            ModuleManifest manifest = _current.Manifest;
+
+            // A module may only own a fact it DECLARED. Otherwise OwnsState
+            // would police uniqueness among claims while the actual owners went
+            // unchecked, and law L5 would hold on paper only.
+            bool declared = false;
+            for (int i = 0; i < manifest.OwnsState.Count; i++)
+                if (manifest.OwnsState[i] == state.Key)
+                {
+                    declared = true;
+                    break;
+                }
+
+            if (!declared)
+                throw new InvariantFault("L5", null,
+                    $"{manifest.Name.Value} owns state '{state.Key.Value}', " +
+                    "which its manifest never declared.");
+
+            _owned.Add(state.Key);
+
+            // StateRegistry enforces write-once per key itself; this adds the
+            // manifest half, which it cannot see.
+            State.Register(state);
+        }
+
         /// <summary>
         /// Every contributed stage, in (stage, order). The pipeline sorts by
         /// <c>StageId</c> alone and is stable, so within-stage order is decided
@@ -409,6 +450,27 @@ public sealed class ModuleComposer
                             CompositionProblemKind.UnmetRequirement, module.Manifest.Name,
                             $"Stage {stages[i].Stage} order {stages[i].Order} was declared " +
                             "in Stages but no work was contributed for it."));
+            }
+        }
+
+        /// <summary>
+        /// The same omission on the state side: a fact declared and left
+        /// unowned. It would be validated for uniqueness, never registered, and
+        /// silently absent from every save — which is worse than refusing to
+        /// save at all, because the loss surfaces only on load.
+        /// </summary>
+        public void AssertEveryFactOwned(
+            IReadOnlyList<IModule> modules, List<CompositionProblem> problems)
+        {
+            foreach (IModule module in modules)
+            {
+                IReadOnlyList<StateKey> keys = module.Manifest.OwnsState;
+                for (int i = 0; i < keys.Count; i++)
+                    if (!_owned.Contains(keys[i]))
+                        problems.Add(new CompositionProblem(
+                            CompositionProblemKind.DuplicateStateKey, module.Manifest.Name,
+                            $"State key '{keys[i].Value}' was declared in OwnsState but " +
+                            "no owner was registered for it."));
             }
         }
     }

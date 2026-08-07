@@ -35,20 +35,28 @@ internal abstract class EngineModule(ModuleManifest manifest) : IModule
     /// <summary>
     /// No stage claims yet — and deliberately none rather than empty ones.
     ///
-    /// <para>A stage a module claims must now be FILLED with an
-    /// <c>ITickStage</c> during Compose, or composition refuses (SDD-001 §9,
-    /// finding 125). Per-tick work needs the module to hold live entities —
-    /// compartments, completions, tanks, ledger accounts — and no module
-    /// implements <c>IStateOwner</c> yet, so there is nothing for a stage body
-    /// to act on. Claiming the slots anyway would be law L3's "declaration with
-    /// no behaviour", which is the exact thing the new check refuses.</para>
-    ///
-    /// <para><c>OwnsState</c> below IS declared, because it is a claim the
-    /// composer validates for uniqueness (check 3) and nothing yet enforces an
-    /// owner behind it — the state keys say which module will own which fact
-    /// when the owners are built.</para>
+    /// <para>A stage a module claims must be FILLED with an <c>ITickStage</c>
+    /// during Compose, or composition refuses (SDD-001 §9, finding 125).
+    /// Per-tick work needs live entities — compartments, completions, tanks —
+    /// and content declares only property kinds, materials and rock types, so
+    /// nothing can instantiate one. Claiming a slot anyway would be law L3's
+    /// "declaration with no behaviour", which is exactly what the check
+    /// refuses.</para>
     /// </summary>
     protected static IReadOnlyList<StageParticipation> NoStagesYet { get; } = [];
+
+    /// <summary>
+    /// No facts owned yet, on the same terms: a declared state key must receive
+    /// an <c>IStateOwner</c> or composition refuses (finding 127). A module
+    /// declares a key when it has an owner to put behind it and not before.
+    ///
+    /// <para>Two owners are BUILT — <c>Company.CompanyState</c> and
+    /// <c>Capabilities.CapabilityState</c> — and neither can be composed here
+    /// yet; each module says why at its own declaration. The mechanism is
+    /// proven by their round-trip tests rather than by a manifest claim nothing
+    /// could redeem.</para>
+    /// </summary>
+    protected static IReadOnlyList<string> NothingOwnedYet { get; } = [];
 
     public ModuleManifest Manifest { get; } = manifest;
 
@@ -77,7 +85,7 @@ internal sealed class SubsurfaceModule() : EngineModule(Declare(
     "subsurface",
     provides: [typeof(IDriveMechanism), typeof(IAquiferModel)],
     requires: [typeof(IFluidPropertyModel)],
-    ownsState: ["subsurface.compartments"],
+    ownsState: NothingOwnedYet,
     stages: NoStagesYet))
 {
     public override void Compose(IModuleComposition composition)
@@ -100,7 +108,7 @@ internal sealed class WellsModule() : EngineModule(Declare(
     "wells",
     provides: [typeof(IInflowModel), typeof(IOutflowModel)],
     requires: [typeof(IFluidPropertyModel)],
-    ownsState: ["wells.completions", "wells.components"],
+    ownsState: NothingOwnedYet,
     stages: NoStagesYet))
 {
     public override void Compose(IModuleComposition composition)
@@ -126,7 +134,7 @@ internal sealed class FlowModule() : EngineModule(Declare(
     // and is declared as one — a Require that the manifest does not name is a
     // dependency the composer cannot order.
     requires: [typeof(IAuditTrail)],
-    ownsState: [],
+    ownsState: NothingOwnedYet,
     stages: NoStagesYet))
 {
     public override void Compose(IModuleComposition composition)
@@ -144,7 +152,7 @@ internal sealed class FacilitiesModule() : EngineModule(Declare(
     "facilities",
     provides: [typeof(ISeparationModel), typeof(IHydraulicModel)],
     requires: [typeof(IFluidPropertyModel)],
-    ownsState: ["facilities.tanks", "facilities.linefill"],
+    ownsState: NothingOwnedYet,
     stages: NoStagesYet))
 {
     public override void Compose(IModuleComposition composition)
@@ -163,7 +171,7 @@ internal sealed class OperationsModule() : EngineModule(Declare(
     "operations",
     provides: [],
     requires: [typeof(IAuditTrail)],
-    ownsState: ["operations.scheduled", "operations.calendars"],
+    ownsState: NothingOwnedYet,
     stages: NoStagesYet))
 {
     public override void Compose(IModuleComposition composition) =>
@@ -172,11 +180,20 @@ internal sealed class OperationsModule() : EngineModule(Declare(
 
 // ---------------------------------------------------------------- company
 
+/// <summary>
+/// R13/R16. `OGSim.Company.CompanyState` is the owner of `company.ledger` and is
+/// built and round-tripped in R20c.6 — but it is not composed HERE yet, because
+/// `CostLedger` must be able to answer "was this posting a custody transfer?"
+/// and nothing records that fact: `CustodyTransferPoint` writes no audit entry,
+/// and `AuditCategory` has no member for one. Composing it would mean handing
+/// the ledger a predicate that always answers the same way, which is the stub
+/// this project does not allow. The gap is R20c.8.
+/// </summary>
 internal sealed class CompanyModule() : EngineModule(Declare(
     "company",
     provides: [typeof(IFiscalRegime)],
     requires: [typeof(IAuditTrail)],
-    ownsState: ["company.ledger", "company.licences"],
+    ownsState: NothingOwnedYet,
     stages: NoStagesYet))
 {
     public override void Compose(IModuleComposition composition)
@@ -198,7 +215,7 @@ internal sealed class InformationModule() : EngineModule(Declare(
     "information",
     provides: [typeof(IBeliefStore), typeof(IObservationModel)],
     requires: [typeof(IAuditTrail)],
-    ownsState: ["information.beliefs", "information.truth"],
+    ownsState: NothingOwnedYet,
     stages: NoStagesYet))
 {
     public override void Compose(IModuleComposition composition)
@@ -218,7 +235,7 @@ internal sealed class WorldModule() : EngineModule(Declare(
     "world",
     provides: [typeof(IWorldGenerator)],
     requires: [],
-    ownsState: ["world.surface", "world.jurisdictions"],
+    ownsState: NothingOwnedYet,
     stages: NoStagesYet))   // world-gen runs once, at tick zero, not in the loop
 {
     public override void Compose(IModuleComposition composition)
@@ -231,11 +248,19 @@ internal sealed class WorldModule() : EngineModule(Declare(
 
 // ---------------------------------------------------------------- capabilities
 
+/// <summary>
+/// R17. `Capabilities.CapabilityState` owns `capabilities.technology` and is
+/// round-tripped in R20c.6 — but this composition provides `AllCapabilities`,
+/// the sandbox all-tech mode, which holds no acquisitions to save. A campaign
+/// composes `TechnologyState` and owns its state; that needs a technology graph,
+/// which is content (`plans/catalog/`) and does not exist yet. Declaring the key
+/// here would claim a fact this composition has none of.
+/// </summary>
 internal sealed class CapabilitiesModule() : EngineModule(Declare(
     "capabilities",
     provides: [typeof(IGatingValidator), typeof(ICapabilitySet), typeof(IEffectState)],
     requires: [],
-    ownsState: ["capabilities.technology"],
+    ownsState: NothingOwnedYet,
     stages: NoStagesYet))
 {
     public override void Compose(IModuleComposition composition)
@@ -259,7 +284,7 @@ internal sealed class IntegrityModule() : EngineModule(Declare(
     "integrity",
     provides: [typeof(IDegradationModel), typeof(IHazardModel)],
     requires: [typeof(IAuditTrail)],
-    ownsState: ["integrity.conditions", "integrity.barriers"],
+    ownsState: NothingOwnedYet,
     stages: NoStagesYet))
 {
     public override void Compose(IModuleComposition composition)
@@ -284,7 +309,7 @@ internal sealed class HseModule() : EngineModule(Declare(
     "hse",
     provides: [],
     requires: [typeof(IHazardModel), typeof(IAuditTrail)],
-    ownsState: ["hse.esg", "hse.incidents"],
+    ownsState: NothingOwnedYet,
     stages: NoStagesYet))
 {
     public override void Compose(IModuleComposition composition) =>
@@ -304,7 +329,7 @@ internal sealed class ObjectivesModule() : EngineModule(Declare(
     "objectives",
     provides: [],
     requires: [],
-    ownsState: ["objectives.progress"],
+    ownsState: NothingOwnedYet,
     stages: NoStagesYet))
 {
     public override void Compose(IModuleComposition composition) =>
@@ -322,7 +347,7 @@ internal sealed class MaterialsModule() : EngineModule(Declare(
     "materials",
     provides: [typeof(IFluidPropertyModel)],
     requires: [],
-    ownsState: ["materials.catalogue"],
+    ownsState: NothingOwnedYet,
     stages: NoStagesYet))
 {
     public override void Compose(IModuleComposition composition)
@@ -345,7 +370,7 @@ internal sealed class DiagnosticsModule(IAuditTrail audit) : EngineModule(Declar
     "diagnostics",
     provides: [typeof(IAuditTrail)],
     requires: [],
-    ownsState: ["diagnostics.audit"],
+    ownsState: NothingOwnedYet,
     stages: NoStagesYet))
 {
     public override void Compose(IModuleComposition composition)

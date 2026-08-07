@@ -710,6 +710,12 @@ public interface IModuleComposition
     // own manifest declared, so a module cannot act in a stage it never named
     // (R20 amendment, finding 125).
     void Contribute(int order, ITickStage work);
+
+    // The declared key's OWNER (§10). `state.Key` must appear in this module's
+    // own OwnsState, and every key it declares must receive one — the same
+    // declaration-must-have-behaviour rule as Contribute, on the state side
+    // (finding 127).
+    void Own(IStateOwner state);
 }
 
 // NOT the composition validator — that is ModuleComposer (§12b). This is the
@@ -835,6 +841,16 @@ cheap, and wrong only when it does not matter (a boundary on an idle element).
 >   the answer depend on argument order would have put that knowledge back in
 >   the caller, where every scenario, test and host would have had to keep it
 >   consistent by hand.
+> - **`OwnsState` was a claim nothing had to honour** (finding 127). A module
+>   declared which facts it owned, the composer checked the claims were unique —
+>   and no member on `IModule` handed over an `IStateOwner`, so `StateRegistry`
+>   was populated by nobody and a save walked an empty owner list. The same gap
+>   as the stage one above, on the state side, and it closes the same way:
+>   `IModuleComposition` gains `Own(IStateOwner)`, a key not in the module's own
+>   `OwnsState` is refused, a declared key with no owner is refused, and
+>   `Composed` carries the populated registry. Without this, `OwnsState`
+>   validated uniqueness among claims that could never be redeemed — an engine
+>   whose save is silently empty is worse than one that will not save.
 
 ## 10. State — R1.11
 
@@ -995,7 +1011,8 @@ public abstract record CompositionResult;
 // pipeline's input, so what composition validated IS what the tick runs
 // (finding 125).
 public sealed record Composed(IReadOnlyList<IModule> OrderedModules,
-                              IReadOnlyList<ITickStage> Stages) : CompositionResult;
+                              IReadOnlyList<ITickStage> Stages,
+                              StateRegistry State) : CompositionResult;
 public sealed record CompositionRefused(IReadOnlyList<CompositionProblem> Problems) : CompositionResult;
 
 public sealed class StateRegistry                 // §10, registration only
