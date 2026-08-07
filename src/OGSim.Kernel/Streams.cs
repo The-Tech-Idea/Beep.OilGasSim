@@ -331,3 +331,139 @@ public readonly record struct MaterialStream(
         return (this with { MassRates = a }, this with { MassRates = b });
     }
 }
+
+/// <summary>
+/// Mass per material, kg, indexed by <c>MaterialId.Ordinal</c>.
+///
+/// <para>The same dense layout as <see cref="Composition"/> and deliberately NOT
+/// the same type: <c>Composition</c> is a mass FLOW (kg/s, SDD-002 §2) and this
+/// is a mass. Sharing a type would make "commit a rate as an inventory" a silent
+/// unit error — the one arithmetic mistake the volume families were split up to
+/// prevent (SDD-003 §3).</para>
+///
+/// <para>A KERNEL type because two modules need it: the compartment's in-place
+/// mass and the tank's inventory are the same concept, and CLAUDE.md's rule is
+/// that a type two modules need is either a kernel type or a design smell. It
+/// arrived here from OGSim.Subsurface, where it was internal and the tank could
+/// not reach it (R8.0 finding 113).</para>
+/// </summary>
+public readonly record struct MaterialInventory(ImmutableArray<double> KilogramsByOrdinal)
+{
+    public static MaterialInventory Empty(int materialCount) =>
+        new([.. new double[materialCount]]);
+
+    public static MaterialInventory Of(params double[] kilogramsByOrdinal)
+    {
+        ArgumentNullException.ThrowIfNull(kilogramsByOrdinal);
+
+        for (int i = 0; i < kilogramsByOrdinal.Length; i++)
+        {
+            double kg = kilogramsByOrdinal[i];
+            if (double.IsNaN(kg) || double.IsInfinity(kg) || kg < 0.0)
+                throw new InvariantFault("SDD-003 §3", null,
+                    $"inventory for ordinal {i} is " +
+                    kg.ToString("R", System.Globalization.CultureInfo.InvariantCulture) +
+                    "; a negative or non-finite mass cannot be held");
+        }
+
+        return new MaterialInventory([.. kilogramsByOrdinal]);
+    }
+
+    /// <summary>
+    /// The mass a flow delivers over a duration — the ONE crossing from kg/s to
+    /// kg, in one place, so the multiplication cannot be spelled differently in
+    /// two modules.
+    /// </summary>
+    public static MaterialInventory From(Composition rate, Duration duration)
+    {
+        double seconds = duration.Seconds;
+        if (seconds < 0.0)
+            throw new InvariantFault("SDD-001 §3", null,
+                "negative duration cannot deliver mass");
+
+        var kilograms = new double[rate.KgPerSecondByOrdinal.Length];
+        for (int i = 0; i < kilograms.Length; i++)
+            kilograms[i] = rate.KgPerSecondByOrdinal[i] * seconds;
+
+        return new MaterialInventory([.. kilograms]);
+    }
+
+    public int MaterialCount => KilogramsByOrdinal.Length;
+
+    public Mass this[MaterialId material] => new(KilogramsByOrdinal[material.Ordinal]);
+
+    public Mass Total
+    {
+        get
+        {
+            double sum = 0.0;
+            for (int i = 0; i < KilogramsByOrdinal.Length; i++) sum += KilogramsByOrdinal[i];
+            return new Mass(sum);
+        }
+    }
+
+    public MaterialInventory Plus(MaterialInventory other)
+    {
+        if (other.MaterialCount != MaterialCount)
+            throw new InvariantFault("SDD-002 §2", null,
+                $"cannot add inventories of {MaterialCount} and {other.MaterialCount} materials");
+
+        var sum = new double[MaterialCount];
+        for (int i = 0; i < sum.Length; i++)
+            sum[i] = KilogramsByOrdinal[i] + other.KilogramsByOrdinal[i];
+
+        return new MaterialInventory([.. sum]);
+    }
+
+    /// <summary>
+    /// Takes a fraction, leaving the REMAINDER — so the two parts sum back to
+    /// the whole exactly and a draw followed by a return cannot lose a gram.
+    /// </summary>
+    public (MaterialInventory Taken, MaterialInventory Left) Split(double fraction)
+    {
+        if (fraction is < 0.0 or > 1.0 || double.IsNaN(fraction))
+            throw new InvariantFault("SDD-002 §2", null,
+                "inventory split requires a fraction in [0,1]; got " +
+                fraction.ToString("R", System.Globalization.CultureInfo.InvariantCulture));
+
+        var taken = new double[MaterialCount];
+        var left = new double[MaterialCount];
+
+        for (int i = 0; i < MaterialCount; i++)
+        {
+            taken[i] = KilogramsByOrdinal[i] * fraction;
+            left[i] = KilogramsByOrdinal[i] - taken[i];
+        }
+
+        return (new MaterialInventory([.. taken]), new MaterialInventory([.. left]));
+    }
+
+    /// <summary>Withdrawal. A negative remainder is an invariant failure, not a
+    /// clamp: taking out more than is held means two parts of the engine
+    /// disagree, and continuing would hide it.</summary>
+    public MaterialInventory Less(MaterialInventory taken)
+    {
+        var remaining = new double[MaterialCount];
+
+        for (int i = 0; i < MaterialCount; i++)
+        {
+            double left = KilogramsByOrdinal[i] - taken.KilogramsByOrdinal[i];
+
+            // The tolerance is on the SUBTRACTION, not on the physics: removing
+            // the last kilogram may land a few ulp below zero.
+            if (left < 0.0)
+            {
+                if (-left > Math.Max(1e-9, 1e-12 * KilogramsByOrdinal[i]))
+                    throw new InvariantFault("INV1", null,
+                        $"ordinal {i}: withdrawal exceeds inventory by " +
+                        (-left).ToString("R", System.Globalization.CultureInfo.InvariantCulture) +
+                        " kg");
+                left = 0.0;
+            }
+
+            remaining[i] = left;
+        }
+
+        return new MaterialInventory([.. remaining]);
+    }
+}

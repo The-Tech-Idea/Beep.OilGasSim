@@ -14,73 +14,18 @@
 // solver hands to everything downstream, so a compartment element would
 // broadcast reservoir pressure to any holder of a stream.
 
-using System.Collections.Immutable;
 using OGSim.Contracts;
 using OGSim.Kernel;
 
+// SDD-003 §3's `InPlace` IS the kernel's mass-per-material type. It lived here
+// as its own struct until R8.0's finding 113: the tank's inventory is the same
+// concept, `InPlace` was internal to this assembly, and two copies of
+// "kilograms by ordinal" is exactly the duplication CLAUDE.md's rule about
+// kernel types exists to prevent. The alias keeps the domain name at the call
+// sites while the arithmetic lives in one place.
+using InPlace = OGSim.Kernel.MaterialInventory;
+
 namespace OGSim.Subsurface;
-
-/// <summary>
-/// Dense mass per material, kg, indexed by <c>MaterialId.Ordinal</c>.
-///
-/// <para>The same layout as <see cref="Composition"/> and deliberately not the
-/// same type: <c>Composition</c> is a mass FLOW (kg/s, SDD-002 §2) and this is a
-/// mass. Sharing a type would make "commit a rate as an inventory" a silent unit
-/// error of exactly the kind the volume families exist to make uncompilable.</para>
-/// </summary>
-internal readonly record struct InPlace(ImmutableArray<double> KilogramsByOrdinal)
-{
-    public static InPlace Of(params double[] kilogramsByOrdinal)
-    {
-        ArgumentNullException.ThrowIfNull(kilogramsByOrdinal);
-
-        for (int i = 0; i < kilogramsByOrdinal.Length; i++)
-        {
-            double kg = kilogramsByOrdinal[i];
-            if (double.IsNaN(kg) || double.IsInfinity(kg) || kg < 0.0)
-                throw new InvariantFault("SDD-003 §3", null,
-                    $"in-place mass for ordinal {i} is {Format(kg)}; " +
-                    "a compartment cannot hold a negative or non-finite mass");
-        }
-
-        return new InPlace([.. kilogramsByOrdinal]);
-    }
-
-    public Mass this[MaterialId material] =>
-        new(KilogramsByOrdinal[material.Ordinal]);
-
-    public int MaterialCount => KilogramsByOrdinal.Length;
-
-    /// <summary>Withdrawal at commit. Negative remainder is an invariant
-    /// failure, not a clamp: producing more of a material than exists means the
-    /// flow solve and the inventory disagree, and continuing would hide it.</summary>
-    public InPlace Less(Composition producedMass)
-    {
-        var remaining = new double[KilogramsByOrdinal.Length];
-
-        for (int i = 0; i < remaining.Length; i++)
-        {
-            double left = KilogramsByOrdinal[i] - producedMass[new MaterialId(i)].KgPerSecond;
-
-            // The tolerance is on the SUBTRACTION, not on the physics: taking
-            // the last kilogram of a material may land a few ulp below zero.
-            if (left < 0.0)
-            {
-                if (-left > Math.Max(1e-9, 1e-12 * KilogramsByOrdinal[i]))
-                    throw new InvariantFault("INV1", null,
-                        $"ordinal {i}: withdrawal exceeds in place by {Format(-left)} kg");
-                left = 0.0;
-            }
-
-            remaining[i] = left;
-        }
-
-        return new InPlace([.. remaining]);
-    }
-
-    private static string Format(double value) =>
-        value.ToString("R", System.Globalization.CultureInfo.InvariantCulture);
-}
 
 /// <summary>Fluid contacts, at datum TVD. They move as volume is replaced.</summary>
 internal readonly record struct ContactSet(

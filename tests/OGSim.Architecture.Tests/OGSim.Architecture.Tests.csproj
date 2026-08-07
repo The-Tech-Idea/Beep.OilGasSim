@@ -27,6 +27,7 @@
     <ProjectReference Include="..\..\src\OGSim.Kernel\OGSim.Kernel.csproj" />
     <ProjectReference Include="..\..\src\OGSim.Flow\OGSim.Flow.csproj" />
     <ProjectReference Include="..\..\src\OGSim.Wells\OGSim.Wells.csproj" />
+    <ProjectReference Include="..\..\src\OGSim.Facilities\OGSim.Facilities.csproj" />
     <!-- Referenced so the assembly is present to INSPECT, not to use: every
          type in OGSim.Subsurface is internal, which is the thing R5-V-truth
          checks. -->

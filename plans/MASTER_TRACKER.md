@@ -357,21 +357,58 @@ would mean one of the two competing terms was missing from the model.
 on the outflow model. The rule is right and the default was wrong: "natural flow"
 and "someone forgot to pass the pump" are not a distinction a default can make.
 
-### Phase R8 — Facilities and separation ⬜
+### Phase R8 — Facilities and separation 🟨
 > 📄 [phases/R8_FACILITIES.md](phases/R8_FACILITIES.md)
+> `src/OGSim.Facilities`.
 
 | # | Task | Status |
 |---|---|---|
-| R8.1 | `IFacility` — recursive container, site, cost centre | ⬜ |
-| R8.2 | `IFacilityUnit` as `IFlowElement` | ⬜ |
-| R8.3 | `ISeparationModel` — split, efficiency, carry-over/under, dual capacity | ⬜ |
-| R8.4 | Multi-stage separation | ⬜ |
-| R8.5 | Oil treating — treater, desalter, stabiliser | ⬜ |
-| R8.6 | `ITank` — inventory, ullage, **backpressure when full** | ⬜ |
-| R8.7 | `ISpecification` — the spec gate | ⬜ |
-| R8.8 | `IPowerSource` and the power balance | ⬜ |
-| R8.9 | Manifold, commingling, provenance-preserving mixing | ⬜ |
-| R8.10 | Flowlines | ⬜ |
+| R8.0 | SDD review — finding 113 (`InPlace` promoted to the kernel) and the deliverables correction below | ✅ |
+| R8.1 | `IFacility` — recursive container, site, cost centre | ⬜ — contract declared at R1; it owns no behaviour until R13 makes it a cost centre |
+| R8.2 | Units as `IFlowElement` | ✅ — separator, tank and custody point; **no `IFacilityUnit` type**, per finding 82(c) |
+| R8.3 | `ISeparationModel` — fixed-efficiency split, carry-over/under, **dual capacity** | ✅ |
+| R8.4 | Multi-stage separation | ⬜ — **not expressible without components; gated at R9** (see below) |
+| R8.5 | Oil treating — treater, desalter, stabiliser | ⬜ — these are content tiers behind the same separator/spec machinery; deferred with R9's component split, which is what a treater changes |
+| R8.6 | Tank — inventory, ullage, **backpressure when full** | ✅ |
+| R8.7 | The spec gate | ✅ — every breach named with its margin; all-or-nothing rejection |
+| R8.8 | `IPowerSource` and the power balance | ✅ — declared duty at stage 4, shed by priority then by size |
+| R8.9 | Manifold, commingling, provenance-preserving mixing | ✅ — proven at R4 (FV10) and reused; `Allocation.Blend` is the kernel's |
+| R8.10 | Flowlines | ⬜ — `IPipeline` declared; the hydraulics are SDD-006 §6 and share SDD-003 §6.2's Colebrook, which R6 already ships |
+
+**R8's verification.** R8-V1 ✅ · R8-V2 ✅ · R8-V3 ✅ · R8-V5 ✅ · R8-V6 ✅ ·
+R8-V7 ✅ (including R7-V7's ESP-fleet coupling, now real) · R8-V10 ✅ ·
+R8-V4 ⬜ · R8-V8 ⬜ (treating, with R8.5) · R8-V9 ⬜ (templates, with R8.1).
+
+**R8-V4 is not expressible yet, and the reason is a finding.** Staged separation
+recovers more stock-tank liquid because the gas removed at high pressure is
+*leaner* — mostly methane — so the liquid keeps its intermediates, where one
+large drop to low pressure vaporises them. That is a statement about **component
+composition**, and SDD-006 §4 is explicit that components exist in exactly one
+place: the NGL plant's per-component recovery fractions (FD2). With a scalar
+oil/gas/water composition every arrangement of stages retains the same mass by
+construction. A first draft asserted otherwise and got the sign wrong, which is
+how the gap was found. Gated at R9.
+
+**Finding 113: `InPlace` belonged in the kernel.** R5 declared it `internal` to
+`OGSim.Subsurface`; the tank's inventory is the identical concept — kilograms by
+material ordinal — and could not reach it. Two copies would be exactly the
+duplication CLAUDE.md's rule prevents ("a type two modules need is either a
+kernel type or a design smell"). Promoted to `MaterialInventory`, with the one
+kg/s → kg crossing (`From(rate, duration)`) in one place. `InPlace` survives as
+a `using` alias so SDD-003 §3's domain name stays at the call sites.
+
+Writing the tank found the error that type exists to prevent: it held a
+`Composition`, which is kg/**s**, so committing a receipt tried to scale a rate
+by 2 592 000 and the kernel refused. Storing a rate as an inventory is precisely
+what SDD-003 §3 split the two types to stop.
+
+**Deliverables correction (finding 114).** R8 §3 names `ISeparator`, `ITreater`,
+`IStabiliser`, `IDesalter`, `ITank` and `IFlowNode` — six of the ~20 equipment
+interfaces [22](design/22_DESIGN_COHERENCE.md) finding 82(c) records as never to
+be declared, since 02 §4.1 admits no facility-type hierarchy and non-negotiable
+11 makes each a content template behind `IFlowElement`. `ISpecification` is
+declared as the record `Specification`. The concrete classes here are
+implementations selected by `ContentId`, which is the intended shape.
 
 ### Phase R9 — Gas processing ⬜
 > 📄 [phases/R9_GAS.md](phases/R9_GAS.md)
