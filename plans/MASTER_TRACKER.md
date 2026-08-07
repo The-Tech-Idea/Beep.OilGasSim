@@ -821,23 +821,49 @@ Severity terms **add to one** rather than scaling it, so equipment in mild
 service still ages — a multiplicative form with a zero term would have said it
 did not.
 
-### Phase R23 — Health, Safety and Environment ⬜  *(executes after R18)*
-> 📄 [phases/R23_HSE.md](phases/R23_HSE.md)
+### Phase R23 — Health, Safety and Environment 🟨  *(executes after R18)*
+> 📄 [phases/R23_HSE.md](phases/R23_HSE.md) · spec is **SDD-012 §4b**
+> `src/OGSim.Integrity`. No amendment — eight phases running.
 
 | # | Task | Status |
 |---|---|---|
-| R23.1 | `IBarrier`, barrier sets, **strength derived from equipment condition** | ⬜ |
-| R23.2 | Bow-tie evaluation — threats → preventive → top event → mitigating → consequences | ⬜ |
-| R23.3 | Incident tiers and consequences; response and investigation operations | ⬜ |
-| R23.4 | **Near-miss generation** — the free warning | ⬜ |
-| R23.5 | Personal and process safety, tracked separately | ⬜ |
-| R23.6 | Health hazards; fatigue coupled to R12 crew configuration | ⬜ |
-| R23.7 | `IEmissionsLedger` — CO₂, methane, flaring, SOx/NOx, VOC; carbon price | ⬜ |
-| R23.8 | Discharges, waste, spills with sensitivity multiplier | ⬜ |
-| R23.9 | Induced seismicity from disposal volumes | ⬜ |
-| R23.10 | `ISocialLicence` — drivers and effects on permits and access | ⬜ |
-| R23.11 | ESG standing → cost of capital coupling | ⬜ |
-| R23.12 | HS1–HS14 verification suite ([14](design/14_HSE.md) §10) | ⬜ |
+| R23.0 | SDD review — no findings | ✅ |
+| R23.1 | `Barrier` — **strength derived from equipment condition**, weakest-link | ✅ |
+| R23.2 | Bow-tie evaluation | ✅ |
+| R23.3 | Incident tiers and consequences | 🟨 — the top event and its surviving mitigations are produced; the consequence table and response operations are content plus R12 |
+| R23.4 | **Near-miss generation** | ✅ |
+| R23.5 | Personal and process safety tracked separately | 🟨 — HS3's leading-indicator behaviour is tested; the two counters are a read-model projection (R19) |
+| R23.7 | Emissions ledger | 🟨 — R9's flare already splits combusted from **vented**, which is the distinction that matters; pricing is R13's |
+| R23.11 | ESG standing → cost of capital | ✅ standing; the lender spread is R13.5's |
+| R23.6 · R23.8 · R23.9 · R23.10 | Fatigue, spills, seismicity, social licence | ⬜ — each needs R22's environment profiles or R12's crew state |
+| R23.12 | HS1–HS14 | 🟨 — HS1/HS2/HS3/HS4/HS12 built |
+
+**Barrier condition IS equipment condition.** No parallel safety stat: strength
+is `min(worst element's condition, crew competency, procedure compliance)`.
+Weakest-link because that is the safety doctrine — averaging would let a
+well-maintained valve hide an untrained crew, which is exactly the failure the
+doctrine exists to prevent. A separate safety number would be a second
+representation of one fact (L5) and would drift from the plant.
+
+**HS3's design intent is now a test, not a hope.** A player *can* let
+process-safety barriers degrade — and the near-miss rate more than triples when
+barrier strength falls from 0.98 to 0.75, long before losses of containment
+become common. The leading indicator says so loudly to anyone who looks.
+
+**The near miss is complete, not short-circuited.** Every preventive barrier is
+sampled even after one has failed. That costs a draw and buys the report:
+knowing *which* barriers failed is the whole value of the mechanic, and stopping
+at the first failure would throw it away to save arithmetic nobody is short of.
+
+**Mitigating barriers are sampled only on a top event** — the emergency shutdown
+is not tested on a day nothing happened. Drawing anyway would consume stream
+values on every suppressed threat and make the sequence depend on how many quiet
+days preceded a bad one; a test pins the stream position to prove it does not.
+
+**The ESG loop has two exits, per CI4**: clean up the intensities, or let the
+incident record decay on its half-life. Without the decay one bad year would
+price a company's debt forever — a loop with one exit is a trap, and a loop with
+none is a punishment.
 
 ---
 
