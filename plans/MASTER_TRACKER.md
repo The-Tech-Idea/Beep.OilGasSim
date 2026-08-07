@@ -322,17 +322,40 @@ elements with no domain meaning, before any well existed. Accommodating a real
 completion required exactly one change to it — finding 107, which **removed** a
 parameter.
 
-### Phase R7 — Artificial lift ⬜
+### Phase R7 — Artificial lift 🟨
 > 📄 [phases/R7_LIFT.md](phases/R7_LIFT.md)
+> `src/OGSim.Wells` extension.
 
 | # | Task | Status |
 |---|---|---|
-| R7.1 | `ILiftMethod` contract and envelope declaration | ⬜ |
-| R7.2 | Gas lift | ⬜ |
-| R7.3 | ESP — pump curve, power draw, gas sensitivity | ⬜ |
-| R7.4 | Rod pump | ⬜ |
-| R7.5 | PCP | ⬜ |
-| R7.6 | Lift selection advisory (envelope matching) | ⬜ |
+| R7.0 | SDD review — finding 110: `ILiftMethod` could not express one of §6.2's three hooks | ✅ |
+| R7.1 | `ILiftMethod : IWellComponent`, `LiftEffect`, `LiftEnvelope`, `EnvelopeAssessment` — out of envelope **degrades and raises hazard**, never refuses | ✅ |
+| R7.2 | Gas lift — volume-weighted density reduction; the optimum is emergent | ✅ |
+| R7.3 | ESP — piecewise-linear catalogue curve scaled by ρ_mix/ρ_ref, power draw = hydraulic/η | ✅ |
+| R7.4 | Rod pump — displacement cap | ✅ |
+| R7.5 | PCP — the same relation, distinguished by its envelope, per §6.2 | ✅ |
+| R7.6 | Lift selection advisory | ⬜ — deferred to R15's advisor, which owns recommendation surfaces; `Assess` gives it everything it needs |
+
+**R7's verification.** R7-V1 ✅ · R7-V2 ✅ · R7-V3 ✅ · R7-V4 ✅ · R7-V5 ✅ ·
+R7-V6 ✅ · R7-V7 🟨 (the ESP's power draw is computed and asserted; the facility
+balance that *consumes* it is R8.8) · R7-V8 ⬜ (deferred to R13 by the phase doc).
+
+**R7-V4's optimum is emergent, and that is the check.** Gas-lift injection has an
+interior optimum: too little does not lighten the column, too much adds volume
+that must be pushed up the same tubing, and friction goes as v². The test asserts
+the optimum is *neither* at zero *nor* at the end of the sweep — either extreme
+would mean one of the two competing terms was missing from the model.
+
+**Two defects found by R7-V2, both structural.**
+
+| Finding | |
+|---|---|
+| 111 | **The operating-point bracket floor was a second copy of a fact the outflow model owns** (law L5). `Completion` passed `hydrostaticFloorPa` alongside the model; the moment a pump was fitted the copy still described the *unlifted* column, so the floor sat above reservoir pressure and every lifted well reported `Dead` without a search ever running. The floor is now asked of the model — `RequiredBottomhole(0, wellhead)` — which already accounts for whatever is installed |
+| 112 | **Gas lift returned no effect at zero rate**, on the reasoning that there was no liquid to lighten. But the gas goes down the tubing whether or not the well produces, so at zero rate the column is *pure injected gas* — the lightest it ever gets. Combined with finding 111 this made revival impossible: the bracket floor is evaluated at zero rate, so a method whose benefit vanished there could never enter the search in which it would have saved the well |
+
+`L2_NoOptionalContractParameter` also caught a defaulted `ILiftMethod? lift = null`
+on the outflow model. The rule is right and the default was wrong: "natural flow"
+and "someone forgot to pass the pump" are not a distinction a default can make.
 
 ### Phase R8 — Facilities and separation ⬜
 > 📄 [phases/R8_FACILITIES.md](phases/R8_FACILITIES.md)

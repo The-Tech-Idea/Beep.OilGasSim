@@ -655,10 +655,46 @@ public interface IOutflowModel
 // A lift method modifies the VLP, and its TIER datasheet is the whole effect
 // (07 §4b) — there is no per-method interface for ESP vs rod pump vs PCP,
 // because that would be an equipment hierarchy in code (02 §4.1).
-public interface ILiftMethod
+public interface ILiftMethod : IWellComponent
 {
     ContentId InstalledTier { get; }
+
+    // R7 §2.2. Declared, and violating it DEGRADES rather than refuses.
+    LiftEnvelope Envelope { get; }
+    EnvelopeAssessment Assess(LiftConditions conditions);
+
+    // §6.2's three hooks, as ONE value. Every method fills the fields it uses
+    // and leaves the others neutral, so the outflow model applies all four
+    // uniformly and no code anywhere branches on which method is installed.
+    LiftEffect EffectAt(ReservoirRate rate, Density mixtureDensity);
 }
+
+// The three VLP modifications §6.2 names, plus the power §2.4 needs.
+public sealed record LiftEffect(
+    Pressure PressureBoost,           // ESP: ΔP_pump(q) from the tier's curve
+    double DensityFactor,             // gas lift: lightens the column, ≤ 1
+    ReservoirRate? DisplacementCap,   // rod pump / PCP: a hard ceiling on rate
+    Power PowerDraw);                 // ESP: feeds the stage-4 power balance
+
+public sealed record LiftEnvelope(
+    ReservoirRate MinRate, ReservoirRate MaxRate,
+    Length MaxDepth,
+    double MaxDeviationDegrees,
+    double MaxGasFraction,
+    Temperature MaxTemperature,
+    double MaxSolidsFraction);
+
+public sealed record LiftConditions(
+    ReservoirRate Rate, Length Depth,
+    double DeviationDegrees, double GasFraction,
+    Temperature Temperature, double SolidsFraction);
+
+// R7 §2.2's consequence, not its refusal.
+public sealed record EnvelopeAssessment(
+    bool Within,
+    double PerformanceFactor,         // ≤ 1: what the method still delivers
+    double HazardMultiplier,          // ≥ 1: how much sooner it fails (R18)
+    IReadOnlyList<ContentId> Exceeded);
 
 // §6.3's outcome. DEAD is a distinct result and NOT a zero rate: "cannot flow
 // at any rate" and "produced nothing this tick" have different remedies, and
@@ -702,6 +738,25 @@ public interface ICompletion : IFlowElement
 > came from the other. Since `ICompletion : IFlowElement`, every completion is
 > already IN the network: the solver finds them there, in the topological order
 > it already computed, and the disagreement is no longer expressible.
+
+> **R7.0 amendment (finding 110): `ILiftMethod` could not express a single one
+> of §6.2's lift hooks.** It declared `InstalledTier` and nothing else, so a
+> method had no way to state its pressure boost, its density reduction or its
+> displacement cap — §6.2 specified three effects against an interface with no
+> member capable of carrying any of them, and R7.1's "envelope declaration" task
+> named a type that existed nowhere.
+>
+> The four effects are returned as ONE value rather than as four members,
+> because that is what keeps the method-agnostic promise real: the outflow model
+> applies all four fields uniformly, a gas-lift method leaves `PressureBoost` at
+> zero because it genuinely adds no pressure, and no code anywhere asks which
+> method is installed. Four separate members would have invited
+> `if (lift is Esp)` at the first call site that needed only one of them.
+>
+> `ILiftMethod : IWellComponent` per [01](../design/01_CONCEPT_MATRIX.md) B7 and
+> R7 §2.1 — lift is installed, pulled and degraded like any other component, and
+> declaring it outside the component tree would have made it the one piece of
+> equipment R18 could not wear out.
 
 ### 6.1 Inflow (SI Darcy form, per perforation)
 

@@ -27,7 +27,7 @@ public class NetworkCouplingTests
     private static Completion Well(ulong id, double reservoirBarA, double permeabilityM2)
     {
         var outflow = new HydrostaticFrictionOutflowModel(
-            Fixtures.Tubing(), Density.FromSpecificGravity(0.85));
+            Fixtures.Tubing(), Density.FromSpecificGravity(0.85), lift: null);
 
         return new Completion(
             new EntityId<ICompletion>(id),
@@ -43,7 +43,6 @@ public class NetworkCouplingTests
                 new Pressure(reservoirBarA * 1e5),
                 Temperature.FromCelsius(80.0)),
             ChokeSetting.Open,
-            outflow.HydrostaticPa,
             materialOrdinal: 0,
             materialCount: 1,
             lift: null);

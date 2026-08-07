@@ -46,7 +46,6 @@ public sealed class Completion : ICompletion
     private readonly IOutflowModel _outflow;
     private readonly CompletionFluid _fluid;
     private readonly ChokeSetting _choke;
-    private readonly double _hydrostaticFloorPa;
     private readonly int _materialOrdinal;
     private readonly int _materialCount;
 
@@ -60,7 +59,6 @@ public sealed class Completion : ICompletion
         IOutflowModel outflow,
         CompletionFluid fluid,
         ChokeSetting choke,
-        double hydrostaticFloorPa,
         int materialOrdinal,
         int materialCount,
         ILiftMethod? lift)
@@ -86,7 +84,6 @@ public sealed class Completion : ICompletion
         _outflow = outflow;
         _fluid = fluid;
         _choke = choke;
-        _hydrostaticFloorPa = hydrostaticFloorPa;
         _materialOrdinal = materialOrdinal;
         _materialCount = materialCount;
     }
@@ -120,13 +117,23 @@ public sealed class Completion : ICompletion
     {
         OperatingPoint point = OperatingPointSolver.Solve(
             _fluid.ReservoirPressure, wellheadBackpressure,
-            _inflow, _outflow, Perforations, _hydrostaticFloorPa);
+            _inflow, _outflow, Perforations);
 
         if (point is not Flowing flowing)
         {
             _pressureDecoupled = false;
             return point;
         }
+
+        // R7-V6 / SDD-003 §6.2. A positive-displacement pump moves a fixed
+        // volume per stroke, so the rate is the PUMP's and not the reservoir's:
+        // a well capable of ten times the displacement produces the
+        // displacement. Applied here rather than in the VLP because it is a
+        // bound on rate, and the VLP speaks in pressures.
+        if (Lift?.EffectAt(flowing.Rate, _fluid.SurfaceDensity).DisplacementCap
+            is ReservoirRate cap
+            && flowing.Rate.CubicMetresPerSecond > cap.CubicMetresPerSecond)
+            flowing = new Flowing(cap, flowing.Bottomhole);
 
         // Critical when the pressure ratio across the choke falls below its
         // critical value: downstream can no longer signal upstream at all.

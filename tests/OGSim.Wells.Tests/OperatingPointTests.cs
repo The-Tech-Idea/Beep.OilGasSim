@@ -23,7 +23,7 @@ public class OperatingPointTests
 
         var outflow = new HydrostaticFrictionOutflowModel(
             Fixtures.Tubing(diameterM: tubingDiameterM),
-            Density.FromSpecificGravity(0.85));
+            Density.FromSpecificGravity(0.85), lift: null);
 
         return new Completion(
             new EntityId<ICompletion>(id),
@@ -38,7 +38,6 @@ public class OperatingPointTests
                 new Pressure(reservoirBarA * 1e5),
                 Temperature.FromCelsius(80.0)),
             choke ?? ChokeSetting.Open,
-            outflow.HydrostaticPa,
             materialOrdinal: 0,
             materialCount: 1,
             lift: null);
@@ -57,7 +56,7 @@ public class OperatingPointTests
         // Independently: at the solved Pwf, what does the tubing DEMAND, and what
         // does the reservoir SUPPLY? At a true intersection they agree.
         var outflow = new HydrostaticFrictionOutflowModel(
-            Fixtures.Tubing(), Density.FromSpecificGravity(0.85));
+            Fixtures.Tubing(), Density.FromSpecificGravity(0.85), lift: null);
 
         double demanded = outflow.RequiredBottomhole(flowing.Rate, wellhead).Pascals;
 
@@ -82,7 +81,7 @@ public class OperatingPointTests
         var flowing = Assert.IsType<Flowing>(well.SolveOperatingPoint(wellhead));
 
         var outflow = new HydrostaticFrictionOutflowModel(
-            Fixtures.Tubing(), Density.FromSpecificGravity(0.85));
+            Fixtures.Tubing(), Density.FromSpecificGravity(0.85), lift: null);
 
         Assert.Equal(flowing.Bottomhole.Pascals,
                      outflow.RequiredBottomhole(flowing.Rate, wellhead).Pascals,

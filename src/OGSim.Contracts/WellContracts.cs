@@ -67,10 +67,70 @@ public interface IOutflowModel
     Pressure RequiredBottomhole(ReservoirRate rate, Pressure wellheadPressure);
 }
 
+/// <summary>
+/// SDD-003 §6.2's three lift hooks, plus the power draw R7 §2.4 needs, as ONE
+/// value.
+///
+/// <para>One value rather than four members, deliberately: the outflow model
+/// applies every field uniformly, a gas-lift method leaves
+/// <see cref="PressureBoost"/> at zero because it genuinely adds no pressure,
+/// and no code anywhere asks which method is installed. Four separate members
+/// would invite <c>if (lift is Esp)</c> at the first call site needing only
+/// one of them — an equipment hierarchy by the back door (design 02 §4.1).</para>
+/// </summary>
+public sealed record LiftEffect(
+    Pressure PressureBoost,           // ESP / jet pump
+    double DensityFactor,             // gas lift: lightens the column, ≤ 1
+    ReservoirRate? DisplacementCap,   // rod pump / PCP: a hard ceiling
+    Power PowerDraw)
+{
+    /// <summary>No lift. Not a fallback — a naturally flowing well genuinely has
+    /// no lift effect, and the VLP applies this exactly as it applies any other.</summary>
+    public static LiftEffect None { get; } =
+        new(new Pressure(0.0), DensityFactor: 1.0, DisplacementCap: null, new Power(0.0));
+}
+
+/// <summary>R7 §2.2 — each method declares where it works.</summary>
+public sealed record LiftEnvelope(
+    ReservoirRate MinRate,
+    ReservoirRate MaxRate,
+    Length MaxDepth,
+    double MaxDeviationDegrees,
+    double MaxGasFraction,
+    Temperature MaxTemperature,
+    double MaxSolidsFraction);
+
+/// <summary>The well as the lift method finds it.</summary>
+public sealed record LiftConditions(
+    ReservoirRate Rate,
+    Length Depth,
+    double DeviationDegrees,
+    double GasFraction,
+    Temperature Temperature,
+    double SolidsFraction);
+
+/// <summary>
+/// R7 §2.2's consequence. Operating outside the envelope DEGRADES performance
+/// and raises the failure hazard; it does not refuse installation.
+///
+/// <para>The interesting failure is the player who puts an ESP in a gassy well,
+/// sees good rates for eight months and then loses the pump. A hard block
+/// teaches nothing; a consequence teaches the envelope — and the envelope is
+/// readable before installing, so it is a trap that can be avoided.</para>
+/// </summary>
+public sealed record EnvelopeAssessment(
+    bool Within,
+    double PerformanceFactor,         // ≤ 1
+    double HazardMultiplier,          // ≥ 1
+    IReadOnlyList<ContentId> Exceeded);
+
 /// <summary>A lift method modifies the VLP — its tier datasheet IS the effect (07 §4b).</summary>
-public interface ILiftMethod
+public interface ILiftMethod : IWellComponent
 {
     ContentId InstalledTier { get; }
+    LiftEnvelope Envelope { get; }
+    EnvelopeAssessment Assess(LiftConditions conditions);
+    LiftEffect EffectAt(ReservoirRate rate, Density mixtureDensity);
 }
 
 /// <summary>

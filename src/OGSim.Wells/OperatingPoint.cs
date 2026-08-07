@@ -39,11 +39,18 @@ internal static class OperatingPointSolver
         Pressure wellheadPressure,
         IInflowModel inflow,
         IOutflowModel outflow,
-        IReadOnlyList<Perforation> perforations,
-        double hydrostaticFloorPa)
+        IReadOnlyList<Perforation> perforations)
     {
         double highPa = reservoirPressure.Pascals;
-        double lowPa = wellheadPressure.Pascals + hydrostaticFloorPa;
+
+        // The bracket's floor is what the tubing demands at ZERO rate — asked of
+        // the outflow model rather than computed here, because the model is the
+        // one thing that knows what is installed. An earlier version took the
+        // hydrostatic head as a separate argument, which was a second copy of a
+        // fact the model owns (law L5): the moment a pump was fitted, the copy
+        // still described the unlifted column, the floor stayed above reservoir
+        // pressure, and every lifted well reported DEAD without a search.
+        double lowPa = outflow.RequiredBottomhole(new ReservoirRate(0.0), wellheadPressure).Pascals;
 
         // The column already weighs more than the reservoir can push. No rate
         // is possible, and no amount of searching will find one.
