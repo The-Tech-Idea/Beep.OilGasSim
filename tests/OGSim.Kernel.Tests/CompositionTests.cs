@@ -17,6 +17,15 @@ public class CompositionTests
     private sealed class PumpModel : IPumpModel;
     private sealed class TankModel : ITankModel;
 
+    /// <summary>Work for a declared slot. Does nothing on purpose — these tests
+    /// are about composition, not about what a stage computes.</summary>
+    private sealed class NoOpStage(StageId id) : ITickStage
+    {
+        public StageId Id => id;
+
+        public void Execute(TickContext context) { }
+    }
+
     private sealed class TestModule(
         string name,
         Type[] provides,
@@ -29,9 +38,16 @@ public class CompositionTests
 
         public Func<IModuleComposition, bool>? OnCompose { get; init; }
 
+        /// <summary>Resolved during Compose — the thing that only works if the
+        /// provider was composed first.</summary>
+        public Type? RequiresDuringCompose { get; init; }
+
         public void Compose(IModuleComposition composition)
         {
             if (OnCompose is not null && OnCompose(composition)) return;
+
+            if (RequiresDuringCompose == typeof(IPumpModel)) composition.Require<IPumpModel>();
+            if (RequiresDuringCompose == typeof(ITankModel)) composition.Require<ITankModel>();
 
             IReadOnlyList<Type> declared = Manifest.Provides;
             for (int i = 0; i < declared.Count; i++)
@@ -39,6 +55,12 @@ public class CompositionTests
                 if (declared[i] == typeof(IPumpModel)) composition.Provide<IPumpModel>(new PumpModel());
                 if (declared[i] == typeof(ITankModel)) composition.Provide<ITankModel>(new TankModel());
             }
+
+            // Every declared slot is filled, because a claimed slot left empty is
+            // now its own refusal (SDD-001 §9, finding 125).
+            IReadOnlyList<StageParticipation> stages = Manifest.Stages;
+            for (int i = 0; i < stages.Count; i++)
+                composition.Contribute(stages[i].Order, new NoOpStage(stages[i].Stage));
         }
     }
 
@@ -47,8 +69,12 @@ public class CompositionTests
         Type[]? provides = null,
         Type[]? requires = null,
         StateKey[]? ownsState = null,
-        StageParticipation[]? stages = null) =>
-        new(name, provides ?? [], requires ?? [], ownsState ?? [], stages ?? []);
+        StageParticipation[]? stages = null,
+        Type? requiresDuringCompose = null) =>
+        new(name, provides ?? [], requires ?? [], ownsState ?? [], stages ?? [])
+        {
+            RequiresDuringCompose = requiresDuringCompose,
+        };
 
     // ------------------------------------------------------------- R1-V11
 
@@ -89,7 +115,82 @@ public class CompositionTests
                      composed.OrderedModules.Select(m => m.Manifest.Name.Value).ToArray());
     }
 
+    [Fact] // R1-V11: resolution follows the dependency graph, not the argument list
+    public void R1V11_a_provider_declared_after_its_consumer_still_resolves_first()
+    {
+        // "transport" requires IPumpModel and is listed BEFORE the module that
+        // provides it. Composition must still succeed: the cycle check proves a
+        // construction order exists, and finding 126 is that the composer has to
+        // use it rather than compose in the order it was handed (SDD-001 §9).
+        var result = new ModuleComposer().Compose(
+        [
+            Module("transport", provides: [typeof(ITankModel)], requires: [typeof(IPumpModel)],
+                   stages: [new StageParticipation(StageId.Custody, 0)],
+                   requiresDuringCompose: typeof(IPumpModel)),
+            Module("facilities", provides: [typeof(IPumpModel)],
+                   stages: [new StageParticipation(StageId.SolveFlow, 0)]),
+        ]);
+
+        Assert.IsType<Composed>(result);
+    }
+
+    [Fact] // R1-V11: a composed set hands the pipeline exactly the stages it validated
+    public void R1V11_contributed_stages_come_back_in_stage_order()
+    {
+        var result = new ModuleComposer().Compose(
+        [
+            Module("late", stages: [new StageParticipation(StageId.Company, 0)]),
+            Module("early", stages: [new StageParticipation(StageId.Environment, 0)]),
+            Module("split", stages:
+            [
+                new StageParticipation(StageId.Environment, 1),
+                new StageParticipation(StageId.Close, 0),
+            ]),
+        ]);
+
+        var composed = Assert.IsType<Composed>(result);
+
+        Assert.Equal(
+            [StageId.Environment, StageId.Environment, StageId.Company, StageId.Close],
+            composed.Stages.Select(s => s.Id).ToArray());
+    }
+
     // ------------------------------------------------------------- R1-V12
+
+    [Fact] // Failure mode 6: a slot declared and left empty (law L3, finding 125)
+    public void R1V12_a_declared_stage_slot_with_no_work_is_named()
+    {
+        var idle = new TestModule(
+            "idle", [], [], [], [new StageParticipation(StageId.Economics, 0)])
+        {
+            // Returns true, so the fixture's Compose stops before contributing.
+            OnCompose = _ => true,
+        };
+
+        var refused = Assert.IsType<CompositionRefused>(new ModuleComposer().Compose([idle]));
+
+        CompositionProblem problem = Assert.Single(refused.Problems);
+        Assert.Equal(CompositionProblemKind.UnmetRequirement, problem.Kind);
+        Assert.Contains("no work was contributed", problem.Detail);
+    }
+
+    [Fact] // Failure mode 7: acting in a stage the manifest never declared
+    public void R1V12_contributing_to_an_undeclared_slot_throws()
+    {
+        var sneak = new TestModule("sneak", [], [], [], [])
+        {
+            OnCompose = composition =>
+            {
+                composition.Contribute(0, new NoOpStage(StageId.Economics));
+                return true;
+            },
+        };
+
+        InvariantFault fault = Assert.Throws<InvariantFault>(
+            () => new ModuleComposer().Compose([sneak]));
+
+        Assert.Contains("never declared", fault.Message);
+    }
 
     [Fact] // Failure mode 1: a requirement nobody provides
     public void R1V12_an_unmet_requirement_is_named()

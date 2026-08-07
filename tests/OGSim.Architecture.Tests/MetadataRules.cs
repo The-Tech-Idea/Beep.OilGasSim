@@ -72,6 +72,13 @@ public class MetadataRules
     {
         var violations = new List<string>();
         foreach (Type type in EngineTypes)
+        {
+            // Layer 4's exemption, and its ONLY one (design 03 §8): composition
+            // exists to name concrete types, so forbidding it to name one would
+            // forbid it to do its job. Every other rule in this file still
+            // applies to this assembly unchanged.
+            if (type.Assembly == EngineCorpus.Composition) continue;
+
             foreach (ConstructorInfo constructor in type.GetConstructors(AllDeclared))
                 foreach (ParameterInfo parameter in constructor.GetParameters())
                 {
@@ -83,6 +90,7 @@ public class MetadataRules
 
                     violations.Add($"{type.FullName}..ctor takes concrete {parameterType.FullName}");
                 }
+        }
 
         EngineCorpus.AssertNone(violations, "L1 — no concrete cross-module dependency");
     }
@@ -113,6 +121,19 @@ public class MetadataRules
             ["OGSim.Integrity"] = ["OGSim.Kernel", "OGSim.Contracts"],
             ["OGSim.Persistence"] = ["OGSim.Kernel", "OGSim.Contracts"],
             ["OGSim.Objectives"] = ["OGSim.Kernel", "OGSim.Contracts"],
+
+            // Layer 4 (design 03 §8). The ONE assembly that may reference every
+            // module, because it is the one that decides what implements what.
+            // Listing the modules explicitly rather than allowing "anything
+            // OGSim.*" keeps the direction checkable: composition may reference
+            // a module, and a module still may not reference composition.
+            ["OGSim.Composition"] =
+            [
+                "OGSim.Kernel", "OGSim.Contracts",
+                "OGSim.Flow", "OGSim.Subsurface", "OGSim.Wells", "OGSim.Facilities",
+                "OGSim.Operations", "OGSim.Company", "OGSim.Information", "OGSim.World",
+                "OGSim.Capabilities", "OGSim.Integrity", "OGSim.Objectives",
+            ],
         };
 
         var violations = new List<string>();

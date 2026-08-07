@@ -704,6 +704,12 @@ public interface IModuleComposition
 {
     void Provide<T>(T implementation) where T : class;
     T Require<T>() where T : class;
+
+    // The declared slot's WORK. `work.Id` says which stage; `order` says where
+    // within it — together they must match a StageParticipation this module's
+    // own manifest declared, so a module cannot act in a stage it never named
+    // (R20 amendment, finding 125).
+    void Contribute(int order, ITickStage work);
 }
 
 // NOT the composition validator — that is ModuleComposer (§12b). This is the
@@ -800,6 +806,35 @@ impact ranking (21 §5.2) uses a pinned estimator — **the affected element's
 last-committed throughput × the boundary's remaining duration** — because true
 impact needs the solve the plan precedes; last-committed is deterministic,
 cheap, and wrong only when it does not matter (a boundary on an idle element).
+
+> **R20 review corrections (findings 125, 126).** Building the first real module
+> set found this section specifying a composition that could not be connected to
+> a tick, and a resolution order that depended on the caller.
+>
+> - **A module declared its stages and had no way to supply them.**
+>   `ModuleManifest.Stages` names the `(StageId, Order)` slots a module claims,
+>   check 5 forbids two modules claiming one slot — and then `TickPipeline` took
+>   `IReadOnlyList<ITickStage>` from *nowhere*, with no member on `IModule`
+>   producing one. Composition validated a stage plan that nothing could fill,
+>   which is law L3 at the architecture level: a declaration with no behaviour
+>   behind it. `IModuleComposition` therefore gains `Contribute(int order,
+>   ITickStage work)`, and `Composed` carries the collected stages so the
+>   pipeline is built from exactly what was validated. Two new refusals fall out
+>   and are `UnmetRequirement`-kind: a slot declared and never contributed, and
+>   a stage contributed to a slot the manifest never declared. Letting the
+>   pipeline take an independently-assembled stage list instead would have made
+>   the manifest's stage declaration decorative — the composer would check an
+>   order the tick was free to ignore.
+> - **Resolution ran in caller-list order, not dependency order.** `Compose` was
+>   specified to validate the set and then call `module.Compose(c)` over the
+>   modules as given, so a module whose provider sat later in the list threw
+>   from `Require` — the composer proved the graph acyclic and then discarded
+>   the construction order that proof establishes. It now resolves in
+>   topological order (DFS post-order over the same providers map). Requires
+>   exists precisely so that a module need not know who builds it first; making
+>   the answer depend on argument order would have put that knowledge back in
+>   the caller, where every scenario, test and host would have had to keep it
+>   consistent by hand.
 
 ## 10. State — R1.11
 
@@ -956,7 +991,11 @@ public enum CompositionProblemKind
 { UnmetRequirement, DuplicateProvider, DuplicateStateKey, DependencyCycle, StageConflict }
 public sealed record CompositionProblem(CompositionProblemKind Kind, ModuleName Module, string Detail);
 public abstract record CompositionResult;
-public sealed record Composed(IReadOnlyList<IModule> OrderedModules) : CompositionResult;
+// Stages: every contributed ITickStage, ordered by (StageId, Order) — the tick
+// pipeline's input, so what composition validated IS what the tick runs
+// (finding 125).
+public sealed record Composed(IReadOnlyList<IModule> OrderedModules,
+                              IReadOnlyList<ITickStage> Stages) : CompositionResult;
 public sealed record CompositionRefused(IReadOnlyList<CompositionProblem> Problems) : CompositionResult;
 
 public sealed class StateRegistry                 // §10, registration only

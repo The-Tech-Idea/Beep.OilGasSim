@@ -1,0 +1,35 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Design 03 §8: "Layer 4. The ONLY project naming concrete types."
+         Every other assembly depends downward on Kernel and Contracts alone;
+         this one is allowed to know what implements what, because somebody has
+         to and confining it to one project is what keeps the rest honest. -->
+    <ProjectReference Include="..\OGSim.Contracts\OGSim.Contracts.csproj" />
+    <ProjectReference Include="..\OGSim.Kernel\OGSim.Kernel.csproj" />
+
+    <ProjectReference Include="..\OGSim.Flow\OGSim.Flow.csproj" />
+    <ProjectReference Include="..\OGSim.Subsurface\OGSim.Subsurface.csproj" />
+    <ProjectReference Include="..\OGSim.Wells\OGSim.Wells.csproj" />
+    <ProjectReference Include="..\OGSim.Facilities\OGSim.Facilities.csproj" />
+    <ProjectReference Include="..\OGSim.Operations\OGSim.Operations.csproj" />
+    <ProjectReference Include="..\OGSim.Company\OGSim.Company.csproj" />
+    <ProjectReference Include="..\OGSim.Information\OGSim.Information.csproj" />
+    <ProjectReference Include="..\OGSim.World\OGSim.World.csproj" />
+    <ProjectReference Include="..\OGSim.Capabilities\OGSim.Capabilities.csproj" />
+    <ProjectReference Include="..\OGSim.Integrity\OGSim.Integrity.csproj" />
+    <ProjectReference Include="..\OGSim.Persistence\OGSim.Persistence.csproj" />
+    <ProjectReference Include="..\OGSim.Objectives\OGSim.Objectives.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="OGSim.Composition.Tests" />
+  </ItemGroup>
+
+</Project>

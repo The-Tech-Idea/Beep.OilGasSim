@@ -29,8 +29,14 @@ public sealed record CompositionProblem(
 
 public abstract record CompositionResult;
 
-/// <summary>Modules in the order their stages run — the tick pipeline's input.</summary>
-public sealed record Composed(IReadOnlyList<IModule> OrderedModules) : CompositionResult;
+/// <summary>
+/// Modules in the order their stages run, and every stage they contributed —
+/// ordered by (StageId, Order), so what composition validated IS what the tick
+/// runs (SDD-001 §9, finding 125).
+/// </summary>
+public sealed record Composed(
+    IReadOnlyList<IModule> OrderedModules,
+    IReadOnlyList<ITickStage> Stages) : CompositionResult;
 
 /// <summary>Every problem, never just the first (R1 §2.9).</summary>
 public sealed record CompositionRefused(IReadOnlyList<CompositionProblem> Problems) : CompositionResult;
@@ -122,13 +128,54 @@ public sealed class ModuleComposer
 
         if (problems.Count > 0) return new CompositionRefused(problems);
 
+        // DEPENDENCY order, not the caller's (finding 126). The cycle check just
+        // proved a construction order exists; using the argument order instead
+        // would throw from Require whenever a provider happened to sit later in
+        // the list, putting knowledge of who-builds-first back in every caller.
         var composition = new Composition(providers);
-        foreach (IModule module in modules) module.Compose(composition);
+        foreach (IModule module in ResolutionOrder(modules, providers))
+            composition.Composing(module).Compose(composition);
+
         composition.AssertEveryProviderDelivered(modules, problems);
+        composition.AssertEverySlotFilled(modules, problems);
 
         if (problems.Count > 0) return new CompositionRefused(problems);
 
-        return new Composed(OrderByStage(modules));
+        return new Composed(OrderByStage(modules), composition.OrderedStages());
+    }
+
+    /// <summary>
+    /// Topological order over "module A requires a contract module B provides":
+    /// DFS post-order, so every provider is composed before its consumer.
+    /// Reached only after <see cref="DetectCycles"/> passed, so the recursion
+    /// terminates and the order is total.
+    /// </summary>
+    private static IReadOnlyList<IModule> ResolutionOrder(
+        IReadOnlyList<IModule> modules, Dictionary<Type, ModuleName> providers)
+    {
+        var byName = new Dictionary<ModuleName, IModule>();
+        foreach (IModule module in modules) byName[module.Manifest.Name] = module;
+
+        var ordered = new List<IModule>(modules.Count);
+        var settled = new HashSet<ModuleName>();
+
+        foreach (IModule module in modules) Walk(module);
+
+        return ordered;
+
+        void Walk(IModule module)
+        {
+            if (!settled.Add(module.Manifest.Name)) return;
+
+            IReadOnlyList<Type> requires = module.Manifest.Requires;
+            for (int i = 0; i < requires.Count; i++)
+                if (providers.TryGetValue(requires[i], out ModuleName provider)
+                    && provider != module.Manifest.Name
+                    && byName.TryGetValue(provider, out IModule? dependency))
+                    Walk(dependency);
+
+            ordered.Add(module);
+        }
     }
 
     /// <summary>
@@ -233,6 +280,22 @@ public sealed class ModuleComposer
     private sealed class Composition(Dictionary<Type, ModuleName> providers) : IModuleComposition
     {
         private readonly Dictionary<Type, object> _implementations = [];
+        private readonly List<(StageId Stage, int Order, ITickStage Work)> _stages = [];
+        private readonly Dictionary<(StageId, int), ModuleName> _contributors = [];
+
+        /// <summary>
+        /// Which module is being composed right now — needed so a contribution
+        /// can be checked against the manifest that claimed the slot. Set by the
+        /// composer immediately before each <c>Compose</c> call, which is the
+        /// only sequencing this class does.
+        /// </summary>
+        private IModule? _current;
+
+        public IModule Composing(IModule module)
+        {
+            _current = module;
+            return module;
+        }
 
         public void Provide<T>(T implementation) where T : class
         {
@@ -255,6 +318,61 @@ public sealed class ModuleComposer
                     : $"{typeof(T).Name} is required but was never declared.");
         }
 
+        public void Contribute(int order, ITickStage work)
+        {
+            ArgumentNullException.ThrowIfNull(work);
+
+            if (_current is null)
+                throw new InvariantFault("SDD-001 §9", null,
+                    "A stage was contributed outside any module's Compose.");
+
+            ModuleManifest manifest = _current.Manifest;
+            var slot = (work.Id, order);
+
+            // A module may only fill a slot it DECLARED. Without this the
+            // manifest's stage list would be decorative — check 5 would police
+            // an order the tick was free to ignore.
+            bool declared = false;
+            for (int i = 0; i < manifest.Stages.Count; i++)
+                if (manifest.Stages[i].Stage == work.Id && manifest.Stages[i].Order == order)
+                {
+                    declared = true;
+                    break;
+                }
+
+            if (!declared)
+                throw new InvariantFault("SDD-001 §9", null,
+                    $"{manifest.Name.Value} contributed to stage {work.Id} order {order}, " +
+                    "which its manifest never declared.");
+
+            if (_contributors.TryGetValue(slot, out ModuleName existing))
+                throw new InvariantFault("SDD-001 §9", null,
+                    $"Stage {work.Id} order {order} was already filled by {existing.Value}; " +
+                    "check 5 should have refused this set.");
+
+            _contributors.Add(slot, manifest.Name);
+            _stages.Add((work.Id, order, work));
+        }
+
+        /// <summary>
+        /// Every contributed stage, in (stage, order). The pipeline sorts by
+        /// <c>StageId</c> alone and is stable, so within-stage order is decided
+        /// here — where the declared <c>Order</c> is still in hand.
+        /// </summary>
+        public IReadOnlyList<ITickStage> OrderedStages()
+        {
+            var sorted = new List<(StageId Stage, int Order, ITickStage Work)>(_stages);
+            sorted.Sort((left, right) =>
+            {
+                int byStage = ((int)left.Stage).CompareTo((int)right.Stage);
+                return byStage != 0 ? byStage : left.Order.CompareTo(right.Order);
+            });
+
+            var stages = new List<ITickStage>(sorted.Count);
+            for (int i = 0; i < sorted.Count; i++) stages.Add(sorted[i].Work);
+            return stages;
+        }
+
         /// <summary>
         /// A module may declare a contract in Provides and then fail to hand one
         /// over. Validation cannot see that — only running Compose can — so it is
@@ -271,6 +389,26 @@ public sealed class ModuleComposer
                         problems.Add(new CompositionProblem(
                             CompositionProblemKind.UnmetRequirement, module.Manifest.Name,
                             $"{provides[i].Name} was declared in Provides but never provided."));
+            }
+        }
+
+        /// <summary>
+        /// The same omission on the stage side: a slot claimed and left empty.
+        /// Law L3 — a declaration with no behaviour behind it — and the tick
+        /// would silently skip it, which is the failure this refuses to ship.
+        /// </summary>
+        public void AssertEverySlotFilled(
+            IReadOnlyList<IModule> modules, List<CompositionProblem> problems)
+        {
+            foreach (IModule module in modules)
+            {
+                IReadOnlyList<StageParticipation> stages = module.Manifest.Stages;
+                for (int i = 0; i < stages.Count; i++)
+                    if (!_contributors.ContainsKey((stages[i].Stage, stages[i].Order)))
+                        problems.Add(new CompositionProblem(
+                            CompositionProblemKind.UnmetRequirement, module.Manifest.Name,
+                            $"Stage {stages[i].Stage} order {stages[i].Order} was declared " +
+                            "in Stages but no work was contributed for it."));
             }
         }
     }

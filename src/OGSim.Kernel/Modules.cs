@@ -40,6 +40,14 @@ public interface IModuleComposition
 {
     void Provide<T>(T implementation) where T : class;
     T Require<T>() where T : class;
+
+    /// <summary>
+    /// The work for a declared slot. <c>work.Id</c> says which stage and
+    /// <paramref name="order"/> where within it; together they must match a
+    /// <see cref="StageParticipation"/> this module's own manifest declared, so
+    /// a module cannot act in a stage it never named (SDD-001 §9, finding 125).
+    /// </summary>
+    void Contribute(int order, ITickStage work);
 }
 
 /// <summary>Model-plugin binding for content stage 6 (SDD-004 §5): a content

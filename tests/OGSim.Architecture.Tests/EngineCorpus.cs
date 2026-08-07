@@ -69,8 +69,17 @@ internal static class EngineCorpus
         typeof(OGSim.Integrity.IntegrityPass).Assembly,
         typeof(OGSim.Persistence.MigrationChain).Assembly,
         typeof(OGSim.Objectives.ObjectiveEvaluator).Assembly,
+        typeof(OGSim.Composition.EngineBuilder).Assembly,
         Subsurface,
     ];
+
+    /// <summary>
+    /// Layer 4 (design 03 §8) — the ONLY project permitted to name concrete
+    /// types, because composition is where something finally has to know what
+    /// implements what. Rules that forbid naming an implementation exempt this
+    /// assembly and only this one; every other rule applies to it unchanged.
+    /// </summary>
+    public static Assembly Composition { get; } = typeof(OGSim.Composition.EngineBuilder).Assembly;
 
     public static IEnumerable<Type> Types =>
         Assemblies.SelectMany(a => a.GetTypes()).Where(t => !IsCompilerGenerated(t));

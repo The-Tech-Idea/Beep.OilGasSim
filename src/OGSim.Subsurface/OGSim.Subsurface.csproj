@@ -17,6 +17,12 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="OGSim.Subsurface.Tests" />
+    <!-- Layer 4 only (design 03 §8). Composition must name a concrete drive to
+         register one, and every type here is internal by design — so the door
+         is opened to exactly one project rather than by making a type public,
+         which would break Truth_SubsurfaceExposesNoPublicType and, with it, the
+         guarantee that no consumer can reach a compartment. -->
+    <InternalsVisibleTo Include="OGSim.Composition" />
   </ItemGroup>
 
 </Project>

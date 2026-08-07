@@ -209,7 +209,7 @@ Test names carry their FV number so coverage is readable from the test list.
 
 | FV | Covered | Where / why not |
 |---|---|---|
-| FV1 Conservation | ✅ | Hand-built chains + **200 randomised networks × 3 seeds**, generated valid-by-construction. The design asks for 1,000 *ticks*; there is no tick loop until R7, so the per-solve half is proven here and the loop half belongs with the loop |
+| FV1 Conservation | ✅ | Hand-built chains + **200 randomised networks × 3 seeds**, generated valid-by-construction. The design asks for 1,000 *ticks*; the per-solve half is proven here and the loop half belongs with the loop, which R20c composes and which fills with work when modules own entity state |
 | FV2 Depletion shape | ⬜ | Needs a reservoir (R5) — an Arps curve cannot be checked against synthetic elements |
 | FV3 Operating point | 🟨 | Convergence onto the IPR and the DEAD outcome are pinned, recomputed independently from the report. The **parameter sweep against IPR ∩ VLP** needs a real VLP (R6) |
 | FV4 Bottleneck attribution | ✅ | The element is named and the deferred volume matches the analytic answer; a second test pins that the volume is damping-independent |
@@ -959,6 +959,53 @@ across no wells" has no answer, and zero would make a fleet objective trivially
 true before the first well is drilled. `Sum` and `All` do have identities and use
 them.
 
+### Phase R20c — Composition 🟨
+> Design [03](design/03_ARCHITECTURE.md) §3.1, §8; SDD-001 §9.
+
+Design 03 §8 assigns `OGSim.Composition` a project and a layer, and the phase
+list never gave it one — so eleven tracker rows across R4, R10, R11, R14, R18,
+R19 and R24 deferred verification to "the tick loop" that no phase owned. R20
+cannot start without it: a scenario is a composed engine.
+
+| # | Task | Status |
+|---|---|---|
+| R20c.0 | SDD review — SDD-001 §9 against a real module set | ✅ — two defects, findings 125 and 126 |
+| R20c.1 | `OGSim.Composition`, Layer 4, referencing every module | ✅ |
+| R20c.2 | The fourteen `IModule` manifests — Provides, Requires, OwnsState | ✅ |
+| R20c.3 | `EngineBuilder` — validate, resolve, build a real `TickPipeline` | ✅ |
+| R20c.4 | Composition refusal suite — all seven failure modes, every problem named | ✅ |
+| R20c.5 | Layer 4 declared in the architecture corpus, with its one exemption | ✅ |
+| R20c.6 | Module state ownership — `IStateOwner` per `OwnsState` key | ⬜ |
+| R20c.7 | Stage bodies — the per-tick work each module contributes | ⬜ |
+
+**The fourteen modules compose, and the tick runs zero stages.** That is the
+honest state and it is stated rather than papered over. Composition validates a
+module set as a *set*: every Requires met, nothing provided twice, no state key
+owned twice, no cycle, no two modules in one stage slot, and — new in R20c.0 —
+every claimed stage slot actually filled. What it cannot yet validate is work,
+because no module owns entity state: there are `Completion`, `Tank`,
+`CostLedger` and `BowTie` types, and nothing holding collections of them across
+ticks. A stage body with nothing to act on would be law L3's "declaration with
+no behaviour", so **no module claims a stage** and `NoStagesYet` says why at
+each manifest. R20c.6/.7 are what fill them, and they are the real unblocker for
+the eleven deferred rows — not composition itself.
+
+`OwnsState` **is** declared, because the composer validates it for uniqueness
+(check 3) and nothing yet enforces an owner behind it. The asymmetry is
+deliberate and is the new check's doing: an unfilled stage claim is now a
+refusal, an unowned state key is not yet one. Connecting `OwnsState` to
+`StateRegistry.Register` is R20c.6's job and would make the second symmetric
+with the first.
+
+**Two SDD defects, both found by building the first real module set** — which is
+the argument for building one. Neither was visible while modules were
+hypothetical:
+
+| # | Finding |
+|---|---|
+| 125 | **A module declared its stages and had no way to supply them.** `ModuleManifest.Stages` names the `(StageId, Order)` slots a module claims and check 5 forbids two modules claiming one — and then `TickPipeline` took `IReadOnlyList<ITickStage>` from *nowhere*, with no member on `IModule` producing one. Composition validated a stage plan that nothing could fill: law L3 at the architecture level, a declaration with no behaviour behind it. `IModuleComposition` gains `Contribute(int order, ITickStage work)` and `Composed` carries the collected stages, so the pipeline is built from exactly what was validated. Two refusals fall out — a slot declared and never filled, and a contribution to a slot never declared. Letting the pipeline take an independently-assembled stage list instead would have made the manifest decorative: the composer would police an order the tick was free to ignore |
+| 126 | **Resolution ran in caller-list order, not dependency order.** `Compose` validated the set and then called `module.Compose(c)` over the modules *as given*, so a module whose provider sat later in the list threw from `Require` — the composer proved the graph acyclic and then discarded the construction order that proof establishes. Found the moment `flow` was listed before `diagnostics`. Requires exists precisely so a module need not know who builds it first; making the answer depend on argument order put that knowledge back in every caller, where each scenario, test and host would have had to keep it consistent by hand. Now a DFS post-order over the same providers map, and a test composes the shipped set reversed and gets the identical engine |
+
 ### Phase R20 — Scenarios and balance ⬜
 > 📄 [phases/R20_SCENARIOS.md](phases/R20_SCENARIOS.md)
 
@@ -1035,6 +1082,7 @@ order they are built in.
 | 20 | **R23 HSE** | III | Needs R18's condition model and R16's regulator |
 | 21 | R19 Persistence | IV | Every module has been registering state since R1 |
 | 22 | **R24 Objectives** | IV | R20's scenarios are built *on* this |
+| 22b | **R20c Composition** | IV | Design 03 §8 gave it a layer and the phase list never gave it a phase; a scenario is a composed engine, so R20 cannot start without one |
 | 23 | R20 Scenarios | IV | **SC1 — the acceptance test for the whole engine** |
 | 24 | R21 Host contract | IV | Formalise the boundary; prove it with a reference client |
 | 25 | **R25 Advisor & reality profiles** | IV | Consumes the R21 surface; the reference client generalises into the Advisor |
