@@ -22,4 +22,10 @@ internal static class Fx
     /// block is complete; it multiplies a zero rate here.</summary>
     public static Density GasDensity { get; } =
         new(0.75 * PhysicalConstants.AirDensityAtStandardKgPerM3);
+
+    /// <summary>A DRY well: no water. These suites are about inflow and outflow,
+    /// and a produced water stream would be a second thing under test.</summary>
+    public const double Dry = 0.0;
+
+    public static Density WaterDensity { get; } = Density.FromSpecificGravity(1.05);
 }

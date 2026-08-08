@@ -293,7 +293,11 @@ internal sealed class ProductionLoop
         ArgumentNullException.ThrowIfNull(context);
 
         _wells.RefreshFromReservoir(
-            _subsurface.TruePressureOf, _fluid.Rs, _reservoirTemperature);
+            _subsurface.TruePressureOf,
+            _fluid.Rs,
+            compartment => _subsurface.TrueWaterCutOf(
+                compartment, WaterViscosity, _fluid.MuOil(_subsurface.TruePressureOf(compartment))),
+            _reservoirTemperature);
 
         // Stage 4 owns the plan and stage 5 consumes it. Missing means the
         // availability stage did not run — a composition defect, not a tick with

@@ -55,9 +55,9 @@ public class LiftTests
                 Density.FromSpecificGravity(0.85), new FormationVolumeFactor(1.2),
                 Allocation.FromSingle(new EntityRef(EntityKind.Compartment, 1)),
                 new Pressure(reservoirBarA * 1e5), Temperature.FromCelsius(80.0),
-                Fx.GasDensity, Fx.NoSolutionGas),
+                Fx.GasDensity, Fx.NoSolutionGas, Fx.WaterDensity, Fx.Dry),
             ChokeSetting.Open,
-            oilOrdinal: 0, gasOrdinal: 1, materialCount: 2, lift: lift);
+            oilOrdinal: 0, gasOrdinal: 1, waterOrdinal: 2, materialCount: 3, lift: lift);
     }
 
     private static double Rate(OperatingPoint point) =>

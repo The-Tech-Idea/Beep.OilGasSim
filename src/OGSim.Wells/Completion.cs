@@ -67,7 +67,21 @@ public sealed record CompletionFluid(
     /// for forty years — the opposite of the producing-GOR rise §3.1
     /// models.</para>
     /// </summary>
-    double SolutionGasOilRatio);
+    double SolutionGasOilRatio,
+
+    /// <summary>ρ_sc of produced water, kg/m³.</summary>
+    Density WaterSurfaceDensity,
+
+    /// <summary>
+    /// fw at the sandface (SDD-003 §3.1c) — the fraction of the liquid the
+    /// completion produces that is water.
+    ///
+    /// <para>Refreshed with the pressure through the same door, because it is a
+    /// compartment fact that moves: a well whose water cut was fixed at
+    /// completion would produce dry oil for forty years however much water
+    /// arrived at it, which is the opposite of a field's actual life.</para>
+    /// </summary>
+    double WaterCut);
 
 /// <summary>
 /// SDD-003 §6. A source element: no inlets, and its withdrawal reported as
@@ -89,6 +103,7 @@ public sealed class Completion : ICompletion
     private ChokeSetting _choke;
     private readonly int _oilOrdinal;
     private readonly int _gasOrdinal;
+    private readonly int _waterOrdinal;
     private readonly int _materialCount;
 
     private bool _pressureDecoupled;
@@ -103,6 +118,7 @@ public sealed class Completion : ICompletion
         ChokeSetting choke,
         int oilOrdinal,
         int gasOrdinal,
+        int waterOrdinal,
         int materialCount,
         ILiftMethod? lift)
     {
@@ -129,6 +145,7 @@ public sealed class Completion : ICompletion
         _choke = choke;
         _oilOrdinal = oilOrdinal;
         _gasOrdinal = gasOrdinal;
+        _waterOrdinal = waterOrdinal;
         _materialCount = materialCount;
     }
 
@@ -169,18 +186,28 @@ public sealed class Completion : ICompletion
     /// <c>CompletionFluid</c> always documented.</para>
     /// </summary>
     public void SetReservoirConditions(
-        Pressure reservoirPressure, Temperature temperature, double solutionGasOilRatio)
+        Pressure reservoirPressure,
+        Temperature temperature,
+        double solutionGasOilRatio,
+        double waterCut)
     {
         if (solutionGasOilRatio < 0.0)
             throw new ModelFault("SDD-003 §6.1b", null,
                 $"completion {CompletionId.Value} was given a negative solution GOR; oil " +
                 "cannot hold less than no gas");
 
+        if (waterCut is < 0.0 or > 1.0)
+            throw new ModelFault("SDD-003 §3.1c", null,
+                $"completion {CompletionId.Value} was given a water cut of " +
+                waterCut.ToString("R", System.Globalization.CultureInfo.InvariantCulture) +
+                "; a fraction of the liquid cannot be outside [0, 1]");
+
         _fluid = _fluid with
         {
             ReservoirPressure = reservoirPressure,
             ReservoirTemperature = temperature,
             SolutionGasOilRatio = solutionGasOilRatio,
+            WaterCut = waterCut,
         };
     }
 
@@ -271,8 +298,18 @@ public sealed class Completion : ICompletion
         // conversion needs the factor in hand — the type system will not let a
         // ReservoirVolume be added to a SurfaceVolume without one (kernel
         // Volumes.cs), which is exactly the error this crossing invites.
+        // SDD-003 §6.1b splits the RATE, not the ratio: q_rc is the total LIQUID
+        // the Darcy form gave, and fw says how much of it is water. There is no
+        // singularity at fw = 1 — the oil term simply goes to zero and the well
+        // is a water producer, which is the physical statement.
+        double oilFraction = 1.0 - _fluid.WaterCut;
+
         double surfaceOilRate =
-            rate.CubicMetresPerSecond / _fluid.OilFormationVolumeFactor.RbPerStb;
+            rate.CubicMetresPerSecond * oilFraction / _fluid.OilFormationVolumeFactor.RbPerStb;
+
+        // Water comes up the same hole, is separated off, and costs the same to
+        // lift — which is what eventually ends a field's life.
+        double surfaceWaterRate = rate.CubicMetresPerSecond * _fluid.WaterCut;
 
         // SOLUTION GAS (SDD-003 §6.1b) comes up dissolved in the oil and breaks
         // out at surface: Rs sm³ of gas per sm³ of stock-tank oil. It is not free
@@ -283,6 +320,8 @@ public sealed class Completion : ICompletion
         double[] byOrdinal = new double[_materialCount];
         byOrdinal[_oilOrdinal] = surfaceOilRate * _fluid.SurfaceDensity.KgPerCubicMetre;
         byOrdinal[_gasOrdinal] += surfaceGasRate * _fluid.GasSurfaceDensity.KgPerCubicMetre;
+        byOrdinal[_waterOrdinal] +=
+            surfaceWaterRate * _fluid.WaterSurfaceDensity.KgPerCubicMetre;
 
         Composition produced = Composition.Validated([.. byOrdinal]);
 

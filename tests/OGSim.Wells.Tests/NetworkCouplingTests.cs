@@ -21,10 +21,11 @@ namespace OGSim.Wells.Tests;
 
 public class NetworkCouplingTests
 {
-    /// <summary>Oil and gas, matching the completion the shipped catalogue
-    /// builds — a synthetic element narrower than the wells feeding it would
-    /// fail SDD-002 §2's ordinal check rather than the coupling under test.</summary>
-    private const int Materials = 2;
+    /// <summary>Oil, gas and water — matching the completion the shipped
+    /// catalogue builds. A synthetic element narrower than the wells feeding it
+    /// fails SDD-002 §2's ordinal check rather than the coupling under
+    /// test.</summary>
+    private const int Materials = 3;
 
     private static readonly SegmentContext WholeTick =
         new(DurationDays: 30, Temperature.FromCelsius(15.0), WeatherSeverity: 0.0);
@@ -48,11 +49,14 @@ public class NetworkCouplingTests
                 new Pressure(reservoirBarA * 1e5),
                 Temperature.FromCelsius(80.0),
                 Fx.GasDensity,
-                Fx.NoSolutionGas),
+                Fx.NoSolutionGas,
+                Fx.WaterDensity,
+                Fx.Dry),
             ChokeSetting.Open,
             oilOrdinal: 0,
             gasOrdinal: 1,
-            materialCount: 2,
+            waterOrdinal: 2,
+            materialCount: 3,
             lift: null);
     }
 

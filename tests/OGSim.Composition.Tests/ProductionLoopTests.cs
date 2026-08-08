@@ -82,11 +82,14 @@ public sealed class ProductionLoopTests
                 new Pressure(30.0e6),
                 Temperature.FromCelsius(93.3),
                 Defaults.GasSurfaceDensity,
-                Defaults.Fluid.SolutionGorAtBubblePoint),
+                Defaults.Fluid.SolutionGorAtBubblePoint,
+                Defaults.WaterSurfaceDensity,
+                0.0),
             ChokeSetting.Open,
             oilOrdinal: 0,
             gasOrdinal: 1,
-            materialCount: 2,
+            waterOrdinal: 2,
+            materialCount: 3,
             lift: null);
 
     /// <summary>
@@ -134,8 +137,12 @@ public sealed class ProductionLoopTests
     {
         (Engine engine, CompanyState company) = Field();
 
-        // Past the plateau: run until the vessel stops refusing, which is the
-        // month the reservoir becomes the binding constraint.
+        // Debottleneck first, as a player would, then run past the plateau: the
+        // reservoir cannot be seen to decline while a FACILITY is what limits
+        // the field, and with the shipped aquifer holding pressure up the first
+        // vessel would bind for longer than a field's life.
+        engine.Commands.Submit(new InstallSeparatorCommand());
+
         for (var month = 0; month < 480; month++)
         {
             engine.Pipeline.AdvanceTick();

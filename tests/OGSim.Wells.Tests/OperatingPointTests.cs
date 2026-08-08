@@ -38,11 +38,14 @@ public class OperatingPointTests
                 new Pressure(reservoirBarA * 1e5),
                 Temperature.FromCelsius(80.0),
                 Fx.GasDensity,
-                Fx.NoSolutionGas),
+                Fx.NoSolutionGas,
+                Fx.WaterDensity,
+                Fx.Dry),
             choke ?? ChokeSetting.Open,
             oilOrdinal: 0,
             gasOrdinal: 1,
-            materialCount: 2,
+            waterOrdinal: 2,
+            materialCount: 3,
             lift: null);
     }
 

@@ -132,7 +132,11 @@ public sealed class ChainTests
         OGSim.Wells.Completion well = Defaults.CompletionFor(1, target, new Length(2000.0));
         well.SetReservoirConditions(
             new Pressure(30.0e6), Defaults.ReservoirTemperature,
-            engine.Provided.Resolve<IFluidPropertyModel>().Rs(new Pressure(30.0e6)));
+            engine.Provided.Resolve<IFluidPropertyModel>().Rs(new Pressure(30.0e6)),
+
+            // Dry: this asserts the SURFACE's effect on the wellhead, and a
+            // watered-out well would be measuring the reservoir instead.
+            waterCut: 0.0);
 
         var flowing = Assert.IsType<Flowing>(
             well.SolveOperatingPoint(Defaults.SeparatorTier.OperatingPressure));

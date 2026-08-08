@@ -382,10 +382,17 @@ internal static class Defaults
                 // Rs is REFRESHED from the compartment before every solve, like
                 // the pressure it is a function of. Opening at the bubble-point
                 // ratio is the value a well starts at, not a placeholder.
-                Fluid.SolutionGorAtBubblePoint),
+                Fluid.SolutionGorAtBubblePoint,
+
+                WaterSurfaceDensity,
+
+                // And so is the water cut: a new well on an unflooded
+                // compartment is dry, and stays dry until water reaches it.
+                0.0),
             Wells.ChokeSetting.Open,
             oilOrdinal: OilOrdinal.Ordinal,
             gasOrdinal: GasOrdinal.Ordinal,
+            waterOrdinal: WaterOrdinal.Ordinal,
             materialCount: MaterialCount,
             lift: null);
     }
@@ -625,8 +632,9 @@ internal static class Defaults
     /// by the element that imposes it rather than by the stage that read it.
     ///
     /// <para><b>The liquid capacity BINDS, and that is the point.</b> A well on
-    /// this field delivers about 7 kg/s, so the first vessel carries one well
-    /// comfortably and is over capacity on the second — the player sees the
+    /// this field delivers about 10 kg/s of liquid once it makes water as well
+    /// as oil, so the first vessel carries one well and is over capacity on the
+    /// second — the player sees the
     /// separator refusing production on the read model and has to do something
     /// about it. A vessel sized never to bind would make every downstream
     /// mechanic — the throttle, the deferral attribution, the bottleneck report —
@@ -644,7 +652,7 @@ internal static class Defaults
     public static Facilities.SeparatorTier SeparatorTier { get; } = new(
         new ContentId("separator-3phase-e1"),
         GasCapacity: new MassRate(50.0),
-        LiquidCapacity: new MassRate(10.0),
+        LiquidCapacity: new MassRate(12.0),
         Volume: new ReservoirVolume(30.0),
         RatedEfficiency: new SeparationEfficiency(
             LiquidFromGas: 0.0, GasFromLiquid: 0.0, WaterFromLiquid: 0.0),
@@ -748,6 +756,10 @@ internal static class Defaults
     /// the barrels a player reads.</summary>
     public static Density SurfaceOilDensity { get; } = Density.FromSpecificGravity(0.85);
 
+    /// <summary>Produced water at standard conditions — brine, a little denser
+    /// than fresh.</summary>
+    public static Density WaterSurfaceDensity { get; } = Density.FromSpecificGravity(1.05);
+
     /// <summary>
     /// The shipped rock's Corey curve (SDD-003 §3.1c) — what turns a water
     /// saturation into a water cut, and therefore when a field waters out.
@@ -786,10 +798,20 @@ internal static class Defaults
     /// a few MPa of drawdown, which is what "supported" means.</summary>
     public const double AquiferProductivityIndex = 1.0e-8;
 
-    /// <summary>W_ei — the total expansion available. Comparable to the pore
-    /// volume: a strong aquifer, and still a finite one, so support fades and
-    /// the field ends rather than producing for ever.</summary>
-    public static ReservoirVolume AquiferExpansion { get; } = new(60.0e6);
+    /// <summary>
+    /// W_ei — the total expansion available. SEVERAL TIMES the pore volume,
+    /// because a Fetkovich aquifer's own pressure falls in proportion to what it
+    /// has delivered: one sized like the field runs itself down to the
+    /// reservoir's pressure after a tenth of its water has arrived, and then
+    /// stops. The field held its pressure and never watered out, which took the
+    /// late game with it.
+    ///
+    /// <para>A regional aquifer keeps pushing, so the water reaches the
+    /// producers, the water cut climbs the S-curve and the field ends by
+    /// drowning rather than by running dry — which is how most fields actually
+    /// end.</para>
+    /// </summary>
+    public static ReservoirVolume AquiferExpansion { get; } = new(400.0e6);
 
     public static RelativePermeabilityCurve Wettability { get; } =
         RelativePermeabilityCurve.Validated(

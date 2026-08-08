@@ -96,10 +96,12 @@ public sealed class WellsState : IStateOwner
     public void RefreshFromReservoir(
         Func<EntityId<IReservoirCompartmentEntity>, Pressure> pressureOf,
         Func<Pressure, double> solutionGorAt,
+        Func<EntityId<IReservoirCompartmentEntity>, double> waterCutOf,
         Temperature reservoirTemperature)
     {
         ArgumentNullException.ThrowIfNull(pressureOf);
         ArgumentNullException.ThrowIfNull(solutionGorAt);
+        ArgumentNullException.ThrowIfNull(waterCutOf);
 
         for (int i = 0; i < _completions.Count; i++)
         {
@@ -110,7 +112,8 @@ public sealed class WellsState : IStateOwner
             // would let a completion solve at this month's pressure and last
             // month's gas ratio, which is a GOR that lags its own reservoir.
             completion.SetReservoirConditions(
-                reservoir, reservoirTemperature, solutionGorAt(reservoir));
+                reservoir, reservoirTemperature, solutionGorAt(reservoir),
+                waterCutOf(_drains[completion.CompletionId]));
         }
     }
 
