@@ -26,7 +26,8 @@ internal sealed class DrillWellActivity(
     ActivityTerms terms,
     Length maximumDepth,
     FieldControl field,
-    WellDesign design) : Activity<DrillWellCommand>(terms)
+    WellDesign design,
+    OGSim.Information.ProspectRisks risks) : Activity<DrillWellCommand>(terms)
 {
     /// <summary>A well is PP&amp;E: the money buys something the company still
     /// owns next month (SDD-009 §1).</summary>
@@ -84,10 +85,44 @@ internal sealed class DrillWellActivity(
         // what the player has bought is knowledge — which is the whole of
         // exploration economics and the reason drilling is a decision rather
         // than a button.
-        if (!done.Succeeded) return;
+        var prospect = new EntityRef(EntityKind.Compartment, done.Target.Value);
+
+        if (!done.Succeeded)
+        {
+            // WHAT A DRY HOLE SHOULD TEACH, and does not yet (finding 169). A
+            // failed well here is a roll on the outcome table, not a report on
+            // the rock: the generator emits only CHARGED traps, so truth always
+            // says there is oil under this structure and a "dry hole" contradicts
+            // it. Attributing the failure to source or seal would therefore write
+            // a diagnosis nobody derived from truth, which is exactly what
+            // SDD-008 §4 requires ("truth-derived, R14 §2.5") and F-3 forbids
+            // inventing.
+            //
+            // Left recording nothing rather than recording a guess. The fix is
+            // for dry structures to exist in the world so a well can genuinely
+            // find one — R20d.8's remaining slice, not something to paper over
+            // here.
+            return;
+        }
 
         var target = new EntityId<IReservoirCompartmentEntity>(done.Target.Value);
 
         field.OpenWell(design(field.NextWellId(), target, done.Depth), target);
+
+        // A DISCOVERY DE-RISKS THE PLAY (SDD-008 §4). The well proved every
+        // element at this location — there was a source, a reservoir, a seal, a
+        // trap, and the timing worked, because oil is in the hole. Three of
+        // those beliefs belong to the play, so every other prospect drawing on
+        // the same petroleum system is worth more than it was this morning.
+        //
+        // This is the half of exploration a player does not pay for directly and
+        // is the reason a first discovery changes a whole campaign.
+        if (!risks.Knows(prospect)) return;
+
+        risks.Drilled(prospect, PosFactor.Source, present: true);
+        risks.Drilled(prospect, PosFactor.Reservoir, present: true);
+        risks.Drilled(prospect, PosFactor.Seal, present: true);
+        risks.Drilled(prospect, PosFactor.Trap, present: true);
+        risks.Drilled(prospect, PosFactor.Timing, present: true);
     }
 }

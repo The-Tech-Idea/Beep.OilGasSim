@@ -405,4 +405,53 @@ public sealed class NewGameTests
 
         Assert.Fail("sixty basins produced none with two plays represented");
     }
+
+    /// <summary>
+    /// A DISCOVERY DE-RISKS THE PLAY, and it does so through a real well rather
+    /// than a test poking the registry. The company drills, finds oil, and every
+    /// other prospect drawing on the same petroleum system is worth more than it
+    /// was that morning — the half of exploration nobody pays for directly, and
+    /// the reason a first strike changes a whole campaign.
+    /// </summary>
+    [Fact]
+    public void R20d7V2_a_discovery_raises_the_odds_on_the_rest_of_its_play()
+    {
+        for (ulong seed = 1UL; seed < 60UL; seed++)
+        {
+            Engine engine = NewGame(seed);
+            engine.Pipeline.AdvanceTick();
+
+            IReadOnlyList<ProspectView> before = engine.ReadModel!.Prospects;
+
+            var sibling = -1;
+
+            for (int i = 1; i < before.Count; i++)
+                if (before[i].Play == before[0].Play) { sibling = i; break; }
+
+            if (sibling < 0) continue;
+
+            double was = before[sibling].ProbabilityOfSuccess;
+
+            var target = new EntityId<IReservoirCompartmentEntity>(before[0].Prospect.Value);
+
+            Assert.IsType<Accepted>(
+                engine.Commands.Submit(new DrillWellCommand(target, new Length(2000.0))));
+
+            // Long enough for the rig to finish, however the outcome table
+            // stretches it. A well that failed teaches nothing yet (finding
+            // 169), so this walks seeds until one drills a discovery.
+            for (var month = 0; month < 12; month++) engine.Pipeline.AdvanceTick();
+
+            if (engine.ReadModel!.Wells == 0) continue;      // dry: try another basin
+
+            IReadOnlyList<ProspectView> after = engine.ReadModel!.Prospects;
+
+            Assert.True(after[sibling].ProbabilityOfSuccess > was,
+                "a discovery left the rest of its play priced exactly as before");
+
+            return;
+        }
+
+        Assert.Fail("sixty basins produced no discovery on a play with a second prospect");
+    }
 }
