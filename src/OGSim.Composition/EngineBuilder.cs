@@ -678,6 +678,35 @@ internal static class Defaults
     /// debottleneck and drill in the same months — which is what makes the
     /// decision interesting rather than merely sequential.
     /// </summary>
+    /// <summary>
+    /// What plugging a well costs, and how long it takes. NO RIG in this
+    /// composition's terms — a plugging crew is not the drilling rig, so a
+    /// company can close down one well while drilling another.
+    ///
+    /// <para>$3M is a real onshore figure and it is deliberately not small: the
+    /// obligation is registered the moment the well is drilled, so a player who
+    /// has run their field into the ground may find they cannot afford to leave.
+    /// That is the authentic and uncomfortable shape of late life.</para>
+    /// </summary>
+    public static ActivityTerms AbandonWellTerms { get; } = new(
+        Template: new ContentId("abandon-well"),
+        Cost: Money.FromMillions(3.0),
+        DurationTicks: 2,
+        Rig: null,
+        Outcomes: SurveyOutcomes);
+
+    /// <summary>
+    /// What an obligation is estimated at, by template (SDD-007 §6). Content in
+    /// a finished game; here the abandonment activity's own price, so the
+    /// liability on the books and the bill when it falls due cannot disagree.
+    /// </summary>
+    public static Money AbandonmentCostOf(ContentId template) =>
+        template == AbandonWellTerms.Template
+            ? AbandonWellTerms.Cost
+            : throw new ContentFault("SDD-007 §6", null,
+                $"no abandonment template '{template.Value}' is priced; an obligation " +
+                "nobody can cost is a liability nobody can plan for");
+
     public static ActivityTerms InstallSeparatorTerms { get; } = new(
         Template: new ContentId("install-separator"),
         Cost: Money.FromMillions(6.0),

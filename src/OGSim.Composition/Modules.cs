@@ -457,7 +457,7 @@ internal sealed class CompanyModule() : EngineModule(Declare(
 /// </summary>
 internal sealed class FieldModule() : EngineModule(Declare(
     "field",
-    provides: [typeof(FieldControl), typeof(CloseStage)],
+    provides: [typeof(FieldControl), typeof(CloseStage), typeof(IObligationRegistry)],
     requires:
     [
         typeof(OGSim.Subsurface.SubsurfaceState),
@@ -476,7 +476,10 @@ internal sealed class FieldModule() : EngineModule(Declare(
         typeof(IFlowElementRegistry),
         typeof(SurfaceChain),
     ],
-    ownsState: ["field.activities"],
+    // Provided here because the field is where an asset is CREATED, and
+    // registration is unconditional at creation (SDD-007 §6).
+
+    ownsState: ["field.activities", "company.obligations"],
     stages:
     [
         new StageParticipation(StageId.Operations, Order: 0),
@@ -504,6 +507,7 @@ internal sealed class FieldModule() : EngineModule(Declare(
         typeof(SeismicSurveyCommand),
         typeof(InstallSeparatorCommand),
         typeof(SetWellChokeCommand),
+        typeof(AbandonWellCommand),
     ]))
 {
     public override void Compose(IModuleComposition composition)
@@ -512,6 +516,19 @@ internal sealed class FieldModule() : EngineModule(Declare(
 
         IFlowElementRegistry network = composition.Require<IFlowElementRegistry>();
         SurfaceChain chain = composition.Require<SurfaceChain>();
+
+        var obligations = new OGSim.Operations.ObligationRegistry(Defaults.AbandonmentCostOf);
+        composition.Own(obligations);
+        composition.Provide<IObligationRegistry>(obligations);
+
+        var field = new FieldControl(
+            composition.Require<OGSim.Subsurface.SubsurfaceState>(),
+            composition.Require<OGSim.Wells.WellsState>(),
+            network,
+            chain,
+            obligations,
+            Defaults.AbandonWellTerms.Template);
+
 
         var loop = new ProductionLoop(
             composition.Require<OGSim.Subsurface.SubsurfaceState>(),
@@ -529,6 +546,7 @@ internal sealed class FieldModule() : EngineModule(Declare(
             Defaults.ExportOfftake,
             composition.Require<IFiscalRegime>(),
             Defaults.LiquidOrdinals,
+            () => field.IsAbandoned,
             Defaults.Economics,
             Defaults.ReservoirTemperature,
             Defaults.SurfaceAmbient,
@@ -545,12 +563,6 @@ internal sealed class FieldModule() : EngineModule(Declare(
 
         // The scenario's door onto the field. Provided rather than reachable, so
         // building a field is something composition hands out deliberately.
-        var field = new FieldControl(
-            composition.Require<OGSim.Subsurface.SubsurfaceState>(),
-            composition.Require<OGSim.Wells.WellsState>(),
-            network,
-            chain);
-
         composition.Provide(field);
 
         var company = composition.Require<OGSim.Company.CompanyState>();
@@ -607,6 +619,11 @@ internal sealed class FieldModule() : EngineModule(Declare(
             // paid for and bypassed (finding 153).
             new InstallSeparatorActivity(
                 Defaults.InstallSeparatorTerms, chain.Separator, Defaults.SeparatorLadder),
+
+            // The ENDING (R12b.10). Finding 153's other reason is gone too: opex
+            // scales with the liquid lifted, so a watered-out well genuinely
+            // costs more than it earns and stopping it is a real decision.
+            new AbandonWellActivity(Defaults.AbandonWellTerms, field, obligations),
         ];
 
         var activities = new ActivityState(scheduler, company, catalogue);

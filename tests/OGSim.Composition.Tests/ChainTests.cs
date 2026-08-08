@@ -503,6 +503,106 @@ public sealed class ChainTests
         Assert.Contains(rejected.Reasons, reason => reason.LocId == "$loc:reject.choke-unchanged");
     }
 
+    // ------------------------------------------------------------- the ending
+
+    /// <summary>
+    /// R12b.10. A field's arc ends: the wells are plugged, the obligation is
+    /// discharged and the standing charge stops.
+    ///
+    /// <para>Until this the tail ran for thirty years — a field producing almost
+    /// nothing while the standing charge ate the cash it had made — and a player
+    /// could watch it and had no way to stop paying. That is what the
+    /// measurement in R20.4 found and this is the answer to it.</para>
+    /// </summary>
+    [Fact]
+    public void R12bV10_abandoning_the_last_well_closes_the_field()
+    {
+        (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled();
+        Produce(engine, target);
+
+        OGSim.Company.CostLedger ledger =
+            engine.Provided.Resolve<OGSim.Company.CompanyState>().Ledger;
+
+        engine.Pipeline.AdvanceTick();
+
+        Assert.IsType<Accepted>(engine.Commands.Submit(
+            new AbandonWellCommand(new EntityId<ICompletion>(1))));
+
+        engine.Pipeline.AdvanceTick();
+        while (engine.ReadModel!.ActivitiesRunning > 0) engine.Pipeline.AdvanceTick();
+
+        // The well is plugged: nothing is produced...
+        Assert.Equal(0.0, engine.ReadModel!.ProducedThisTick.CubicMetres, precision: 9);
+
+        // ...and the field stops costing anything to keep.
+        long before = Math.Abs(ledger.BalanceOf(Account.Opex).Cents);
+        engine.Pipeline.AdvanceTick();
+
+        Assert.Equal(before, Math.Abs(ledger.BalanceOf(Account.Opex).Cents));
+    }
+
+    /// <summary>
+    /// The obligation is registered when the well is DRILLED, not when someone
+    /// remembers it (SDD-007 §6, design 02 §3.4) — so a company always knows what
+    /// it owes the future, and cannot escape the cost by never recording it.
+    /// </summary>
+    [Fact]
+    public void R12bV10_a_well_carries_its_abandonment_obligation_from_the_day_it_opens()
+    {
+        (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled();
+
+        var obligations = engine.Provided.Resolve<IObligationRegistry>();
+        var well = new EntityRef(EntityKind.Completion, 1);
+
+        Assert.Equal(Money.Zero, obligations.EstimatedCost(well));
+
+        Produce(engine, target);
+
+        Assert.Equal(Defaults.AbandonWellTerms.Cost, obligations.EstimatedCost(well));
+    }
+
+    /// <summary>
+    /// Only a COMPLETED abandonment discharges it (SDD-007 §6). Shutting a well
+    /// in stops what it costs to lift and leaves the liability exactly where it
+    /// was — pausing is not leaving.
+    /// </summary>
+    [Fact]
+    public void R12bV10_shutting_a_well_in_does_not_discharge_its_obligation()
+    {
+        (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled();
+        Produce(engine, target);
+
+        engine.Commands.Submit(
+            new SetWellChokeCommand(new EntityId<ICompletion>(1), Open: false));
+        engine.Pipeline.AdvanceTick();
+
+        Assert.Equal(
+            Defaults.AbandonWellTerms.Cost,
+            engine.Provided.Resolve<IObligationRegistry>()
+                  .EstimatedCost(new EntityRef(EntityKind.Completion, 1)));
+    }
+
+    /// <summary>A well already plugged is refused rather than plugged twice —
+    /// months and money spent discharging nothing.</summary>
+    [Fact]
+    public void R12bV10_abandoning_a_plugged_well_is_refused()
+    {
+        (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled();
+        Produce(engine, target);
+
+        var well = new EntityId<ICompletion>(1);
+
+        engine.Commands.Submit(new AbandonWellCommand(well));
+        engine.Pipeline.AdvanceTick();
+        while (engine.ReadModel!.ActivitiesRunning > 0) engine.Pipeline.AdvanceTick();
+
+        var rejected = Assert.IsType<Rejected>(
+            engine.Commands.Submit(new AbandonWellCommand(well)));
+
+        Assert.Contains(rejected.Reasons,
+            reason => reason.LocId == "$loc:reject.already-abandoned");
+    }
+
     // ------------------------------------------------------------- economics
 
     /// <summary>

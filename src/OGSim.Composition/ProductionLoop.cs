@@ -193,6 +193,7 @@ internal sealed class ProductionLoop
 
     private readonly IFiscalRegime _regime;
     private readonly IReadOnlyList<int> _liquidOrdinals;
+    private readonly Func<bool> _isAbandoned;
 
     public ProductionLoop(
         SubsurfaceState subsurface,
@@ -210,6 +211,7 @@ internal sealed class ProductionLoop
         MassRate offtake,
         IFiscalRegime regime,
         IReadOnlyList<int> liquidOrdinals,
+        Func<bool> isAbandoned,
         FieldEconomics economics,
         Temperature reservoirTemperature,
         Temperature ambient,
@@ -230,6 +232,7 @@ internal sealed class ProductionLoop
         ArgumentNullException.ThrowIfNull(tank);
         ArgumentNullException.ThrowIfNull(regime);
         ArgumentNullException.ThrowIfNull(liquidOrdinals);
+        ArgumentNullException.ThrowIfNull(isAbandoned);
         ArgumentNullException.ThrowIfNull(economics);
 
         _subsurface = subsurface;
@@ -246,6 +249,7 @@ internal sealed class ProductionLoop
         _offtake = offtake;
         _regime = regime;
         _liquidOrdinals = liquidOrdinals;
+        _isAbandoned = isAbandoned;
         _economics = economics;
         _handled = new double[materialCount];
         _reservoirTemperature = reservoirTemperature;
@@ -663,6 +667,18 @@ internal sealed class ProductionLoop
     /// </summary>
     private Money OperatingCost()
     {
+        // A FIELD THAT HAS BEEN ABANDONED COSTS NOTHING. The standing charge is
+        // the people, the power and the road, and none of them is there once the
+        // last well is plugged — which is the ending: a player who cannot make
+        // the field pay stops paying for it.
+        //
+        // ABANDONED, not merely empty. A field nobody has drilled yet still has
+        // a licence and a standing charge, and that is what makes idling lose;
+        // and a field whose wells are shut IN still has the site, the staff and
+        // the licence, having only stopped lifting. Pausing is not leaving, and
+        // the difference is what abandonment's price buys.
+        if (_isAbandoned()) return Money.Zero;
+
         var liquid = 0.0;
         for (int i = 0; i < _liquidOrdinals.Count; i++)
             liquid += _handled[_liquidOrdinals[i]];
@@ -704,6 +720,8 @@ public sealed class FieldControl
     private readonly WellsState _wells;
     private readonly IFlowElementRegistry _network;
     private readonly SurfaceChain _chain;
+    private readonly IObligationRegistry _obligations;
+    private readonly ContentId _abandonmentTemplate;
 
     private int _slotsTaken;
 
@@ -711,12 +729,16 @@ public sealed class FieldControl
         SubsurfaceState subsurface,
         WellsState wells,
         IFlowElementRegistry network,
-        SurfaceChain chain)
+        SurfaceChain chain,
+        IObligationRegistry obligations,
+        ContentId abandonmentTemplate)
     {
         _subsurface = subsurface;
         _wells = wells;
         _network = network;
         _chain = chain;
+        _obligations = obligations;
+        _abandonmentTemplate = abandonmentTemplate;
     }
 
     /// <summary>
@@ -771,6 +793,13 @@ public sealed class FieldControl
 
         EntityId<ICompletion> opened = _wells.Open(completion, drains);
 
+        // UNCONDITIONAL, at creation (SDD-007 §6, design 02 §3.4): a well that
+        // is drilled will one day be plugged whatever else happens to it, and a
+        // company able to create one without the liability could walk away from
+        // the cost by never recording it.
+        _obligations.Register(
+            new EntityRef(EntityKind.Completion, opened.Value), _abandonmentTemplate);
+
         _network.Connect(new FlowConnection(
             completion.Id, WellheadOutlet,
             _chain.Manifold.Id, _chain.Manifold.SlotAt(_slotsTaken)));
@@ -785,6 +814,47 @@ public sealed class FieldControl
     /// <summary>One open well by id, or null — the door a player's lever is
     /// pulled through.</summary>
     public Completion? WellNamed(EntityId<ICompletion> well) => _wells.Find(well);
+
+    /// <summary>How many wells are still producing — abandoned ones are plugged
+    /// and no longer part of the field a player is running.</summary>
+    public int LiveWellCount => _wells.Count - _abandoned.Count;
+
+    /// <summary>
+    /// Whether the field is closed: it was developed, and every well it had is
+    /// plugged.
+    ///
+    /// <para>Both halves matter. A field nobody has drilled is not abandoned, it
+    /// is undeveloped — and it still costs its standing charge, which is what
+    /// makes doing nothing lose.</para>
+    /// </summary>
+    public bool IsAbandoned => _wells.Count > 0 && _abandoned.Count == _wells.Count;
+
+    /// <summary>
+    /// Plugs a well and discharges its obligation (SDD-007 §6).
+    ///
+    /// <para>The completion stays in the network, permanently shut: registration
+    /// is write-once and an element that vanished mid-tick would take its
+    /// tie-ins with it (SDD-002 §6). A plugged well is a closed valve that will
+    /// never open again — which is what an abandoned well IS, and it keeps the
+    /// header slot it occupied, exactly as it does on a real site.</para>
+    /// </summary>
+    public void Abandon(EntityId<ICompletion> well, AuditId cause)
+    {
+        if (_wells.Find(well) is not Completion found)
+            throw new InvariantFault("R1 §2.5", null,
+                $"an abandonment completed against well {well.Value}, which is not open");
+
+        found.SetChoke(ChokeSetting.Closed);
+        _abandoned.Add(well);
+
+        _obligations.Discharge(
+            new EntityRef(EntityKind.Completion, well.Value), new EntityId<IOperation>(cause.Value));
+    }
+
+    /// <summary>Which wells are plugged. Held here because it is what
+    /// distinguishes a shut-in well from an abandoned one, and only this layer
+    /// knows an abandonment happened.</summary>
+    private readonly HashSet<EntityId<ICompletion>> _abandoned = [];
 
     /// <summary>
     /// Turns a well's valve (SDD-003 §5.1's R20.4 amendment).
