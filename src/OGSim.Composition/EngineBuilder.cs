@@ -481,6 +481,41 @@ internal static class Defaults
 
     public static EntityId<IFlowElement> TheFlowline { get; } = new(1_000_006);
 
+    public static EntityId<IFlowElement> TheTank { get; } = new(1_000_007);
+
+    /// <summary>
+    /// Storage at the terminal (SDD-006 §5, catalogue C12), 150,000 tonnes.
+    ///
+    /// <para><b>Sized against a MONTH, because the ullage constraint is a
+    /// rate.</b> A tank offers "remaining capacity ÷ the segment's seconds" as
+    /// the mass rate it can still accept, so a tank holding less than a tick's
+    /// throughput binds on the first tick whatever else is happening — which is
+    /// storage behaving like a restriction rather than a buffer. This is several
+    /// months of an E1 field, so it fills only when production genuinely runs
+    /// ahead of export.</para>
+    ///
+    /// <para>The boil-off is why storage is not free: oil sitting in a tank
+    /// evaporates slowly, so a field that stores rather than exports loses a
+    /// little of what it stored.</para>
+    /// </summary>
+    public static Facilities.TankTier TankTier { get; } = new(
+        new ContentId("tank-terminal-e1"),
+        Capacity: new Mass(150.0e6),
+        VapourLossRatePerTick: 0.001);
+
+    /// <summary>
+    /// What the export line contracts to take, kg/s.
+    ///
+    /// <para><b>Above the first separator and below a bigger one</b>, and that is
+    /// the progression: an E1 field is vessel-limited, so the tank never fills
+    /// and export is invisible. Fit the bigger vessel and the field can make more
+    /// than the pipeline will take — the tank starts filling, and when it is full
+    /// the ullage constraint reaches back down the chain and shuts wells in
+    /// (R8-V5). One bottleneck solved is the next one met, which is the shape an
+    /// operations game is played on.</para>
+    /// </summary>
+    public static MassRate ExportOfftake { get; } = new(20.0);
+
     /// <summary>
     /// The gathering line from the header to the vessel (design 04 §5 stage 3,
     /// catalogue C06's size ladder).

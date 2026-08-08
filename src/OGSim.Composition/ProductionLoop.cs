@@ -167,6 +167,12 @@ internal sealed class ProductionLoop
 
     private readonly Func<EntityId<IFlowElement>, string> _names;
 
+    private readonly OGSim.Facilities.Tank _tank;
+    private readonly MassRate _offtake;
+
+    private OGSim.Kernel.Composition _stored;
+    private Allocation _tankProvenance;
+
     public ProductionLoop(
         SubsurfaceState subsurface,
         WellsState wells,
@@ -179,6 +185,8 @@ internal sealed class ProductionLoop
         IFlowElementRegistry network,
         IReadOnlyList<EntityId<IFlowElement>> meteredPoints,
         Func<EntityId<IFlowElement>, string> names,
+        OGSim.Facilities.Tank tank,
+        MassRate offtake,
         FieldEconomics economics,
         Temperature reservoirTemperature,
         Temperature ambient,
@@ -196,6 +204,7 @@ internal sealed class ProductionLoop
         ArgumentNullException.ThrowIfNull(network);
         ArgumentNullException.ThrowIfNull(meteredPoints);
         ArgumentNullException.ThrowIfNull(names);
+        ArgumentNullException.ThrowIfNull(tank);
         ArgumentNullException.ThrowIfNull(economics);
 
         _subsurface = subsurface;
@@ -208,6 +217,8 @@ internal sealed class ProductionLoop
         _aquifer = aquifer;
         _network = network;
         _names = names;
+        _tank = tank;
+        _offtake = offtake;
         _economics = economics;
         _reservoirTemperature = reservoirTemperature;
         _ambient = ambient;
@@ -217,6 +228,8 @@ internal sealed class ProductionLoop
         for (int i = 0; i < meteredPoints.Count; i++) _meters.Add(meteredPoints[i]);
 
         Delivered = OGSim.Kernel.Composition.Zero(materialCount);
+        _stored = OGSim.Kernel.Composition.Zero(materialCount);
+        _tankProvenance = Allocation.FromSingle(new EntityRef(EntityKind.Compartment, 1));
     }
 
     /// <summary>Stock-tank oil produced in the tick just solved — what the read
@@ -260,6 +273,7 @@ internal sealed class ProductionLoop
 
         _byCompartment.Clear();
         _chain.Clear();
+        _stored = OGSim.Kernel.Composition.Zero(_materialCount);
         double[] delivered = new double[_materialCount];
 
         for (int i = 0; i < plan.Segments.Count; i++)
@@ -349,11 +363,17 @@ internal sealed class ProductionLoop
             ElementSolution solution = report.Solutions[i];
             if (!_meters.Contains(solution.Element)) continue;
 
-            OGSim.Kernel.Composition onSpec =
-                solution.Converged.Outlets[OnSpecLeg].MassRates;
+            MaterialStream passed = solution.Converged.Outlets[OnSpecLeg];
+            OGSim.Kernel.Composition onSpec = passed.MassRates;
 
             for (int m = 0; m < _materialCount; m++)
                 delivered[m] += onSpec[new MaterialId(m)].KgPerSecond * seconds;
+
+            // What the tank receives is exactly what the meter passed, with the
+            // provenance it carries — so a lifting out of storage allocates back
+            // to the compartments that filled it (SDD-002 §3, design 04 §2.2).
+            _stored = onSpec;
+            _tankProvenance = passed.Provenance;
         }
     }
 
@@ -475,6 +495,34 @@ internal sealed class ProductionLoop
     /// would be a custody transfer that did not happen, and the ledger's rule
     /// would be satisfied by a fiction.</para>
     /// </summary>
+    /// <summary>
+    /// Stage 6, after the solve: what reached the tank is held, and what the
+    /// export line contracts to take is lifted.
+    ///
+    /// <para>The two together are the buffer. A field producing below its export
+    /// rate never fills the tank and never notices it; one producing above fills
+    /// it, and when it is full the ullage constraint reaches back down the chain
+    /// and shuts wells in (R8-V5) — which is the moment a player has to decide
+    /// between more storage, more export and less production.</para>
+    /// </summary>
+    public void StoreAndExport(Duration tick)
+    {
+        _tank.Receive(_stored, _tankProvenance, tick);
+
+        // Boil-off first, because oil that evaporated was never available to
+        // lift. It is a conservation term, not a rounding: the tank reports it
+        // and stage 9 will account it as fugitive emissions.
+        _tank.VapourLossOver(tick);
+
+        MaterialInventory lifted = _tank.Draw(new Mass(_offtake.KgPerSecond * tick.Seconds));
+
+        Exported = lifted.Total;
+    }
+
+    /// <summary>What left for market this tick. What the tank could not hold
+    /// stays in it, and what it could not take never left the field.</summary>
+    public Mass Exported { get; private set; }
+
     public void RecordCustody()
     {
         _sale = null;
@@ -714,6 +762,11 @@ internal sealed class CustodyStage(ProductionLoop loop) : ITickStage
     public void Execute(TickContext context)
     {
         ArgumentNullException.ThrowIfNull(context);
+
+        // Store, lift, then record. Custody is metered on the way INTO storage,
+        // so what is recorded is what the meter passed — and the lifting is what
+        // makes room for next month rather than a second transfer.
+        loop.StoreAndExport(Duration.FromTicks(1.0));
         loop.RecordCustody();
     }
 }

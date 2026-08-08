@@ -71,6 +71,12 @@ public sealed class Tank : IFlowElement
     /// <summary>Remaining capacity, kg. Zero is <c>tank.full</c>.</summary>
     public Mass Ullage => new(Math.Max(0.0, _tier.Capacity.Kilograms - _held.Total.Kilograms));
 
+    /// <summary>The ports by name, so a caller wiring the chain never writes a
+    /// bare index.</summary>
+    public static PortId Inlet { get; } = new(0);
+
+    public static PortId Outlet { get; } = new(1);
+
     public IReadOnlyList<PortSpec> Ports { get; } =
     [
         new PortSpec(new PortId(0), PortDirection.Inlet, PortRole.Main),

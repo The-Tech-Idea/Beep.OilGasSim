@@ -181,7 +181,7 @@ public sealed class ChainTests
 
         Assert.Equal(
             ["well-1", "manifold", "flowline", "separator", "custody-meter", "flare",
-             "water-disposal"],
+             "water-disposal", "tank"],
             engine.ReadModel!.Chain.Select(element => element.DisplayId));
     }
 
@@ -408,6 +408,56 @@ public sealed class ChainTests
 
         Assert.Contains(rejected.Reasons,
             reason => reason.LocId == "$loc:reject.top-of-the-ladder");
+    }
+
+    // ------------------------------------------------ one bottleneck, then the next
+
+    /// <summary>
+    /// R8-V5, and the progression that makes an operations game an operations
+    /// game: solving one constraint is meeting the next.
+    ///
+    /// <para>An E1 field is VESSEL-limited, so the tank never fills and export is
+    /// invisible. Fit the bigger separator and the field can make more than the
+    /// pipeline will take — the tank starts filling, and when it is full the
+    /// ullage constraint reaches back down the chain and throttles the wells.
+    /// The player has traded a separator problem for an export problem, which is
+    /// the whole shape of debottlenecking.</para>
+    /// </summary>
+    [Fact]
+    public void R8V5_fixing_the_vessel_meets_the_export_limit_and_the_tank_backs_up()
+    {
+        (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled();
+
+        for (var well = 0; well < 6; well++) Produce(engine, target);
+
+        engine.Pipeline.AdvanceTick();
+
+        // The vessel binds; the tank is empty and silent.
+        Assert.Equal("separator", Assert.Single(engine.ReadModel!.Bottlenecks).DisplayId);
+
+        Assert.IsType<Accepted>(engine.Commands.Submit(new InstallSeparatorCommand()));
+        engine.Pipeline.AdvanceTick();
+        while (engine.ReadModel!.ActivitiesRunning > 0) engine.Pipeline.AdvanceTick();
+
+        // Now the field can make more than the line will take. Run until the
+        // tank fills and starts refusing.
+        var jammed = false;
+        for (var month = 0; month < 60 && !jammed; month++)
+        {
+            engine.Pipeline.AdvanceTick();
+
+            foreach (ChainElementView element in engine.ReadModel!.Bottlenecks)
+                if (element.DisplayId == "tank") jammed = true;
+        }
+
+        Assert.True(jammed,
+            "a field producing above its export rate must eventually fill the tank and be " +
+            "throttled by it (R8-V5), or storage is a decoration on the chain");
+
+        ChainElementView tank = Assert.Single(
+            engine.ReadModel!.Chain, element => element.DisplayId == "tank");
+
+        Assert.Equal(ConstraintKind.Ullage, Assert.Single(tank.Deferred).Kind);
     }
 
     // ------------------------------------------------------------- the header

@@ -123,7 +123,7 @@ public sealed class RealityProfileTests
 
             Assert.Equal(
                 ["well-1", "manifold", "flowline", "separator", "custody-meter", "flare",
-             "water-disposal"],
+             "water-disposal", "tank"],
                 engine.ReadModel!.Chain.Select(element => element.DisplayId));
 
             // And the verb that answers a bottleneck is on offer either way.

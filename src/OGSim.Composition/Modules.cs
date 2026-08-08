@@ -280,7 +280,21 @@ internal sealed class FacilitiesModule() : EngineModule(Declare(
         disposal.SetInjectionConditions(
             Defaults.DisposalFormationPressure, Defaults.DisposalPressure);
 
+        // STORAGE, after the meter. The oil is metered on its way in — pipeline
+        // export metering, a real arrangement — and the tank is what lets a
+        // field produce above its export rate for a while instead of being
+        // throttled the moment it does.
+        var tank = new OGSim.Facilities.Tank(
+            Defaults.TheTank, Defaults.TankTier, Defaults.MaterialCount,
+            MaterialInventory.Empty(Defaults.MaterialCount),
+
+            // Empty tanks hold nobody's oil, and an allocation must name at
+            // least one compartment — so the opening provenance names the field
+            // and is replaced by the first receipt's blend.
+            Allocation.FromSingle(new EntityRef(EntityKind.Compartment, 1)));
+
         network.Add(disposal);
+        network.Add(tank);
 
         network.Connect(new FlowConnection(
             manifold.Id, manifold.Outlet,
@@ -307,8 +321,12 @@ internal sealed class FacilitiesModule() : EngineModule(Declare(
             separator.Id, OGSim.Facilities.Separator.WaterOutlet,
             disposal.Id, OGSim.Wells.Injector.Inlet));
 
+        network.Connect(new FlowConnection(
+            custody.Id, OGSim.Facilities.CustodyTransferPoint.OnSpecOutlet,
+            tank.Id, OGSim.Facilities.Tank.Inlet));
+
         composition.Provide(
-            new SurfaceChain(manifold, flowline, separator, custody, flare, disposal));
+            new SurfaceChain(manifold, flowline, separator, custody, flare, disposal, tank));
     }
 }
 
@@ -327,7 +345,8 @@ internal sealed record SurfaceChain(
     OGSim.Facilities.Separator Separator,
     OGSim.Facilities.CustodyTransferPoint Custody,
     OGSim.Facilities.Flare Flare,
-    OGSim.Wells.Injector Disposal)
+    OGSim.Wells.Injector Disposal,
+    OGSim.Facilities.Tank Tank)
 {
     /// <summary>Where a well ties in, and how many can. One list rather than a
     /// count, so a caller cannot forget which port a slot index means.</summary>
@@ -353,6 +372,7 @@ internal sealed record SurfaceChain(
         if (element == Custody.Id) return "custody-meter";
         if (element == Flare.Id) return "flare";
         if (element == Disposal.Id) return "water-disposal";
+        if (element == Tank.Id) return "tank";
 
         return "well-" + element.Value.ToString(
             System.Globalization.CultureInfo.InvariantCulture);
@@ -501,6 +521,8 @@ internal sealed class FieldModule() : EngineModule(Declare(
             network,
             chain.MeteredPoints,
             chain.NameOf,
+            chain.Tank,
+            Defaults.ExportOfftake,
             Defaults.Economics,
             Defaults.ReservoirTemperature,
             Defaults.SurfaceAmbient,
