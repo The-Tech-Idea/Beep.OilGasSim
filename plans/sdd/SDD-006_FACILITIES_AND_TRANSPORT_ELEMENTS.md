@@ -525,6 +525,38 @@ a stream can fail either end — rich gas is off-spec as surely as lean.
 > guess. The reservoir sets what CAN be produced; the player sizes what actually
 > lifts it, and is wrong about it at their own expense.
 
+## 7c. The chain belongs to a field, not to the engine
+
+> **R20d.8 finding (167), recorded rather than worked around.** The world now
+> places accumulations on the map with real positions and real extents, and
+> harbours with real depths — so the distance from a field to its route to market
+> is a number that exists. **Nothing can consume it**, and the reason is
+> structural rather than missing code.
+>
+> The surface chain — manifold, flowline, separator, meter, tank, terminal — is
+> composed once, by `FacilitiesModule`, before any world exists. Its flowline is
+> therefore a content constant (2 km), so a remote discovery costs exactly what
+> one beside the harbour costs, and a basin's geography is scenery. Worse, one
+> chain cannot serve a multi-prospect world at all: a company that develops two
+> accumulations forty kilometres apart has two gathering systems, and this
+> composition can only express one.
+>
+> **The fix is an ordering, and it is the same one finding 164's second half
+> pointed at.** A chain is laid when a field is developed, from that field's
+> position to the harbour it is routed to — so it cannot be composed before the
+> world is generated OR before the player has chosen. Two consequences:
+>
+> 1. `CreateNew` generates BEFORE composing (the generator needs only an
+>    `IRandomStream`, never a module store — SDD-010 §4 already guarantees this),
+>    so composition can build what the world justifies.
+> 2. A surface chain becomes a per-field object created by development, not a
+>    singleton owned by a module. `SurfaceChain` is already a unit-of-composition;
+>    what changes is how many there are and when they exist.
+>
+> Until then, distance is generated, rendered, and charged for by nobody. Stated
+> here so that the flowline's constant length is read as a known gap rather than
+> as a decision.
+
 ## 8. Datasheet field registry (content ⇄ code)
 
 Per-unit-kind closed datasheet blocks (SDD-004 §6): separator {gasRating,
