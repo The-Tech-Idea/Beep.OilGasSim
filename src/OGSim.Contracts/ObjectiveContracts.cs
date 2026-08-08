@@ -105,3 +105,53 @@ public sealed record Objective(
     Tick? Deadline,
     double Weight,
     bool Visible);
+
+/// <summary>
+/// The sealed position an objective is evaluated against (SDD-014 §5a):
+/// read-model values by PATH, the collections an <see cref="Aggregate"/>
+/// quantifies over, and the tick's events. Nothing else.
+///
+/// <para>It lives here rather than in <c>OGSim.Objectives</c> because it crosses
+/// a contract boundary — <see cref="IScenarioRunner.Evaluate"/> takes one. The
+/// evaluator that consumes it stays in the module: the same split as
+/// <c>Observation</c> and <c>ObservationSampler</c>, where the shape is
+/// vocabulary and the thing that acts on it is not.</para>
+/// </summary>
+public sealed record ObjectiveSnapshot(
+    IReadOnlyDictionary<string, double> Values,
+    IReadOnlyDictionary<string, IReadOnlyList<IReadOnlyDictionary<string, double>>> Collections,
+    IReadOnlyList<EngineEvent> Events)
+{
+    // Finding 131. Collections nests a list of maps inside a map, so the
+    // per-element comparison has to reach all the way down — which is exactly
+    // what the default equality does not do at any level.
+    public bool Equals(ObjectiveSnapshot? other) =>
+        other is not null
+        && Structural.Equal(Values, other.Values)
+        && CollectionsEqual(Collections, other.Collections)
+        && Structural.Equal(Events, other.Events);
+
+    private static bool CollectionsEqual(
+        IReadOnlyDictionary<string, IReadOnlyList<IReadOnlyDictionary<string, double>>> left,
+        IReadOnlyDictionary<string, IReadOnlyList<IReadOnlyDictionary<string, double>>> right)
+    {
+        if (left.Count != right.Count) return false;
+
+        foreach (KeyValuePair<string, IReadOnlyList<IReadOnlyDictionary<string, double>>> pair in left)
+        {
+            if (!right.TryGetValue(pair.Key, out IReadOnlyList<IReadOnlyDictionary<string, double>>? other))
+                return false;
+
+            if (pair.Value.Count != other.Count) return false;
+
+            for (int i = 0; i < pair.Value.Count; i++)
+                if (!Structural.Equal(pair.Value[i], other[i])) return false;
+        }
+
+        return true;
+    }
+
+    public override int GetHashCode() =>
+        HashCode.Combine(Structural.HashOf(Values), Collections.Count,
+                         Structural.HashOf(Events));
+}

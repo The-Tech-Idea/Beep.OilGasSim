@@ -314,12 +314,88 @@ internal static class Defaults
             lift: null);
     }
 
+    // ------------------------------------------------------- the read model's paths
+    //
+    // SDD-014 §2's registry, as the paths THIS read model can fill. An objective
+    // naming anything else is refused when the engine composes, rather than
+    // evaluated against a zero nobody computed.
+    //
+    // Money is in CENTS: a path is a double and the ledger is a scaled integer,
+    // so the projection carries the integer's own unit rather than introducing a
+    // second rounding rule (SDD-001 §1.3).
+
+    public static IReadOnlyList<ProjectedPath> ProjectedPaths { get; } =
+    [
+        new("company.cash", position => position.Cash.Cents),
+        new("company.insolvent", position => position.Insolvent ? 1.0 : 0.0),
+        new("field.wells", position => position.Wells),
+        new("field.activitiesRunning", position => position.ActivitiesRunning),
+        new("field.producedThisTick", position => position.ProducedThisTick.CubicMetres),
+    ];
+
     /// <summary>
-    /// What this scenario asks for: double the opening cash inside ten years.
-    /// Reachable with a few good wells and out of reach if the early holes are
-    /// dry — which is what makes the first drilling decision matter.
+    /// Double the opening cash. Named so the goal and the opening position
+    /// cannot drift apart silently.
+    ///
+    /// <para>Declared BEFORE the scenario that reads it: static initialisers run
+    /// in declaration order, so a target declared below would be zero when the
+    /// objective is built — and "cash at least zero" is met in month one, which
+    /// is a scenario that cannot be lost rather than a compile error. The same
+    /// trap the activity terms above carry a note about.</para>
     /// </summary>
-    public static ScenarioGoal Goal { get; } = new(Money.FromMillions(100.0), new Tick(120));
+    private static Money TargetCash { get; } = Money.FromMillions(100.0);
+
+    /// <summary>
+    /// The scenario this composition ships (SDD-014 §5). Content in a finished
+    /// game — R21f authors the twelve missions — and stated here as the records a
+    /// loader will produce, so the runner that reads it is the shipped one rather
+    /// than a path only content will ever take.
+    ///
+    /// <para>What it asks for: double the opening cash inside ten years.
+    /// Reachable with a few good wells and out of reach if the early holes are
+    /// dry, which is what makes the first drilling decision matter. Running out
+    /// of money is a `Never` in <c>Failures</c> — the hard limit that ends the
+    /// run rather than a goal the player works toward.</para>
+    ///
+    /// <para><c>Scoring</c> is EMPTY, and honestly: SDD-014 §4's eight formulas
+    /// read ledger and registry values this loop does not publish yet, and that
+    /// document says an empty scoring list is what a sandbox is. A weight here
+    /// would be a promise of a number nothing computes.</para>
+    /// </summary>
+    public static Scenario FirstField { get; } = new(
+        Id: new ContentId("first-field"),
+        World: new GeneratedWorld(Seed: 1),
+        StartingState: new ContentId("opening-position"),
+        Objectives:
+        [
+            new Objective(
+                new ContentId("double-the-opening-cash"),
+                new Compare(
+                    new Metric(new ReadModelPath("company.cash")),
+                    CompareOp.Ge,
+                    new Const(TargetCash.Cents)),
+                Deadline: null,
+                Weight: 1.0,
+                Visible: true),
+        ],
+        Failures:
+        [
+            new Objective(
+                new ContentId("stay-solvent"),
+                new Never(
+                    new Compare(
+                        new Metric(new ReadModelPath("company.insolvent")),
+                        CompareOp.Ge,
+                        new Const(1.0))),
+                Deadline: null,
+                Weight: 1.0,
+                Visible: true),
+        ],
+        Scoring: [],
+        RealityProfile: new ContentId("standard"),
+        Script: [],
+        Deadline: new Tick(120));
+
 
     public static Temperature ReservoirTemperature { get; } = Temperature.FromCelsius(93.3);
 

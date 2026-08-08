@@ -62,8 +62,8 @@ public class PredicateTests
 {
     private static readonly ObjectiveEvaluator Evaluator = new();
 
-    private static bool Eval(Predicate condition, ObjectiveSnapshot snapshot, ObjectiveState? state = null) =>
-        Evaluator.Evaluate(Fx.Obj(condition), snapshot, state ?? new ObjectiveState());
+    private static bool Eval(Predicate condition, ObjectiveSnapshot snapshot, PredicateState? state = null) =>
+        Evaluator.Evaluate(Fx.Obj(condition), snapshot, state ?? new PredicateState());
 
     [Fact] // Comparison, all six ways
     public void GM1_comparisons_evaluate_against_the_read_model()
@@ -111,7 +111,7 @@ public class PredicateTests
     [Fact] // sustained-for needs CONSECUTIVE ticks
     public void GM1_sustained_for_counts_consecutive_ticks()
     {
-        var state = new ObjectiveState();
+        var state = new PredicateState();
         var condition = new SustainedFor(Fx.Above("field.rate", 100.0), Ticks: 3);
 
         Assert.False(Eval(condition, Fx.With(("field.rate", 150.0)), state));
@@ -122,7 +122,7 @@ public class PredicateTests
     [Fact] // An interruption RESETS the counter
     public void GM1_sustained_for_resets_when_the_condition_lapses()
     {
-        var state = new ObjectiveState();
+        var state = new PredicateState();
         var condition = new SustainedFor(Fx.Above("field.rate", 100.0), Ticks: 3);
 
         Eval(condition, Fx.With(("field.rate", 150.0)), state);
@@ -144,7 +144,7 @@ public class PredicateTests
     [Fact] // A sequence is satisfied IN ORDER
     public void GM1_a_sequence_advances_step_by_step()
     {
-        var state = new ObjectiveState();
+        var state = new PredicateState();
         var condition = new InSequence(
             [Fx.Above("company.cash", 10.0), Fx.Above("field.rate", 100.0)]);
 
@@ -161,7 +161,7 @@ public class PredicateTests
     [Fact] // The index never goes backwards
     public void GM1_a_completed_sequence_stays_completed()
     {
-        var state = new ObjectiveState();
+        var state = new PredicateState();
         var condition = new InSequence([Fx.Above("company.cash", 10.0)]);
 
         Assert.True(Eval(condition, Fx.With(("company.cash", 50.0)), state));
@@ -176,7 +176,7 @@ public class PredicateTests
     [Fact] // `Never` is a FAILURE condition: once broken, broken for good
     public void GM1_never_stays_broken_once_it_has_been_broken()
     {
-        var state = new ObjectiveState();
+        var state = new PredicateState();
         var condition = new Never(Fx.Above("field.rate", 1000.0));
 
         Assert.True(Eval(condition, Fx.With(("field.rate", 500.0)), state));
@@ -378,7 +378,7 @@ public class ObserveNeverInfluenceTests
             new Dictionary<string, IReadOnlyList<IReadOnlyDictionary<string, double>>>(),
             []);
 
-        var state = new ObjectiveState();
+        var state = new PredicateState();
         new ObjectiveEvaluator().Evaluate(
             Fx.Obj(new SustainedFor(Fx.Above("field.rate", 100.0), 3)), snapshot, state);
 
@@ -392,7 +392,7 @@ public class ObserveNeverInfluenceTests
     public void R24V4_a_missing_snapshot_value_is_an_invariant_fault()
     {
         var fault = Assert.Throws<InvariantFault>(() => new ObjectiveEvaluator().Evaluate(
-            Fx.Obj(Fx.Above("company.rrr", 1.0)), Fx.Snapshot(), new ObjectiveState()));
+            Fx.Obj(Fx.Above("company.rrr", 1.0)), Fx.Snapshot(), new PredicateState()));
 
         // Defaulting to zero would make an objective silently true — and a
         // scenario that completed itself because a projection was renamed is

@@ -239,7 +239,16 @@ public interface IScenarioRunner
     /// uses.</summary>
     IReadOnlyList<ScriptedEntry> EntriesFor(Tick tick);
 
-    /// <summary>Stage 12. Reads a sealed position and reports how the run
-    /// stands.</summary>
-    ScenarioProgress Evaluate(ReadModel readModel, Tick tick);
+    /// <summary>
+    /// Stage 12. Reads a sealed position and reports how the run stands.
+    ///
+    /// <para>The POSITION, not <see cref="ReadModel"/> (SDD-014 §5a). An
+    /// objective sees the read model through paths validated against the
+    /// registry, and the snapshot is that view; handing a runner the record
+    /// would make it flatten fifteen nested views itself, duplicating the
+    /// registry SDD-017 §3 generates from those same records — and a plugin that
+    /// flattened differently would evaluate content against paths it was never
+    /// validated against.</para>
+    /// </summary>
+    ScenarioProgress Evaluate(ObjectiveSnapshot position, Tick tick);
 }

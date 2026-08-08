@@ -18,50 +18,15 @@ using OGSim.Kernel;
 namespace OGSim.Objectives;
 
 /// <summary>
-/// The sealed snapshot an objective is evaluated against: read-model values and
-/// the tick's events, and nothing else.
+/// The stateful nodes' counters, persisted with the objective (SDD-013).
+///
+/// <para>Not <c>ObjectiveState</c>, which is what an objective has COME TO
+/// (SDD-014 §5a). This is what its <see cref="SustainedFor"/>,
+/// <see cref="InSequence"/> and <see cref="Never"/> nodes have accumulated on
+/// the way — a different concept, and the two meet on one object the moment a
+/// scenario runner is written.</para>
 /// </summary>
-public sealed record ObjectiveSnapshot(
-    IReadOnlyDictionary<string, double> Values,
-    IReadOnlyDictionary<string, IReadOnlyList<IReadOnlyDictionary<string, double>>> Collections,
-    IReadOnlyList<EngineEvent> Events)
-{
-    // Finding 131. Collections nests a list of maps inside a map, so the
-    // per-element comparison has to reach all the way down — which is exactly
-    // what the default equality does not do at any level.
-    public bool Equals(ObjectiveSnapshot? other) =>
-        other is not null
-        && Structural.Equal(Values, other.Values)
-        && CollectionsEqual(Collections, other.Collections)
-        && Structural.Equal(Events, other.Events);
-
-    private static bool CollectionsEqual(
-        IReadOnlyDictionary<string, IReadOnlyList<IReadOnlyDictionary<string, double>>> left,
-        IReadOnlyDictionary<string, IReadOnlyList<IReadOnlyDictionary<string, double>>> right)
-    {
-        if (left.Count != right.Count) return false;
-
-        foreach (KeyValuePair<string, IReadOnlyList<IReadOnlyDictionary<string, double>>> pair in left)
-        {
-            if (!right.TryGetValue(pair.Key, out IReadOnlyList<IReadOnlyDictionary<string, double>>? other))
-                return false;
-
-            if (pair.Value.Count != other.Count) return false;
-
-            for (int i = 0; i < pair.Value.Count; i++)
-                if (!Structural.Equal(pair.Value[i], other[i])) return false;
-        }
-
-        return true;
-    }
-
-    public override int GetHashCode() =>
-        HashCode.Combine(Structural.HashOf(Values), Collections.Count,
-                         Structural.HashOf(Events));
-}
-
-/// <summary>The stateful nodes' counters, persisted with the objective (SDD-013).</summary>
-public sealed class ObjectiveState
+public sealed class PredicateState
 {
     private readonly Dictionary<string, int> _sustained = [];
     private readonly Dictionary<string, int> _sequenceStep = [];
@@ -193,7 +158,7 @@ public sealed class ObjectiveEvaluator
     /// Evaluates one objective. <paramref name="state"/> carries the stateful
     /// nodes' counters between ticks and is the ONLY thing mutated.
     /// </summary>
-    public bool Evaluate(Objective objective, ObjectiveSnapshot snapshot, ObjectiveState state)
+    public bool Evaluate(Objective objective, ObjectiveSnapshot snapshot, PredicateState state)
     {
         ArgumentNullException.ThrowIfNull(objective);
         ArgumentNullException.ThrowIfNull(snapshot);
@@ -202,7 +167,7 @@ public sealed class ObjectiveEvaluator
         return Truth(objective.Condition, snapshot, state, objective.Id.Value);
     }
 
-    private bool Truth(Predicate predicate, ObjectiveSnapshot snapshot, ObjectiveState state, string node)
+    private bool Truth(Predicate predicate, ObjectiveSnapshot snapshot, PredicateState state, string node)
     {
         switch (predicate)
         {
@@ -259,7 +224,7 @@ public sealed class ObjectiveEvaluator
     /// compliance.</para>
     /// </summary>
     private bool Sustained(
-        SustainedFor sustained, ObjectiveSnapshot snapshot, ObjectiveState state, string node)
+        SustainedFor sustained, ObjectiveSnapshot snapshot, PredicateState state, string node)
     {
         string key = $"{node}.sustained";
 
@@ -282,7 +247,7 @@ public sealed class ObjectiveEvaluator
     /// by producing first.
     /// </summary>
     private bool Sequence(
-        InSequence sequence, ObjectiveSnapshot snapshot, ObjectiveState state, string node)
+        InSequence sequence, ObjectiveSnapshot snapshot, PredicateState state, string node)
     {
         string key = $"{node}.sequence";
         int step = state.SequenceStep(key);
@@ -300,7 +265,7 @@ public sealed class ObjectiveEvaluator
     /// a promise about the whole scenario rather than a momentary check.
     /// </summary>
     private bool NeverBroken(
-        Never never, ObjectiveSnapshot snapshot, ObjectiveState state, string node)
+        Never never, ObjectiveSnapshot snapshot, PredicateState state, string node)
     {
         string key = $"{node}.never";
 

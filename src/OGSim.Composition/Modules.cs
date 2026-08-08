@@ -411,12 +411,21 @@ internal sealed class FieldModule() : EngineModule(Declare(
         var activities = new ActivityState(scheduler, company, catalogue);
         composition.Own(activities);
 
-        var objectives = new ObjectiveStage(company, Defaults.Goal, audit);
+        var projection = new FieldProjection(
+            loop, company, field, activities, composition.Require<IBeliefStore>());
+
+        // The scenario is CONTENT (design 03 §3.3): the win condition is an
+        // objective over a read-model path, not a comparison compiled into a
+        // stage. Defaults.FirstField is the JSON a loader will hand over at
+        // R21f without a line here changing — and the runner refuses at
+        // composition time if it names a path this read model cannot fill.
+        var paths = new ReadModelPaths(Defaults.ProjectedPaths);
+        var runner = new ScenarioRunner(Defaults.FirstField, paths.Schema);
+
+        var objectives = new ObjectiveStage(company, runner, paths, projection, audit);
         composition.Contribute(order: 0, objectives);
 
-        var close = new CloseStage(
-            loop, company, field, activities, objectives,
-            composition.Require<IBeliefStore>());
+        var close = new CloseStage(projection, objectives);
         composition.Contribute(order: 0, close);
         composition.Provide(close);
 

@@ -483,15 +483,26 @@ public sealed class GameplayTests
         for (var month = 0; month < 120; month++)
         {
             engine.Pipeline.AdvanceTick();
-            if (engine.ReadModel!.Outcome != Outcome.Playing) break;
+            if (engine.ReadModel!.Outcome != ObjectiveState.Pending) break;
         }
 
-        Assert.Equal(Outcome.Won, engine.ReadModel!.Outcome);
+        Assert.Equal(ObjectiveState.Met, engine.ReadModel!.Outcome);
     }
 
-    /// <summary>A player who does nothing runs out of money and loses.</summary>
+    /// <summary>
+    /// A player who does nothing runs out of TIME, not money — and the two are
+    /// now different verdicts (SDD-014 §5a).
+    ///
+    /// <para>At $300k a month the opening $50M lasts about fourteen years and
+    /// the deadline is ten, so an idle company is <c>Expired</c> and not
+    /// <c>Failed</c>. That is a real statement about the shipped numbers, and
+    /// the old enum could not make it: `Lost` covered both, so a scenario that
+    /// ended one way looked identical to one that ended the other, and a
+    /// campaign branching on it (SDD-014 §5) would have had nothing to
+    /// branch on.</para>
+    /// </summary>
     [Fact]
-    public void A_player_who_does_nothing_loses()
+    public void A_player_who_does_nothing_runs_out_of_time()
     {
         Built built = Assert.IsType<Built>(EngineBuilder.Build(Fixture.Settings()));
         Engine engine = built.Engine;
@@ -499,10 +510,39 @@ public sealed class GameplayTests
         for (var month = 0; month < 200; month++)
         {
             engine.Pipeline.AdvanceTick();
-            if (engine.ReadModel!.Outcome != Outcome.Playing) break;
+            if (engine.ReadModel!.Outcome != ObjectiveState.Pending) break;
         }
 
-        Assert.Equal(Outcome.Lost, engine.ReadModel!.Outcome);
+        Assert.Equal(ObjectiveState.Expired, engine.ReadModel!.Outcome);
+        Assert.False(engine.ReadModel.Insolvent, "the money had not run out yet");
+    }
+
+    /// <summary>
+    /// SDD-014 §5a's precedence, where it matters: a company that spends itself
+    /// broke has FAILED, not expired, even though the deadline is what an idle
+    /// company would have hit first.
+    ///
+    /// <para>The money is gone before the goal is measured, and that is the
+    /// order it happens in — so the failure objective wins over the deadline
+    /// rather than over whichever the loop happened to check first.</para>
+    /// </summary>
+    [Fact]
+    public void A_company_that_spends_itself_broke_has_failed_not_expired()
+    {
+        (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled();
+
+        // Surveys, one after another: $2.5M each, no rig, no wellbore — the one
+        // way to burn the opening cash without ever earning any back.
+        for (var month = 0; month < 120; month++)
+        {
+            engine.Commands.Submit(new SeismicSurveyCommand(target));
+            engine.Pipeline.AdvanceTick();
+
+            if (engine.ReadModel!.Outcome != ObjectiveState.Pending) break;
+        }
+
+        Assert.True(engine.ReadModel!.Insolvent, "the company had to actually run out");
+        Assert.Equal(ObjectiveState.Failed, engine.ReadModel.Outcome);
     }
 
     /// <summary>
@@ -517,10 +557,10 @@ public sealed class GameplayTests
 
         for (var attempt = 0; attempt < 5; attempt++) engine.Commands.Submit(Drill(target));
 
-        while (engine.ReadModel?.Outcome is null or Outcome.Playing)
+        while (engine.ReadModel?.Outcome is null or ObjectiveState.Pending)
             engine.Pipeline.AdvanceTick();
 
-        Outcome verdict = engine.ReadModel!.Outcome;
+        ObjectiveState verdict = engine.ReadModel!.Outcome;
 
         for (var month = 0; month < 240; month++) engine.Pipeline.AdvanceTick();
 
@@ -538,7 +578,7 @@ public sealed class GameplayTests
 
         engine.Pipeline.AdvanceTick();
 
-        Assert.Equal(Outcome.Playing, engine.ReadModel!.Outcome);
+        Assert.Equal(ObjectiveState.Pending, engine.ReadModel!.Outcome);
     }
 
     /// <summary>

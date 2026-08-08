@@ -46,6 +46,25 @@ public sealed record BeliefEntryView(
     GameDate AsOf);
 
 /// <summary>
+/// The month's facts, as an objective reads them and the read model reports
+/// them.
+///
+/// <para>Separate from <see cref="FieldReadModel"/> because the read model also
+/// carries the scenario's VERDICT on the month, and an objective that could read
+/// its own verdict would be evaluating a circle. What is true is taken once, at
+/// stage 12; what it means is decided from it; both are published together at
+/// stage 13.</para>
+/// </summary>
+public sealed record FieldPosition(
+    Tick Tick,
+    GameDate Date,
+    Money Cash,
+    int Wells,
+    int ActivitiesRunning,
+    SurfaceVolume ProducedThisTick,
+    bool Insolvent);
+
+/// <summary>
 /// What the player can see, rebuilt at the close of every tick.
 ///
 /// <para>Deliberately NOT the full SDD-017 read model — that is R21's whole
@@ -68,65 +87,51 @@ public sealed record FieldReadModel(
     int ActivitiesRunning,
     SurfaceVolume ProducedThisTick,
     bool Insolvent,
-    Outcome Outcome,
+    ScenarioProgress Progress,
     IReadOnlyList<BeliefEntryView> Beliefs)
 {
+    /// <summary>How the run stands (SDD-014 §5a). <c>Pending</c> until the
+    /// scenario says otherwise.</summary>
+    public ObjectiveState Outcome => Progress.Overall;
+
     // Finding 131: a record carrying a collection compares it by reference.
     public bool Equals(FieldReadModel? other) =>
         other is not null && Tick == other.Tick && Date == other.Date
         && Cash == other.Cash && Wells == other.Wells
         && ActivitiesRunning == other.ActivitiesRunning
         && ProducedThisTick == other.ProducedThisTick
-        && Insolvent == other.Insolvent && Outcome == other.Outcome
+        && Insolvent == other.Insolvent && Progress == other.Progress
         && Structural.Equal(Beliefs, other.Beliefs);
 
     public override int GetHashCode() =>
         HashCode.Combine(Tick, Date, Cash, Wells, ActivitiesRunning, ProducedThisTick,
-            HashCode.Combine(Insolvent, Outcome, Structural.HashOf(Beliefs)));
+            HashCode.Combine(Insolvent, Progress, Structural.HashOf(Beliefs)));
 }
 
-// -------------------------------------------------------------- losing
-
-// Design 09s failure condition, at its simplest true form: a company that
-// cannot pay is finished. It is recorded as an AUDIT entry and surfaced on the
-// read model rather than as an EngineEvent — an event carries a loop role and a
-// player-visibility flag (SDD-001 §8) and those are R21s to decide, not
-// something to guess at here.
-
 /// <summary>
-/// Stage 13. Publishes the read model and decides whether the company is still
-/// playing.
+/// The one projection from live state to what a player sees.
+///
+/// <para>Stage 12 <see cref="Take"/>s the month's facts to judge them; stage 13
+/// <see cref="Publish"/>es those same facts with the verdict attached. One owner,
+/// so the number an objective was measured against and the number the host is
+/// shown are the same number (law L5) rather than two reads of a field that
+/// nothing stops drifting apart.</para>
 /// </summary>
-internal sealed class CloseStage(
+internal sealed class FieldProjection(
     ProductionLoop loop,
     CompanyState company,
     FieldControl field,
     ActivityState activities,
-    ObjectiveStage objectives,
-    IBeliefStore beliefs) : ITickStage
+    IBeliefStore beliefs)
 {
-    public StageId Id => StageId.Close;
+    public FieldPosition Take(Tick tick, GameDate date, bool insolvent) =>
+        new(tick, date, company.Ledger.Cash, field.WellCount, activities.InProgress,
+            loop.ProducedThisTick, insolvent);
 
-    /// <summary>The tick just closed, as the host reads it.</summary>
-    public FieldReadModel? Published { get; private set; }
-
-    public bool Insolvent => objectives.Insolvent;
-
-    public void Execute(TickContext context)
-    {
-        ArgumentNullException.ThrowIfNull(context);
-
-        Published = new FieldReadModel(
-            context.Tick,
-            context.Date,
-            company.Ledger.Cash,
-            field.WellCount,
-            activities.InProgress,
-            loop.ProducedThisTick,
-            objectives.Insolvent,
-            objectives.Outcome,
-            Project(beliefs));
-    }
+    public FieldReadModel Publish(FieldPosition position, ScenarioProgress progress) =>
+        new(position.Tick, position.Date, position.Cash, position.Wells,
+            position.ActivitiesRunning, position.ProducedThisTick, position.Insolvent,
+            progress, Project(beliefs));
 
     /// <summary>
     /// SDD-008 §8's projection, at the close: everything the company has learned,
@@ -162,5 +167,45 @@ internal sealed class CloseStage(
         }
 
         return entries;
+    }
+}
+
+// -------------------------------------------------------------- losing
+
+// Design 09s failure condition, at its simplest true form: a company that
+// cannot pay is finished. It is recorded as an AUDIT entry and surfaced on the
+// read model rather than as an EngineEvent — an event carries a loop role and a
+// player-visibility flag (SDD-001 §8) and those are R21s to decide, not
+// something to guess at here.
+
+/// <summary>
+/// Stage 13. Publishes the read model and decides whether the company is still
+/// playing.
+/// </summary>
+internal sealed class CloseStage(
+    FieldProjection projection,
+    ObjectiveStage objectives) : ITickStage
+{
+    public StageId Id => StageId.Close;
+
+    /// <summary>The tick just closed, as the host reads it.</summary>
+    public FieldReadModel? Published { get; private set; }
+
+    public bool Insolvent => objectives.Insolvent;
+
+    public void Execute(TickContext context)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+
+        // Stage 12 took the month's facts to judge them; this publishes the same
+        // facts with the verdict attached. Re-reading the field here would be a
+        // second projection, and a host could be shown a cash figure the
+        // objectives were never measured against.
+        if (objectives.Position is not FieldPosition position)
+            throw new InvariantFault("design 03 §6", null,
+                "stage 13 ran without stage 12 having taken the month's position; the " +
+                "objectives stage owns the projection and must run first");
+
+        Published = projection.Publish(position, objectives.Progress);
     }
 }
