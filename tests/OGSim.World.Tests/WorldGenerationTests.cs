@@ -267,6 +267,10 @@ public class WorldGenerationTests
         // charge admits traps a lower setting turned away: if nothing were being
         // rejected, both settings would return every closure and these would be
         // equal.
+        //
+        // R20d.8.7 made the algorithm underneath this the real one — charge
+        // migrating up-dip and running out — so R20d8V6 now asks the sharper
+        // question this one only approaches: WHERE the newly filled traps are.
         var generous = 0;
 
         for (ulong seed = 1; seed <= 200; seed++)
@@ -609,5 +613,74 @@ public class WorldGenerationTests
 
         Assert.True(deepest.InitialPressure.Pascals > shallowest.InitialPressure.Pascals,
             "the deepest trap does not start at the highest pressure");
+    }
+
+    // ------------------------------------------- fill-spill migrates (R20d.8.7)
+
+    /// <summary>
+    /// R15-V7, asked properly at last. Charge is cooked deep and migrates
+    /// UP-DIP, so a richer basin does not simply fill the same traps fuller — it
+    /// reaches FURTHER, and the traps it newly reaches are the shallower ones.
+    ///
+    /// <para>This is the whole difference between fill-spill and the per-trap
+    /// coin flip it replaced. A probability would charge deep and shallow traps
+    /// alike, so raising it would push the shallowest charged trap nowhere in
+    /// particular. Because charge has a direction, more of it means oil arrives
+    /// somewhere it previously never got to — which is what makes a dry hole
+    /// informative about its neighbours and "drill the up-dip prospect" a choice
+    /// that can be wrong.</para>
+    /// </summary>
+    [Fact]
+    public void R20d8V6_more_charge_reaches_further_up_dip()
+    {
+        var lean = double.MaxValue;
+        var rich = double.MaxValue;
+
+        for (ulong seed = 1; seed <= 30; seed++)
+        {
+            lean = Math.Min(lean, ShallowestCharged(seed, richness: 0.5));
+            rich = Math.Min(rich, ShallowestCharged(seed, richness: 2.0));
+        }
+
+        Assert.True(rich < lean,
+            $"a basin charged four times as hard reached no further up-dip " +
+            $"({rich:0} m against {lean:0} m); migration has no direction");
+    }
+
+    /// <summary>The shallowest trap that received any oil — how far up-dip the
+    /// charge got. Infinity for a basin that charged nothing at all.</summary>
+    private static double ShallowestCharged(ulong seed, double richness)
+    {
+        IReadOnlyList<GeneratedAccumulation> found =
+            Generate(seed, Parameters(richness: richness)).Accumulations;
+
+        var shallowest = double.MaxValue;
+
+        for (int i = 0; i < found.Count; i++)
+            shallowest = Math.Min(shallowest, found[i].Compartments[0].Depth.Metres);
+
+        return shallowest;
+    }
+
+    /// <summary>
+    /// AND A BASIN IS NEVER FULL. The kitchen cooks less than the traps could
+    /// hold, so there is always somewhere the charge did not reach — which is
+    /// what makes exploration a search rather than an inventory.
+    /// </summary>
+    [Fact]
+    public void R20d8V6_some_structures_are_always_dry()
+    {
+        // Compared against the same basins charged far harder: whatever the
+        // absolute counts, a lean basin must leave traps the rich one fills.
+        int lean = 0, rich = 0;
+
+        for (ulong seed = 1; seed <= 30; seed++)
+        {
+            lean += Generate(seed, Parameters(richness: 0.5)).Accumulations.Count;
+            rich += Generate(seed, Parameters(richness: 2.0)).Accumulations.Count;
+        }
+
+        Assert.True(rich > lean,
+            $"charging four times as hard filled no more traps ({rich} against {lean})");
     }
 }

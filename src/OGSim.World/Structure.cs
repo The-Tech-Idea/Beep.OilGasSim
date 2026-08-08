@@ -176,7 +176,7 @@ internal sealed class StructuralHorizon
 
         for (int i = 0; i < filled.Count; i++) columnMetres += spill - _depth[filled[i]];
 
-        return new Closure(crest, filled.Count, columnMetres, height);
+        return new Closure(crest, filled.Count, columnMetres, height, spill);
     }
 
     private void Consider(int cell, double level, HashSet<int> seen, List<int> next)
@@ -291,4 +291,5 @@ internal sealed class StructuralHorizon
 /// A closed structure on the horizon: where its crest is, how many cells it
 /// covers, and how much rock stands between crest and spill.
 /// </summary>
-internal sealed record Closure(int Crest, int Cells, double ColumnMetres, double Height);
+internal sealed record Closure(
+    int Crest, int Cells, double ColumnMetres, double Height, double SpillDepth);

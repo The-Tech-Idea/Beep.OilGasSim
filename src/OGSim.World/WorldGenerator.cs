@@ -32,10 +32,17 @@ public sealed class BasinWorldGenerator : IWorldGenerator
     /// could book reserves off it would never buy seismic (R15-V10).</summary>
     private const double RegionalSigmaLog = 1.2;
 
-    /// <summary>Traps that receive no charge. SDD-010 §2.6's fill-spill produces
-    /// these naturally — the fraction is an outcome, and R15-V7 checks it is
-    /// meaningful rather than zero.</summary>
-    private const double SpillFraction = 0.55;
+    /// <summary>
+    /// How much oil the kitchen cooked, as a fraction of everything the basin's
+    /// traps could hold. Below one, so a basin is never entirely full and there
+    /// is always somewhere the charge did not reach — which is what makes
+    /// exploration a search rather than an inventory.
+    /// </summary>
+    private const double ChargeFractionOfCapacity = 0.35;
+
+    private const double MinimumPorosity = 0.12;
+
+    private const double PorositySpread = 0.15;
 
     public ContentId Id { get; } = new("basin-generator");
 
@@ -94,11 +101,36 @@ public sealed class BasinWorldGenerator : IWorldGenerator
         // Step 5: every closed high with a worthwhile column.
         IReadOnlyList<Closure> closures = horizon.Traps(MinimumClosureHeightMetres);
 
+        // Step 6: FILL-SPILL, in migration order (SDD-010 §2.6).
+        //
+        // Charge is cooked in the deep part of the basin and migrates UP-DIP,
+        // so it reaches the deepest traps first. Each fills to its spill point
+        // and passes what it cannot hold to the next one up the path; when the
+        // charge runs out, every trap above that point is dry.
+        //
+        // THE EMPTY TRAPS ARE NOW AN OUTCOME rather than a coin flip. Which
+        // structures hold oil depends on where they sit relative to the kitchen
+        // — so a dry hole says something about its neighbours, exploration has a
+        // pattern to learn, and "drill the up-dip prospect first" becomes a
+        // choice that can be wrong. A per-trap probability could express none of
+        // that: it made every prospect independent, which is exactly the thing
+        // real exploration is not.
+        IReadOnlyList<Closure> path = MigrationOrder(closures);
+
+        // How much oil the kitchen made, against how much the basin could hold.
+        // Expressed as a FRACTION of total capacity rather than as an absolute:
+        // a bigger basin has both more source rock and more traps, and an
+        // absolute would make grid size decide whether the world had any oil.
+        double porosityMidpoint = MinimumPorosity + (PorositySpread * 0.5);
+
+        double charged = TotalCapacity(path, porosityMidpoint)
+                       * ChargeFractionOfCapacity * parameters.ResourceRichness;
+
         var accumulations = new List<GeneratedAccumulation>();
 
-        for (int i = 0; i < closures.Count; i++)
+        for (int i = 0; i < path.Count; i++)
         {
-            Closure closure = closures[i];
+            Closure closure = path[i];
             // Step 5's subtlety class, drawn per trap — TRUTH, read by the
             // screening gate rather than the other way round. A below-tier
             // survey spawns nothing at all, which is why R15-V10 asks for zero
@@ -106,22 +138,25 @@ public sealed class BasinWorldGenerator : IWorldGenerator
             // information.
             DetectClass subtlety = (DetectClass)traps.NextInt(4);
 
-            // Step 6: fill-spill. A trap that receives no charge is empty, and
-            // the classic algorithm produces those NATURALLY rather than by a
-            // rule that says "make some empty" (R15-V7).
-            if (charge.NextUnit() > (1.0 - SpillFraction) * parameters.ResourceRichness) continue;
+            // Step 7: the trap's CAPACITY is its own — the rock between crest and
+            // spill, times a porosity draw. Size is a consequence of structure
+            // rather than a number: a broad gentle closure holds more than a
+            // small sharp one, and the long-tailed distribution real basins show
+            // emerges from the surface instead of being imposed on it (R15-V3).
+            double porosity = MinimumPorosity + (sizing.NextUnit() * PorositySpread);
 
-            // Step 7: the volume is THE TRAP'S OWN — the rock between its crest
-            // and its spill point, times a porosity draw. Size is therefore a
-            // consequence of structure rather than a number: a broad gentle
-            // closure holds more than a small sharp one, and the log-normal
-            // distribution real basins show emerges from the surface instead of
-            // being imposed on it (R15-V3).
-            double porosity = 0.12 + sizing.NextUnit() * 0.15;
+            double capacity = CapacityOf(closure, porosity);
 
-            double cellArea = CellSizeMetres * CellSizeMetres;
-            double volume = closure.ColumnMetres * cellArea * porosity
-                          * parameters.ResourceRichness;
+            // What actually reached it. The last trap on the path is PARTLY
+            // filled — an oil column shorter than its closure, which is a real
+            // and common outcome and the reason "how big is the structure" and
+            // "how much is in it" are different questions a player has to ask
+            // separately.
+            double volume = Math.Min(charged, capacity);
+
+            charged -= volume;
+
+            if (volume <= 0.0) continue;
 
             // Depth is where the crest actually is on the horizon, so pressure,
             // temperature and access all follow from the structure rather than
@@ -151,6 +186,36 @@ public sealed class BasinWorldGenerator : IWorldGenerator
         }
 
         return accumulations;
+    }
+
+    /// <summary>
+    /// Traps in the order charge reaches them: DEEPEST FIRST, because oil
+    /// migrates up-dip out of the kitchen. Ties broken by cell so two runs of
+    /// one seed fill the same traps in the same order (rule D-5).
+    /// </summary>
+    private static IReadOnlyList<Closure> MigrationOrder(IReadOnlyList<Closure> closures)
+    {
+        var ordered = new List<Closure>(closures);
+
+        ordered.Sort(static (a, b) =>
+        {
+            int byDepth = b.SpillDepth.CompareTo(a.SpillDepth);
+            return byDepth != 0 ? byDepth : a.Crest.CompareTo(b.Crest);
+        });
+
+        return ordered;
+    }
+
+    private static double CapacityOf(Closure closure, double porosity) =>
+        closure.ColumnMetres * CellSizeMetres * CellSizeMetres * porosity;
+
+    private static double TotalCapacity(IReadOnlyList<Closure> closures, double porosity)
+    {
+        double total = 0.0;
+
+        for (int i = 0; i < closures.Count; i++) total += CapacityOf(closures[i], porosity);
+
+        return total;
     }
 
     /// <summary>
