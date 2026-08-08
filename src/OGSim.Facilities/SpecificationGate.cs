@@ -125,6 +125,15 @@ public sealed class CustodyTransferPoint : ICustodyTransferPoint
     /// transform, so it always describes the pass just made.</summary>
     public IReadOnlyList<SpecBreach> LastBreaches { get; private set; } = [];
 
+    /// <summary>The ports by name (see <see cref="Separator.Inlet"/>).</summary>
+    public static PortId Inlet { get; } = new(0);
+
+    /// <summary>What passed the gate — the only leg custody records, and the only
+    /// mass stage 8 may price (SDD-009 §1).</summary>
+    public static PortId OnSpecOutlet { get; } = new(1);
+
+    public static PortId RejectOutlet { get; } = new(2);
+
     /// <summary>Inlet, the on-spec outlet, and the MANDATORY Reject.</summary>
     public IReadOnlyList<PortSpec> Ports { get; } =
     [

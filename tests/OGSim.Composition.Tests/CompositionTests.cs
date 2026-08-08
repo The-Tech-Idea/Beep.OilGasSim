@@ -142,8 +142,14 @@ public sealed class ShippedSetTests
 
     /// <summary>
     /// The shipped engine runs exactly the stages its modules declared, in
-    /// design 03 §6's order — solve, commit, pay, close. Named rather than
-    /// counted, so adding a stage without declaring it fails here.
+    /// design 03 §6's order — plan, solve, commit, meter, pay, close. Named
+    /// rather than counted, so adding a stage without declaring it fails here.
+    ///
+    /// <para>R20d.1 added two: <b>Availability</b>, which says which elements are
+    /// available and for how long, and <b>Custody</b>, which records what crossed
+    /// the meter. Both are slots design 03 §6 has always had and nothing filled —
+    /// stage 5 now iterates a plan instead of assuming the month, and stage 8
+    /// prices a metered delivery instead of whatever the wells produced.</para>
     /// </summary>
     [Fact]
     public void The_shipped_engine_runs_the_stages_its_modules_declared()
@@ -151,8 +157,9 @@ public sealed class ShippedSetTests
         Built built = Assert.IsType<Built>(EngineBuilder.Build(Fixture.Settings()));
 
         Assert.Equal(
-            [StageId.Operations, StageId.SolveFlow, StageId.MaterialBalance,
-             StageId.Economics, StageId.Objectives, StageId.Close],
+            [StageId.Operations, StageId.Availability, StageId.SolveFlow,
+             StageId.MaterialBalance, StageId.Custody, StageId.Economics,
+             StageId.Objectives, StageId.Close],
             built.Engine.Pipeline.DeclaredOrder());
     }
 

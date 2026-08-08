@@ -63,6 +63,16 @@ internal sealed class DrillWellActivity(
             reasons.Add(new RejectionReason(
                 "$loc:reject.invalid-depth", "a well must have a positive depth"));
 
+        // A well needs somewhere to tie in (SDD-006 §1b). Checked HERE, before
+        // the money moves: the header is full or it is not, and a player told so
+        // after four months of rig time has been charged for a hole that could
+        // never have produced.
+        if (!field.HasFreeSlot)
+            reasons.Add(new RejectionReason(
+                "$loc:reject.no-manifold-slot",
+                "every slot on the manifold is taken; a well with nowhere to tie in " +
+                "cannot flow, and a bigger header has to be installed first"));
+
         return reasons;
     }
 

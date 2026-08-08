@@ -14,16 +14,6 @@ using OGSim.Kernel;
 
 namespace OGSim.Wells;
 
-/// <summary>
-/// What one completion took from one compartment over a whole tick, in
-/// stock-tank volumes — stage 6's input.
-/// </summary>
-public sealed record CompletionProduction(
-    EntityId<ICompletion> Completion,
-    EntityId<IReservoirCompartmentEntity> Compartment,
-    SurfaceVolume Oil,
-    ReservoirVolume ReservoirVolume);
-
 /// <summary>Owner of <c>wells.completions</c>.</summary>
 public sealed class WellsState : IStateOwner
 {
@@ -109,41 +99,24 @@ public sealed class WellsState : IStateOwner
         }
     }
 
-    /// <summary>
-    /// Stage 5, in the shape stage 6 consumes: what each well produced over the
-    /// month, at its own operating point.
-    ///
-    /// <para>A DEAD well contributes nothing and is not an error — "cannot flow
-    /// at any rate" is a legitimate answer and the one a depleted reservoir
-    /// eventually gives (SDD-003 §6.3). It is the moment the player has to do
-    /// something, which is why it must not be a fault.</para>
-    /// </summary>
-    public IReadOnlyList<CompletionProduction> ProduceOver(
-        Duration tick, Pressure wellheadBackpressure, FormationVolumeFactor oilFormationVolumeFactor)
-    {
-        var produced = new List<CompletionProduction>(_completions.Count);
-
-        for (int i = 0; i < _completions.Count; i++)
-        {
-            Completion completion = _completions[i];
-
-            if (completion.SolveOperatingPoint(wellheadBackpressure) is not Flowing flowing) continue;
-
-            // Reservoir rate over the month, then shrunk to the tank. Both steps
-            // go through the typed quantities, so a reservoir volume can never be
-            // reported as a stock-tank one.
-            var overTick = new ReservoirVolume(
-                flowing.Rate.CubicMetresPerSecond * tick.Seconds);
-
-            produced.Add(new CompletionProduction(
-                completion.CompletionId,
-                _drains[completion.CompletionId],
-                oilFormationVolumeFactor.Shrink(overTick),
-                overTick));
-        }
-
-        return produced;
-    }
+    // ProduceOver LIVED HERE, and it was the second flow system.
+    //
+    // It solved every completion against ONE hard-coded backpressure and handed
+    // the result straight to stage 6 — no network, no separator, no header, no
+    // meter, and no way for anything downstream of a well to affect it. The
+    // engine therefore shipped with two ways for material to move: the one flow
+    // engine (SDD-002 §7), composed and unused, and this.
+    //
+    // DELETED rather than left for the day something wants it (R20d G3). A
+    // second path that still compiles is a second path someone will call, and
+    // the two would drift the moment either learned something the other did not
+    // — which is exactly how it came to exist: the loop was built end to end at
+    // speed and the solver was one of the subsystems it wrote past (finding 142,
+    // the same defect on the drilling side).
+    //
+    // Material moves one way now: stage 4 plans the segments, stage 5 solves the
+    // network, stage 6 commits, stage 7 meters. Adding equipment is adding an
+    // element to that network.
 
     public void Capture(IStateWriter writer)
     {

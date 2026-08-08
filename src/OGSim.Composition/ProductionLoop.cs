@@ -25,7 +25,11 @@ namespace OGSim.Composition;
 /// dependency with a default.
 /// </summary>
 public sealed record FieldEconomics(
-    Money OilPricePerCubicMetre,
+    /// <summary>PER TONNE, because custody meters MASS (SDD-017 §2's
+    /// <c>MarketView.Prices</c>). A price per volume would have to pick a
+    /// density, and the one place a density belongs is where mass becomes the
+    /// barrels a player reads.</summary>
+    Money OilPricePerTonne,
     Money FixedOperatingCostPerTick);
 
 /// <summary>
@@ -69,11 +73,20 @@ internal sealed class ProductionLoop
     private readonly IAuditTrail _audit;
     private readonly FieldEconomics _economics;
     private readonly Temperature _reservoirTemperature;
-    private readonly Pressure _wellheadBackpressure;
+    private readonly IFlowSolver _solver;
+    private readonly IFlowElementRegistry _network;
+    private readonly Temperature _ambient;
+    private readonly Density _surfaceDensity;
+    private readonly int _materialCount;
+
+    // Which elements meter. A set, because stage 5 asks it once per element per
+    // segment — and because the loop must not ask an element what it IS, only
+    // whether composition told it this one is a meter.
+    private readonly HashSet<EntityId<IFlowElement>> _meters = [];
 
     // Stage 5's answer, held for stage 6. Cleared at the start of every solve so
     // a tick that produced nothing cannot commit last month's volumes.
-    private readonly List<CompletionProduction> _thisTick = [];
+    private readonly Dictionary<EntityId<IReservoirCompartmentEntity>, double> _byCompartment = [];
 
     public ProductionLoop(
         SubsurfaceState subsurface,
@@ -82,9 +95,14 @@ internal sealed class ProductionLoop
         TickProduction production,
         IFluidPropertyModel fluid,
         IAuditTrail audit,
+        IFlowSolver solver,
+        IFlowElementRegistry network,
+        IReadOnlyList<EntityId<IFlowElement>> meteredPoints,
         FieldEconomics economics,
         Temperature reservoirTemperature,
-        Pressure wellheadBackpressure)
+        Temperature ambient,
+        Density surfaceDensity,
+        int materialCount)
     {
         ArgumentNullException.ThrowIfNull(subsurface);
         ArgumentNullException.ThrowIfNull(wells);
@@ -92,6 +110,9 @@ internal sealed class ProductionLoop
         ArgumentNullException.ThrowIfNull(production);
         ArgumentNullException.ThrowIfNull(fluid);
         ArgumentNullException.ThrowIfNull(audit);
+        ArgumentNullException.ThrowIfNull(solver);
+        ArgumentNullException.ThrowIfNull(network);
+        ArgumentNullException.ThrowIfNull(meteredPoints);
         ArgumentNullException.ThrowIfNull(economics);
 
         _subsurface = subsurface;
@@ -100,39 +121,130 @@ internal sealed class ProductionLoop
         _production = production;
         _fluid = fluid;
         _audit = audit;
+        _solver = solver;
+        _network = network;
         _economics = economics;
         _reservoirTemperature = reservoirTemperature;
-        _wellheadBackpressure = wellheadBackpressure;
+        _ambient = ambient;
+        _surfaceDensity = surfaceDensity;
+        _materialCount = materialCount;
+
+        for (int i = 0; i < meteredPoints.Count; i++) _meters.Add(meteredPoints[i]);
+
+        Delivered = OGSim.Kernel.Composition.Zero(materialCount);
     }
 
     /// <summary>Stock-tank oil produced in the tick just solved — what the read
     /// model reports and what a test asserts on.</summary>
     public SurfaceVolume ProducedThisTick { get; private set; } = new(0.0);
 
+    /// <summary>What crossed the custody meter this tick — the ONLY mass stage 8
+    /// is allowed to price (SDD-009 §1).</summary>
+    public OGSim.Kernel.Composition Delivered { get; private set; }
+
     /// <summary>
     /// Stage 5. Refresh every well with the pressure its compartment is at NOW,
-    /// then solve each operating point.
+    /// then solve the NETWORK — once per segment, over the elements that segment
+    /// has available (SDD-002 §9).
     ///
     /// <para>The refresh is why decline happens: without it a completion holds
     /// the pressure it was built with and produces at month one's rate
     /// forever.</para>
+    ///
+    /// <para>What this replaced is the whole of R20d.1. A per-well
+    /// <c>SolveOperatingPoint</c> against a hard-coded backpressure could not
+    /// express a separator's set point, a capacity that binds, a header that
+    /// couples one well's rate to another's, or a segment where something is
+    /// unavailable. All four now reach the reservoir because they are in the
+    /// network the solver walks rather than in a document.</para>
     /// </summary>
-    public void SolveFlow()
+    public void SolveFlow(TickContext context)
     {
+        ArgumentNullException.ThrowIfNull(context);
+
         _wells.RefreshFromReservoir(_subsurface.TruePressureOf, _reservoirTemperature);
 
-        _thisTick.Clear();
-        _thisTick.AddRange(_wells.ProduceOver(
-            Duration.FromTicks(1.0),
-            _wellheadBackpressure,
-            _fluid.Bo(AverageReservoirPressure())));
+        // Stage 4 owns the plan and stage 5 consumes it. Missing means the
+        // availability stage did not run — a composition defect, not a tick with
+        // no segments, and solving the whole month as one unplanned interval
+        // would silently include whatever was unavailable.
+        if (context.Segments is not SegmentPlan plan)
+            throw new InvariantFault("SDD-002 §9", null,
+                "stage 5 ran with no segment plan; stage 4 builds it and must run first");
 
-        var total = 0.0;
-        for (int i = 0; i < _thisTick.Count; i++) total += _thisTick[i].Oil.CubicMetres;
-        ProducedThisTick = new SurfaceVolume(total);
+        _byCompartment.Clear();
+        double[] delivered = new double[_materialCount];
+
+        for (int i = 0; i < plan.Segments.Count; i++)
+        {
+            Segment segment = plan.Segments[i];
+
+            SolveReport report = _solver.Solve(
+                new SegmentContext(segment.DurationDays, _ambient, WeatherSeverity: 0.0),
+                _network.ViewFor(segment.Available));
+
+            // DURATION-WEIGHTED (SDD-002 §9). Rates are per second and a segment
+            // is a whole number of days on the /30ths grid, so the weight is
+            // exact rather than nearly.
+            Accumulate(report, segment.DurationDays * SecondsPerDay, delivered);
+        }
+
+        Delivered = OGSim.Kernel.Composition.Validated([.. delivered]);
+        ProducedThisTick = new SurfaceVolume(
+            Delivered.Total.KgPerSecond / _surfaceDensity.KgPerCubicMetre);
 
         PublishWithdrawals();
     }
+
+    /// <summary>
+    /// One segment's answer, added to the tick's.
+    ///
+    /// <para>Withdrawal comes from the completion's converged RATE and not from
+    /// the mass it put on the network: a compartment is emptied of reservoir
+    /// volume, and going mass → surface → reservoir to recover a number the
+    /// solver already holds would round twice for nothing.</para>
+    /// </summary>
+    private void Accumulate(SolveReport report, double seconds, double[] delivered)
+    {
+        for (int i = 0; i < report.CompletionStates.Count; i++)
+        {
+            CompletionState state = report.CompletionStates[i];
+
+            EntityId<IReservoirCompartmentEntity> compartment =
+                _wells.CompartmentOf(new EntityId<ICompletion>(state.Completion.Value));
+
+            _byCompartment[compartment] =
+                _byCompartment.GetValueOrDefault(compartment)
+                + state.Rate.CubicMetresPerSecond * seconds;
+        }
+
+        // What reached the meter. The custody point's ON-SPEC outlet only: its
+        // Reject leg is deliberately not counted, which is the entire reason the
+        // gate is a network element rather than a predicate at the ledger.
+        for (int i = 0; i < report.Solutions.Count; i++)
+        {
+            ElementSolution solution = report.Solutions[i];
+            if (!_meters.Contains(solution.Element)) continue;
+
+            OGSim.Kernel.Composition onSpec =
+                solution.Converged.Outlets[OnSpecLeg].MassRates;
+
+            for (int m = 0; m < _materialCount; m++)
+                delivered[m] += onSpec[new MaterialId(m)].KgPerSecond * seconds;
+        }
+    }
+
+    /// <summary>
+    /// The on-spec leg's index in a custody point's OUTLETS, which is 0 — not its
+    /// port id, which is 1.
+    ///
+    /// <para>The two are different numbers and reading the wrong one is silent:
+    /// index 1 is the Reject leg, so the field metered its rejected oil, sold
+    /// nothing, and looked exactly like a field whose wells would not flow.</para>
+    /// </summary>
+    private const int OnSpecLeg = 0;
+
+    private const double SecondsPerDay = 86_400.0;
 
     /// <summary>
     /// Hands stage 5's answer to stage 6 in the shape the compartments consume:
@@ -141,20 +253,36 @@ internal sealed class ProductionLoop
     /// </summary>
     private void PublishWithdrawals()
     {
-        var withdrawals = new List<CompartmentWithdrawal>(_thisTick.Count);
+        var withdrawals = new List<CompartmentWithdrawal>(_byCompartment.Count);
 
-        for (int i = 0; i < _thisTick.Count; i++)
+        // Walked over the COMPLETIONS in their own order, never over the
+        // dictionary (rule D-5): a hash walk here would make the order material
+        // balance commits in depend on hashing, and two runs of one save could
+        // deplete two compartments in different orders.
+        IReadOnlyList<Completion> completions = _wells.Completions;
+        var seen = new HashSet<EntityId<IReservoirCompartmentEntity>>();
+
+        for (int i = 0; i < completions.Count; i++)
         {
-            CompletionProduction production = _thisTick[i];
+            EntityId<IReservoirCompartmentEntity> compartment =
+                _wells.CompartmentOf(completions[i].CompletionId);
 
+            if (!seen.Add(compartment)) continue;
+            if (!_byCompartment.TryGetValue(compartment, out double reservoirVolume)) continue;
+
+            // Each compartment's OWN Bo, at its own pressure. The field-average
+            // this replaced was a stated simplification with a task against it
+            // (R20c.11); solving per element made the honest form free, because
+            // the compartment is already in hand.
             withdrawals.Add(new CompartmentWithdrawal(
-                production.Compartment,
-                production.Oil,
+                compartment,
+                _fluid.Bo(_subsurface.TruePressureOf(compartment))
+                     .Shrink(new ReservoirVolume(reservoirVolume)),
                 new StandardGasVolume(0.0),
                 new SurfaceVolume(0.0),
                 Influx: new ReservoirVolume(0.0),
                 Injected: new ReservoirVolume(0.0),
-                ReservoirVolume: production.ReservoirVolume));
+                ReservoirVolume: new ReservoirVolume(reservoirVolume)));
         }
 
         _production.Set(withdrawals);
@@ -168,21 +296,51 @@ internal sealed class ProductionLoop
     /// one, so "where did this money come from?" always has an answer that
     /// points at a metered event.</para>
     /// </summary>
+    /// <summary>
+    /// Stage 7. What crossed the meter is recorded as a custody transfer, and
+    /// nothing else is.
+    ///
+    /// <para>Its own stage in design 03 §6's own slot, because custody is an
+    /// EVENT rather than a line in the pricing arithmetic: the ledger refuses a
+    /// revenue credit whose cause is not a custody transfer (SDD-009 §1), so
+    /// "where did this money come from?" resolves to a metered delivery instead
+    /// of to whoever did the multiplication.</para>
+    ///
+    /// <para>Nothing delivered records nothing. An entry for a zero delivery
+    /// would be a custody transfer that did not happen, and the ledger's rule
+    /// would be satisfied by a fiction.</para>
+    /// </summary>
+    public void RecordCustody()
+    {
+        _sale = null;
+        if (Delivered.Total.KgPerSecond <= 0.0) return;
+
+        _sale = _audit.Record(
+            AuditCategory.CustodyTransfer,
+            subject: null,
+            cause: null,
+            new Dictionary<string, AuditValue>(StringComparer.Ordinal)
+            {
+                ["mass-kg"] = new(Format(Delivered.Total.KgPerSecond)),
+                ["volume-m3"] = new(Format(ProducedThisTick.CubicMetres)),
+            });
+    }
+
+    private AuditId? _sale;
+
+    private static string Format(double value) =>
+        value.ToString("R", System.Globalization.CultureInfo.InvariantCulture);
+
     public void PostEconomics(Tick tick)
     {
-        if (ProducedThisTick.CubicMetres > 0.0)
+        // PRICED OFF THE METER (SDD-009 §1) — not off what the wells produced.
+        // Everything the chain does between the two lives in that difference,
+        // and oil that failed the spec gate is oil the company has and cannot
+        // sell.
+        if (_sale is AuditId sale)
         {
-            AuditId sale = _audit.Record(
-                AuditCategory.CustodyTransfer,
-                subject: null,
-                cause: null,
-                new Dictionary<string, AuditValue>(StringComparer.Ordinal)
-                {
-                    ["volume-m3"] = new(ProducedThisTick.CubicMetres.ToString(
-                        "R", System.Globalization.CultureInfo.InvariantCulture)),
-                });
-
-            Money revenue = Scale(_economics.OilPricePerCubicMetre, ProducedThisTick.CubicMetres);
+            Money revenue = Scale(
+                _economics.OilPricePerTonne, Delivered.Total.KgPerSecond / KilogramsPerTonne);
 
             _company.Ledger.Post(new Movement(
                 tick, Account.Cash, Account.Revenue, revenue,
@@ -213,24 +371,7 @@ internal sealed class ProductionLoop
         // cover its own standing charge.
         Money.RoundHalfEven(unitPrice.Cents * quantity);
 
-    /// <summary>
-    /// One Bo for the field this tick. A per-compartment factor is the honest
-    /// form and arrives with per-compartment allocation (R20c.11); using the
-    /// mean pressure here is a stated simplification rather than a hidden one,
-    /// and with a single compartment it is exact.
-    /// </summary>
-    private Pressure AverageReservoirPressure()
-    {
-        IReadOnlyList<Completion> completions = _wells.Completions;
-        if (completions.Count == 0) return _fluid.Pb;
-
-        var sum = 0.0;
-        for (int i = 0; i < completions.Count; i++)
-            sum += _subsurface.TruePressureOf(
-                _wells.CompartmentOf(completions[i].CompletionId)).Pascals;
-
-        return new Pressure(sum / completions.Count);
-    }
+    private const double KilogramsPerTonne = 1000.0;
 }
 
 /// <summary>
@@ -253,12 +394,34 @@ public sealed class FieldControl
 {
     private readonly SubsurfaceState _subsurface;
     private readonly WellsState _wells;
+    private readonly IFlowElementRegistry _network;
+    private readonly SurfaceChain _chain;
 
-    internal FieldControl(SubsurfaceState subsurface, WellsState wells)
+    private int _slotsTaken;
+
+    internal FieldControl(
+        SubsurfaceState subsurface,
+        WellsState wells,
+        IFlowElementRegistry network,
+        SurfaceChain chain)
     {
         _subsurface = subsurface;
         _wells = wells;
+        _network = network;
+        _chain = chain;
     }
+
+    /// <summary>
+    /// Whether the header has room for another well.
+    ///
+    /// <para>Asked by the drilling command's own refusals, so a player who has
+    /// filled their manifold is told BEFORE they pay for four months of rig time
+    /// — the tie-in itself cannot report a player error, because by then the hole
+    /// is drilled and the money is gone.</para>
+    /// </summary>
+    public bool HasFreeSlot => _slotsTaken < _chain.Slots;
+
+    public int FreeSlots => _chain.Slots - _slotsTaken;
 
     public EntityId<IReservoirCompartmentEntity> AddCompartment(
         GeneratedCompartment generated,
@@ -272,11 +435,42 @@ public sealed class FieldControl
             generated, permeability, netThickness, drainageArea,
             rockCompressibility, gasOilContact, oilWaterContact);
 
-    /// <summary>Brings a completion online against a compartment. From the next
-    /// tick it is a source element in the network the solver sees.</summary>
+    /// <summary>
+    /// Brings a completion online against a compartment and ties it into the
+    /// header. From the next tick it is a source element the solver sees, flowing
+    /// against whatever the surface holds.
+    ///
+    /// <para>The tie-in happens HERE because this is the one place that knows a
+    /// completion and a manifold are both real (design 03 §8). A well opened
+    /// without one would be a source element with nowhere to go: it would solve,
+    /// produce, put its mass on an unconnected port, and look like it was
+    /// working while earning nothing.</para>
+    /// </summary>
     public EntityId<ICompletion> OpenWell(
-        Completion completion, EntityId<IReservoirCompartmentEntity> drains) =>
-        _wells.Open(completion, drains);
+        Completion completion, EntityId<IReservoirCompartmentEntity> drains)
+    {
+        ArgumentNullException.ThrowIfNull(completion);
+
+        // A composition defect by the time it reaches here, not a player error:
+        // the drilling command refuses a well with no slot to tie into, so
+        // arriving with a full header means something bypassed the validator.
+        if (!HasFreeSlot)
+            throw new InvariantFault("SDD-006 §1b", null,
+                $"the header has {_chain.Slots} slots and all are taken; a well with " +
+                "nowhere to tie in must be refused when it is ordered, not when it lands");
+
+        EntityId<ICompletion> opened = _wells.Open(completion, drains);
+
+        _network.Connect(new FlowConnection(
+            completion.Id, WellheadOutlet,
+            _chain.Manifold.Id, _chain.Manifold.SlotAt(_slotsTaken)));
+
+        _slotsTaken++;
+        return opened;
+    }
+
+    /// <summary>A completion's one outlet: the wellhead.</summary>
+    private static PortId WellheadOutlet { get; } = new(0);
 
     public int CompartmentCount => _subsurface.Count;
 
@@ -293,11 +487,60 @@ public sealed class FieldControl
     public ulong NextWellId() => (ulong)_wells.Count + 1;
 }
 
+/// <summary>
+/// Stage 4. Says which elements are available this tick, and for how long.
+///
+/// <para>ONE segment covering the whole month, because nothing yet takes an
+/// element away mid-tick: integrity owns no state and runs no stage (R20d.11)
+/// and weather is unbuilt (R22). The plan is REAL rather than skipped — stage 5
+/// iterates segments, and a stage 5 that solved "the tick" instead would have
+/// nowhere to put the second segment on the day one arrives.</para>
+///
+/// <para>Availability is every REGISTERED element, because a failed element is
+/// ABSENT from the network rather than present at zero rate (design 04 §4). The
+/// day hazards land they subtract from this list and nothing else changes.</para>
+/// </summary>
+internal sealed class SegmentationStage(IFlowElementRegistry network) : ITickStage
+{
+    public StageId Id => StageId.Availability;
+
+    public void Execute(TickContext context)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+
+        IReadOnlyList<IFlowElement> registered = network.Registered;
+        var available = new List<EntityRef>(registered.Count);
+
+        for (int i = 0; i < registered.Count; i++)
+            available.Add(FlowElementRegistry.ReferenceTo(registered[i]));
+
+        // Set exactly once, by this stage: a later stage reading it before now
+        // is a stage-isolation violation (I-V5), and one writing it would be a
+        // second owner of the tick's shape.
+        context.Segments = new SegmentPlan(
+        [
+            new Segment(StartDay: 0, DurationDays: (int)Duration.DaysPerTick, available),
+        ]);
+    }
+}
+
 internal sealed class SolveFlowStage(ProductionLoop loop) : ITickStage
 {
     public StageId Id => StageId.SolveFlow;
 
-    public void Execute(TickContext context) => loop.SolveFlow();
+    public void Execute(TickContext context) => loop.SolveFlow(context);
+}
+
+/// <summary>Stage 7. Custody, in its own slot (design 03 §6).</summary>
+internal sealed class CustodyStage(ProductionLoop loop) : ITickStage
+{
+    public StageId Id => StageId.Custody;
+
+    public void Execute(TickContext context)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        loop.RecordCustody();
+    }
 }
 
 internal sealed class EconomicsStage(ProductionLoop loop) : ITickStage

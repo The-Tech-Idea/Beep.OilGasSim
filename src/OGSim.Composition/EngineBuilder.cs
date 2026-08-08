@@ -72,8 +72,27 @@ internal static class Defaults
     /// from the one intended.</para>
     /// </summary>
     public static FieldEconomics Economics { get; } = new(
-        OilPricePerCubicMetre: Money.FromMillions(377.0 / 1_000_000.0),
+        // $377/m³ ÷ 0.85 t/m³ — the same money for the same oil. Custody meters
+        // mass, so the price is per tonne and the density is applied once, where
+        // mass becomes the barrels a player reads.
+        OilPricePerTonne: Money.FromMillions(377.0 / 0.85 / 1_000_000.0),
         FixedOperatingCostPerTick: Money.FromMillions(0.3));
+
+    /// <summary>
+    /// The catalogue, as content would carry it. ONE material, because the chain
+    /// this composition ships has one thing to move; the nine of
+    /// `content/materials/` arrive with R20c.9.
+    ///
+    /// <para>The PHASE is what makes this more than a name: `SplitAt` reads it to
+    /// decide which leg of a separator a material leaves by, so "oil is a liquid
+    /// at standard conditions" is the statement that sends every kilogram down
+    /// the liquid leg to the meter.</para>
+    /// </summary>
+    public static IReadOnlyList<(ContentId Id, PhaseAtStandardConditions Phase,
+                                 IReadOnlyList<IProperty> Properties)> Materials { get; } =
+    [
+        (new ContentId("crude-oil"), PhaseAtStandardConditions.Liquid, []),
+    ];
 
     /// <summary>
     /// How many materials this composition's catalogue carries. One — oil —
@@ -283,6 +302,18 @@ internal static class Defaults
         Outcomes: SurveyOutcomes);
 
     /// <summary>
+    /// The formation volume factor a shipped completion converts with.
+    ///
+    /// <para><b>It disagrees with the composed <c>BlackOilModel</c> by about 9%</b>,
+    /// which is one physical fact with two owners (law L5). A completion design
+    /// is a catalogue entry and its fluid block belongs to the fluid system, so
+    /// closing it is R20c.9's loader rather than a number changed here — named
+    /// as a constant so the two places are at least visible to each other
+    /// (finding 160).</para>
+    /// </summary>
+    public static FormationVolumeFactor CompletionBo { get; } = new(1.2);
+
+    /// <summary>
     /// The well a drilling command produces. One completion on one compartment,
     /// naturally flowing, wide open — the E1 well, and the only one the current
     /// content can describe.
@@ -302,8 +333,8 @@ internal static class Defaults
             new Wells.HydrostaticFrictionOutflowModel(
                 tubing, Density.FromSpecificGravity(0.85), lift: null),
             new Wells.CompletionFluid(
-                Density.FromSpecificGravity(0.85),
-                new FormationVolumeFactor(1.2),
+                SurfaceOilDensity,
+                CompletionBo,
                 Allocation.Validated(
                     [(new EntityRef(EntityKind.Compartment, compartment.Value), 1.0)]),
                 new Pressure(30.0e6),
@@ -399,8 +430,84 @@ internal static class Defaults
 
     public static Temperature ReservoirTemperature { get; } = Temperature.FromCelsius(93.3);
 
-    /// <summary>Separator inlet pressure the wells flow against.</summary>
-    public static Pressure WellheadBackpressure { get; } = Pressure.FromBar(15.0);
+    // ------------------------------------------------------- the surface chain
+    //
+    // Wellheads → header → vessel → meter. Four elements, and they are the
+    // difference between a chain that is described and one a barrel travels
+    // down: a well needs something to flow against, two wells need somewhere to
+    // meet, and revenue needs a metered point to originate at (SDD-009 §1).
+    // Content in a finished game (R20c.9).
+
+    public static EntityId<IFlowElement> TheManifold { get; } = new(1_000_001);
+
+    public static EntityId<IFlowElement> TheSeparator { get; } = new(1_000_002);
+
+    public static EntityId<IFlowElement> TheCustodyPoint { get; } = new(1_000_003);
+
+    /// <summary>
+    /// The field's header. Eight slots — a fixed manifold from catalogue C06's
+    /// bottom rung, which is a real limit on how many wells this field can carry
+    /// and the reason a ninth well is refused before it is paid for rather than
+    /// after.
+    /// </summary>
+    public static Facilities.ManifoldTier ManifoldTier { get; } =
+        new(new ContentId("manifold-fixed-8"), Slots: 8);
+
+    /// <summary>
+    /// The field's one vessel. 15 bar is the separator inlet pressure the loop
+    /// used to hard-code as a wellhead backpressure — the same number, now held
+    /// by the element that imposes it rather than by the stage that read it.
+    ///
+    /// <para>The capacities are deliberately generous: a bottleneck is something
+    /// a player creates by choosing a vessel, and shipping one that binds on the
+    /// first well would be a balance decision nobody made (R20.4 owns sizing).
+    /// The efficiencies are perfect because there is one material and nothing to
+    /// carry over — a number below 1.0 here would be describing a separation
+    /// this content cannot express.</para>
+    /// </summary>
+    public static Facilities.SeparatorTier SeparatorTier { get; } = new(
+        new ContentId("separator-3phase-standard"),
+        GasCapacity: new MassRate(50.0),
+        LiquidCapacity: new MassRate(500.0),
+        Volume: new ReservoirVolume(30.0),
+        RatedEfficiency: new SeparationEfficiency(
+            LiquidFromGas: 0.0, GasFromLiquid: 0.0, WaterFromLiquid: 0.0),
+        DesignRate: new ReservoirRate(0.05),
+        OperatingPressure: Pressure.FromBar(15.0));
+
+    /// <summary>
+    /// What the sales contract requires. EMPTY, and honestly: a specification is
+    /// a list of limits on measured stream properties, this composition ships one
+    /// material with no contaminants, and every limit that could be written would
+    /// bound a fraction that is structurally zero.
+    ///
+    /// <para>The gate is still real — it meters, it has its Reject leg, and a
+    /// spec arrives as content the day there is a sour or wet stream to fail it
+    /// (R20d.3). An empty spec passing everything is the correct answer for a
+    /// stream that cannot be off-spec, not a disabled check.</para>
+    /// </summary>
+    public static Specification SalesSpec { get; } = new([]);
+
+    /// <summary>What the meter reads off a stream. Every fraction is zero because
+    /// the one material is oil: no water to be basic sediment, no H2S, no CO2, no
+    /// light ends. It becomes a measurement when there is a stream to measure
+    /// (R20d.3, R20d.4).</summary>
+    public static Facilities.StreamProperties MeasureStream(MaterialStream stream) =>
+        new(BasicSedimentAndWater: 0.0, H2SFraction: 0.0, Co2Fraction: 0.0,
+            WaterInGasFraction: 0.0, LightEndsFraction: 0.0,
+            Heating: new HeatingValue(0.0));
+
+    /// <summary>
+    /// Surface ambient, for the segment context. A stated value until R22 builds
+    /// an environment to supply one (R20d.13) — stated HERE rather than defaulted
+    /// inside the solve, so the day weather arrives there is exactly one place
+    /// that stops being a constant.
+    /// </summary>
+    public static Temperature SurfaceAmbient { get; } = Temperature.FromCelsius(15.0);
+
+    /// <summary>Stock-tank oil density — what custody mass divides by to become
+    /// the barrels a player reads.</summary>
+    public static Density SurfaceOilDensity { get; } = Density.FromSpecificGravity(0.85);
 
     public static Integrity.DegradationCoefficients Decay { get; } =
         new(BaseRatePerYear: 0.05, WaterCutFactor: 1.0, SourFactor: 2.0,

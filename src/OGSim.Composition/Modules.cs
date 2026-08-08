@@ -201,8 +201,14 @@ internal sealed class FlowModule() : EngineModule(Declare(
 
 internal sealed class FacilitiesModule() : EngineModule(Declare(
     "facilities",
-    provides: [typeof(ISeparationModel), typeof(IHydraulicModel)],
-    requires: [typeof(IFluidPropertyModel)],
+
+    // The chain, as the elements every barrel crosses between the wellhead and
+    // the sale (R20d.2, R20d.5). Provided rather than merely registered, because
+    // two things above need to name them: a well has to be tied into the header,
+    // and stage 5 has to know which element METERS — and asking an element what
+    // it is would be the type switch design 04 §1 exists to prevent.
+    provides: [typeof(ISeparationModel), typeof(IHydraulicModel), typeof(SurfaceChain)],
+    requires: [typeof(IFluidPropertyModel), typeof(IFlowElementRegistry)],
     ownsState: NothingOwnedYet,
     stages: NoStagesYet))
 {
@@ -210,10 +216,65 @@ internal sealed class FacilitiesModule() : EngineModule(Declare(
     {
         ArgumentNullException.ThrowIfNull(composition);
 
-        composition.Provide<ISeparationModel>(new OGSim.Facilities.FixedEfficiencySeparationModel());
+        var separation = new OGSim.Facilities.FixedEfficiencySeparationModel();
+
+        composition.Provide<ISeparationModel>(separation);
         composition.Provide<IHydraulicModel>(new OGSim.Facilities.LiquidHydraulicModel(
             Density.FromSpecificGravity(0.85), new Viscosity(3e-3), new Length(0.0)));
+
+        IFlowElementRegistry network = composition.Require<IFlowElementRegistry>();
+
+        var manifold = new OGSim.Facilities.Manifold(
+            Defaults.TheManifold, Defaults.ManifoldTier, Defaults.MaterialCount);
+
+        var separator = new OGSim.Facilities.Separator(
+            Defaults.TheSeparator, Defaults.SeparatorTier, separation,
+            composition.Require<IFluidPropertyModel>(), Defaults.MaterialCount);
+
+        var custody = new OGSim.Facilities.CustodyTransferPoint(
+            Defaults.TheCustodyPoint, Defaults.SalesSpec, Defaults.MaterialCount,
+            Defaults.MeasureStream);
+
+        network.Add(manifold);
+        network.Add(separator);
+        network.Add(custody);
+
+        network.Connect(new FlowConnection(
+            manifold.Id, manifold.Outlet,
+            separator.Id, OGSim.Facilities.Separator.Inlet));
+
+        // The LIQUID leg to the meter. The gas and water legs are unconnected
+        // and carry nothing: this composition ships one material, so the ideal
+        // split puts every kilogram in the liquid. They are wired when there is
+        // something to put in them (R20d.3, R20d.4) rather than piped now to an
+        // element that would receive zero for a decade.
+        network.Connect(new FlowConnection(
+            separator.Id, OGSim.Facilities.Separator.LiquidOutlet,
+            custody.Id, OGSim.Facilities.CustodyTransferPoint.Inlet));
+
+        composition.Provide(new SurfaceChain(manifold, separator, custody));
     }
+}
+
+/// <summary>
+/// The surface elements every well flows into, and which of them meters.
+///
+/// <para>It exists so that the two things above the facilities module can name
+/// what they need without asking an element what it IS — design 04 §1's rule
+/// that the solver knows only <see cref="IFlowElement"/> applies just as much to
+/// the loop above it. The module that BUILT the meter says which one it is;
+/// nothing downstream infers it from a type.</para>
+/// </summary>
+internal sealed record SurfaceChain(
+    OGSim.Facilities.Manifold Manifold,
+    OGSim.Facilities.Separator Separator,
+    OGSim.Facilities.CustodyTransferPoint Custody)
+{
+    /// <summary>Where a well ties in, and how many can. One list rather than a
+    /// count, so a caller cannot forget which port a slot index means.</summary>
+    public int Slots => Manifold.Slots;
+
+    public IReadOnlyList<EntityId<IFlowElement>> MeteredPoints => [Custody.Id];
 }
 
 // ---------------------------------------------------------------- operations
@@ -305,12 +366,17 @@ internal sealed class FieldModule() : EngineModule(Declare(
         typeof(SimulationClock),
         typeof(IBeliefStore),
         typeof(OGSim.Information.ObservationSampler),
+        typeof(IFlowSolver),
+        typeof(IFlowElementRegistry),
+        typeof(SurfaceChain),
     ],
     ownsState: ["field.activities"],
     stages:
     [
         new StageParticipation(StageId.Operations, Order: 0),
+        new StageParticipation(StageId.Availability, Order: 0),
         new StageParticipation(StageId.SolveFlow, Order: 0),
+        new StageParticipation(StageId.Custody, Order: 0),
         new StageParticipation(StageId.Economics, Order: 0),
         new StageParticipation(StageId.Objectives, Order: 0),
         new StageParticipation(StageId.Close, Order: 0),
@@ -336,6 +402,9 @@ internal sealed class FieldModule() : EngineModule(Declare(
     {
         ArgumentNullException.ThrowIfNull(composition);
 
+        IFlowElementRegistry network = composition.Require<IFlowElementRegistry>();
+        SurfaceChain chain = composition.Require<SurfaceChain>();
+
         var loop = new ProductionLoop(
             composition.Require<OGSim.Subsurface.SubsurfaceState>(),
             composition.Require<OGSim.Wells.WellsState>(),
@@ -343,18 +412,30 @@ internal sealed class FieldModule() : EngineModule(Declare(
             composition.Require<TickProduction>(),
             composition.Require<IFluidPropertyModel>(),
             composition.Require<IAuditTrail>(),
+            composition.Require<IFlowSolver>(),
+            network,
+            chain.MeteredPoints,
             Defaults.Economics,
             Defaults.ReservoirTemperature,
-            Defaults.WellheadBackpressure);
+            Defaults.SurfaceAmbient,
+            Defaults.SurfaceOilDensity,
+            Defaults.MaterialCount);
 
+        // Stage 4 before stage 5 before stage 7: the plan, the solve, the meter.
+        // Three slots in design 03 §6's order rather than one function, so a
+        // failed solve commits nothing and an unmetered barrel earns nothing.
+        composition.Contribute(order: 0, new SegmentationStage(network));
         composition.Contribute(order: 0, new SolveFlowStage(loop));
+        composition.Contribute(order: 0, new CustodyStage(loop));
         composition.Contribute(order: 0, new EconomicsStage(loop));
 
         // The scenario's door onto the field. Provided rather than reachable, so
         // building a field is something composition hands out deliberately.
         var field = new FieldControl(
             composition.Require<OGSim.Subsurface.SubsurfaceState>(),
-            composition.Require<OGSim.Wells.WellsState>());
+            composition.Require<OGSim.Wells.WellsState>(),
+            network,
+            chain);
 
         composition.Provide(field);
 
@@ -609,7 +690,7 @@ internal sealed class ObjectivesModule() : EngineModule(Declare(
 /// </summary>
 internal sealed class MaterialsModule() : EngineModule(Declare(
     "materials",
-    provides: [typeof(IFluidPropertyModel)],
+    provides: [typeof(IFluidPropertyModel), typeof(IMaterialCatalog)],
     requires: [],
     ownsState: NothingOwnedYet,
     stages: NoStagesYet))
@@ -618,7 +699,21 @@ internal sealed class MaterialsModule() : EngineModule(Declare(
     {
         ArgumentNullException.ThrowIfNull(composition);
 
-        composition.Provide<IFluidPropertyModel>(new BlackOilModel(Defaults.Fluid, Defaults.Validity));
+        var fluid = new BlackOilModel(Defaults.Fluid, Defaults.Validity);
+        var catalogue = new MaterialCatalogue(Defaults.Materials);
+
+        // THE SECOND HALF OF A TWO-PHASE CONSTRUCTION, and it was missing.
+        // `BlackOilModel.SplitAt` asks the catalogue what phase a material is at
+        // standard conditions, and the binding is deferred because the fluid
+        // system and the catalogue both load from content and neither can be
+        // built first. Nothing called `SplitAt` until a separator did, so the
+        // engine composed and ran for four phases with the second half never
+        // performed — and then faulted at exactly the right moment, naming the
+        // field, because the model refuses to default (law L2).
+        fluid.BindMaterials(catalogue);
+
+        composition.Provide<IFluidPropertyModel>(fluid);
+        composition.Provide<IMaterialCatalog>(catalogue);
     }
 }
 

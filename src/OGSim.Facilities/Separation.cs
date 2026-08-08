@@ -169,6 +169,16 @@ public sealed class Separator : IPressureController
     /// </summary>
     public Pressure SetPoint => _tier.OperatingPressure;
 
+    /// <summary>The ports by name, so a caller wiring the chain never writes a
+    /// bare index — a mistyped integer is a silently different network.</summary>
+    public static PortId Inlet { get; } = new(0);
+
+    public static PortId GasOutlet { get; } = new(1);
+
+    public static PortId LiquidOutlet { get; } = new(2);
+
+    public static PortId WaterOutlet { get; } = new(3);
+
     /// <summary>Inlet, then gas and liquid outlets. Three-phase adds water.</summary>
     public IReadOnlyList<PortSpec> Ports { get; } =
     [
