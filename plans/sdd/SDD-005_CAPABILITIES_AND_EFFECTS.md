@@ -309,6 +309,47 @@ nodes + profiles at load, PV2 verifies behavioural identity).
 | Effect targeting an unknown slot/envelope kind | Load failure (stage 6) |
 | Two `SetModelSelection` on one slot from different active technologies | Content consistency failure at load — precedence is authored, never implicit |
 
+## 7b. Reality profiles — the fidelity axis
+
+> **R25.1 declaration (finding 163).** `RealityProfile` is a `ContentId` on
+> `EngineSetup` ([SDD-017](SDD-017_HOST_SURFACE.md) §1b), on `Scenario`
+> ([SDD-014](SDD-014_OBJECTIVES_AND_SCENARIOS.md) §5) and on `ObjectiveView`,
+> and SDD-014 cites *"modifiers (SDD-005, 18 §5b)"* — **this document.** It said
+> nothing about them. Three contracts carried an id that nothing could turn into
+> behaviour, which is findings 129/141/154's shape for the fifth time.
+
+[18](../design/18_GAME_MODES.md) §5b.1 makes fidelity "per-model plugin
+selection ([03](../design/03_ARCHITECTURE.md) §3.2) — arcade / standard /
+simulation implementations per subsystem". **Every mechanism that needs already
+exists**: `ModelSlot`, `SetModelSelection` (§4's sealed effect vocabulary) and
+`PluginRegistry`, keyed by (name, contract). A profile is therefore not a new
+mechanism — it is a named bundle of the selections technology already makes.
+
+```csharp
+/// 18 §5b's fidelity axis, as content. A named bundle of model selections
+/// applied at composition, before any tick runs.
+public sealed record RealityProfile(
+    ContentId Id,
+    IReadOnlyList<SetModelSelection> Fidelity);
+```
+
+**Composed, not commanded.** Technology issues `SetModelSelection` mid-game
+through §4's effect pipeline; a profile applies the same selections *at
+composition*, because fidelity is what a run is played at rather than something
+earned during it. Changing preset mid-game is allowed (18 §5b.5) and is a
+recompose, which is why it is "allowed and logged" rather than free.
+
+**The same slot may be named by a profile and by a technology**, and §7's error
+table already settles the collision: two `SetModelSelection` on one slot is a
+content consistency failure with authored precedence, never implicit. A profile
+selecting a plugin a technology later replaces is the designed case — the
+player earned a better model — and a profile and an *active* technology naming
+one slot at the same instant is the authored-precedence one.
+
+**A profile names slots, never all of them.** An unnamed slot keeps whatever the
+module composed, so `standard` is legitimately the empty profile: it is the
+shipped set, and only a departure from it needs stating.
+
 ## 8. Test mapping
 
 R17-V11 (gate names the missing tech) · R17-V12 (rental path) · R17-V13/13 §2.1
@@ -324,3 +365,4 @@ extension/restriction cases, order-shuffled.
 |---|---|---|
 | S005-1 | Rival capability state: rivals hold their own `TechnologyState` (TD2) — same type, no special path; confirm memory footprint is trivial | R16 |
 | S005-2 | Whether `MaxDetectClass` should be per-basin (regional expertise) rather than global | Post-R20 balance — start global |
+| S005-3 | Which of §3.2's eleven slots ship an arcade implementation. Fluid properties first (the correlations a player never sees); inflow and hazards are the next candidates. A slot with one implementation is not a defect — it is a slot whose fidelity does not yet vary | R25.1, as each arcade model is written |
