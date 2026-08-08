@@ -122,6 +122,45 @@ public sealed class BeliefStore : IBeliefStore
     /// </summary>
     public IReadOnlyList<HeldBelief> Held => _held;
 
+    /// <summary>SDD-008 §4's re-key, in place: the entry keeps its position in
+    /// the learning order, because when the company learned a thing did not
+    /// change when the thing was renamed.</summary>
+    public void ReKey(EntityRef from, EntityRef to)
+    {
+        // Walked rather than indexed, because the store is keyed by (subject,
+        // kind) and this moves every kind a subject has. In learning order, so
+        // two runs agree (rule D-5).
+        for (int i = 0; i < _held.Count; i++)
+        {
+            HeldBelief entry = _held[i];
+
+            if (entry.Subject != from) continue;
+
+            // A merge has no correct answer. Two beliefs about one fact cannot
+            // be combined without deciding which evidence to discard, and
+            // silently keeping either is the kind of loss nothing would ever
+            // surface (SDD-008 §4).
+            if (_at.ContainsKey((to, entry.PropertyKind)))
+                throw new InvariantFault("SDD-008 §4", to,
+                    $"{to.Kind}:{to.Value} already holds a belief about " +
+                    $"'{entry.PropertyKind.Value}'; re-keying would have to merge two " +
+                    "beliefs about one fact, and no combination of them is correct");
+
+            _at.Remove((from, entry.PropertyKind));
+            _at.Add((to, entry.PropertyKind), i);
+
+            _held[i] = entry with { Subject = to };
+
+            _audit.Record(
+                AuditCategory.StateTransition, subject: to, cause: null,
+                new Dictionary<string, AuditValue>(StringComparer.Ordinal)
+                {
+                    ["rekeyed-from"] = new($"{from.Kind}:{from.Value}"),
+                    ["kind"] = new(entry.PropertyKind.Value),
+                });
+        }
+    }
+
     /// <summary>
     /// SDD-008 §2's staleness: sigma grows for DYNAMIC kinds only.
     ///

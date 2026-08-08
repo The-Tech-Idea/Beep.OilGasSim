@@ -637,4 +637,72 @@ public sealed class NewGameTests
             > OGSim.Information.ProspectRisk.MeanOf(risks.Of(drilled)[PosFactor.Trap]),
             "weighted evidence is not being applied; every observation counts as one well");
     }
+
+    // ------------------------------- a prospect becomes a field (R20d.7.6)
+
+    /// <summary>
+    /// A COMPANY KEEPS WHAT IT PAID FOR. Seismic buys a belief about a
+    /// structure's size; drilling it does not make that knowledge wrong, it
+    /// makes the structure an accumulation. The belief follows the thing it was
+    /// always about — same mean, same sigma, same provenance — because nothing
+    /// new was learned by the entity changing name (SDD-008 §4).
+    ///
+    /// <para>Until this, a discovery stranded everything: the survey's belief
+    /// stayed on a prospect nobody would look at again, and the field it
+    /// described was a compartment the company knew nothing about.</para>
+    /// </summary>
+    [Fact]
+    public void R20d7V5_a_discovery_moves_what_was_learned_onto_the_field()
+    {
+        for (ulong seed = 1UL; seed < 60UL; seed++)
+        {
+            Engine engine = NewGame(seed);
+            WorldState world = WorldOf(engine);
+            IBeliefStore beliefs = engine.Provided.Resolve<IBeliefStore>();
+
+            var charged = -1;
+
+            for (int i = 0; i < world.Prospects.Count; i++)
+                if (world.Beneath(world.Prospects[i]) is not null) { charged = i; break; }
+
+            if (charged < 0) continue;
+
+            EntityId<IProspect> target = world.Prospects[charged];
+            var structure = new EntityRef(EntityKind.Prospect, target.Value);
+            var capacity = new ContentId("structure-capacity");
+
+            // Buy the survey, so there is something to carry across.
+            engine.Commands.Submit(new SeismicSurveyCommand(target));
+
+            engine.Pipeline.AdvanceTick();
+            while (engine.ReadModel!.ActivitiesRunning > 0) engine.Pipeline.AdvanceTick();
+
+            if (beliefs.Get(structure, capacity) is not Belief surveyed) continue;
+
+            engine.Commands.Submit(new DrillWellCommand(target, new Length(2000.0)));
+
+            for (var month = 0; month < 12; month++) engine.Pipeline.AdvanceTick();
+
+            if (engine.ReadModel!.Wells == 0) continue;      // the job was lost; try again
+
+            var field = new EntityRef(
+                EntityKind.Compartment, world.Beneath(target)!.Value.Value);
+
+            Belief? moved = beliefs.Get(field, capacity);
+
+            Assert.NotNull(moved);
+            Assert.Equal(surveyed.Mu, moved.Value.Mu, precision: 12);
+            Assert.Equal(surveyed.Sigma, moved.Value.Sigma, precision: 12);
+            Assert.Equal(surveyed.BestSource, moved.Value.BestSource);
+
+            // AND IT IS A MOVE. Leaving the original would have the prospect and
+            // the field each answering for one fact, and an appraisal updating
+            // one would leave the other stale (law L5).
+            Assert.Null(beliefs.Get(structure, capacity));
+
+            return;
+        }
+
+        Assert.Fail("sixty basins produced no surveyed discovery");
+    }
 }

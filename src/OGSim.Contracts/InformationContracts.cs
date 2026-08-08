@@ -132,6 +132,21 @@ public interface IBeliefStore
     /// amendment).</para>
     /// </summary>
     IReadOnlyList<HeldBelief> Held { get; }
+
+    /// <summary>
+    /// Moves everything known about one subject onto another (SDD-008 §4).
+    ///
+    /// <para>The moment a prospect becomes a field. A company that bought
+    /// seismic over a structure and then drilled it does not stop knowing what
+    /// it paid for — the belief follows the thing it was always about, with the
+    /// same mean, the same sigma, the same provenance and the same as-of date,
+    /// because nothing new was learned by the entity changing name.</para>
+    ///
+    /// <para>A MOVE. Copying would leave the prospect and the accumulation each
+    /// answering for one fact, and an appraisal updating one would leave the
+    /// other stale — law L5, in the information layer.</para>
+    /// </summary>
+    void ReKey(EntityRef from, EntityRef to);
 }
 
 // ILicence moved to CompanyContracts.cs at R16, per SDD-011 §1's standing note:

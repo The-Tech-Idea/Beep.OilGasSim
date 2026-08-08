@@ -189,6 +189,16 @@ public class RivalTests
 
         public IReadOnlyList<HeldBelief> Held => _held;
 
+        /// <summary>
+        /// These tests are about licences, and nothing in them discovers a
+        /// field — so a re-key here would be a call nobody makes. It faults
+        /// rather than doing nothing, because a silent no-op in a double is how
+        /// a test comes to pass against behaviour that was never exercised.
+        /// </summary>
+        public void ReKey(EntityRef from, EntityRef to) =>
+            throw new NotSupportedException(
+                "these tests never discover a field, so nothing should re-key");
+
         public void Apply(Observation observation)
         {
             var entry = new HeldBelief(

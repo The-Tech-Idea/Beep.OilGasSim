@@ -37,7 +37,8 @@ internal sealed class DrillWellActivity(
     FieldControl field,
     WellDesign design,
     OGSim.Information.ProspectRisks risks,
-    WorldState world) : Activity<DrillWellCommand>(terms)
+    WorldState world,
+    IBeliefStore beliefs) : Activity<DrillWellCommand>(terms)
 {
     /// <summary>A well is PP&amp;E: the money buys something the company still
     /// owns next month (SDD-009 §1).</summary>
@@ -134,6 +135,18 @@ internal sealed class DrillWellActivity(
         EntityId<IReservoirCompartmentEntity> reservoir = found.Value;
 
         field.OpenWell(design(field.NextWellId(), reservoir, done.Depth), reservoir);
+
+        // THE PROSPECT BECOMES A FIELD, and the company keeps what it paid for
+        // (SDD-008 §4). Seismic bought a belief about this structure's size;
+        // drilling it did not make that knowledge wrong, it made the structure
+        // an accumulation. The belief follows the thing it was always about,
+        // with the same mean, sigma, provenance and as-of date — nothing new was
+        // learned by the entity changing name.
+        //
+        // Without this a discovery stranded everything: the survey's belief
+        // stayed on a prospect nobody would look at again, and the field it
+        // described was a compartment the company knew nothing about.
+        beliefs.ReKey(prospect, new EntityRef(EntityKind.Compartment, reservoir.Value));
 
         // A DISCOVERY DE-RISKS THE PLAY (SDD-008 §4). The well proved every
         // element at this location — there was a source, a reservoir, a seal, a
