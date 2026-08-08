@@ -340,4 +340,138 @@ public class WorldGenerationTests
             Assert.Equal(expected, surface.Terrain.ClassByCell[i]);
         }
     }
+
+    // ------------------------------------------------- where everything is (R20d.8)
+    //
+    // Until this the surface was a heightfield and four empty lists, and every
+    // accumulation was a 5×5 square in a row at x = index·10 — so "where" was a
+    // slot number, not a place. Nothing offshore existed, because nothing ever
+    // asked the ground what was above a trap.
+
+    /// <summary>
+    /// A basin has somewhere to load a cargo, and the harbour's depth is the
+    /// water it touches — the same heightfield going negative rather than a
+    /// second map (SDD-010 §3).
+    /// </summary>
+    [Fact]
+    public void R20d8V3_a_coastline_produces_harbours_with_depth()
+    {
+        IReadOnlyList<Harbour> harbours = Generate(11UL).Surface!.Harbours;
+
+        Assert.NotEmpty(harbours);
+
+        for (int i = 0; i < harbours.Count; i++)
+            Assert.True(harbours[i].Depth.Metres > 0.0,
+                "a harbour on dry land is not a harbour");
+    }
+
+    /// <summary>
+    /// A LAND-LOCKED BASIN HAS NONE, and gets no settlements either. The
+    /// mechanic is that the world decides, not that every world is the same
+    /// shape — a basin with no coast is a real basin, and it has to reach market
+    /// some other way.
+    /// </summary>
+    [Fact]
+    public void R20d8V3_a_basin_with_no_sea_has_no_harbours()
+    {
+        // Land fraction 0 puts the sea-level percentile below every cell.
+        RecordingSink dry = Generate(11UL, Parameters(land: 0.0));
+
+        Assert.Empty(dry.Surface!.Harbours);
+        Assert.Empty(dry.Surface!.Settlements);
+    }
+
+    /// <summary>
+    /// Towns are ranked, not uniform: a basin gets one real port and a scatter
+    /// of smaller places. The distribution is what decides where labour and
+    /// complaints come from, so a flat one would make every location equivalent.
+    /// </summary>
+    [Fact]
+    public void R20d8V3_settlements_are_ranked_by_population()
+    {
+        IReadOnlyList<Settlement> towns = Generate(3UL).Surface!.Settlements;
+
+        Assert.True(towns.Count > 1, "a coastline produced fewer than two settlements");
+
+        long biggest = 0, smallest = long.MaxValue;
+
+        for (int i = 0; i < towns.Count; i++)
+        {
+            biggest = Math.Max(biggest, towns[i].Population);
+            smallest = Math.Min(smallest, towns[i].Population);
+        }
+
+        Assert.True(biggest > smallest * 2,
+            $"the largest settlement ({biggest}) is not materially bigger than the " +
+            $"smallest ({smallest})");
+    }
+
+    /// <summary>
+    /// AN ACCUMULATION IS SOMEWHERE. Traps land on distinct cells of the
+    /// generated grid rather than in a row, so two prospects are genuinely in
+    /// different places and the distance between them is a real number.
+    /// </summary>
+    [Fact]
+    public void R20d8V3_accumulations_sit_at_distinct_places_on_the_map()
+    {
+        IReadOnlyList<GeneratedAccumulation> found = Generate(21UL).Accumulations;
+
+        Assert.True(found.Count > 1, "one accumulation cannot show a spatial spread");
+
+        var places = new HashSet<Coordinate>();
+        for (int i = 0; i < found.Count; i++) places.Add(found[i].Closure.Centroid);
+
+        Assert.True(places.Count > 1, "every accumulation was generated at the same place");
+    }
+
+    /// <summary>
+    /// AND ITS FOOTPRINT IS ITS SIZE. Closure area grows with the volume drawn,
+    /// which is what a well drilled into it drains — so a big field is big in
+    /// the ground AND on the map, and the two agree.
+    /// </summary>
+    [Fact]
+    public void R20d8V3_a_bigger_accumulation_has_a_bigger_closure()
+    {
+        IReadOnlyList<GeneratedAccumulation> found = Generate(21UL).Accumulations;
+
+        GeneratedAccumulation biggest = found[0], smallest = found[0];
+
+        for (int i = 1; i < found.Count; i++)
+        {
+            if (Volume(found[i]) > Volume(biggest)) biggest = found[i];
+            if (Volume(found[i]) < Volume(smallest)) smallest = found[i];
+        }
+
+        Assert.True(biggest.Closure.Area.SquareMetres > smallest.Closure.Area.SquareMetres,
+            "the largest accumulation does not have the largest footprint");
+    }
+
+    private static double Volume(GeneratedAccumulation accumulation) =>
+        accumulation.Compartments[0].PoreVolume.CubicMetres;
+
+    /// <summary>
+    /// WATER DEPTH IS READ FROM THE GROUND ABOVE THE TRAP, not declared. Every
+    /// accumulation was `Onshore` before this regardless of what it sat under,
+    /// which made the offshore half of the access gate unreachable — a
+    /// development class the game could describe and never present.
+    /// </summary>
+    [Fact]
+    public void R20d8V3_an_accumulation_under_water_is_offshore()
+    {
+        var offshore = 0;
+
+        // Across several basins: a single one can legitimately draw all its
+        // traps onto dry land, and that is the world being a world.
+        foreach (ulong seed in new ulong[] { 1UL, 2UL, 3UL, 4UL, 5UL, 6UL, 7UL, 8UL })
+        {
+            IReadOnlyList<GeneratedAccumulation> found = Generate(seed).Accumulations;
+
+            for (int i = 0; i < found.Count; i++)
+                if (found[i].Access.WaterDepth != WaterDepthClass.Onshore) offshore++;
+        }
+
+        Assert.True(offshore > 0,
+            "eight basins generated with half their cells under water produced no " +
+            "offshore accumulation at all; water depth is not being read from the terrain");
+    }
 }

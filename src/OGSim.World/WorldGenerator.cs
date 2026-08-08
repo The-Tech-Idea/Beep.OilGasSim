@@ -52,11 +52,20 @@ public sealed class BasinWorldGenerator : IWorldGenerator
         // PV7 is a property of the construction rather than of discipline.
         var streams = new StepStreams(unchecked((ulong)worldGen.NextInt(int.MaxValue)));
 
-        IReadOnlyList<GeneratedAccumulation> accumulations = GenerateGeology(parameters, streams);
+        // THE SURFACE COMES FIRST, because geology has to be placed ON it: a
+        // trap's water depth is the elevation of the ground above it, and until
+        // there was a heightfield to ask, every accumulation was declared
+        // onshore whatever it sat under. Reordering costs nothing in
+        // determinism — each step draws from its own substream (§1), so where a
+        // step runs cannot shift what another step draws.
+        GeneratedSurface surface = GenerateSurface(parameters, streams);
+
+        IReadOnlyList<GeneratedAccumulation> accumulations =
+            GenerateGeology(parameters, streams, surface.Terrain);
 
         for (int i = 0; i < accumulations.Count; i++) sink.AddAccumulation(accumulations[i]);
 
-        sink.SetSurface(GenerateSurface(parameters, streams));
+        sink.SetSurface(surface);
         sink.AddJurisdiction(GenerateJurisdiction(parameters, streams));
 
         DeliverRegionalData(accumulations, sink, streams);
@@ -65,7 +74,7 @@ public sealed class BasinWorldGenerator : IWorldGenerator
     // ---------------------------------------------------------- geology
 
     private static IReadOnlyList<GeneratedAccumulation> GenerateGeology(
-        WorldParameters parameters, StepStreams streams)
+        WorldParameters parameters, StepStreams streams, GeneratedTerrain terrain)
     {
         IRandomStream traps = streams.For(WorldStep.Traps);
         IRandomStream charge = streams.For(WorldStep.Charge);
@@ -98,11 +107,24 @@ public sealed class BasinWorldGenerator : IWorldGenerator
 
             var depth = new Length(1200.0 + sizing.NextUnit() * 3500.0);
 
+            // WHERE IT IS. A cell on the generated grid, not a slot in a row —
+            // so the ground above the trap is real ground with an elevation, and
+            // an accumulation under water is offshore because of where it is
+            // rather than because nothing ever asked.
+            int cell = traps.NextInt(terrain.ClassByCell.Length);
+
+            // AND HOW BIG ITS STRUCTURE IS. Closure area scales with the volume
+            // drawn above: a bigger accumulation is a bigger trap, which is what
+            // a well drilled into it drains (SDD-010 §2.5's closure polygon,
+            // consumed as drainage area). A fixed footprint would have made
+            // every well in the basin drain the same area whatever it found.
+            Polygon closure = ClosureAt(terrain, cell, volume);
+
             accumulations.Add(new GeneratedAccumulation(
                 Play: new ContentId(plays.NextUnit() < 0.5 ? "play-a" : "play-b"),
-                Closure: SquareAround(i),
+                Closure: closure,
                 Subtlety: subtlety,
-                Access: AccessFor(depth),
+                Access: AccessFor(depth, WaterDepthAt(terrain, cell)),
                 Fluid: depth.Metres > 3200.0 ? FluidForm.ModifiedBlackOil : FluidForm.BlackOil,
                 Compartments:
                 [
@@ -123,7 +145,7 @@ public sealed class BasinWorldGenerator : IWorldGenerator
     /// SDD-010 §2.7 — access requirements DERIVED from generated depth, never
     /// authored. A deep discovery is hard because it is deep.
     /// </summary>
-    private static AccessRequirements AccessFor(Length depth) =>
+    private static AccessRequirements AccessFor(Length depth, WaterDepthClass water) =>
         new(Depth: depth.Metres switch
             {
                 < 1500.0 => DepthClass.Shallow,
@@ -131,10 +153,69 @@ public sealed class BasinWorldGenerator : IWorldGenerator
                 < 4500.0 => DepthClass.Deep,
                 _ => DepthClass.UltraDeep,
             },
-            WaterDepth: WaterDepthClass.Onshore,
+            WaterDepth: water,
             Hpht: depth.Metres > 4000.0,
             Tight: false,
             Sour: false);
+
+    /// <summary>
+    /// How much water stands over a trap — read from the heightfield, because
+    /// sea level is elevation zero and bathymetry is the same field going
+    /// negative (§3 hydrology). A trap on dry land is onshore; one under 400 m
+    /// of water is a different development entirely, and the gate on
+    /// <see cref="AccessRequirements"/> is what makes that true in play.
+    /// </summary>
+    private static WaterDepthClass WaterDepthAt(GeneratedTerrain terrain, int cell)
+    {
+        double elevation = terrain.Elevation.ElevationMetres[cell];
+
+        if (elevation >= 0.0) return WaterDepthClass.Onshore;
+
+        return -elevation switch
+        {
+            < 150.0 => WaterDepthClass.Shallow,
+            < 1000.0 => WaterDepthClass.Deep,
+            _ => WaterDepthClass.UltraDeep,
+        };
+    }
+
+    /// <summary>
+    /// The trap's footprint on the map: a square centred on its cell, with an
+    /// area that grows with the accumulation it holds.
+    ///
+    /// <para>A SQUARE and not a contour walk, which is what SDD-010 §2.5
+    /// specifies — a closure polygon should be the contour of the structural
+    /// horizon at the spill point. There is no generated horizon yet (steps 1–4
+    /// are not implemented), so there is nothing to walk. What this DOES give
+    /// honestly is position and extent, which is what everything downstream
+    /// consumes; the shape becomes real when the horizon does.</para>
+    /// </summary>
+    private static Polygon ClosureAt(GeneratedTerrain terrain, int cell, double volume)
+    {
+        double cellSize = terrain.Elevation.CellSize.Metres;
+
+        double x = (cell % terrain.Elevation.Width) * cellSize;
+        double y = (cell / terrain.Elevation.Width) * cellSize;
+
+        // Side of a square holding this much rock at a nominal column height.
+        // The scaling is what matters rather than the constant: ten times the
+        // volume is a little over three times the footprint, which is the
+        // relationship between a field's size and the area a well drains.
+        double side = DetMath.Sqrt(volume / NominalColumnMetres);
+
+        return new Polygon(
+        [
+            new Coordinate(x, y), new Coordinate(x + side, y),
+            new Coordinate(x + side, y + side), new Coordinate(x, y + side),
+        ]);
+    }
+
+    /// <summary>
+    /// The column height a closure's footprint is computed against. Twenty
+    /// metres of net pay — an ordinary onshore reservoir, and the number that
+    /// turns a pore volume into an area.
+    /// </summary>
+    private const double NominalColumnMetres = 20.0;
 
     // ---------------------------------------------------------- surface
 
@@ -161,8 +242,145 @@ public sealed class BasinWorldGenerator : IWorldGenerator
         var terrain = new GeneratedTerrain(
             heightfield, [.. classes], [new ContentId("sea"), new ContentId("land")], [], []);
 
-        return new GeneratedSurface(terrain, [], [], [], [], []);
+        IReadOnlyList<Harbour> harbours = PlaceHarbours(terrain);
+
+        return new GeneratedSurface(
+            terrain,
+            PlaceSettlements(terrain, harbours, surface),
+            [],                                  // roads: A* on the cost grid, step 9.4
+            harbours,
+            [],                                  // third-party fabric, step 9.5
+            []);                                 // sensitivity zones, step 9.6
     }
+
+    /// <summary>
+    /// Where a cargo can be loaded (SDD-010 §3 hydrology). A harbour is a land
+    /// cell with sea against it, and its DEPTH is the deepest water it touches —
+    /// which falls out of the heightfield rather than needing a map of its own,
+    /// because sea level is elevation zero.
+    ///
+    /// <para>Depth is the whole point: a shallow inlet cannot berth what a deep
+    /// one can, so where a basin's coast happens to be steep decides what class
+    /// of vessel its oil leaves on. That is a fact about the world rather than a
+    /// content setting.</para>
+    /// </summary>
+    private static IReadOnlyList<Harbour> PlaceHarbours(GeneratedTerrain terrain)
+    {
+        int width = terrain.Elevation.Width;
+        int height = terrain.Elevation.Height;
+        double cellSize = terrain.Elevation.CellSize.Metres;
+
+        ImmutableArray<double> elevation = terrain.Elevation.ElevationMetres;
+
+        var found = new List<Harbour>();
+
+        // Walked in cell order, never by enumerating a set (D-5): two runs of
+        // one seed must place harbours in the same order or a save's ids drift.
+        for (int y = 0; y < height; y++)
+        {
+            for (int x = 0; x < width; x++)
+            {
+                int cell = (y * width) + x;
+
+                if (elevation[cell] < 0.0) continue;      // sea, not shore
+
+                double deepest = 0.0;
+
+                if (x > 0) deepest = Math.Min(deepest, elevation[cell - 1]);
+                if (x < width - 1) deepest = Math.Min(deepest, elevation[cell + 1]);
+                if (y > 0) deepest = Math.Min(deepest, elevation[cell - width]);
+                if (y < height - 1) deepest = Math.Min(deepest, elevation[cell + width]);
+
+                // Dry on every side — inland, and not a harbour however good the
+                // ground is.
+                if (deepest >= 0.0) continue;
+
+                found.Add(new Harbour(
+                    new Coordinate(x * cellSize, y * cellSize), new Length(-deepest)));
+            }
+        }
+
+        return found;
+    }
+
+    /// <summary>
+    /// SDD-010 §3's settlement score, with the terms this world can honestly
+    /// answer: coast and flat ground. The river and arable terms are declared in
+    /// that section and weighted zero here, because rivers are not generated yet
+    /// — a scored term with no data behind it would be a number pretending to be
+    /// a reason.
+    ///
+    /// <para>Population is log-normal BY RANK, so a basin has one real town and
+    /// a scatter of villages rather than a uniform sprawl — the distribution
+    /// that decides where labour, roads and complaints come from.</para>
+    /// </summary>
+    private static IReadOnlyList<Settlement> PlaceSettlements(
+        GeneratedTerrain terrain, IReadOnlyList<Harbour> harbours, IRandomStream surface)
+    {
+        // A coast is the strongest single reason a town is where it is, so the
+        // harbours already found ARE the candidate sites — scored by the water
+        // they touch, which is the same fact that made them harbours.
+        var sites = new List<Harbour>(harbours);
+
+        // Deepest water first; ties by position, so the order is a property of
+        // the world rather than of the sort's stability.
+        sites.Sort(static (a, b) =>
+        {
+            int byDepth = b.Depth.Metres.CompareTo(a.Depth.Metres);
+            if (byDepth != 0) return byDepth;
+
+            int byX = a.Site.X.CompareTo(b.Site.X);
+            return byX != 0 ? byX : a.Site.Y.CompareTo(b.Site.Y);
+        });
+
+        var settlements = new List<Settlement>();
+
+        for (int rank = 0; rank < sites.Count && settlements.Count < MaxSettlements; rank++)
+        {
+            Coordinate site = sites[rank].Site;
+
+            if (TooClose(settlements, site, terrain.Elevation.CellSize.Metres)) continue;
+
+            // Rank decays the median: the first town is the port, the tenth is a
+            // village that happens to be on the water.
+            double logPopulation = FirstTownLogPopulation
+                                 - (settlements.Count * RankDecay)
+                                 + (surface.NextNormal() * PopulationSigmaLog);
+
+            settlements.Add(new Settlement(site, (long)DetMath.Exp(logPopulation)));
+        }
+
+        return settlements;
+    }
+
+    private static bool TooClose(
+        IReadOnlyList<Settlement> placed, Coordinate site, double cellSize)
+    {
+        double minimum = MinimumSpacingCells * cellSize;
+
+        for (int i = 0; i < placed.Count; i++)
+        {
+            double dx = placed[i].Site.X - site.X;
+            double dy = placed[i].Site.Y - site.Y;
+
+            if ((dx * dx) + (dy * dy) < minimum * minimum) return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>Towns do not sit on top of one another. Five cells apart, so a
+    /// coastline becomes a handful of places rather than one per cell.</summary>
+    private const double MinimumSpacingCells = 5.0;
+
+    private const int MaxSettlements = 8;
+
+    /// <summary>ln(60 000) — a small port city.</summary>
+    private const double FirstTownLogPopulation = 11.0;
+
+    private const double RankDecay = 0.55;
+
+    private const double PopulationSigmaLog = 0.35;
 
     private static Jurisdiction GenerateJurisdiction(
         WorldParameters parameters, StepStreams streams)
