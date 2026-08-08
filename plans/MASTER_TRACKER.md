@@ -20,12 +20,12 @@ next.** Updated at the close of every phase.
 | | |
 |---|---|
 | **Phase** | R0–R19, R23, R24 ✅ · **R21a–d ✅ — the engine is played** · R20c, R12b, R20d, R21 🟨 · R20, R22, R25 ⬜. The composite programme is one document: [phases/R20d_INTEGRATION.md](phases/R20d_INTEGRATION.md) |
-| **Design docs** | 24 design + 1 research + **26 phase docs**, 17 catalogue sheets + tech tree, 18 SDDs (000–017). Coherence log: **153 findings**, 61–153 from the code passes. **49 open SDD items** now registered here rather than only in the documents that raised them. |
-| **Code status** | 15 engine assemblies, 0 warnings, 0 errors, **801 tests**. The kernel, the contract layer, eleven domain modules and Layer 4 composition are implemented; scenario, activity-mass, VOI, lending and souring contracts are declared in their SDDs and compiled. The composed engine **advances a tick and plays**: a player drills, waits, finds oil or doesn't, produces, declines, and wins or goes broke. Every implemented member traces to a pinned SDD section (F-1). |
+| **Design docs** | 24 design + 1 research + **26 phase docs**, 17 catalogue sheets + tech tree, 18 SDDs (000–017). Coherence log: **156 findings**, 61–156 from the code passes. **51 open SDD items** now registered here rather than only in the documents that raised them. |
+| **Code status** | 15 engine assemblies, 0 warnings, 0 errors, **814 tests**. The kernel, the contract layer, eleven domain modules and Layer 4 composition are implemented; scenario, activity-mass, VOI, lending and souring contracts are declared in their SDDs and compiled. The composed engine **advances a tick and plays**: a player drills, waits, finds oil or doesn't, produces, declines, and wins or goes broke. Every implemented member traces to a pinned SDD section (F-1). |
 | **Repository** | `The-Tech-Idea/Beep.OilGasSim`, branch `master`. Work lands directly on `master`, one task per commit. |
 | **The playable loop** | **arrive → commit capital under uncertainty → wait four months → find oil or don't → produce → decline → reinvest → win or go broke.** Six of the fourteen tick stages are real (3, 5, 6, 8, 12, 13). One command, one product, one goal, one failure condition. |
 | **Balance note** | With a $8M well earning far more per month than it costs, **cash is not the binding constraint on early expansion — the rig is.** Reaching a cash refusal takes ~140 months of idling. That is a real observation about the shipped numbers and belongs to R20.4, not a defect. |
-| **Next** | **R21e — the scenario runner**, then the chain (R20d.1–5). The exploration loop is now whole in both directions: five activities on the one engine (finding 149), and stage 13 projects what they taught, so a player pays to learn and can see what they learned. **The activities that CHANGE something are blocked, not skipped** — workover, install and abandon each reach a subsystem the loop does not yet call, so all three would complete and mean nothing (finding 153). They land with steps 4 and 6, not before them. |
+| **Next** | **The chain (R20d.1–5)** — the flow solver over the registered network, separation, gas, water, transport, and custody as a metered point, with `R12b.8 install` alongside it. Everything before it in the wiring order is done: the exploration loop is whole in both directions (R20d.7), and the win condition is content rather than a comparison compiled into a stage (R21e). **The activities that CHANGE something are blocked, not skipped** — workover, install and abandon each reach a subsystem the loop does not yet call, so all three would complete and mean nothing (finding 153). They land with steps 4 and 6. |
 
 **Three things are true at once and all three should stay visible.** The engine
 is architecturally complete to its own laws — every manifest promise checked,
@@ -1215,6 +1215,9 @@ hypothetical:
 
 | # | Finding |
 |---|---|
+| 156 | **The shipped scenario's goal read a target that had not been initialised yet.** The first-field scenario asks for cash at or above `TargetCash.Cents`, and `TargetCash` was declared BELOW the scenario that reads it — so a static initialiser running in declaration order built the objective against `default(Money)`, and the game shipped asking for "cash at least zero". Met in month one, every time: not a game that was easy, a game that could not be lost. It is the third time this file has been bitten by the same rule — `Defaults` already carries a note about it on the activity terms, put there when the outcome tables were read before they existed — and it is worth recording as a finding rather than a slip because of what the two instances have in common: both were a `static` reading another `static` in a file whose whole purpose is to hold the values everything else is built from. The compiler said nothing either time. What caught it was a test asserting the game starts undecided |
+| 155 | **The content fault class had one carrier and it was about saves.** `FaultClass.Content` covers both "this save is damaged" and "this authored file asks for something that was never built", and SDD-001 §11 declared only `SaveDataFault` — "a missing or unreadable value on load". So the first caller that needed to refuse a mission had the choice of raising a save fault for a file that is not a save, or inventing a class. A mission author told their save is corrupt has been sent to look in the wrong place entirely, which is the failure mode the whole typed-refusal design exists to avoid. `ContentFault` added: same class, so the fault policy branches identically, different carrier, so the sentence a human reads is about the thing that is actually wrong |
+| 154 | **The two types that closed finding 141 were never specified.** Finding 141's own note lists eight shapes as written and declares six: `ScenarioProgress` and `IScenarioRunner` — the report and the interface, which is to say the two a runner must implement — went into `OGSim.Contracts` and into no document, **inside the change that was fixing prose-only specification**. `ObjectiveSnapshot` did the same at R24. That is F-1 broken in the act of closing an F-1 defect, and it is worth stating plainly because it says the rule needs a mechanism rather than more care: S000-4 (automating F-1 as a member diff) is the open item, and this is the second finding to name it. Two further defects fell out of declaring them. **`Evaluate` took SDD-017's fifteen-view `ReadModel`**, which no composition can build until eleven subsystems are wired — so the debt R21d created could never be paid — and which is wrong on the merits anyway: SDD-014 §1–2 say an objective sees the read model through paths validated against the registry, so a runner handed the record would flatten fifteen nested views itself, duplicating the registry SDD-017 §3 generates from those same records, and a plugin that flattened differently would evaluate content against paths it was never validated against. And **`ObjectiveState` named two different concepts** — the enum a campaign branches on, and R24's class of `SustainedFor`/`InSequence`/`Never` counters. Both public, and invisible until now only because the tests live in the namespace that shadows one of them; the moment a runner held an objective's counters and reported its state, it was a compile error. The counters are `PredicateState` |
 | 153 | **The next three activities each have nothing to change.** The plan's stated order after the four measurements was "the templates that CHANGE something — workover, install, abandon", and reading the modules they reach says none of the three can be built honestly yet. A **workover** restores condition, and `IntegrityModule` provides two models while owning no state and running no stage: no component degrades, so the restoration would restore nothing. An **install** joins a facility to the network, and the loop still runs well→sale directly (R20d.1–5): the separator would be bought, paid for, and bypassed. An **abandon** discharges an obligation, and `CompanyState` carries no abandonment liability, so it would remove a producing well and save the company nothing — the field's standing charge is flat and does not know how many wells it stands over. All three would be law L3 with a completion effect that runs and means nothing, which is a worse failure than an unbuilt template because it *looks* built. **R12b's remaining catalogue is gated on the subsystems it reaches, not on catalogue work** — the wiring order in R20d §2 step 1 has to interleave with steps 4 and 6 rather than precede them. Not a defect in what was built; a defect in the order, and the argument for R20d's second axis proving itself again: eight subsystems being complete and bypassed is exactly why the verbs that reach them cannot land first |
 | 152 | **The read model was promised a belief panel nothing could enumerate.** SDD-008 §8 has specified since R14 that beliefs project as `(P10, P50, P90, BestSource, AsOf)` **per kind**, and §3's `IBeliefStore` offered `Apply` and `Get(subject, kind)` — a store you can only ask about a pair you already hold. So the projection had to be handed its (subject, kind) pairs from somewhere, and the only place they exist is inside the store. It is finding 147's shape from the other end: there the consumer was specified and the producer was not, here the producer was specified and the *door* was not, and both stayed invisible for the same reason — nothing had yet tried to build the thing the document promised. `Held` closes it, and the no-leak argument is what makes it safe to add: a pair enters the list only through `Apply`, so it lists exactly what `Get` would already answer one call at a time, and an unobserved subject has no entry to find. Enumerability decides whether the known can be walked, not what is knowable. Fixing it turned up a smaller one underneath — `BeliefStore` held its key set twice, in a `Dictionary` and a parallel insertion-order `List`, which is law L5 waiting to happen: `Age` mutated one and a projection would have read the other |
 | 151 | **A rig was booked and never given back.** `OperationScheduler.Release` was written for R12-V8's cancel-frees-the-rig and called by nothing else, so SDD-007 §5's "release resources" at completion was prose with no code behind it. The calendar therefore held every reservation an operation ever made, and a company's one rig stayed committed for months after it had finished — the second activity of a game was refused as "rig 1 is committed; next free on day 246". It survived this long because nothing had ever tried to run a second activity *after* a first finished: the gameplay tests submit their six wells at once and assert the refusals, which is the same calendar working correctly. It took a well test ordered after a well to expose it. `ActivityState.Finish` now takes the activity off the register and releases the operation together, because they are one event and a caller given two calls will one day make one of them |
@@ -1303,6 +1306,7 @@ the phase that closes them (finding 143).
 | S015-4 | **`CommandTemplate` and `ReasoningTemplate` have no declared shape** — signatures that cannot be implemented because a type they name does not exist | R25 |
 | S004-2 | Localisation file format for `$loc:` ids — **already being emitted**: every `RejectionReason` the engine produces carries one and nothing defines what resolves it | R21 |
 | S017-2 | Localisation of rejection/reasoning rendering at the host boundary | R21, after S004-2 |
+| S014-3 | **An objective cannot see events at stage 12** — SDD-014 §3 evaluates over "the sealed event list" and the pipeline seals at the close, after stage 12, so `OnEvent` reads an empty list. A runner refuses a scenario containing one rather than shipping a predicate that silently never fires | R21f — no mission can use an event until it is decided |
 
 **Model honesty — the ones that decide whether numbers can be trusted**
 
@@ -1314,6 +1318,7 @@ the phase that closes them (finding 143).
 | S003-1 | Two-pass ρ_mix vs full pressure-traverse for deep gassy wells | R6 model tests |
 | S003-2 | Coning constants need calibration against CAL3's S-curve | R10 |
 | S003-3 | Drainage-area split when completions share a compartment | R6.10 — recommend kh-weighted |
+| S014-4 | Fractional objective progress — a per-predicate distance metric. `ScenarioProgress.Progress` is 0.0/1.0 until one exists, so a host can show met-or-not and nothing between | R21f mission UI |
 
 **Deferred with a named trigger — start-here answers already chosen**
 
@@ -1442,7 +1447,7 @@ a phase that has not started at all.
 
 | # | Task | Status |
 |---|---|---|
-| R21.1 | Immutable read model published at tick close | 🟨 — `FieldReadModel` is published at stage 13: eight fields (tick, date, cash, wells, drilling, production, solvency, outcome) where SDD-017 §2 specifies fifteen views |
+| R21.1 | Immutable read model published at tick close | 🟨 — `FieldReadModel` is published at stage 13: the month's facts, the beliefs and the scenario's verdict, where SDD-017 §2 specifies fifteen views. One projection owns it (`FieldProjection`), taken at stage 12 so the objectives judge the month they are in |
 | R21.2 | Command submission surface | 🟨 — the bus is composed and `DrillWellCommand` runs through it; **1 of the 61-decision catalogue** ([20](design/20_PLAYER_DECISIONS.md)), and PD1's fixture that derives the required set from that catalogue has never been run |
 | R21.3 | Audit query surface — the player-facing "why?" | ⬜ — the trail records causes; nothing queries it for a player |
 | R21.4 | Belief and uncertainty projection for map rendering | ⬜ |
@@ -1458,7 +1463,7 @@ from *runs* to *is played*:
 | R21b | Drilling as a decision — four months, 0.6 success, a dry hole paid in full | ✅ |
 | R21c | The game can be won — a goal, a deadline, a verdict at stage 12 | ✅ |
 | R21d | Scenario/campaign **contracts** — finding 141 | ✅ |
-| R21e | `IScenarioRunner` implementation, replacing composition's `ScenarioGoal` | ⬜ |
+| R21e | `IScenarioRunner` implementation, replacing composition's `ScenarioGoal` | ✅ — the goal is an `Objective` over a read-model path; `ScenarioGoal` and `Outcome` are gone. A scenario naming a projection the loop cannot fill is refused when the engine composes |
 | R21f | Scenario and challenge **content** — the 12 missions, the 10 patterns | ⬜ |
 
 The loop a player now lives: **arrive → commit capital under uncertainty → wait
@@ -1467,14 +1472,16 @@ broke.** Every step is real. The reservoir falls because of what was taken, the
 well earns less as it does, a dry hole costs full price, and the outcome is
 drawn once at commitment so a reload cannot re-roll it.
 
-**What it is not.** Drilling is the only decision — no workover, no lift, no
-facility investment. The player is told where the oil is, so R14's belief
-machinery is built and unused. Gas, water and transport are built and bypassed:
-oil goes straight from reservoir to sale. And `ScenarioGoal` in
-`OGSim.Composition` is a stand-in for the contracts R21d just declared — a win
-condition compiled into the engine rather than loaded, which is the thing
-design 03 §3.3 exists to prevent. **R21e is the debt R21d created and should be
-paid before more content is written against it.**
+**What it is not.** Drilling is the only decision that CHANGES anything — no
+workover, no lift, no facility investment. Gas, water and transport are built
+and bypassed: oil goes straight from reservoir to sale.
+
+**Two of the three gaps this list opened with are closed.** The player is no
+longer told where the oil is — four activities measure, and what they teach
+reaches the read model as a distribution with provenance (R20d.7). And
+`ScenarioGoal` is gone: the win condition is an `Objective` over a read-model
+path inside a `Scenario`, which is what design 03 §3.3 means by a mode being
+content (R21e). What is left of the original three is the chain.
 
 ---
 
@@ -1531,7 +1538,7 @@ order they are built in.
 **What remains, in order** — the sequencing above is the historical plan; for
 the work still open it is superseded by
 [phases/R20d_INTEGRATION.md](phases/R20d_INTEGRATION.md) §2: **R12b's
-measurements ✅ → beliefs (R20d.7) ✅ → R21e scenario runner → the chain
+measurements ✅ → beliefs (R20d.7) ✅ → R21e scenario runner ✅ → the chain
 (R20d.1–5, with R12b.8) → R22 + environment wiring → technology & company
 (R20d.10/.9, with R12b.10) → equipment content (R20c.9) → R20 → R21 → R25.**
 Phase numbers stay stable; only the order is restated — and R12b's remaining

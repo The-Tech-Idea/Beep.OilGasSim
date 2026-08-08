@@ -31,7 +31,7 @@ tested; only an R20d mark says it is in the game.**
 | G1 | One activity engine, no bespoke timers | Drilling, testing, surveying, working over, installing and abandoning all run on `OperationScheduler`; the R21b drilling timer is gone (finding 142) |
 | G2 | The player learns instead of being told | Nothing reveals subsurface truth except an `Observation` produced by an activity the player paid for |
 | G3 | Oil flows through the chain, not past it | Reservoir → completion → separation → (gas · water paths) → transport → **metered custody** → sale; the direct well→sale path is deleted, not bypassed |
-| G4 | A scenario is loaded, never compiled | The `ScenarioGoal` record inside `OGSim.Composition` is replaced by an `IScenarioRunner` reading `Scenario` content (finding 141's contracts) |
+| G4 | A scenario is loaded, never compiled | ✅ mechanism · ⬜ loader — `ScenarioGoal` is gone and `ScenarioRunner` reads a `Scenario`; the records are still built in `Defaults` rather than parsed from JSON, which is R21f |
 | G5 | The whole engine saves | One call captures every registered state owner; a reload continues bit-identically (PV2) |
 
 ---
@@ -43,7 +43,7 @@ The order is by what each step unblocks, not by phase number.
 | Step | What | Why here |
 |---|---|---|
 | 1 | **R12b — activities on the one engine.** ✅ drilling collapsed (142, 148) · ✅ one activity, one class (149) · ✅ the four measurements: survey, log, core, build-up (150, 151). **The templates that CHANGE something do not come next** — workover, install and abandon each reach a subsystem this list has not yet wired, so all three would complete and mean nothing (finding 153). They move into steps 4 and 6, beside the subsystem that gives each one something to change | The lever: most bypassed subsystems are reached by an activity or not at all. Well test and seismic are the door to G2 |
-| 2 | **R21e — the scenario runner** | R21d's debt; pays before content is written against the ad-hoc goal |
+| 2 | **R21e — the scenario runner** | ✅ R21d's debt, paid: the goal is an `Objective` over a read-model path, and a scenario naming a projection the loop cannot fill is refused when the engine composes. `ScenarioGoal` and `Outcome` are gone (findings 154–156) |
 | 3 | **Beliefs wired (R20d.7)** | ✅ both directions, ahead of schedule — step 1's measurements produce `Observation`s through `ObservationSampler`, and stage 13 projects the result as `BeliefEntryView` (R21-V7). A player pays to learn and can see what they learned. POS is the remainder and has no subject until a world generator makes prospects (R20d.8) |
 | 4 | **The chain (R20d.1–5)** — with **R12b.8 install** | `IFlowSolver` over the registered network; separation, gas, water, transport; custody becomes a metered point. Closes FV1's 1000-tick half, R11-V13, SC7/SC8. An install template is catalogue work the moment a facility is something the loop routes through rather than around |
 | 5 | **Environment (R22 + R20d.13)** | The one unbuilt phase; weather, seasons, access windows feeding stage 2 |
