@@ -21,6 +21,11 @@ namespace OGSim.Wells.Tests;
 
 public class NetworkCouplingTests
 {
+    /// <summary>Oil and gas, matching the completion the shipped catalogue
+    /// builds — a synthetic element narrower than the wells feeding it would
+    /// fail SDD-002 §2's ordinal check rather than the coupling under test.</summary>
+    private const int Materials = 2;
+
     private static readonly SegmentContext WholeTick =
         new(DurationDays: 30, Temperature.FromCelsius(15.0), WeatherSeverity: 0.0);
 
@@ -41,10 +46,13 @@ public class NetworkCouplingTests
                 new FormationVolumeFactor(1.2),
                 Allocation.FromSingle(new EntityRef(EntityKind.Compartment, id)),
                 new Pressure(reservoirBarA * 1e5),
-                Temperature.FromCelsius(80.0)),
+                Temperature.FromCelsius(80.0),
+                Fx.GasDensity,
+                Fx.NoSolutionGas),
             ChokeSetting.Open,
-            materialOrdinal: 0,
-            materialCount: 1,
+            oilOrdinal: 0,
+            gasOrdinal: 1,
+            materialCount: 2,
             lift: null);
     }
 
@@ -219,9 +227,9 @@ public class NetworkCouplingTests
         {
             if (input.Inlets.Count == 0)
                 return new TransformResult(
-                    [new MaterialStream(Composition.Zero(1), Pressure.FromBar(1.0),
+                    [new MaterialStream(Composition.Zero(Materials), Pressure.FromBar(1.0),
                                         Temperature.FromCelsius(60.0), OneCompartment)],
-                    Composition.Zero(1), Composition.Zero(1), NoDisposal, new Power(0.0));
+                    Composition.Zero(Materials), Composition.Zero(Materials), NoDisposal, new Power(0.0));
 
             MaterialStream inlet = input.Inlets[0];
             double massRate = inlet.MassRates.Total.KgPerSecond;
@@ -233,7 +241,7 @@ public class NetworkCouplingTests
             };
 
             return new TransformResult(
-                [outlet], Composition.Zero(1), Composition.Zero(1), NoDisposal, new Power(0.0));
+                [outlet], Composition.Zero(Materials), Composition.Zero(Materials), NoDisposal, new Power(0.0));
         }
 
         public IReadOnlyList<ConstraintEvaluation> EvaluateConstraints(TransformInput input) => [];
@@ -251,11 +259,11 @@ public class NetworkCouplingTests
         {
             Composition received = input.Inlets.Count > 0
                 ? input.Inlets[0].MassRates
-                : Composition.Zero(1);
+                : Composition.Zero(Materials);
 
             return new TransformResult(
-                [], Composition.Zero(1), Composition.Zero(1),
-                new DisposedMass(Composition.Zero(1), Composition.Zero(1), received),
+                [], Composition.Zero(Materials), Composition.Zero(Materials),
+                new DisposedMass(Composition.Zero(Materials), Composition.Zero(Materials), received),
                 new Power(0.0));
         }
 
@@ -266,7 +274,7 @@ public class NetworkCouplingTests
         Allocation.FromSingle(new EntityRef(EntityKind.Compartment, 1));
 
     private static DisposedMass NoDisposal { get; } =
-        new(Composition.Zero(1), Composition.Zero(1), Composition.Zero(1));
+        new(Composition.Zero(Materials), Composition.Zero(Materials), Composition.Zero(Materials));
 
     /// <summary>Two inlets, one outlet, taking the lower inlet pressure — the
     /// shared line R6-V14 is about.</summary>
@@ -283,7 +291,7 @@ public class NetworkCouplingTests
 
         public TransformResult Transform(TransformInput input)
         {
-            Composition total = Composition.Zero(1);
+            Composition total = Composition.Zero(Materials);
             double pressure = double.MaxValue;
 
             var parts = new List<(Allocation Part, Mass Weight)>(input.Inlets.Count);
@@ -304,8 +312,8 @@ public class NetworkCouplingTests
             return new TransformResult(
                 [new MaterialStream(total, new Pressure(pressure),
                                     Temperature.FromCelsius(60.0), blended)],
-                Composition.Zero(1), Composition.Zero(1),
-                new DisposedMass(Composition.Zero(1), Composition.Zero(1), Composition.Zero(1)),
+                Composition.Zero(Materials), Composition.Zero(Materials),
+                new DisposedMass(Composition.Zero(Materials), Composition.Zero(Materials), Composition.Zero(Materials)),
                 new Power(0.0));
         }
 

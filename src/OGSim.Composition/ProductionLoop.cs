@@ -243,7 +243,8 @@ internal sealed class ProductionLoop
     {
         ArgumentNullException.ThrowIfNull(context);
 
-        _wells.RefreshFromReservoir(_subsurface.TruePressureOf, _reservoirTemperature);
+        _wells.RefreshFromReservoir(
+            _subsurface.TruePressureOf, _fluid.Rs, _reservoirTemperature);
 
         // Stage 4 owns the plan and stage 5 consumes it. Missing means the
         // availability stage did not run — a composition defect, not a tick with
@@ -297,8 +298,23 @@ internal sealed class ProductionLoop
         {
             ElementSolution solution = report.Solutions[i];
 
-            var throughput = 0.0;
-            IReadOnlyList<MaterialStream> outlets = solution.Converged.Outlets;
+            TransformResult converged = solution.Converged;
+
+            // EVERYTHING THAT LEFT, in any form — outlets, fuel burned, mass
+            // disposed of. By SDD-002 §5's element conservation that equals what
+            // entered, so it is exactly "what crossed this element".
+            //
+            // Outlets alone would read ZERO for a terminal sink: a flare has no
+            // outlet ports, so a chain that measured only outlets would show the
+            // flare passing nothing while it burned the field's entire gas
+            // production.
+            double throughput =
+                converged.FuelConsumed.Total.KgPerSecond
+                + converged.Disposed.Flared.Total.KgPerSecond
+                + converged.Disposed.Vented.Total.KgPerSecond
+                + converged.Disposed.Discharged.Total.KgPerSecond;
+
+            IReadOnlyList<MaterialStream> outlets = converged.Outlets;
             for (int o = 0; o < outlets.Count; o++)
                 throughput += outlets[o].MassRates.Total.KgPerSecond;
 

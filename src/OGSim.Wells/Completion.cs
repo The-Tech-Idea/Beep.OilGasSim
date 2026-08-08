@@ -29,11 +29,33 @@ public sealed record ChokeSetting(double CriticalPressureRatio, ReservoirRate Cr
 
 /// <summary>What a completion needs to turn a solved rate into a stream.</summary>
 public sealed record CompletionFluid(
-    Density SurfaceDensity,                 // ρ at standard conditions, kg/m³
+    Density SurfaceDensity,                 // ρ_sc of the OIL, kg/m³
     FormationVolumeFactor OilFormationVolumeFactor,
     Allocation Provenance,                  // which compartments the mass is credited to
     Pressure ReservoirPressure,             // Pr — from the compartment, through a contract
-    Temperature ReservoirTemperature);
+    Temperature ReservoirTemperature,
+
+    /// <summary>
+    /// ρ_sc of the solution gas, kg/m³ — <c>γg · ρ_air,sc</c> (SDD-003 §6.1b).
+    ///
+    /// <para>Its own density and not a factor on the oil's: gas is about a
+    /// thousandth as dense, and a stream using one number for both would put the
+    /// field's entire gas production on the wrong side of the conservation
+    /// check.</para>
+    /// </summary>
+    Density GasSurfaceDensity,
+
+    /// <summary>
+    /// Rs, sm³ of gas per sm³ of stock-tank oil at the compartment's CURRENT
+    /// pressure (SDD-003 §6.1b).
+    ///
+    /// <para>Refreshed with the pressure through the same door, because it is a
+    /// function of it: as a reservoir falls below bubble point the oil holds less
+    /// gas, and a completion keeping its initial Rs would produce a constant GOR
+    /// for forty years — the opposite of the producing-GOR rise §3.1
+    /// models.</para>
+    /// </summary>
+    double SolutionGasOilRatio);
 
 /// <summary>
 /// SDD-003 §6. A source element: no inlets, and its withdrawal reported as
@@ -53,7 +75,8 @@ public sealed class Completion : ICompletion
     // has to be the one the material balance moved.
     private CompletionFluid _fluid;
     private readonly ChokeSetting _choke;
-    private readonly int _materialOrdinal;
+    private readonly int _oilOrdinal;
+    private readonly int _gasOrdinal;
     private readonly int _materialCount;
 
     private bool _pressureDecoupled;
@@ -66,7 +89,8 @@ public sealed class Completion : ICompletion
         IOutflowModel outflow,
         CompletionFluid fluid,
         ChokeSetting choke,
-        int materialOrdinal,
+        int oilOrdinal,
+        int gasOrdinal,
         int materialCount,
         ILiftMethod? lift)
     {
@@ -91,7 +115,8 @@ public sealed class Completion : ICompletion
         _outflow = outflow;
         _fluid = fluid;
         _choke = choke;
-        _materialOrdinal = materialOrdinal;
+        _oilOrdinal = oilOrdinal;
+        _gasOrdinal = gasOrdinal;
         _materialCount = materialCount;
     }
 
@@ -131,12 +156,21 @@ public sealed class Completion : ICompletion
     /// sides passes the number, which is the same door
     /// <c>CompletionFluid</c> always documented.</para>
     /// </summary>
-    public void SetReservoirConditions(Pressure reservoirPressure, Temperature temperature) =>
+    public void SetReservoirConditions(
+        Pressure reservoirPressure, Temperature temperature, double solutionGasOilRatio)
+    {
+        if (solutionGasOilRatio < 0.0)
+            throw new ModelFault("SDD-003 §6.1b", null,
+                $"completion {CompletionId.Value} was given a negative solution GOR; oil " +
+                "cannot hold less than no gas");
+
         _fluid = _fluid with
         {
             ReservoirPressure = reservoirPressure,
             ReservoirTemperature = temperature,
+            SolutionGasOilRatio = solutionGasOilRatio,
         };
+    }
 
     /// <summary>What the well currently believes the compartment is at — the
     /// value the next solve will use.</summary>
@@ -206,11 +240,18 @@ public sealed class Completion : ICompletion
         // conversion needs the factor in hand — the type system will not let a
         // ReservoirVolume be added to a SurfaceVolume without one (kernel
         // Volumes.cs), which is exactly the error this crossing invites.
-        double surfaceRate =
+        double surfaceOilRate =
             rate.CubicMetresPerSecond / _fluid.OilFormationVolumeFactor.RbPerStb;
 
+        // SOLUTION GAS (SDD-003 §6.1b) comes up dissolved in the oil and breaks
+        // out at surface: Rs sm³ of gas per sm³ of stock-tank oil. It is not free
+        // gas from a cap, and it falls as the reservoir depletes — which is the
+        // producing-GOR story §3.1 tells through Rp.
+        double surfaceGasRate = surfaceOilRate * _fluid.SolutionGasOilRatio;
+
         double[] byOrdinal = new double[_materialCount];
-        byOrdinal[_materialOrdinal] = surfaceRate * _fluid.SurfaceDensity.KgPerCubicMetre;
+        byOrdinal[_oilOrdinal] = surfaceOilRate * _fluid.SurfaceDensity.KgPerCubicMetre;
+        byOrdinal[_gasOrdinal] += surfaceGasRate * _fluid.GasSurfaceDensity.KgPerCubicMetre;
 
         Composition produced = Composition.Validated([.. byOrdinal]);
 

@@ -206,4 +206,33 @@ public static class PhysicalConstants
 
     /// <summary>2π — the radial-flow coefficient of SDD-003 §6.1, as the form states it.</summary>
     public const double TwoPi = 2.0 * Math.PI;
+
+    // ------------------------------------------------- standard conditions
+    //
+    // SDD-003 §3.1 states p_sc and T_sc in its prose and nothing carried them. A
+    // gas specific gravity is relative to AIR (γg, air = 1), so SDD-003 §6.1b's
+    // ρ_sc,gas = γg · ρ_air,sc needs an air density — and without one it could
+    // only be written as a literal, which is the rule this class exists to
+    // enforce.
+
+    /// <summary>p_sc, Pa. SDD-003 §3.1.</summary>
+    public const double StandardPressurePa = 101_325.0;
+
+    /// <summary>T_sc, K — 60 °F, the industry's standard. SDD-003 §3.1.</summary>
+    public const double StandardTemperatureK = 288.706;
+
+    /// <summary>Dry air, kg/mol. SDD-001 §1.</summary>
+    public const double AirMolarMassKgPerMol = 0.0289647;
+
+    /// <summary>
+    /// ρ_air at standard conditions, kg/m³ — what a gas specific gravity is
+    /// measured against (SDD-001 §1).
+    ///
+    /// <para>DERIVED as <c>pM/RT</c> rather than stated as ≈1.2255, so the number
+    /// is checkable against the three constants above. A constant nobody can
+    /// re-derive is a literal with a comment on it.</para>
+    /// </summary>
+    public const double AirDensityAtStandardKgPerM3 =
+        StandardPressurePa * AirMolarMassKgPerMol
+        / (GasConstantJPerMolK * StandardTemperatureK);
 }

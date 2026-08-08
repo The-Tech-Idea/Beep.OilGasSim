@@ -36,10 +36,13 @@ public class OperatingPointTests
                 new FormationVolumeFactor(1.2),
                 Allocation.FromSingle(new EntityRef(EntityKind.Compartment, 1)),
                 new Pressure(reservoirBarA * 1e5),
-                Temperature.FromCelsius(80.0)),
+                Temperature.FromCelsius(80.0),
+                Fx.GasDensity,
+                Fx.NoSolutionGas),
             choke ?? ChokeSetting.Open,
-            materialOrdinal: 0,
-            materialCount: 1,
+            oilOrdinal: 0,
+            gasOrdinal: 1,
+            materialCount: 2,
             lift: null);
     }
 

@@ -79,10 +79,13 @@ public sealed class ProductionLoopTests
                 Allocation.Validated(
                     [(new EntityRef(EntityKind.Compartment, drains.Value), 1.0)]),
                 new Pressure(30.0e6),
-                Temperature.FromCelsius(93.3)),
+                Temperature.FromCelsius(93.3),
+                Defaults.GasSurfaceDensity,
+                Defaults.Fluid.SolutionGorAtBubblePoint),
             ChokeSetting.Open,
-            materialOrdinal: 0,
-            materialCount: 1,
+            oilOrdinal: 0,
+            gasOrdinal: 1,
+            materialCount: 2,
             lift: null);
 
     /// <summary>

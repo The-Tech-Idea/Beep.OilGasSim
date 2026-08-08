@@ -129,7 +129,9 @@ public sealed class ChainTests
         // What the completion would give at the vessel's pressure, solved
         // independently of the network, then shrunk and taken over the month.
         OGSim.Wells.Completion well = Defaults.CompletionFor(1, target, new Length(2000.0));
-        well.SetReservoirConditions(new Pressure(30.0e6), Defaults.ReservoirTemperature);
+        well.SetReservoirConditions(
+            new Pressure(30.0e6), Defaults.ReservoirTemperature,
+            engine.Provided.Resolve<IFluidPropertyModel>().Rs(new Pressure(30.0e6)));
 
         var flowing = Assert.IsType<Flowing>(
             well.SolveOperatingPoint(Defaults.SeparatorTier.OperatingPressure));
@@ -177,7 +179,7 @@ public sealed class ChainTests
         engine.Pipeline.AdvanceTick();
 
         Assert.Equal(
-            ["well-1", "manifold", "separator", "custody-meter"],
+            ["well-1", "manifold", "separator", "custody-meter", "flare"],
             engine.ReadModel!.Chain.Select(element => element.DisplayId));
     }
 
@@ -216,6 +218,64 @@ public sealed class ChainTests
 
         foreach (ChainElementView element in engine.ReadModel.Chain)
             Assert.False(element.IsBottleneck);
+    }
+
+    // --------------------------------------------------- more than one material
+
+    /// <summary>
+    /// SDD-003 §6.1b. A well produces solution gas as well as oil, the separator
+    /// sends each down its own leg, and the gas is flared — which is what an E1
+    /// field with no gas infrastructure does with it.
+    ///
+    /// <para>Before this a completion carried a single material ordinal: a well
+    /// that could only ever produce one substance, so the separator's gas leg had
+    /// nothing to carry and the vessel was a pass-through with a capacity.</para>
+    /// </summary>
+    [Fact]
+    public void R20dV3_a_well_produces_gas_and_the_separator_sends_it_to_the_flare()
+    {
+        (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled();
+        Produce(engine, target);
+
+        engine.Pipeline.AdvanceTick();
+
+        ChainElementView flare = Assert.Single(
+            engine.ReadModel!.Chain, element => element.DisplayId == "flare");
+
+        Assert.True(flare.Throughput.Kilograms > 0.0,
+            "the gas leg reaches the flare, or a field's associated gas vanishes at " +
+            "an unconnected port");
+    }
+
+    /// <summary>
+    /// Gas is produced and NOT sold: only the liquid leg reaches the meter, so
+    /// revenue is oil revenue. Flared gas is a cost with no income, which is
+    /// exactly the pressure the ESG mechanics are built to apply later.
+    /// </summary>
+    [Fact]
+    public void R20dV3_flared_gas_earns_nothing()
+    {
+        (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled();
+        Produce(engine, target);
+
+        engine.Pipeline.AdvanceTick();
+
+        ChainElementView flare = Assert.Single(
+            engine.ReadModel!.Chain, element => element.DisplayId == "flare");
+        ChainElementView meter = Assert.Single(
+            engine.ReadModel.Chain, element => element.DisplayId == "custody-meter");
+
+        // The meter carries oil and the flare carries gas: two legs of one
+        // stream, and only one of them is worth money.
+        Assert.True(flare.Throughput.Kilograms > 0.0);
+        Assert.True(meter.Throughput.Kilograms > 0.0);
+
+        // What was SOLD is the metered stock-tank oil, not the whole stream.
+        Assert.True(
+            engine.ReadModel.ProducedThisTick.CubicMetres
+                < (meter.Throughput.Kilograms + flare.Throughput.Kilograms)
+                  / Defaults.SurfaceOilDensity.KgPerCubicMetre,
+            "the barrels a player is paid for must be the metered leg alone");
     }
 
     // ------------------------------------------- see the jam, build past it

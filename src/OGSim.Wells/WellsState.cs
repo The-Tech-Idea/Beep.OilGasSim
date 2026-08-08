@@ -87,15 +87,22 @@ public sealed class WellsState : IStateOwner
     /// </summary>
     public void RefreshFromReservoir(
         Func<EntityId<IReservoirCompartmentEntity>, Pressure> pressureOf,
+        Func<Pressure, double> solutionGorAt,
         Temperature reservoirTemperature)
     {
         ArgumentNullException.ThrowIfNull(pressureOf);
+        ArgumentNullException.ThrowIfNull(solutionGorAt);
 
         for (int i = 0; i < _completions.Count; i++)
         {
             Completion completion = _completions[i];
+            Pressure reservoir = pressureOf(_drains[completion.CompletionId]);
+
+            // Rs travels with the pressure it is a function of. Two deliveries
+            // would let a completion solve at this month's pressure and last
+            // month's gas ratio, which is a GOR that lags its own reservoir.
             completion.SetReservoirConditions(
-                pressureOf(_drains[completion.CompletionId]), reservoirTemperature);
+                reservoir, reservoirTemperature, solutionGorAt(reservoir));
         }
     }
 

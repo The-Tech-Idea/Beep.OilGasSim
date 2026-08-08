@@ -235,24 +235,39 @@ internal sealed class FacilitiesModule() : EngineModule(Declare(
             Defaults.TheCustodyPoint, Defaults.SalesSpec, Defaults.MaterialCount,
             Defaults.MeasureStream);
 
+        // THE GAS LEG GOES TO A FLARE. An E1 field with no gas infrastructure
+        // burns its associated gas, which is both the historical answer and the
+        // one the ESG mechanics are built to make expensive later (design 13).
+        // What it is NOT is an unconnected port: mass leaving the network at one
+        // would vanish from the tick's conservation terms silently, and a flare
+        // accounts for it — combusted and unburnt, both reported as Disposed.
+        var flare = new OGSim.Facilities.Flare(
+            Defaults.TheFlare, Defaults.FlareCapacity, Defaults.FlareCombustionEfficiency,
+            Defaults.MaterialCount);
+
         network.Add(manifold);
         network.Add(separator);
         network.Add(custody);
+        network.Add(flare);
 
         network.Connect(new FlowConnection(
             manifold.Id, manifold.Outlet,
             separator.Id, OGSim.Facilities.Separator.Inlet));
 
-        // The LIQUID leg to the meter. The gas and water legs are unconnected
-        // and carry nothing: this composition ships one material, so the ideal
-        // split puts every kilogram in the liquid. They are wired when there is
-        // something to put in them (R20d.3, R20d.4) rather than piped now to an
-        // element that would receive zero for a decade.
+        // The LIQUID leg to the meter, the GAS leg to the flare. The water leg
+        // stays unconnected and carries nothing: there is no water material yet,
+        // so the split puts nothing in it (R20d.4). It is piped the day there is
+        // water to put down it, rather than now to an element that would receive
+        // zero for a decade.
         network.Connect(new FlowConnection(
             separator.Id, OGSim.Facilities.Separator.LiquidOutlet,
             custody.Id, OGSim.Facilities.CustodyTransferPoint.Inlet));
 
-        composition.Provide(new SurfaceChain(manifold, separator, custody));
+        network.Connect(new FlowConnection(
+            separator.Id, OGSim.Facilities.Separator.GasOutlet,
+            flare.Id, OGSim.Facilities.Flare.Inlet));
+
+        composition.Provide(new SurfaceChain(manifold, separator, custody, flare));
     }
 }
 
@@ -268,7 +283,8 @@ internal sealed class FacilitiesModule() : EngineModule(Declare(
 internal sealed record SurfaceChain(
     OGSim.Facilities.Manifold Manifold,
     OGSim.Facilities.Separator Separator,
-    OGSim.Facilities.CustodyTransferPoint Custody)
+    OGSim.Facilities.CustodyTransferPoint Custody,
+    OGSim.Facilities.Flare Flare)
 {
     /// <summary>Where a well ties in, and how many can. One list rather than a
     /// count, so a caller cannot forget which port a slot index means.</summary>
@@ -291,6 +307,7 @@ internal sealed record SurfaceChain(
         if (element == Manifold.Id) return "manifold";
         if (element == Separator.Id) return "separator";
         if (element == Custody.Id) return "custody-meter";
+        if (element == Flare.Id) return "flare";
 
         return "well-" + element.Value.ToString(
             System.Globalization.CultureInfo.InvariantCulture);

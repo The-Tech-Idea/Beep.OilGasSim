@@ -261,6 +261,13 @@ public sealed class Flare : IFlowElement
 
     public EntityId<IFlowElement> Id { get; }
 
+    /// <summary>The one port, named so a caller wiring the chain never writes a
+    /// bare index (see <see cref="Separator.Inlet"/>).</summary>
+    public static PortId Inlet { get; } = new(0);
+
+    /// <summary>Inlet only. A flare is a TERMINAL sink: what enters leaves the
+    /// network as Disposed, combusted or not, and there is nothing downstream of
+    /// it to connect.</summary>
     public IReadOnlyList<PortSpec> Ports { get; } =
         [new PortSpec(new PortId(0), PortDirection.Inlet, PortRole.Main)];
 

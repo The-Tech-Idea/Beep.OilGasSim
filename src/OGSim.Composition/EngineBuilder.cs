@@ -92,7 +92,26 @@ internal static class Defaults
                                  IReadOnlyList<IProperty> Properties)> Materials { get; } =
     [
         (new ContentId("crude-oil"), PhaseAtStandardConditions.Liquid, []),
+        (new ContentId("natural-gas"), PhaseAtStandardConditions.Gas, []),
     ];
+
+    /// <summary>
+    /// Ordinals are assigned by the CATALOGUE from the id-sorted list, never
+    /// here (SDD-004 §6) — "crude-oil" sorts before "natural-gas". Named so a
+    /// completion is built with the ordinal the catalogue chose rather than one
+    /// this file assumed.
+    /// </summary>
+    public static MaterialId OilOrdinal { get; } = new(0);
+
+    public static MaterialId GasOrdinal { get; } = new(1);
+
+    /// <summary>
+    /// ρ_sc of the produced gas — <c>γg · ρ_air,sc</c> (SDD-003 §6.1b). The
+    /// specific gravity is the fluid system's; the air density is the kernel's
+    /// derived constant.
+    /// </summary>
+    public static Density GasSurfaceDensity { get; } = new(
+        Fluid.GasSpecificGravity * PhysicalConstants.AirDensityAtStandardKgPerM3);
 
     /// <summary>
     /// How many materials this composition's catalogue carries. One — oil —
@@ -100,7 +119,7 @@ internal static class Defaults
     /// three places must agree on it: the completion's stream width, an
     /// operation's mass report, and any zero composition either of them builds.
     /// </summary>
-    public const int MaterialCount = 1;
+    public const int MaterialCount = 2;
 
     /// <summary>
     /// The company's one rig. **One**, deliberately: a rig drills a single well
@@ -338,10 +357,17 @@ internal static class Defaults
                 Allocation.Validated(
                     [(new EntityRef(EntityKind.Compartment, compartment.Value), 1.0)]),
                 new Pressure(30.0e6),
-                ReservoirTemperature),
+                ReservoirTemperature,
+                GasSurfaceDensity,
+
+                // Rs is REFRESHED from the compartment before every solve, like
+                // the pressure it is a function of. Opening at the bubble-point
+                // ratio is the value a well starts at, not a placeholder.
+                Fluid.SolutionGorAtBubblePoint),
             Wells.ChokeSetting.Open,
-            materialOrdinal: 0,
-            materialCount: 1,
+            oilOrdinal: OilOrdinal.Ordinal,
+            gasOrdinal: GasOrdinal.Ordinal,
+            materialCount: MaterialCount,
             lift: null);
     }
 
@@ -443,6 +469,20 @@ internal static class Defaults
     public static EntityId<IFlowElement> TheSeparator { get; } = new(1_000_002);
 
     public static EntityId<IFlowElement> TheCustodyPoint { get; } = new(1_000_003);
+
+    public static EntityId<IFlowElement> TheFlare { get; } = new(1_000_004);
+
+    /// <summary>
+    /// The flare's throughput, generous because a flare that binds would shut a
+    /// field in for want of somewhere to put its gas — a real late-life failure
+    /// and a balance decision R20.4 owns, not one to ship by accident.
+    /// </summary>
+    public static MassRate FlareCapacity { get; } = new(200.0);
+
+    /// <summary>SDD-006 §3's combustion efficiency. 0.98 is the industry figure
+    /// for a well-run flare; the 2% unburnt is methane and is what makes routine
+    /// flaring an emissions problem rather than merely a waste one.</summary>
+    public const double FlareCombustionEfficiency = 0.98;
 
     /// <summary>
     /// The field's header. Eight slots — a fixed manifold from catalogue C06's
