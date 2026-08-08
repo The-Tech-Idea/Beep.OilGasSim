@@ -458,17 +458,27 @@ internal static class Defaults
     /// used to hard-code as a wellhead backpressure — the same number, now held
     /// by the element that imposes it rather than by the stage that read it.
     ///
-    /// <para>The capacities are deliberately generous: a bottleneck is something
-    /// a player creates by choosing a vessel, and shipping one that binds on the
-    /// first well would be a balance decision nobody made (R20.4 owns sizing).
-    /// The efficiencies are perfect because there is one material and nothing to
-    /// carry over — a number below 1.0 here would be describing a separation
+    /// <para><b>The liquid capacity BINDS, and that is the point.</b> A well on
+    /// this field delivers about 7 kg/s, so the first vessel carries one well
+    /// comfortably and is over capacity on the second — the player sees the
+    /// separator refusing production on the read model and has to do something
+    /// about it. A vessel sized never to bind would make every downstream
+    /// mechanic — the throttle, the deferral attribution, the bottleneck report —
+    /// machinery that runs and is never felt.</para>
+    ///
+    /// <para>Which is the whole shape of an operations game: the constraint is
+    /// visible, it is nameable, and it is bought past. R20.4 owns where exactly
+    /// the number lands; that it binds at all is a design decision, not a balance
+    /// one.</para>
+    ///
+    /// <para>The efficiencies are perfect because there is one material and
+    /// nothing to carry over — a number below 1.0 would describe a separation
     /// this content cannot express.</para>
     /// </summary>
     public static Facilities.SeparatorTier SeparatorTier { get; } = new(
-        new ContentId("separator-3phase-standard"),
+        new ContentId("separator-3phase-e1"),
         GasCapacity: new MassRate(50.0),
-        LiquidCapacity: new MassRate(500.0),
+        LiquidCapacity: new MassRate(10.0),
         Volume: new ReservoirVolume(30.0),
         RatedEfficiency: new SeparationEfficiency(
             LiquidFromGas: 0.0, GasFromLiquid: 0.0, WaterFromLiquid: 0.0),

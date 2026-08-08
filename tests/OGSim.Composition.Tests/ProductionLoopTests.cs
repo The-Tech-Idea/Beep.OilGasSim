@@ -111,15 +111,34 @@ public sealed class ProductionLoopTests
 
     /// <summary>
     /// DECLINE — the thing that makes this a game rather than a spreadsheet. The
-    /// same well, unchanged, earns less next month because the reservoir it
+    /// same well, unchanged, earns less than it used to because the reservoir it
     /// drains is lower. Before finding 137 the completion held its pressure in a
     /// readonly field, and this test could not have failed however broken the
     /// physics was.
+    ///
+    /// <para><b>Measured after the vessel stops binding, and that is not a
+    /// workaround.</b> The shipped separator's liquid leg caps this field's early
+    /// production, so the first months are flat at the cap — the FACILITY is the
+    /// constraint, not the reservoir, and decline is genuinely invisible until
+    /// the well falls below it. That is the real behaviour of a facility-limited
+    /// field and the reason a player debottlenecks; asserting decline across
+    /// months when something else is binding would be asserting that the cap does
+    /// not work.</para>
     /// </summary>
     [Fact]
     public void Earnings_decline_as_the_reservoir_depletes()
     {
         (Engine engine, CompanyState company) = Field();
+
+        // Past the plateau: run until the vessel stops refusing, which is the
+        // month the reservoir becomes the binding constraint.
+        for (var month = 0; month < 480; month++)
+        {
+            engine.Pipeline.AdvanceTick();
+            if (engine.ReadModel!.Bottlenecks.Count == 0) break;
+        }
+
+        Assert.Empty(engine.ReadModel!.Bottlenecks);
 
         Money before = company.Ledger.Cash;
         engine.Pipeline.AdvanceTick();
@@ -132,6 +151,36 @@ public sealed class ProductionLoopTests
         Assert.True(secondMonth < firstMonth,
             $"month two ({secondMonth.Cents}c) must earn less than month one " +
             $"({firstMonth.Cents}c) — a well whose reservoir has fallen produces less");
+    }
+
+    /// <summary>
+    /// THE PLATEAU, which is the other half of the same fact. While the vessel
+    /// binds, a field produces its capacity and not its potential — the months
+    /// are flat, the separator is named on the read model as the thing refusing,
+    /// and the deferred mass is what the player is losing by not building.
+    ///
+    /// <para>This is the shape an operations game is played on: the constraint is
+    /// visible, it is nameable, and it is bought past.</para>
+    /// </summary>
+    [Fact]
+    public void R20dV1_a_facility_limited_field_produces_its_capacity_not_its_potential()
+    {
+        (Engine engine, _) = Field();
+
+        engine.Pipeline.AdvanceTick();
+        double first = engine.ReadModel!.ProducedThisTick.CubicMetres;
+
+        ChainElementView jammed = Assert.Single(engine.ReadModel.Bottlenecks);
+        Assert.Equal("separator", jammed.DisplayId);
+        Assert.Equal(ConstraintKind.LiquidCapacity, Assert.Single(jammed.Deferred).Kind);
+        Assert.True(Assert.Single(jammed.Deferred).Deferred.Kilograms > 0.0,
+            "a bottleneck must say how much it is costing, or a player cannot price the fix");
+
+        engine.Pipeline.AdvanceTick();
+
+        // Flat while the vessel binds: the reservoir has fallen and the field
+        // has not, because the reservoir was never what was limiting it.
+        Assert.Equal(first, engine.ReadModel!.ProducedThisTick.CubicMetres, precision: 6);
     }
 
     /// <summary>
