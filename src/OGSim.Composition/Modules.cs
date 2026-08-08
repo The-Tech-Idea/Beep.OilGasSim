@@ -476,6 +476,7 @@ internal sealed class FieldModule() : EngineModule(Declare(
         typeof(IFiscalRegime),
         typeof(IFlowElementRegistry),
         typeof(SurfaceChain),
+        typeof(WorldState),
     ],
     // Provided here because the field is where an asset is CREATED, and
     // registration is unconditional at creation (SDD-007 §6).
@@ -529,7 +530,8 @@ internal sealed class FieldModule() : EngineModule(Declare(
             network,
             chain,
             obligations,
-            Defaults.AbandonWellTerms.Template);
+            Defaults.AbandonWellTerms.Template,
+            composition.Require<WorldState>());
 
 
         // THE ROUTE TO MARKET. One per field, so its identity is the field's
@@ -734,8 +736,8 @@ internal sealed class InformationModule() : EngineModule(Declare(
 
 internal sealed class WorldModule() : EngineModule(Declare(
     "world",
-    provides: [typeof(IWorldGenerator), typeof(WorldSink)],
-    requires: [typeof(FieldControl), typeof(IBeliefStore)],
+    provides: [typeof(IWorldGenerator), typeof(WorldState)],
+    requires: [],
     ownsState: NothingOwnedYet,
     stages: NoStagesYet))   // world-gen runs once, at tick zero, not in the loop
 {
@@ -745,12 +747,11 @@ internal sealed class WorldModule() : EngineModule(Declare(
 
         composition.Provide<IWorldGenerator>(new OGSim.World.BasinWorldGenerator());
 
-        // THE SINK, provided so `CreateNew` can find it — and so the generated
-        // world has exactly one place to land. It was the missing half: a
-        // generator was composed here for four phases and the only IWorldSink in
-        // the repository was a test double, so nothing ever ran it.
-        composition.Provide<WorldSink>(new WorldSink(
-            composition.Require<FieldControl>(), composition.Require<IBeliefStore>()));
+        // EMPTY, and filled once by generation before the first tick. Composed
+        // rather than created by `CreateNew` because the FIELD reads it — a well
+        // tied in has to know where its prospect is — and a module cannot depend
+        // on something built after composition finished.
+        composition.Provide<WorldState>(new WorldState());
     }
 }
 

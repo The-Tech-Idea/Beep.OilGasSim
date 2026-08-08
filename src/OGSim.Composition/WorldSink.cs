@@ -27,30 +27,25 @@ using OGSim.Kernel;
 namespace OGSim.Composition;
 
 /// <summary>
-/// SDD-010 §4's sink: the generator's only output channel.
+/// THE WORLD THE ENGINE IS PLAYING IN — composed empty and filled once, by
+/// generation, before the first tick.
+///
+/// <para>It is a separate object from the sink that fills it because two very
+/// different things need it and one of them cannot wait for the other: the sink
+/// writes truth into module stores as it goes, while the FIELD reads a
+/// prospect's position every time a well is tied in. Folding both into one type
+/// would make the module that owns the field depend on the module that owns
+/// generation and the reverse at the same time.</para>
 /// </summary>
-public sealed class WorldSink : IWorldSink
+public sealed class WorldState
 {
-    private readonly FieldControl _field;
-    private readonly IBeliefStore _beliefs;
-
+    private readonly List<EntityId<IReservoirCompartmentEntity>> _prospects = [];
+    private readonly List<Coordinate> _at = [];
     private readonly List<ClimateRegion> _climate = [];
     private readonly List<Jurisdiction> _jurisdictions = [];
 
+    private IReadOnlyList<Harbour> _harbours = [];
     private GeneratedSurface? _surface;
-
-    /// <summary>How many compartments have been built, so the id the generator
-    /// assumed can be checked rather than trusted.</summary>
-    private int _compartments;
-
-    public WorldSink(FieldControl field, IBeliefStore beliefs)
-    {
-        ArgumentNullException.ThrowIfNull(field);
-        ArgumentNullException.ThrowIfNull(beliefs);
-
-        _field = field;
-        _beliefs = beliefs;
-    }
 
     /// <summary>
     /// The renderable world, or null before generation has run — the same
@@ -74,7 +69,79 @@ public sealed class WorldSink : IWorldSink
     /// </summary>
     public IReadOnlyList<EntityId<IReservoirCompartmentEntity>> Prospects => _prospects;
 
-    private readonly List<EntityId<IReservoirCompartmentEntity>> _prospects = [];
+    /// <summary>How many compartments generation built, so the subject the
+    /// generator assumed can be checked rather than trusted.</summary>
+    public int Count => _prospects.Count;
+
+    internal void Add(EntityId<IReservoirCompartmentEntity> prospect, Coordinate at)
+    {
+        _prospects.Add(prospect);
+        _at.Add(at);
+    }
+
+    internal void Surface(GeneratedSurface surface)
+    {
+        _surface = surface;
+        _harbours = surface.Harbours;
+    }
+
+    internal void Climate(ClimateRegion region) => _climate.Add(region);
+
+    internal void Jurisdiction(Jurisdiction jurisdiction) => _jurisdictions.Add(jurisdiction);
+
+    /// <summary>
+    /// HOW FAR A FIELD IS FROM MARKET — the distance from the prospect to the
+    /// nearest harbour, which is the flowline a company has to lay to develop it
+    /// (SDD-006 §7c.1).
+    ///
+    /// <para>Null when there is nothing to measure: a basin with no coast, or an
+    /// engine playing a hand-built field that no generator ever placed. Both are
+    /// legitimately "no distance", and returning a made-up one would let a game
+    /// route oil to a sea that is not there or charge a test field for a journey
+    /// it never makes.</para>
+    /// </summary>
+    public Length? DistanceToMarket(EntityId<IReservoirCompartmentEntity> prospect)
+    {
+        int index = _prospects.IndexOf(prospect);
+
+        if (index < 0 || _harbours.Count == 0) return null;
+
+        Coordinate at = _at[index];
+        double nearest = double.PositiveInfinity;
+
+        for (int i = 0; i < _harbours.Count; i++)
+        {
+            double dx = _harbours[i].Site.X - at.X;
+            double dy = _harbours[i].Site.Y - at.Y;
+
+            nearest = Math.Min(nearest, (dx * dx) + (dy * dy));
+        }
+
+        return new Length(DetMath.Sqrt(nearest));
+    }
+}
+
+/// <summary>
+/// SDD-010 §4's sink: the generator's only output channel.
+/// </summary>
+public sealed class WorldSink : IWorldSink
+{
+    private readonly FieldControl _field;
+    private readonly IBeliefStore _beliefs;
+    private readonly WorldState _world;
+
+    public WorldSink(FieldControl field, IBeliefStore beliefs, WorldState world)
+    {
+        ArgumentNullException.ThrowIfNull(field);
+        ArgumentNullException.ThrowIfNull(beliefs);
+        ArgumentNullException.ThrowIfNull(world);
+
+        _field = field;
+        _beliefs = beliefs;
+        _world = world;
+    }
+
+    private EntityId<IReservoirCompartmentEntity> _prospectJustBuilt;
 
     public void AddAccumulation(GeneratedAccumulation accumulation)
     {
@@ -89,7 +156,7 @@ public sealed class WorldSink : IWorldSink
             // structure is reach all the way into the inflow equation — which is
             // the difference between a field that is large because a content
             // file says so and one that is large because of its shape.
-            _prospects.Add(_field.AddCompartment(
+            _prospectJustBuilt = _field.AddCompartment(
                 generated,
                 permeability: Defaults.Inflow.Permeability,
                 netThickness: Defaults.Inflow.PerforatedInterval,
@@ -106,9 +173,9 @@ public sealed class WorldSink : IWorldSink
                 Defaults.Wettability,
                 Defaults.Drive,
                 Defaults.AquiferStrength,
-                Defaults.AquiferResponseTime));
+                Defaults.AquiferResponseTime);
 
-            _compartments++;
+            _world.Add(_prospectJustBuilt, accumulation.Closure.Centroid);
         }
     }
 
@@ -129,19 +196,19 @@ public sealed class WorldSink : IWorldSink
     public void SetSurface(GeneratedSurface surface)
     {
         ArgumentNullException.ThrowIfNull(surface);
-        _surface = surface;
+        _world.Surface(surface);
     }
 
     public void AddClimateRegion(ClimateRegion region)
     {
         ArgumentNullException.ThrowIfNull(region);
-        _climate.Add(region);
+        _world.Climate(region);
     }
 
     public void AddJurisdiction(Jurisdiction jurisdiction)
     {
         ArgumentNullException.ThrowIfNull(jurisdiction);
-        _jurisdictions.Add(jurisdiction);
+        _world.Jurisdiction(jurisdiction);
     }
 
     /// <summary>
@@ -161,10 +228,10 @@ public sealed class WorldSink : IWorldSink
         // compartment accumulation would silently attach a belief about one
         // structure to a different one, and a belief pointing at the wrong
         // subject is worse than no belief at all.
-        if (observation.Subject.Value > (ulong)_compartments)
+        if (observation.Subject.Value > (ulong)_world.Count)
             throw new InvariantFault("SDD-010 §4", observation.Subject,
                 $"regional data names compartment {observation.Subject.Value} and only " +
-                $"{_compartments} were built; the generator's positional subject and the " +
+                $"{_world.Count} were built; the generator's positional subject and the " +
                 "compartments this sink created have drifted apart");
 
         _beliefs.Apply(observation);

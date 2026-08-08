@@ -730,6 +730,7 @@ public sealed class FieldControl
     private readonly SurfaceChain _chain;
     private readonly IObligationRegistry _obligations;
     private readonly ContentId _abandonmentTemplate;
+    private readonly WorldState _world;
 
     private int _slotsTaken;
 
@@ -739,7 +740,8 @@ public sealed class FieldControl
         IFlowElementRegistry network,
         SurfaceChain chain,
         IObligationRegistry obligations,
-        ContentId abandonmentTemplate)
+        ContentId abandonmentTemplate,
+        WorldState world)
     {
         _subsurface = subsurface;
         _wells = wells;
@@ -747,6 +749,7 @@ public sealed class FieldControl
         _chain = chain;
         _obligations = obligations;
         _abandonmentTemplate = abandonmentTemplate;
+        _world = world;
     }
 
     /// <summary>
@@ -801,6 +804,17 @@ public sealed class FieldControl
             throw new InvariantFault("SDD-006 §1b", null,
                 $"the header has {_chain.Slots} slots and all are taken; a well with " +
                 "nowhere to tie in must be refused when it is ordered, not when it lands");
+
+        // LAY THE LINE TO WHERE THE FIELD ACTUALLY IS (SDD-006 §7c.1). The
+        // first well tied in is the moment a company commits to a location, and
+        // the flowline it runs to market is as long as the journey — so a
+        // discovery out at the edge of the basin costs more pressure to produce
+        // through than one beside the harbour.
+        //
+        // Only on the FIRST tie-in: later wells join a line that is already laid,
+        // and re-routing under oil is refused by the pipeline itself.
+        if (_slotsTaken == 0 && _world.DistanceToMarket(drains) is Length toMarket)
+            _chain.Flowline.Route(_chain.Flowline.Geometry with { PipeLength = toMarket });
 
         EntityId<ICompletion> opened = _wells.Open(completion, drains);
 

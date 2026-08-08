@@ -241,9 +241,36 @@ public sealed class Pipeline : IPipeline
     }
 
     public EntityId<IFlowElement> Id { get; }
-    public PipeGeometry Geometry { get; }
-    public Length PipeLength { get; }
-    public Length InnerDiameter { get; }
+    public PipeGeometry Geometry { get; private set; }
+    public Length PipeLength { get; private set; }
+    public Length InnerDiameter { get; private set; }
+
+    /// <summary>
+    /// LAY THE LINE (SDD-006 §7c.1). A pipeline is a socket like a separator:
+    /// the element keeps its id, its tie-ins and its spec, and the route is what
+    /// is fitted — because the flow registry is write-once, so the element has
+    /// to exist from composition while the distance it covers is not known until
+    /// a field is chosen.
+    ///
+    /// <para>REFUSED while the line holds oil. A route cannot change under mass
+    /// that is already in it: re-routing a full line would either destroy owned
+    /// inventory or teleport it, and only the second of those would be caught by
+    /// the conservation check. Emptying the line first is what a company would
+    /// actually have to do.</para>
+    /// </summary>
+    public void Route(PipeGeometry geometry)
+    {
+        if (_linefill.Total.Kilograms > 0.0)
+            throw new InvariantFault("SDD-006 §7c.1", new EntityRef(EntityKind.Pipeline, Id.Value),
+                $"pipeline {Id.Value} holds {_linefill.Total.Kilograms} kg of linefill and " +
+                "cannot be re-routed; a line is emptied before it is moved");
+
+        LiquidHydraulicModel.Validate(geometry);
+
+        Geometry = geometry;
+        PipeLength = geometry.PipeLength;
+        InnerDiameter = geometry.InnerDiameter;
+    }
     public Pressure Rating { get; }
     public ContentId PipeSpec { get; }
 

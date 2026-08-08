@@ -31,7 +31,33 @@ public sealed class NewGameTests
         Assert.IsType<Built>(EngineBuilder.CreateNew(
             Fixture.Settings() with { WorldSeed = seed }, Basin())).Engine;
 
-    private static WorldSink SinkOf(Engine engine) => engine.Provided.Resolve<WorldSink>();
+    private static WorldState WorldOf(Engine engine) => engine.Provided.Resolve<WorldState>();
+
+    /// <summary>
+    /// A basin with at least two prospects that can both reach market. Found by
+    /// walking seeds rather than by naming one, because how many traps a basin
+    /// charges is exactly the thing generation decides — a hard-coded seed would
+    /// mean these tests silently stop asking their question the first time step 6
+    /// is tuned.
+    /// </summary>
+    private static Engine BasinWithSeveralProspects()
+    {
+        for (ulong seed = 1UL; seed < 40UL; seed++)
+        {
+            Engine engine = NewGame(seed);
+            WorldState world = WorldOf(engine);
+
+            var reachable = 0;
+
+            for (int i = 0; i < world.Prospects.Count; i++)
+                if (world.DistanceToMarket(world.Prospects[i]) is not null) reachable++;
+
+            if (reachable > 1) return engine;
+        }
+
+        throw new InvalidOperationException(
+            "forty seeds produced no basin with two prospects that can reach market");
+    }
 
     // ------------------------------------------------- the world reaches the engine
 
@@ -44,7 +70,7 @@ public sealed class NewGameTests
     {
         Engine engine = NewGame(seed: 20260808UL);
 
-        Assert.NotEmpty(SinkOf(engine).Prospects);
+        Assert.NotEmpty(WorldOf(engine).Prospects);
     }
 
     /// <summary>
@@ -116,7 +142,7 @@ public sealed class NewGameTests
             Engine engine = NewGame(seed);
             IBeliefStore beliefs = engine.Provided.Resolve<IBeliefStore>();
 
-            foreach (EntityId<IReservoirCompartmentEntity> prospect in SinkOf(engine).Prospects)
+            foreach (EntityId<IReservoirCompartmentEntity> prospect in WorldOf(engine).Prospects)
             {
                 Belief? held = beliefs.Get(
                     new EntityRef(EntityKind.Compartment, prospect.Value),
@@ -148,7 +174,7 @@ public sealed class NewGameTests
     [Fact]
     public void R20d8V2_a_new_game_has_a_renderable_world()
     {
-        WorldView? view = SinkOf(NewGame(seed: 5UL)).View;
+        WorldView? view = WorldOf(NewGame(seed: 5UL)).View;
 
         Assert.NotNull(view);
         Assert.Equal(24 * 24, view.Terrain.Elevation.ElevationMetres.Length);
@@ -164,5 +190,104 @@ public sealed class NewGameTests
     {
         Assert.Throws<ContentFault>(() => EngineBuilder.CreateNew(
             Fixture.Settings(profile: "no-such-fidelity"), Basin()));
+    }
+
+    // -------------------------------------------------- geography costs something
+
+    /// <summary>
+    /// FINDING 167, HALF CLOSED. A prospect's distance from market is a real
+    /// number, and prospects differ in it — which they could not before, when
+    /// every closure was a square in a row and the flowline was a 2 km constant
+    /// whatever the field.
+    /// </summary>
+    [Fact]
+    public void R20d8V4_prospects_differ_in_how_far_they_are_from_market()
+    {
+        Engine engine = BasinWithSeveralProspects();
+        WorldState world = WorldOf(engine);
+
+        var distances = new List<double>();
+
+        foreach (EntityId<IReservoirCompartmentEntity> prospect in world.Prospects)
+            if (world.DistanceToMarket(prospect) is Length away)
+                distances.Add(away.Metres);
+
+        Assert.True(distances.Count > 1, "a basin with one reachable prospect shows no spread");
+
+        distances.Sort();
+
+        Assert.True(distances[^1] > distances[0],
+            "every prospect is exactly as far from market as every other");
+    }
+
+    /// <summary>
+    /// AND THE LINE IS LAID TO IT. Developing a field routes the flowline to
+    /// that field's distance — so the same engine, the same content and the same
+    /// commands produce a different gathering system depending only on which
+    /// discovery a company chose to develop.
+    ///
+    /// <para>This is the mechanism the whole slice exists for: geography is
+    /// worth generating only if committing to a place commits you to its
+    /// consequences.</para>
+    /// </summary>
+    [Fact]
+    public void R20d8V4_developing_a_field_lays_the_line_to_where_it_is()
+    {
+        Engine engine = BasinWithSeveralProspects();
+        WorldState world = WorldOf(engine);
+        FieldControl field = engine.Provided.Resolve<FieldControl>();
+        SurfaceChain chain = engine.Provided.Resolve<SurfaceChain>();
+
+        EntityId<IReservoirCompartmentEntity> chosen = world.Prospects[0];
+        Length expected = world.DistanceToMarket(chosen)!.Value;
+
+        field.OpenWell(
+            Defaults.CompletionFor(field.NextWellId(), chosen, new Length(2000.0)), chosen);
+
+        Assert.Equal(expected.Metres, chain.Flowline.PipeLength.Metres, precision: 6);
+    }
+
+    /// <summary>
+    /// A SECOND WELL DOES NOT MOVE THE LINE. Later wells join a gathering system
+    /// that is already laid — and by then it holds oil, which the pipeline
+    /// refuses to be re-routed under (SDD-006 §7c.1).
+    /// </summary>
+    [Fact]
+    public void R20d8V4_a_second_well_joins_the_line_that_is_already_there()
+    {
+        Engine engine = BasinWithSeveralProspects();
+        WorldState world = WorldOf(engine);
+        FieldControl field = engine.Provided.Resolve<FieldControl>();
+        SurfaceChain chain = engine.Provided.Resolve<SurfaceChain>();
+
+        EntityId<IReservoirCompartmentEntity> first = world.Prospects[0];
+
+        field.OpenWell(
+            Defaults.CompletionFor(field.NextWellId(), first, new Length(2000.0)), first);
+
+        Length laid = chain.Flowline.PipeLength;
+
+        // A well on a DIFFERENT prospect — the case that would move the line if
+        // anything were going to.
+        EntityId<IReservoirCompartmentEntity> elsewhere = world.Prospects[^1];
+
+        field.OpenWell(
+            Defaults.CompletionFor(field.NextWellId(), elsewhere, new Length(2000.0)), elsewhere);
+
+        Assert.Equal(laid.Metres, chain.Flowline.PipeLength.Metres, precision: 6);
+    }
+
+    /// <summary>
+    /// A HAND-BUILT FIELD KEEPS THE COMPOSED ROUTE. No generator placed it, so
+    /// there is no distance to lay a line to — and inventing one would charge a
+    /// test field for a journey it never makes.
+    /// </summary>
+    [Fact]
+    public void R20d8V4_a_field_no_world_placed_has_no_distance()
+    {
+        Engine engine = Assert.IsType<Built>(EngineBuilder.Build(Fixture.Settings())).Engine;
+
+        Assert.Null(engine.Provided.Resolve<WorldState>()
+            .DistanceToMarket(new EntityId<IReservoirCompartmentEntity>(1)));
     }
 }

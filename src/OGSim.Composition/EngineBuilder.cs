@@ -1109,7 +1109,15 @@ public static class EngineBuilder
 
         ready.Engine.Provided.Resolve<IWorldGenerator>().Generate(
             world,
-            ready.Engine.Provided.Resolve<WorldSink>(),
+
+            // Built HERE rather than composed: a sink writes truth once, at
+            // creation, and then has nothing left to do. Composing it would put
+            // a one-shot writer in the container for the life of the game and
+            // make the world module depend on the field module to get it.
+            new WorldSink(
+                ready.Engine.Provided.Resolve<FieldControl>(),
+                ready.Engine.Provided.Resolve<IBeliefStore>(),
+                ready.Engine.Provided.Resolve<WorldState>()),
 
             // The world-generation stream, and only it. Adding a draw to any
             // other subsystem can never shift what this world contains
