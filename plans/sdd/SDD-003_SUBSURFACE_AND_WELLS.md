@@ -313,6 +313,28 @@ problem rather than a one-time build, and it produces the authentic case where a
 field is throttled by disposal capacity and by nothing upstream at all.
 ```
 
+> **R20d.4 amendment. An injector is an `IFlowElement`, and it had to be all
+> along.** `Injector` shipped at R10 as a plain class with an `Id`, a rate and
+> an `EvaluateConstraints` returning `ConstraintKind.Injectivity` — a constraint
+> **only the solver reads**, from `IFlowElement.EvaluateConstraints`, through
+> S3. So the sentence above ("throttled by disposal capacity and by nothing
+> upstream") described a mechanic that could not occur: the element reporting
+> the constraint was not in the network the constraint is evaluated in.
+>
+> One inlet, no outlets — water in, nothing out. **It is a sink from the
+> network's point of view**, and the mass leaves through `DisposedMass`.
+>
+> **Injection as PRESSURE SUPPORT is deliberately not that**, and the two must
+> not be conflated. [SDD-002](SDD-002_STREAMS_AND_FLOW.md) §9 is explicit that
+> injection commits as a *receipt against the compartment*, which is a commit-
+> stage act, not a disposal. An injector that both disposed of its water and
+> committed it as a receipt would put the same mass on both sides of the tick
+> balance. **Disposal ships first**: the water leaves, the field is throttled
+> when it cannot leave fast enough, and nothing is claimed about pressure. The
+> receipt path — the same element, committing rather than disposing, and the
+> voidage replacement that makes water drive a decision rather than weather —
+> is its own task and needs the double-count settled in §9's terms first.
+
 ### 3.2 Contacts
 
 ```text
