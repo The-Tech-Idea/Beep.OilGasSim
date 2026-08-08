@@ -99,7 +99,20 @@ public sealed record SeparatorTier(
     MassRate LiquidCapacity,            // the liquid leg's, independently
     ReservoirVolume Volume,             // vessel volume, for residence time
     SeparationEfficiency RatedEfficiency,   // achieved at or below the design rate
-    ReservoirRate DesignRate);          // where the rated efficiency holds
+    ReservoirRate DesignRate,           // where the rated efficiency holds
+
+    /// <summary>
+    /// SDD-006 §1. What the back-pressure controller holds the vessel at — and
+    /// therefore what the vessel IMPOSES on the network upstream, rather than
+    /// anything it reads from it (finding 157).
+    ///
+    /// <para>It does two things and they are the same thing: it is the pressure
+    /// the flash is taken at, so gas breaks out of oil that was at reservoir
+    /// pressure a moment earlier; and it is the discharge pressure the upstream
+    /// element sees, which is how a separator reaches the reservoir at all. A
+    /// vessel without one separates nothing and holds nothing back.</para>
+    /// </summary>
+    Pressure OperatingPressure);
 
 /// <summary>
 /// A separation vessel as an <see cref="IFlowElement"/>.
@@ -132,6 +145,14 @@ public sealed class Separator : IFlowElement
                 $"separator tier {tier.Id.Value} declares a non-positive design rate; " +
                 "the residence-time term divides by it");
 
+        // A vessel at zero absolute would flash against a vacuum and impose
+        // nothing on the network — the two failures finding 157 describes,
+        // reachable again through content rather than through a missing field.
+        if (tier.OperatingPressure.Pascals <= 0.0)
+            throw new ModelFault("SDD-006 §1", null,
+                $"separator tier {tier.Id.Value} declares a non-positive operating pressure; " +
+                "the vessel is held at a pressure by its controller and imposes it upstream");
+
         Id = id;
         _tier = tier;
         _model = model;
@@ -156,7 +177,12 @@ public sealed class Separator : IFlowElement
 
         if (input.Inlets.Count == 0) return Empty(input);
 
-        MaterialStream inlet = input.Inlets[0];
+        // FLASHED AT THE VESSEL'S PRESSURE, not the inlet's (SDD-006 §1). The
+        // stream arriving from a completion is stamped with RESERVOIR pressure,
+        // and splitting it there asks what phases exist two thousand metres down
+        // — where the answer is "one" and nothing separates. Dropping to P_sep
+        // first is the whole of what a separator does.
+        MaterialStream inlet = AtVesselPressure(input.Inlets[0]);
         SeparationEfficiency efficiency = EfficiencyAt(inlet);
 
         PhaseSplit split = _model.SeparateAt(inlet, efficiency, _fluid);
@@ -234,7 +260,7 @@ public sealed class Separator : IFlowElement
 
         if (input.Inlets.Count == 0) return [];
 
-        MaterialStream inlet = input.Inlets[0];
+        MaterialStream inlet = AtVesselPressure(input.Inlets[0]);
         SeparationEfficiency efficiency = EfficiencyAt(inlet);
         PhaseSplit split = _model.SeparateAt(inlet, efficiency, _fluid);
 
@@ -260,8 +286,26 @@ public sealed class Separator : IFlowElement
         ];
     }
 
+    /// <summary>
+    /// The inlet as the vessel sees it: same mass, same temperature, same
+    /// provenance, at P_sep.
+    ///
+    /// <para>Used for the flash and for the constraint evaluation, so the
+    /// volumetric rates the two capacities are measured against are the ones
+    /// inside the vessel rather than the ones in the pipe upstream of it.</para>
+    /// </summary>
+    private MaterialStream AtVesselPressure(MaterialStream inlet) =>
+        inlet with { P = _tier.OperatingPressure };
+
+    /// <summary>
+    /// Every leg leaves at P_sep (SDD-006 §1). That is what the solver reads as
+    /// the vessel's pressure drop, and therefore what reaches the wellhead — a
+    /// leg stamped with the inlet's own pressure would make the vessel invisible
+    /// to the network it is supposed to hold back (finding 157).
+    /// </summary>
     private MaterialStream Leg(MaterialStream inlet, double[] byOrdinal) =>
-        new(Composition.Validated([.. byOrdinal]), inlet.P, inlet.T, inlet.Provenance);
+        new(Composition.Validated([.. byOrdinal]),
+            _tier.OperatingPressure, inlet.T, inlet.Provenance);
 
     private TransformResult Empty(TransformInput input)
     {

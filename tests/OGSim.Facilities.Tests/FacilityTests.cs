@@ -53,6 +53,33 @@ internal static class Fx
                 (new MaterialId(2), 0.0, 0.0, 1.0),      // water-> aqueous
             ]);
     }
+
+    /// <summary>The same fluid, remembering what pressure it was asked about.
+    /// The split is pressure-independent here on purpose: what is under test is
+    /// which pressure the VESSEL passes down, not what a flash returns.</summary>
+    public sealed class RecordingFluid(List<double> askedAtPascals) : IFluidPropertyModel
+    {
+        private readonly IdealSplitFluid _inner = new();
+
+        public ContentId Id => _inner.Id;
+        public FluidForm Form => _inner.Form;
+        public Pressure Pb => _inner.Pb;
+        public double Rs(Pressure p) => _inner.Rs(p);
+        public double Rv(Pressure p) => _inner.Rv(p);
+        public FormationVolumeFactor Bo(Pressure p) => _inner.Bo(p);
+        public GasFormationVolumeFactor Bg(Pressure p) => _inner.Bg(p);
+        public FormationVolumeFactor Bw(Pressure p) => _inner.Bw(p);
+        public Viscosity MuOil(Pressure p) => _inner.MuOil(p);
+        public Viscosity MuGas(Pressure p) => _inner.MuGas(p);
+        public double Z(Pressure p, Temperature t) => _inner.Z(p, t);
+        public ValidityRange Validity => _inner.Validity;
+
+        public PhaseSplit SplitAt(Composition composition, Pressure p, Temperature t)
+        {
+            askedAtPascals.Add(p.Pascals);
+            return _inner.SplitAt(composition, p, t);
+        }
+    }
 }
 
 public class SeparationTests
@@ -63,12 +90,14 @@ public class SeparationTests
         double designRate = 1.0,
         double carryOver = 0.0,
         double carryUnder = 0.0,
-        double waterKnockout = 0.0) =>
+        double waterKnockout = 0.0,
+        double operatingBar = 15.0) =>
         new(new ContentId("sep-tier-a"),
             new MassRate(gasCapacity), new MassRate(liquidCapacity),
             new ReservoirVolume(10.0),
             new SeparationEfficiency(carryUnder, carryOver, waterKnockout),
-            new ReservoirRate(designRate));
+            new ReservoirRate(designRate),
+            Pressure.FromBar(operatingBar));
 
     private static Separator Vessel(SeparatorTier tier) =>
         new(new EntityId<IFlowElement>(1), tier,
@@ -83,6 +112,60 @@ public class SeparationTests
         Assert.Equal(30.0, result.Outlets[0].MassRates[new MaterialId(1)].KgPerSecond, 9);
         Assert.Equal(60.0, result.Outlets[1].MassRates[new MaterialId(0)].KgPerSecond, 9);
         Assert.Equal(10.0, result.Outlets[2].MassRates[new MaterialId(2)].KgPerSecond, 9);
+    }
+
+    /// <summary>
+    /// SDD-006 §1, finding 157. A separator IMPOSES its pressure on the network:
+    /// every leg leaves at P_sep, whatever pressure arrived.
+    ///
+    /// <para>This is what the solver reads as the vessel's pressure drop, and
+    /// therefore the only way a facility reaches the reservoir at all (FV5). The
+    /// vessel used to stamp its inlet's pressure on every leg, which made it
+    /// invisible to the network it exists to hold back — and the wells behind it
+    /// flowed against the terminal sink boundary.</para>
+    /// </summary>
+    [Fact]
+    public void FV5_every_leg_leaves_at_the_vessels_operating_pressure()
+    {
+        // The stream arrives at 30 bar — a completion's outlet carries RESERVOIR
+        // pressure, which is far above any vessel's.
+        TransformResult result = Vessel(Tier(operatingBar: 8.0))
+            .Transform(Fx.In(Fx.Stream(60.0, 30.0, 10.0)));
+
+        for (int i = 0; i < result.Outlets.Count; i++)
+            Assert.Equal(8.0e5, result.Outlets[i].P.Pascals, precision: 6);
+    }
+
+    /// <summary>
+    /// The other half of the same field: the flash is taken INSIDE the vessel.
+    ///
+    /// <para>Splitting at the inlet pressure asks what phases exist two thousand
+    /// metres down, where the answer is "one" — so a separator fed straight from
+    /// a completion separated nothing. A real fluid model returns different
+    /// fractions at 8 bar than at 30, and the vessel must be asking it about
+    /// 8.</para>
+    /// </summary>
+    [Fact]
+    public void R8V1_the_flash_is_taken_at_the_vessel_pressure_not_the_inlets()
+    {
+        var seen = new List<double>();
+        var fluid = new Fx.RecordingFluid(seen);
+
+        new Separator(new EntityId<IFlowElement>(1), Tier(operatingBar: 8.0),
+                      new FixedEfficiencySeparationModel(), fluid, Fx.MaterialCount)
+            .Transform(Fx.In(Fx.Stream(60.0, 30.0, 10.0)));
+
+        Assert.Equal(8.0e5, Assert.Single(seen), precision: 6);
+    }
+
+    /// <summary>A vessel held at nothing would flash against a vacuum and impose
+    /// nothing — refused at construction rather than reached through content.</summary>
+    [Fact]
+    public void A_vessel_with_no_operating_pressure_is_a_model_fault()
+    {
+        var fault = Assert.Throws<ModelFault>(() => Vessel(Tier(operatingBar: 0.0)));
+
+        Assert.Contains("operating pressure", fault.Fault.Detail);
     }
 
     [Fact] // R8-V10: every unit conserves; nothing is created or destroyed
