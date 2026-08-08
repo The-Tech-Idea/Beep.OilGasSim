@@ -254,7 +254,20 @@ internal sealed class FacilitiesModule() : EngineModule(Declare(
             Defaults.TheDisposalWell, Defaults.Disposal,
             Defaults.WaterOrdinal.Ordinal, Defaults.MaterialCount);
 
+        // THE GATHERING LINE. Without it a header's downstream demand is the
+        // vessel's set point and nothing else, so commingling has no
+        // consequence: two wells on one header would not feel each other at all.
+        // With it, throughput costs pressure and the trap in design 04 §5 stage
+        // 3 is arithmetic rather than a description.
+        var flowline = new OGSim.Facilities.Pipeline(
+            Defaults.TheFlowline, Defaults.Flowline, Defaults.FlowlineRating,
+            new ContentId("flowline-6in"),
+            composition.Require<IHydraulicModel>(),
+            composition.Require<IFluidPropertyModel>(),
+            Defaults.SurfaceOilDensity, Defaults.MaterialCount);
+
         network.Add(manifold);
+        network.Add(flowline);
         network.Add(separator);
         network.Add(custody);
         network.Add(flare);
@@ -271,6 +284,10 @@ internal sealed class FacilitiesModule() : EngineModule(Declare(
 
         network.Connect(new FlowConnection(
             manifold.Id, manifold.Outlet,
+            flowline.Id, OGSim.Facilities.Pipeline.Inlet));
+
+        network.Connect(new FlowConnection(
+            flowline.Id, OGSim.Facilities.Pipeline.Outlet,
             separator.Id, OGSim.Facilities.Separator.Inlet));
 
         // The LIQUID leg to the meter, the GAS leg to the flare. The water leg
@@ -290,7 +307,8 @@ internal sealed class FacilitiesModule() : EngineModule(Declare(
             separator.Id, OGSim.Facilities.Separator.WaterOutlet,
             disposal.Id, OGSim.Wells.Injector.Inlet));
 
-        composition.Provide(new SurfaceChain(manifold, separator, custody, flare, disposal));
+        composition.Provide(
+            new SurfaceChain(manifold, flowline, separator, custody, flare, disposal));
     }
 }
 
@@ -305,6 +323,7 @@ internal sealed class FacilitiesModule() : EngineModule(Declare(
 /// </summary>
 internal sealed record SurfaceChain(
     OGSim.Facilities.Manifold Manifold,
+    OGSim.Facilities.Pipeline Flowline,
     OGSim.Facilities.Separator Separator,
     OGSim.Facilities.CustodyTransferPoint Custody,
     OGSim.Facilities.Flare Flare,
@@ -329,6 +348,7 @@ internal sealed record SurfaceChain(
     public string NameOf(EntityId<IFlowElement> element)
     {
         if (element == Manifold.Id) return "manifold";
+        if (element == Flowline.Id) return "flowline";
         if (element == Separator.Id) return "separator";
         if (element == Custody.Id) return "custody-meter";
         if (element == Flare.Id) return "flare";

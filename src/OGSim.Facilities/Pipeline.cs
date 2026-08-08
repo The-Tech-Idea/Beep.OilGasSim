@@ -260,6 +260,12 @@ public sealed class Pipeline : IPipeline
         * PhysicalConstants.Pi * InnerDiameter.Metres * InnerDiameter.Metres / 4.0
         * PipeLength.Metres);
 
+    /// <summary>The ports by name, so a caller wiring the chain never writes a
+    /// bare index.</summary>
+    public static PortId Inlet { get; } = new(0);
+
+    public static PortId Outlet { get; } = new(1);
+
     public IReadOnlyList<PortSpec> Ports { get; } =
     [
         new PortSpec(new PortId(0), PortDirection.Inlet, PortRole.Main),

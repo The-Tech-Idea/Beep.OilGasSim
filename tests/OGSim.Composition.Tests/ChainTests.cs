@@ -180,7 +180,8 @@ public sealed class ChainTests
         engine.Pipeline.AdvanceTick();
 
         Assert.Equal(
-            ["well-1", "manifold", "separator", "custody-meter", "flare", "water-disposal"],
+            ["well-1", "manifold", "flowline", "separator", "custody-meter", "flare",
+             "water-disposal"],
             engine.ReadModel!.Chain.Select(element => element.DisplayId));
     }
 
@@ -431,6 +432,40 @@ public sealed class ChainTests
 
         Assert.True(two > one,
             $"a second well on the header must add production: {two} is not above {one}");
+    }
+
+    /// <summary>
+    /// R6-V14, THE COMMINGLING TRAP, end to end. A second well on a shared line
+    /// costs the first one something: more throughput means more pressure lost
+    /// down the flowline, which means a higher header pressure, which every well
+    /// on that header flows against.
+    ///
+    /// <para>Nobody codes this. It is backpressure arithmetic — and until the
+    /// flowline was in the network it had no term, so two wells on one header did
+    /// not feel each other at all. Catalogue C06 calls it "cheap steel with
+    /// expensive consequences", and this is the consequence.</para>
+    /// </summary>
+    [Fact]
+    public void R6V14_a_second_well_on_a_shared_line_costs_the_first_one_rate()
+    {
+        (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled();
+
+        Produce(engine, target);
+        engine.Pipeline.AdvanceTick();
+        double alone = engine.ReadModel!.ProducedThisTick.CubicMetres;
+
+        Produce(engine, target);
+        engine.Pipeline.AdvanceTick();
+        double shared = engine.ReadModel!.ProducedThisTick.CubicMetres;
+
+        // Two wells still beat one — the line is not that tight.
+        Assert.True(shared > alone);
+
+        // But NOT by double: the second well raised the pressure both of them
+        // flow against, so each gives up rate to the other.
+        Assert.True(shared < 2.0 * alone,
+            $"two wells delivered {shared} m³ against one well's {alone} — a shared line " +
+            "that costs nothing is a line with no pressure drop in it");
     }
 
     /// <summary>

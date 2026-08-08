@@ -479,6 +479,32 @@ internal static class Defaults
 
     public static EntityId<ICompletion> TheDisposalWell { get; } = new(1_000_005);
 
+    public static EntityId<IFlowElement> TheFlowline { get; } = new(1_000_006);
+
+    /// <summary>
+    /// The gathering line from the header to the vessel (design 04 §5 stage 3,
+    /// catalogue C06's size ladder).
+    ///
+    /// <para><b>This is what makes commingling bite.</b> A header passes its
+    /// downstream demand to every well equally, and the demand is the vessel's
+    /// set point PLUS whatever this line loses at the rate going through it — so
+    /// a new high-rate well raises the throughput, raises the drop, raises the
+    /// header pressure, and the weakest well on the line suffers for it. That is
+    /// R6-V14, and nobody codes it: it is backpressure arithmetic that finally
+    /// has a term.</para>
+    ///
+    /// <para>Six inches over two kilometres. C06's ladder runs 3–8 in, and the
+    /// line size is the classic trade — cheap steel with expensive
+    /// consequences.</para>
+    /// </summary>
+    public static PipeGeometry Flowline { get; } = new(
+        PipeLength: new Length(2_000.0),
+        InnerDiameter: new Length(0.1524),
+        Roughness: 4.6e-5,
+        ElevationRise: new Length(0.0));
+
+    public static Pressure FlowlineRating { get; } = Pressure.FromBar(100.0);
+
     /// <summary>
     /// The disposal well's completion (SDD-003 §3.1d). Its INJECTIVITY is what
     /// throttles a watered-out field, and the plugging term is why that gets
