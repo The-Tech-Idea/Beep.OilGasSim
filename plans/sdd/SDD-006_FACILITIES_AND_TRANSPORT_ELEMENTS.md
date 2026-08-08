@@ -95,6 +95,35 @@ separator, treater, compressor, dehydrator, tank, meter, flare — exists in
 content and in this document's transforms, and in no interface anywhere
 (coherence finding 82).
 
+## 0c. A unit is a socket; a tier is what is fitted into it
+
+> **R12b.8 declaration.** [07](../design/07_TECHNOLOGY.md) §4b.3b states the
+> model — "a tier fits a **socket** and its datasheet is read by the socket's
+> model" — and every element here took its tier at construction and held it
+> `readonly`, which made the ladder in the catalogue sheets unreachable: a field
+> could be built and never improved. Debottlenecking is the operations game's
+> central verb, and it had no way to happen.
+
+```csharp
+// On every unit whose datasheet is a tier. The ELEMENT is the socket and keeps
+// its identity — its id, its place in the network, its connections — while what
+// is fitted into it changes.
+public void Fit(SeparatorTier tier);
+```
+
+**Refitting, not replacing**, and the distinction is load-bearing. The network
+is a registry of elements and their tie-ins ([SDD-002](SDD-002_STREAMS_AND_FLOW.md)
+§6), registration is write-once and there is no removal — deliberately, because
+an element that could vanish mid-tick would take its connections with it. A
+bigger vessel is therefore the same vessel with a bigger datasheet, which is also
+what actually happens on a site: the foundations, the tie-ins and the permit stay.
+
+**Fitted by an operation, never directly.** The catalogue sheets price the
+install as an operation with a duration (C06's "construction · weeks"), so a
+refit takes months of a player's time and money and lands through the one
+activity engine (SDD-007) like everything else. A `Fit` called outside a
+completed operation would be a free upgrade.
+
 ## 1. Separator
 
 ```text
