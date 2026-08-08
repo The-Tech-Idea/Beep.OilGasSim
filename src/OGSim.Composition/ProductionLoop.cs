@@ -722,6 +722,16 @@ internal sealed class ProductionLoop
 /// belief store, through an observation, like every other measurement in the
 /// game.</para>
 /// </summary>
+/// <summary>
+/// Builds a well's gathering line, of a stated length (SDD-006 §1c).
+///
+/// <para>A delegate because the pipeline's dependencies — the hydraulic model,
+/// the fluid system, the material count — belong to composition and a field does
+/// not otherwise know them. Not a default: it is required, and there is no
+/// fallback that would let a well tie in without one.</para>
+/// </summary>
+internal delegate OGSim.Facilities.Pipeline GatheringLine(Length run);
+
 public sealed class FieldControl
 {
     private readonly SubsurfaceState _subsurface;
@@ -731,6 +741,7 @@ public sealed class FieldControl
     private readonly IObligationRegistry _obligations;
     private readonly ContentId _abandonmentTemplate;
     private readonly WorldState _world;
+    private readonly GatheringLine _gatheringLine;
 
     private int _slotsTaken;
 
@@ -741,7 +752,8 @@ public sealed class FieldControl
         SurfaceChain chain,
         IObligationRegistry obligations,
         ContentId abandonmentTemplate,
-        WorldState world)
+        WorldState world,
+        GatheringLine gatheringLine)
     {
         _subsurface = subsurface;
         _wells = wells;
@@ -750,6 +762,7 @@ public sealed class FieldControl
         _obligations = obligations;
         _abandonmentTemplate = abandonmentTemplate;
         _world = world;
+        _gatheringLine = gatheringLine;
     }
 
     /// <summary>
@@ -814,7 +827,16 @@ public sealed class FieldControl
         // Only on the FIRST tie-in: later wells join a line that is already laid,
         // and re-routing under oil is refused by the pipeline itself.
         if (_slotsTaken == 0 && _world.DistanceToMarketOf(drains) is Length toMarket)
+        {
             _chain.Flowline.Route(_chain.Flowline.Geometry with { PipeLength = toMarket });
+
+            // AND THE HEADER GOES UP AT THE FIELD BEING OPENED (SDD-006 §1c).
+            // A manifold is a structure somebody builds somewhere; later fields
+            // reach it rather than it reaching them, which is what makes a
+            // distant second discovery a different proposition from a nearby
+            // one.
+            _world.HeaderAt(_world.PositionOf(_world.ProspectFor(drains)));
+        }
 
         EntityId<ICompletion> opened = _wells.Open(completion, drains);
 
@@ -825,8 +847,31 @@ public sealed class FieldControl
         _obligations.Register(
             new EntityRef(EntityKind.Completion, opened.Value), _abandonmentTemplate);
 
+        // THE GATHERING LINE, design 04 stage 3's wellhead-to-manifold run
+        // (SDD-006 §1c). As long as this well's field is from the header, so a
+        // tieback from across the basin costs pressure that a well on the host's
+        // own field does not — the same well drilled into two structures is two
+        // different propositions.
+        //
+        // Backpressure travels back up it unchanged, so §1b's commingling trap
+        // still works: a strong new well raises manifold pressure and can shut
+        // in weaker wells however far away they are.
+        // NEVER SHORTER THAN THE MINIMUM. A well on the header's own field
+        // measures zero metres to it, and a pipeline of zero length has no
+        // hydraulics to solve — but the tree is not bolted to the manifold
+        // either. The floor is the run every well has whatever else is true.
+        Length toHeader = _world.DistanceToHeaderOf(drains) ?? MinimumGatheringRun;
+
+        OGSim.Facilities.Pipeline tieback = _gatheringLine(
+            toHeader.Metres > MinimumGatheringRun.Metres ? toHeader : MinimumGatheringRun);
+
+        _network.Add(tieback);
+
         _network.Connect(new FlowConnection(
-            completion.Id, WellheadOutlet,
+            completion.Id, WellheadOutlet, tieback.Id, PipelineInlet));
+
+        _network.Connect(new FlowConnection(
+            tieback.Id, PipelineOutlet,
             _chain.Manifold.Id, _chain.Manifold.SlotAt(_slotsTaken)));
 
         _slotsTaken++;
@@ -835,6 +880,18 @@ public sealed class FieldControl
 
     /// <summary>A completion's one outlet: the wellhead.</summary>
     private static PortId WellheadOutlet { get; } = new(0);
+
+    private static PortId PipelineInlet { get; } = new(0);
+
+    private static PortId PipelineOutlet { get; } = new(1);
+
+    /// <summary>
+    /// The shortest gathering run there is: a well on the header's own field
+    /// still has flowline between the tree and the manifold. Two hundred metres
+    /// — and a positive number matters, because a pipeline of zero length has no
+    /// hydraulics to solve.
+    /// </summary>
+    private static Length MinimumGatheringRun { get; } = new(200.0);
 
     /// <summary>One open well by id, or null — the door a player's lever is
     /// pulled through.</summary>

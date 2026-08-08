@@ -539,6 +539,13 @@ internal static class Defaults
     public static EntityId<IFlowElement> TheTank { get; } = new(1_000_007);
 
     /// <summary>
+    /// Where per-well gathering lines start numbering (SDD-006 §1c). Above the
+    /// fixed chain elements by a clear margin, so a line laid for the
+    /// two-thousandth well still cannot collide with the header or the trunk.
+    /// </summary>
+    public const ulong FirstGatheringLine = 2_000_000UL;
+
+    /// <summary>
     /// Storage at the terminal (SDD-006 §5, catalogue C12), 150,000 tonnes.
     ///
     /// <para><b>Sized against a MONTH, because the ullage constraint is a

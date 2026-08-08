@@ -705,4 +705,66 @@ public sealed class NewGameTests
 
         Assert.Fail("sixty basins produced no surveyed discovery");
     }
+
+    // ---------------------------- a second field is a longer reach (R20d.8.8)
+
+    /// <summary>
+    /// FINDING 167, CLOSED. Design 04 stage 3's wellhead-to-manifold gathering
+    /// line did not exist — the element named "flowline" sits AFTER the manifold
+    /// — so every well tied straight into the header at zero distance, and a
+    /// company that developed a second discovery forty kilometres away paid
+    /// nothing for the journey.
+    ///
+    /// <para>Each well now has its own run, as long as its field is from the
+    /// header. A tieback from across the basin is a longer line than a well on
+    /// the host's own field, which is what makes where a discovery sits matter
+    /// after the trunk has been laid.</para>
+    /// </summary>
+    [Fact]
+    public void R20d8V7_a_distant_field_needs_a_longer_reach_than_the_host_s_own()
+    {
+        Engine engine = BasinWithSeveralProspects();
+        WorldState world = WorldOf(engine);
+        FieldControl field = engine.Provided.Resolve<FieldControl>();
+
+        // The header goes up at the first field developed.
+        EntityId<IReservoirCompartmentEntity> host = world.Beneath(Discovery(world, 0))!.Value;
+
+        field.OpenWell(
+            Defaults.CompletionFor(field.NextWellId(), host, new Length(2000.0)), host);
+
+        engine.Pipeline.AdvanceTick();
+
+        double atHost = RunOf(engine, "gathering-1");
+
+        // A second discovery, somewhere else in the basin.
+        EntityId<IReservoirCompartmentEntity> away = world.Beneath(Discovery(world, 1))!.Value;
+
+        field.OpenWell(
+            Defaults.CompletionFor(field.NextWellId(), away, new Length(2000.0)), away);
+
+        engine.Pipeline.AdvanceTick();
+
+        Assert.True(RunOf(engine, "gathering-2") > atHost,
+            "a field elsewhere in the basin reaches the header over the same length of " +
+            "line as one underneath it");
+    }
+
+    /// <summary>How long a named gathering line is, read off the flow network
+    /// the way the solver sees it.</summary>
+    private static double RunOf(Engine engine, string named)
+    {
+        SurfaceChain chain = engine.Provided.Resolve<SurfaceChain>();
+        IFlowElementRegistry network = engine.Provided.Resolve<IFlowElementRegistry>();
+
+        for (int i = 0; i < network.Registered.Count; i++)
+        {
+            IFlowElement element = network.Registered[i];
+
+            if (chain.NameOf(element.Id) == named
+                && element is OGSim.Facilities.Pipeline line) return line.PipeLength.Metres;
+        }
+
+        throw new InvalidOperationException($"no element called {named} is on the network");
+    }
 }

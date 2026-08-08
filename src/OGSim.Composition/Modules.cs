@@ -378,6 +378,14 @@ internal sealed record SurfaceChain(
         if (element == Disposal.Id) return "water-disposal";
         if (element == Tank.Id) return "tank";
 
+        // A gathering line, numbered by the well it serves (SDD-006 §1c). Named
+        // rather than left to the well-N fallback because a player watching the
+        // chain has to be able to tell a tieback that is choking from the well
+        // behind it — they are different problems with different answers.
+        if (element.Value >= Defaults.FirstGatheringLine)
+            return "gathering-" + (element.Value - Defaults.FirstGatheringLine + 1).ToString(
+                System.Globalization.CultureInfo.InvariantCulture);
+
         return "well-" + element.Value.ToString(
             System.Globalization.CultureInfo.InvariantCulture);
     }
@@ -525,6 +533,13 @@ internal sealed class FieldModule() : EngineModule(Declare(
         composition.Own(obligations);
         composition.Provide<IObligationRegistry>(obligations);
 
+        // The gathering lines a field will need are built on demand, so their
+        // dependencies are captured once here rather than resolved per well.
+        IHydraulicModel hydraulics = composition.Require<IHydraulicModel>();
+        IFluidPropertyModel fluid = composition.Require<IFluidPropertyModel>();
+
+        var gatheringLines = 0UL;
+
         var field = new FieldControl(
             composition.Require<OGSim.Subsurface.SubsurfaceState>(),
             composition.Require<OGSim.Wells.WellsState>(),
@@ -532,7 +547,21 @@ internal sealed class FieldModule() : EngineModule(Declare(
             chain,
             obligations,
             Defaults.AbandonWellTerms.Template,
-            composition.Require<WorldState>());
+            composition.Require<WorldState>(),
+
+            // A LINE PER WELL (SDD-006 §1c). Ids are allocated from a block
+            // above the fixed chain elements so a gathering line can never
+            // collide with the header or the trunk, and the registry is
+            // write-once — adding is what it is for.
+            run => new OGSim.Facilities.Pipeline(
+                new EntityId<IFlowElement>(Defaults.FirstGatheringLine + gatheringLines++),
+                Defaults.Flowline with { PipeLength = run },
+                Defaults.FlowlineRating,
+                new ContentId("gathering-4in"),
+                hydraulics,
+                fluid,
+                Defaults.SurfaceOilDensity,
+                Defaults.MaterialCount));
 
 
         // THE ROUTE TO MARKET. One per field, so its identity is the field's

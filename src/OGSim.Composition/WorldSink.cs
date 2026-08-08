@@ -144,6 +144,36 @@ public sealed class WorldState
     /// chain is laid when a well is tied into a compartment and the compartment
     /// is what that code has in hand.
     /// </summary>
+    /// <summary>
+    /// Where the company built its header, set when the first field was
+    /// developed and never moved (SDD-006 §1c). A manifold is a structure on the
+    /// seabed or a pad on the ground; later fields reach it rather than it
+    /// reaching them.
+    /// </summary>
+    internal void HeaderAt(Coordinate site) => _header ??= site;
+
+    private Coordinate? _header;
+
+    /// <summary>
+    /// How far a field is from the header — the gathering line a well on it
+    /// needs. Null until a header exists, and null for a compartment no world
+    /// placed.
+    /// </summary>
+    public Length? DistanceToHeaderOf(EntityId<IReservoirCompartmentEntity> compartment)
+    {
+        if (_header is not Coordinate header) return null;
+
+        if (!_structureOf.TryGetValue(compartment, out EntityId<IProspect> prospect))
+            return null;
+
+        Coordinate at = PositionOf(prospect);
+
+        double dx = header.X - at.X;
+        double dy = header.Y - at.Y;
+
+        return new Length(DetMath.Sqrt((dx * dx) + (dy * dy)));
+    }
+
     public Length? DistanceToMarketOf(EntityId<IReservoirCompartmentEntity> compartment) =>
         _structureOf.TryGetValue(compartment, out EntityId<IProspect> prospect)
             ? DistanceToMarket(prospect)

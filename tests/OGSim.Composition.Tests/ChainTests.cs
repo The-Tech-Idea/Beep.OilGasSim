@@ -200,8 +200,12 @@ public sealed class ChainTests
         engine.Pipeline.AdvanceTick();
 
         Assert.Equal(
-            ["well-1", "manifold", "flowline", "separator", "custody-meter", "flare",
-             "water-disposal", "tank"],
+            // The gathering line is design 04 stage 3's wellhead-to-manifold run
+            // (SDD-006 §1c) — one per well, as long as that well's field is from
+            // the header. It was missing entirely: every well tied straight into
+            // the header at zero distance.
+            ["well-1", "gathering-1", "manifold", "flowline", "separator",
+             "custody-meter", "flare", "water-disposal", "tank"],
             engine.ReadModel!.Chain.Select(element => element.DisplayId));
     }
 
