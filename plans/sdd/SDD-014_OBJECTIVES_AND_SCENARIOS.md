@@ -183,6 +183,94 @@ Anything not whitelisted resets — R24-V17's isolation follows.
 > resolve, and "did they manage it in time" is the question a challenge is
 > asking.
 
+## 5a. Running one — the report, the runner, and what it evaluates against
+
+> **R21e review (finding 154).** The note above lists eight shapes as written
+> and declares six. `ScenarioProgress` and `IScenarioRunner` — the report and
+> the interface, which is to say the two a runner must implement — went into
+> `OGSim.Contracts` and into no document, inside the very change that was
+> fixing prose-only specification. `ObjectiveSnapshot` did the same at R24.
+> Declared here, and the signature corrected while declaring it.
+
+```csharp
+// The sealed position an objective sees: read-model values BY PATH (§2), the
+// collections an Aggregate quantifies over, and the tick's events.
+//
+// It lives in OGSim.Contracts because it crosses a contract boundary; the
+// evaluator that consumes it stays in OGSim.Objectives. The same split as
+// Observation / ObservationSampler in SDD-008 §3 — the shape is vocabulary, the
+// thing that acts on it is a module.
+public sealed record ObjectiveSnapshot(
+    IReadOnlyDictionary<string, double> Values,
+    IReadOnlyDictionary<string, IReadOnlyList<IReadOnlyDictionary<string, double>>> Collections,
+    IReadOnlyList<EngineEvent> Events);
+
+// How a run stands. A REPORT: the runner observes and never acts (R24-V15), so
+// nothing here can change what the engine does next.
+public sealed record ScenarioProgress(
+    IReadOnlyList<(ContentId Objective, ObjectiveState State, double Progress)> Objectives,
+    IReadOnlyList<(ScoreDimension Dimension, double Score)> Scores,
+    ObjectiveState Overall);
+
+public interface IScenarioRunner
+{
+    ContentId Id { get; }
+
+    /// Everything the scenario scripts for this tick, for the engine to execute
+    /// at stages 1-2. RETURNED rather than applied, so the runner still never
+    /// acts — the engine does, through the same command path a player uses.
+    IReadOnlyList<ScriptedEntry> EntriesFor(Tick tick);
+
+    /// Stage 12.
+    ScenarioProgress Evaluate(ObjectiveSnapshot position, Tick tick);
+}
+
+// The stateful nodes' counters (§1), persisted with the objective (SDD-013's
+// `objectives` block). NOT `ObjectiveState`: that enum is what an objective has
+// COME TO, and this is what its SustainedFor / InSequence / Never nodes have
+// accumulated on the way. One name for two concepts is what glossary rule N1
+// forbids, and the two meet on one object the moment a runner is written.
+public sealed class PredicateState { … }
+```
+
+**`Evaluate` takes the snapshot, not the `ReadModel` record.** The earlier
+signature took [SDD-017](SDD-017_HOST_SURFACE.md) §2's fifteen-view root, and
+that is wrong on three counts. §1 and §2 are explicit that an objective sees the
+read model *through paths validated against the registry* — the snapshot is that
+view and the record is not. A runner handed the record would have to flatten
+fifteen nested views into `path → double` itself, and SDD-017 §3 generates the
+registry from those same records: one algorithm with one correct answer, so a
+per-runner flattening is law L5 broken, and a plugin runner that flattened
+differently would evaluate content against paths it was never validated against.
+And `IScenarioRunner` is a replaceable slot — handing a plugin the whole read
+model gives it strictly more than this document says an objective may see.
+
+**`Overall`, pinned.** In this order, and the first match wins:
+
+| # | Condition | `Overall` |
+|---|---|---|
+| 1 | any failure objective's `Never` has broken | `Failed` |
+| 2 | every success objective is `Met` | `Met` |
+| 3 | `tick ≥ scenario.Deadline` | `Expired` |
+| 4 | otherwise | `Pending` |
+
+Failure before success, because a company that cannot pay has lost even in the
+month it would otherwise have hit the target: the money is gone before the goal
+is measured, and that is the order it happens in. **A terminal overall is
+final** — a run does not un-fail, and a player who hit the target in month 90
+does not lose it in month 91.
+
+Per objective: a success objective is `Met` once its predicate holds and stays
+met; `Expired` if its own `Deadline` passes unmet. A failure objective's
+condition is a `Never`, which reads TRUE while it still holds, so the objective
+is `Failed` the tick that condition evaluates false — the one place in this
+document where a false predicate is the bad news.
+
+**`Progress` is 0.0 or 1.0 and nothing between.** A fraction would need a
+per-predicate distance metric — how near is `SustainedFor(12)` at month seven,
+how near is a `Never` to breaking — and no such metric is specified. Inventing
+one at the call site is what F-4 forbids; open item S014-4 carries it.
+
 ## 6. Test mapping
 
 GM2/GM3 (AST nodes incl. stateful counters) · GM4 + R24-V14 (§2 registry) ·
@@ -196,3 +284,5 @@ branching) · GM12 (mission completability scripts) · R24-V18 (stage placement)
 |---|---|---|
 | S014-1 | Event filters' expressiveness (subject/category/severity now; payload fields later?) | First mission authoring (R20.5) |
 | S014-2 | Whether the Recovery proxy (2P-at-sanction) needs a truth-side CAL check to stay honest | R20 calibration |
+| S014-3 | **An objective cannot see events at stage 12.** §3 says evaluation is pure over "the sealed snapshot + sealed event list", and the pipeline seals at the CLOSE — after stage 12, because stages 12 and 13 may still publish. So `ObjectiveSnapshot.Events` is empty at the only point it is read, and an `OnEvent` predicate is silently false rather than wrong-and-loud. Three candidate answers, none of them free: seal before stage 12 and forbid publication after it; expose the pending list to stage 12 and stop calling it sealed; or evaluate `OnEvent` against the PREVIOUS tick's sealed set and accept a one-tick lag like stage 4's. **Until it is decided a runner REFUSES a scenario containing an `OnEvent`**, naming this item — a load-time refusal rather than a predicate that quietly never fires | R21e, deferred there rather than guessed |
+| S014-4 | Fractional objective progress — a per-predicate distance metric (how near is `SustainedFor(12)` at month seven?). `ScenarioProgress.Progress` is 0.0/1.0 until one is specified | First mission UI (R21f) |

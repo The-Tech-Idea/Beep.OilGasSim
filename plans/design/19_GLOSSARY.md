@@ -191,6 +191,8 @@ These six cause the most confusion and are pinned first.
 | **Material** | A registered substance. **The engine never branches on its identity** |
 | **Module** | A unit of composition declaring what it provides, requires and owns |
 | **Objective** | A testable predicate over game state. Observes; never influences |
+| **Scenario** | A situation with a goal, as content: a world, a starting position, objectives, hard limits, a deadline. Never code |
+| **Scenario runner** | What evaluates a scenario against a tick and reports how the run stands. It reports; the engine acts |
 | **Occurrence vs notification** | A state change versus a message about it. Notifications never carry control flow |
 | **Property** | A typed, unit-bearing, provenanced, uncertain fact |
 | **Quantity** | A magnitude bound to a unit of a dimension. **No bare numbers for physical values** |
