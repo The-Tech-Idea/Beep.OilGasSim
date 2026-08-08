@@ -33,6 +33,79 @@ public sealed record FieldEconomics(
     Money FixedOperatingCostPerTick);
 
 /// <summary>
+/// One element of the chain, as a player watches it (SDD-017 §2).
+///
+/// <para><b>Throughput is the flow and deferral is the jam</b>, and together
+/// they are the whole of "where is my production going and what is stopping
+/// it" — the question a production-chain game is played on. Both come off the
+/// solver's own report: §8's attribution measured the refusal against what the
+/// completions WANTED, so this is a number the solve committed to rather than a
+/// second opinion computed beside it.</para>
+///
+/// <para>An empty <see cref="Deferred"/> list is an element that refused
+/// nothing. That is the normal state and it is worth being able to see: a chain
+/// where exactly one row has entries is a chain with exactly one
+/// bottleneck.</para>
+/// </summary>
+public sealed record ChainElementView(
+    EntityRef Element,
+    string DisplayId,
+    Mass Throughput,
+    IReadOnlyList<(ConstraintKind Kind, Mass Deferred)> Deferred)
+{
+    // Finding 131.
+    public bool Equals(ChainElementView? other) =>
+        other is not null && Element == other.Element && DisplayId == other.DisplayId
+        && Throughput == other.Throughput
+        && Structural.Equal(Deferred, other.Deferred);
+
+    public override int GetHashCode() =>
+        HashCode.Combine(Element, DisplayId, Throughput, Structural.HashOf(Deferred));
+
+    /// <summary>Whether this element refused anything this tick — what a host
+    /// highlights, and what "the chain is jammed here" means.</summary>
+    public bool IsBottleneck => Deferred.Count > 0;
+}
+
+/// <summary>
+/// One element's tick, accumulating across segments.
+///
+/// <para>A class rather than a record because it is a running total the solve
+/// adds to segment by segment; it becomes an immutable
+/// <see cref="ChainElementView"/> at the close.</para>
+/// </summary>
+internal sealed class ChainElement(EntityId<IFlowElement> element)
+{
+    private readonly List<(ConstraintKind Kind, Mass Deferred)> _deferred = [];
+
+    public EntityId<IFlowElement> Element { get; } = element;
+
+    public double Throughput { get; set; }
+
+    /// <summary>Accumulated per constraint kind, because the gas leg and the
+    /// liquid leg of one vessel bind independently and a player debottlenecking
+    /// needs to know WHICH (R8-V2).</summary>
+    public void Refuse(ConstraintKind kind, Mass deferred)
+    {
+        for (int i = 0; i < _deferred.Count; i++)
+        {
+            if (_deferred[i].Kind != kind) continue;
+
+            _deferred[i] = (kind, new Mass(_deferred[i].Deferred.Kilograms + deferred.Kilograms));
+            return;
+        }
+
+        _deferred.Add((kind, deferred));
+    }
+
+    public ChainElementView Published(Func<EntityId<IFlowElement>, string> nameOf) =>
+        new(new EntityRef(EntityKind.FlowElement, Element.Value),
+            nameOf(Element),
+            new Mass(Throughput),
+            [.. _deferred]);
+}
+
+/// <summary>
 /// What stage 5 solved, waiting for stage 6 to commit it.
 ///
 /// <para>A shared buffer rather than a static or a direct call: stage 5 and
@@ -88,6 +161,11 @@ internal sealed class ProductionLoop
     // a tick that produced nothing cannot commit last month's volumes.
     private readonly Dictionary<EntityId<IReservoirCompartmentEntity>, double> _byCompartment = [];
 
+    // The chain, rebuilt each tick in the solver's topological order.
+    private readonly List<ChainElement> _chain = [];
+
+    private readonly Func<EntityId<IFlowElement>, string> _names;
+
     public ProductionLoop(
         SubsurfaceState subsurface,
         WellsState wells,
@@ -98,6 +176,7 @@ internal sealed class ProductionLoop
         IFlowSolver solver,
         IFlowElementRegistry network,
         IReadOnlyList<EntityId<IFlowElement>> meteredPoints,
+        Func<EntityId<IFlowElement>, string> names,
         FieldEconomics economics,
         Temperature reservoirTemperature,
         Temperature ambient,
@@ -113,6 +192,7 @@ internal sealed class ProductionLoop
         ArgumentNullException.ThrowIfNull(solver);
         ArgumentNullException.ThrowIfNull(network);
         ArgumentNullException.ThrowIfNull(meteredPoints);
+        ArgumentNullException.ThrowIfNull(names);
         ArgumentNullException.ThrowIfNull(economics);
 
         _subsurface = subsurface;
@@ -123,6 +203,7 @@ internal sealed class ProductionLoop
         _audit = audit;
         _solver = solver;
         _network = network;
+        _names = names;
         _economics = economics;
         _reservoirTemperature = reservoirTemperature;
         _ambient = ambient;
@@ -173,6 +254,7 @@ internal sealed class ProductionLoop
                 "stage 5 ran with no segment plan; stage 4 builds it and must run first");
 
         _byCompartment.Clear();
+        _chain.Clear();
         double[] delivered = new double[_materialCount];
 
         for (int i = 0; i < plan.Segments.Count; i++)
@@ -206,6 +288,27 @@ internal sealed class ProductionLoop
     /// </summary>
     private void Accumulate(SolveReport report, double seconds, double[] delivered)
     {
+        // THE CHAIN, as a player watches it: what crossed each element and what
+        // it refused. Read straight off the report rather than recomputed —
+        // SDD-002 §8's attribution already measured the refusal against what the
+        // completions WANTED, and a second opinion here would be a different
+        // number wearing the same name.
+        for (int i = 0; i < report.Solutions.Count; i++)
+        {
+            ElementSolution solution = report.Solutions[i];
+
+            var throughput = 0.0;
+            IReadOnlyList<MaterialStream> outlets = solution.Converged.Outlets;
+            for (int o = 0; o < outlets.Count; o++)
+                throughput += outlets[o].MassRates.Total.KgPerSecond;
+
+            Flowing(solution.Element).Throughput += throughput * seconds;
+        }
+
+        for (int i = 0; i < report.Deferrals.Count; i++)
+            Flowing(report.Deferrals[i].Element)
+                .Refuse(report.Deferrals[i].Kind, report.Deferrals[i].Deferred);
+
         for (int i = 0; i < report.CompletionStates.Count; i++)
         {
             CompletionState state = report.CompletionStates[i];
@@ -232,6 +335,31 @@ internal sealed class ProductionLoop
             for (int m = 0; m < _materialCount; m++)
                 delivered[m] += onSpec[new MaterialId(m)].KgPerSecond * seconds;
         }
+    }
+
+    /// <summary>
+    /// This element's row, created on first sight so the chain reports itself in
+    /// the solver's own topological order — sources first, the meter last, which
+    /// is the order a player reads a production line in.
+    /// </summary>
+    private ChainElement Flowing(EntityId<IFlowElement> element)
+    {
+        for (int i = 0; i < _chain.Count; i++)
+            if (_chain[i].Element == element) return _chain[i];
+
+        var row = new ChainElement(element);
+        _chain.Add(row);
+        return row;
+    }
+
+    /// <summary>The tick's chain, as SDD-017 §2's <c>ChainElementView</c>.</summary>
+    public IReadOnlyList<ChainElementView> Chain()
+    {
+        var rows = new List<ChainElementView>(_chain.Count);
+
+        for (int i = 0; i < _chain.Count; i++) rows.Add(_chain[i].Published(_names));
+
+        return rows;
     }
 
     /// <summary>

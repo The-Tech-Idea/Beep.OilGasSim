@@ -156,6 +156,67 @@ public sealed class ChainTests
             $"vessel's {Defaults.SeparatorTier.OperatingPressure.Pascals / 1e5} bar is {expected} m³");
     }
 
+    // ------------------------------------------------- the chain is watchable
+
+    /// <summary>
+    /// A production-chain game is played by watching goods move. The read model
+    /// now carries the chain element by element, in the order material crosses
+    /// it — so a host can draw the line from wellhead to meter.
+    ///
+    /// <para>Before this, a player could see cash and barrels and could tell
+    /// that a field was underperforming without being able to tell WHY. Nothing
+    /// between the reservoir and the bank was visible at all.</para>
+    /// </summary>
+    [Fact]
+    public void R20dV1_the_read_model_carries_the_chain_in_flow_order()
+    {
+        (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled();
+        Produce(engine, target);
+
+        engine.Pipeline.AdvanceTick();
+
+        Assert.Equal(
+            ["well-1", "manifold", "separator", "custody-meter"],
+            engine.ReadModel!.Chain.Select(element => element.DisplayId));
+    }
+
+    /// <summary>Every element reports what crossed it, so a host can show the
+    /// flow rather than only its two ends.</summary>
+    [Fact]
+    public void R20dV1_every_element_reports_what_crossed_it()
+    {
+        (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled();
+        Produce(engine, target);
+
+        engine.Pipeline.AdvanceTick();
+
+        foreach (ChainElementView element in engine.ReadModel!.Chain)
+            Assert.True(element.Throughput.Kilograms > 0.0,
+                $"{element.DisplayId} shows no throughput, so a host cannot draw the flow");
+    }
+
+    /// <summary>
+    /// A chain that is flowing freely has NO bottleneck, and that is a state a
+    /// player must be able to read as clearly as a jammed one.
+    ///
+    /// <para>An empty list rather than an element reported at "0% blocked":
+    /// "nothing is refusing" and "something is refusing nothing" are different
+    /// statements, and only one of them asks a player to act.</para>
+    /// </summary>
+    [Fact]
+    public void R20dV1_an_unjammed_chain_reports_no_bottleneck()
+    {
+        (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled();
+        Produce(engine, target);
+
+        engine.Pipeline.AdvanceTick();
+
+        Assert.Empty(engine.ReadModel!.Bottlenecks);
+
+        foreach (ChainElementView element in engine.ReadModel.Chain)
+            Assert.False(element.IsBottleneck);
+    }
+
     // ------------------------------------------------------------- the header
 
     /// <summary>

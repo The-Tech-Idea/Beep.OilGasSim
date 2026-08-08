@@ -88,8 +88,34 @@ public sealed record FieldReadModel(
     SurfaceVolume ProducedThisTick,
     bool Insolvent,
     ScenarioProgress Progress,
-    IReadOnlyList<BeliefEntryView> Beliefs)
+    IReadOnlyList<BeliefEntryView> Beliefs,
+
+    /// <summary>
+    /// The chain, element by element, in the order material crosses it
+    /// (SDD-017 §2).
+    ///
+    /// <para>What a production-chain game is watched through: how much went
+    /// through each thing, and which thing is refusing. A player who can see
+    /// cash and barrels and not this can tell that the field is underperforming
+    /// and not why.</para>
+    /// </summary>
+    IReadOnlyList<ChainElementView> Chain)
 {
+    /// <summary>Where the chain is jammed, if anywhere — the elements that
+    /// refused production this tick.</summary>
+    public IReadOnlyList<ChainElementView> Bottlenecks
+    {
+        get
+        {
+            var jammed = new List<ChainElementView>();
+
+            for (int i = 0; i < Chain.Count; i++)
+                if (Chain[i].IsBottleneck) jammed.Add(Chain[i]);
+
+            return jammed;
+        }
+    }
+
     /// <summary>How the run stands (SDD-014 §5a). <c>Pending</c> until the
     /// scenario says otherwise.</summary>
     public ObjectiveState Outcome => Progress.Overall;
@@ -101,11 +127,13 @@ public sealed record FieldReadModel(
         && ActivitiesRunning == other.ActivitiesRunning
         && ProducedThisTick == other.ProducedThisTick
         && Insolvent == other.Insolvent && Progress == other.Progress
-        && Structural.Equal(Beliefs, other.Beliefs);
+        && Structural.Equal(Beliefs, other.Beliefs)
+        && Structural.Equal(Chain, other.Chain);
 
     public override int GetHashCode() =>
         HashCode.Combine(Tick, Date, Cash, Wells, ActivitiesRunning, ProducedThisTick,
-            HashCode.Combine(Insolvent, Progress, Structural.HashOf(Beliefs)));
+            HashCode.Combine(Insolvent, Progress, Structural.HashOf(Beliefs),
+                             Structural.HashOf(Chain)));
 }
 
 /// <summary>
@@ -131,7 +159,7 @@ internal sealed class FieldProjection(
     public FieldReadModel Publish(FieldPosition position, ScenarioProgress progress) =>
         new(position.Tick, position.Date, position.Cash, position.Wells,
             position.ActivitiesRunning, position.ProducedThisTick, position.Insolvent,
-            progress, Project(beliefs));
+            progress, Project(beliefs), loop.Chain());
 
     /// <summary>
     /// SDD-008 §8's projection, at the close: everything the company has learned,

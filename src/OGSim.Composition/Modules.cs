@@ -275,6 +275,26 @@ internal sealed record SurfaceChain(
     public int Slots => Manifold.Slots;
 
     public IReadOnlyList<EntityId<IFlowElement>> MeteredPoints => [Custody.Id];
+
+    /// <summary>
+    /// What to call an element on screen.
+    ///
+    /// <para>The module that BUILT each element names it, because nothing
+    /// downstream may ask an element what it is (design 04 §1) — and a host that
+    /// had to render "element 1000002" would be showing a player an id instead
+    /// of a separator. A completion is not in this list: wells are named by the
+    /// module that opens them, and a chain row for one falls back to its id
+    /// until R21.6's `WellView` carries a display id.</para>
+    /// </summary>
+    public string NameOf(EntityId<IFlowElement> element)
+    {
+        if (element == Manifold.Id) return "manifold";
+        if (element == Separator.Id) return "separator";
+        if (element == Custody.Id) return "custody-meter";
+
+        return "well-" + element.Value.ToString(
+            System.Globalization.CultureInfo.InvariantCulture);
+    }
 }
 
 // ---------------------------------------------------------------- operations
@@ -415,6 +435,7 @@ internal sealed class FieldModule() : EngineModule(Declare(
             composition.Require<IFlowSolver>(),
             network,
             chain.MeteredPoints,
+            chain.NameOf,
             Defaults.Economics,
             Defaults.ReservoirTemperature,
             Defaults.SurfaceAmbient,
