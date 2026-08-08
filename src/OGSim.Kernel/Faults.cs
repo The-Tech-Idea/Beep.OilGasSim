@@ -53,3 +53,24 @@ public sealed class SaveDataFault : FaultException
     public SaveDataFault(string rule, EntityRef? subject, string detail)
         : base(new Fault(FaultClass.Content, rule, subject, detail)) { }
 }
+
+/// <summary>
+/// SDD-001 §11 — content that loads cleanly and states something the engine
+/// cannot honour: an objective naming a read-model path that does not exist, a
+/// scripted override of a model slot nothing exposes.
+///
+/// <para>The same class as <see cref="SaveDataFault"/> and a different carrier.
+/// Content-class is what the fault policy branches on, but the two say opposite
+/// things to whoever reads the message — one means a save is damaged, the other
+/// means an authored file asks for something that was never built — and a
+/// mission author told their save is corrupt has been sent to look in the wrong
+/// place entirely.</para>
+///
+/// <para>Batched, like every refusal in this engine: every problem in one
+/// throw, never the first (SDD-001 §10).</para>
+/// </summary>
+public sealed class ContentFault : FaultException
+{
+    public ContentFault(string rule, EntityRef? subject, string detail)
+        : base(new Fault(FaultClass.Content, rule, subject, detail)) { }
+}

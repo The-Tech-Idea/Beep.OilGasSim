@@ -940,7 +940,24 @@ and digest tests meaningful.
 | `NaN`/overflow at commit | Invariant (INV6) | `InvariantFault` |
 | Command invalid | not a fault | `Rejected(reason)` |
 | Missing save value | Content-class on load | `SaveDataFault` |
+| Content the engine cannot honour | Content-class on load | `ContentFault` |
 | Publish `C`/`D` event without cause | Invariant (INV12) | `Publish` throws |
+
+> **R21e amendment (finding 155).** `FaultClass.Content` had exactly one
+> carrier and it was `SaveDataFault` — "a missing or unreadable value on load",
+> which is about *saves*. Content that loads cleanly and states something the
+> engine cannot honour had nowhere to go: SDD-014 §2 calls an objective naming
+> an unknown read-model path "a content fault" and no type in this document
+> could raise one. The first caller reached for `SaveDataFault` and would have
+> told a mission author their save was corrupt.
+>
+> ```csharp
+> public sealed class ContentFault : FaultException      // FaultClass.Content
+> ```
+>
+> Same class, so the resilient policy treats the two alike; a separate carrier,
+> so the message a content author reads is about content. Both stay
+> **batched** — every problem in one throw, never the first (SDD-001 §10).
 
 ## 12. Test plan mapping
 
