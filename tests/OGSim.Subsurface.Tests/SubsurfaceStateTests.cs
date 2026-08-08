@@ -47,7 +47,13 @@ public sealed class SubsurfaceStateTests
             drainageArea: new Area(2.0e5),
             rockCompressibility: 4.5e-10,
             gasOilContact: new Length(1900.0),
-            oilWaterContact: new Length(2100.0));
+            oilWaterContact: new Length(2100.0),
+
+            // A water-wet sandstone. These tests are about the material balance
+            // rather than the S-curve, but a compartment without a curve could
+            // not answer what its water cut is at all.
+            RelativePermeabilityCurve.Validated(
+                swc: 0.30, sor: 0.25, krwMax: 0.35, kroMax: 0.90, nw: 3.0, no: 2.0));
 
     private static CompartmentWithdrawal Produce(
         EntityId<IReservoirCompartmentEntity> id, double stockTankOil) =>

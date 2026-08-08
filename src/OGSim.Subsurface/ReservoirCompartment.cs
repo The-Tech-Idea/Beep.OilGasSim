@@ -72,6 +72,57 @@ internal sealed class ReservoirCompartment : IReservoirCompartment
     public CumulativeProduction Cumulative { get; private set; }
 
     /// <summary>
+    /// Sw at the producer — DERIVED from the cumulative terms, never stored
+    /// (SDD-003 §3.1c).
+    ///
+    /// <para>The connate water the compartment started with, plus everything
+    /// that has come in from an aquifer or an injector, less everything produced
+    /// — over the pore volume. A saturation held as its own field would be a
+    /// second owner of what the material balance already determines, and the two
+    /// would drift the first time one was updated without the other (law
+    /// L5).</para>
+    ///
+    /// <para>Clamped to the mobile range: the arithmetic can leave it a
+    /// floating-point whisker outside on a compartment that has produced almost
+    /// all of its movable water, and a saturation of 1.0000000001 would make the
+    /// Corey normalisation report a negative oil permeability.</para>
+    /// </summary>
+    public double WaterSaturation
+    {
+        get
+        {
+            double pore = Initial.PoreVolume.CubicMetres;
+            if (pore <= 0.0) return Initial.ConnateWaterSaturation;
+
+            // Produced water is a STOCK-TANK volume and the others are reservoir
+            // volumes, so it swells before it can be subtracted from them.
+            double producedReservoir =
+                Cumulative.Water.CubicMetres * WaterFormationVolumeFactor;
+
+            double water =
+                pore * Initial.ConnateWaterSaturation
+                + Cumulative.WaterInflux.CubicMetres
+                + Cumulative.Injected.CubicMetres
+                - producedReservoir;
+
+            double saturation = water / pore;
+
+            if (saturation < Initial.ConnateWaterSaturation)
+                return Initial.ConnateWaterSaturation;
+
+            return saturation > 1.0 ? 1.0 : saturation;
+        }
+    }
+
+    /// <summary>
+    /// Bw at reservoir conditions. Water is very nearly incompressible, and
+    /// SDD-003 §3.1 treats it as such everywhere else in the balance — a factor
+    /// that varied here and nowhere else would make the saturation and the
+    /// balance disagree about the same barrels.
+    /// </summary>
+    private const double WaterFormationVolumeFactor = 1.0;
+
+    /// <summary>
     /// Stage 6: record what crossed the boundary this tick and re-solve the
     /// pressure the whole cumulative history implies.
     ///

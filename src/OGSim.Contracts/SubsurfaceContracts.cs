@@ -133,6 +133,63 @@ public interface IDriveMechanism
     IReadOnlyList<ContentId> AcceptedInjectants { get; }
 }
 
+/// <summary>
+/// Corey endpoints and exponents, from the rock type (SDD-003 §3.1c).
+///
+/// <para>HERE rather than in <c>OGSim.Subsurface</c>, and the truth-boundary
+/// architecture test is what says so: subsurface exposes no public type, and a
+/// compartment is CREATED with one of these by the layer that builds a field.
+/// It is a rock-type DATASHEET — content, like a separator's tier — not a fact
+/// about any particular accumulation, so it belongs in the vocabulary every
+/// module shares.</para>
+///
+/// <para>What stays internal is the compartment the curve ends up on, and the
+/// saturation it is evaluated at.</para>
+/// </summary>
+public sealed record RelativePermeabilityCurve(
+    double ConnateWaterSaturation,     // Swc
+    double ResidualOilSaturation,      // Sor
+    double WaterEndpoint,              // krw_max
+    double OilEndpoint,                // kro_max
+    double WaterExponent,              // nw
+    double OilExponent)                // no
+{
+    public static RelativePermeabilityCurve Validated(
+        double swc, double sor, double krwMax, double kroMax, double nw, double no)
+    {
+        if (swc < 0.0 || sor < 0.0 || swc + sor >= 1.0)
+            throw new ModelFault("SDD-003 §3.1c", null,
+                $"Swc {Format(swc)} and Sor {Format(sor)} leave no movable saturation");
+
+        if (krwMax is <= 0.0 or > 1.0 || kroMax is <= 0.0 or > 1.0)
+            throw new ModelFault("SDD-003 §3.1c", null,
+                "relative permeability endpoints must be in (0, 1]");
+
+        if (nw <= 0.0 || no <= 0.0)
+            throw new ModelFault("SDD-003 §3.1c", null,
+                "Corey exponents must be positive");
+
+        return new RelativePermeabilityCurve(swc, sor, krwMax, kroMax, nw, no);
+    }
+
+    /// <summary>S*, clamped to [0, 1].</summary>
+    public double NormalisedSaturation(double waterSaturation)
+    {
+        double span = 1.0 - ConnateWaterSaturation - ResidualOilSaturation;
+        double s = (waterSaturation - ConnateWaterSaturation) / span;
+        return Math.Clamp(s, 0.0, 1.0);
+    }
+
+    public double WaterPermeability(double waterSaturation) =>
+        WaterEndpoint * DetMath.Pow(NormalisedSaturation(waterSaturation), WaterExponent);
+
+    public double OilPermeability(double waterSaturation) =>
+        OilEndpoint * DetMath.Pow(1.0 - NormalisedSaturation(waterSaturation), OilExponent);
+
+    private static string Format(double value) =>
+        value.ToString("R", System.Globalization.CultureInfo.InvariantCulture);
+}
+
 /// <summary>Fetkovich-form aquifer (SDD-003 §3.3): an aquifer is a water compartment.</summary>
 public interface IAquiferModel
 {

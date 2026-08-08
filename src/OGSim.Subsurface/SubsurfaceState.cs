@@ -85,12 +85,15 @@ internal sealed class SubsurfaceState : IStateOwner
         Area drainageArea,
         double rockCompressibility,
         Length gasOilContact,
-        Length oilWaterContact)
+        Length oilWaterContact,
+        RelativePermeabilityCurve wettability)
     {
         ArgumentNullException.ThrowIfNull(generated);
+        ArgumentNullException.ThrowIfNull(wettability);
 
         var rock = new RockTruth(
-            generated.Porosity, permeability, netThickness, drainageArea, rockCompressibility);
+            generated.Porosity, permeability, netThickness, drainageArea, rockCompressibility,
+            wettability);
 
         var contacts = new ContactSet(gasOilContact, oilWaterContact);
 
@@ -110,6 +113,7 @@ internal sealed class SubsurfaceState : IStateOwner
         var initial = new InitialConditions(
             Pressure: generated.InitialPressure,
             OilInPlace: stockTankOil,
+            PoreVolume: generated.PoreVolume,
             GasInPlace: new StandardGasVolume(0.0),
             GasCapRatio: 0.0,
             ConnateWaterSaturation: 1.0 - generated.OilSaturation,
@@ -187,6 +191,25 @@ internal sealed class SubsurfaceState : IStateOwner
         Find(compartment).Rock.Permeability;
 
     /// <summary>
+    /// The water cut at the sandface (SDD-003 §3.1c) — DYNAMIC, like the
+    /// pressure, and joining this door on the same terms (SDD-008 §3's R20d.3
+    /// note): a completion has to be refreshed with it before it solves.
+    ///
+    /// <para>Zero before breakthrough, and that is §3.1c's own result rather
+    /// than a special case: at or below connate saturation <c>krw</c> is exactly
+    /// zero, so no water flows at all. Breakthrough is therefore not scheduled —
+    /// it is the first tick the saturation exceeds connate.</para>
+    /// </summary>
+    internal double TrueWaterCutOf(
+        EntityId<IReservoirCompartmentEntity> compartment, Viscosity water, Viscosity oil)
+    {
+        ReservoirCompartment found = Find(compartment);
+
+        return FractionalFlow.WaterCut(
+            found.Rock.Wettability, found.WaterSaturation, water, oil);
+    }
+
+    /// <summary>
     /// Oil in place as the compartment was CREATED with, not what is left.
     ///
     /// <para>A survey sees the accumulation, not the production history — reading
@@ -226,12 +249,22 @@ internal sealed class SubsurfaceState : IStateOwner
             writer.WriteDouble(at + "gas-cap-ratio", compartment.Initial.GasCapRatio);
             writer.WriteDouble(at + "swc", compartment.Initial.ConnateWaterSaturation);
             writer.WriteDouble(at + "cw", compartment.Initial.WaterCompressibility);
+            writer.WriteDouble(at + "pv", compartment.Initial.PoreVolume.CubicMetres);
 
             writer.WriteDouble(at + "porosity", compartment.Rock.Porosity);
             writer.WriteDouble(at + "permeability", compartment.Rock.Permeability.SquareMetres);
             writer.WriteDouble(at + "net-thickness", compartment.Rock.NetThickness.Metres);
             writer.WriteDouble(at + "drainage-area", compartment.Rock.DrainageArea.SquareMetres);
             writer.WriteDouble(at + "cf", compartment.Rock.RockCompressibility);
+
+            // The rock's Corey curve. Saved with the rock because a compartment
+            // restored without it could not answer what its water cut is, and
+            // guessing one would decide when a field waters out.
+            writer.WriteDouble(at + "sor", compartment.Rock.Wettability.ResidualOilSaturation);
+            writer.WriteDouble(at + "krw", compartment.Rock.Wettability.WaterEndpoint);
+            writer.WriteDouble(at + "kro", compartment.Rock.Wettability.OilEndpoint);
+            writer.WriteDouble(at + "nw", compartment.Rock.Wettability.WaterExponent);
+            writer.WriteDouble(at + "no", compartment.Rock.Wettability.OilExponent);
 
             writer.WriteDouble(at + "goc", compartment.Contacts.GasOilContact.Metres);
             writer.WriteDouble(at + "owc", compartment.Contacts.OilWaterContact.Metres);
@@ -270,6 +303,7 @@ internal sealed class SubsurfaceState : IStateOwner
                 GasCapRatio: reader.ReadDouble(at + "gas-cap-ratio"),
                 ConnateWaterSaturation: reader.ReadDouble(at + "swc"),
                 WaterCompressibility: reader.ReadDouble(at + "cw"),
+                PoreVolume: new ReservoirVolume(reader.ReadDouble(at + "pv")),
                 Mass: InPlace.Empty(materialCount: 0));
 
             var rock = new RockTruth(
@@ -277,7 +311,14 @@ internal sealed class SubsurfaceState : IStateOwner
                 new Permeability(reader.ReadDouble(at + "permeability")),
                 new Length(reader.ReadDouble(at + "net-thickness")),
                 new Area(reader.ReadDouble(at + "drainage-area")),
-                reader.ReadDouble(at + "cf"));
+                reader.ReadDouble(at + "cf"),
+                RelativePermeabilityCurve.Validated(
+                    swc: reader.ReadDouble(at + "swc"),
+                    sor: reader.ReadDouble(at + "sor"),
+                    krwMax: reader.ReadDouble(at + "krw"),
+                    kroMax: reader.ReadDouble(at + "kro"),
+                    nw: reader.ReadDouble(at + "nw"),
+                    no: reader.ReadDouble(at + "no")));
 
             var contacts = new ContactSet(
                 new Length(reader.ReadDouble(at + "goc")),

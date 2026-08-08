@@ -593,6 +593,19 @@ internal static class Defaults
     /// the barrels a player reads.</summary>
     public static Density SurfaceOilDensity { get; } = Density.FromSpecificGravity(0.85);
 
+    /// <summary>
+    /// The shipped rock's Corey curve (SDD-003 §3.1c) — what turns a water
+    /// saturation into a water cut, and therefore when a field waters out.
+    ///
+    /// <para>A water-wet sandstone at its ordinary numbers: exponents of 2 and 3,
+    /// endpoints that leave a broad mobile range. The MOBILITY RATIO these imply
+    /// is what makes the S-curve steep or gentle, and it is the number a player
+    /// is really looking at when a field waters out early.</para>
+    /// </summary>
+    public static RelativePermeabilityCurve Wettability { get; } =
+        RelativePermeabilityCurve.Validated(
+            swc: 0.30, sor: 0.25, krwMax: 0.35, kroMax: 0.90, nw: 3.0, no: 2.0);
+
     // ------------------------------------------------------ reality profiles
     //
     // Design 18 §5b's fidelity axis, at its two shipped ends. Content in a

@@ -38,7 +38,8 @@ public sealed class ActivityTests
                 drainageArea: new Area(2.0e5),
                 rockCompressibility: 4.5e-10,
                 gasOilContact: new Length(1900.0),
-                oilWaterContact: new Length(2100.0));
+                oilWaterContact: new Length(2100.0),
+                Defaults.Wettability);
 
         return (built.Engine, target);
     }

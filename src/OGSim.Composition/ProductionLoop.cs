@@ -574,10 +574,11 @@ public sealed class FieldControl
         Area drainageArea,
         double rockCompressibility,
         Length gasOilContact,
-        Length oilWaterContact) =>
+        Length oilWaterContact,
+        RelativePermeabilityCurve wettability) =>
         _subsurface.Create(
             generated, permeability, netThickness, drainageArea,
-            rockCompressibility, gasOilContact, oilWaterContact);
+            rockCompressibility, gasOilContact, oilWaterContact, wettability);
 
     /// <summary>
     /// Brings a completion online against a compartment and ties it into the

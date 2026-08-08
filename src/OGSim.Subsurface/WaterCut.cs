@@ -10,54 +10,10 @@
 // saturation at the producer exceeds the connate value, and before that krw is
 // exactly zero, so no water flows at all.
 
+using OGSim.Contracts;
 using OGSim.Kernel;
 
 namespace OGSim.Subsurface;
-
-/// <summary>Corey endpoints and exponents, from the rock type.</summary>
-internal sealed record RelativePermeabilityCurve(
-    double ConnateWaterSaturation,     // Swc
-    double ResidualOilSaturation,      // Sor
-    double WaterEndpoint,              // krw_max
-    double OilEndpoint,                // kro_max
-    double WaterExponent,              // nw
-    double OilExponent)                // no
-{
-    public static RelativePermeabilityCurve Validated(
-        double swc, double sor, double krwMax, double kroMax, double nw, double no)
-    {
-        if (swc < 0.0 || sor < 0.0 || swc + sor >= 1.0)
-            throw new ModelFault("SDD-003 §3.1c", null,
-                $"Swc {Format(swc)} and Sor {Format(sor)} leave no movable saturation");
-
-        if (krwMax is <= 0.0 or > 1.0 || kroMax is <= 0.0 or > 1.0)
-            throw new ModelFault("SDD-003 §3.1c", null,
-                "relative permeability endpoints must be in (0, 1]");
-
-        if (nw <= 0.0 || no <= 0.0)
-            throw new ModelFault("SDD-003 §3.1c", null,
-                "Corey exponents must be positive");
-
-        return new RelativePermeabilityCurve(swc, sor, krwMax, kroMax, nw, no);
-    }
-
-    /// <summary>S*, clamped to [0, 1].</summary>
-    public double NormalisedSaturation(double waterSaturation)
-    {
-        double span = 1.0 - ConnateWaterSaturation - ResidualOilSaturation;
-        double s = (waterSaturation - ConnateWaterSaturation) / span;
-        return Math.Clamp(s, 0.0, 1.0);
-    }
-
-    public double WaterPermeability(double waterSaturation) =>
-        WaterEndpoint * DetMath.Pow(NormalisedSaturation(waterSaturation), WaterExponent);
-
-    public double OilPermeability(double waterSaturation) =>
-        OilEndpoint * DetMath.Pow(1.0 - NormalisedSaturation(waterSaturation), OilExponent);
-
-    private static string Format(double value) =>
-        value.ToString("R", System.Globalization.CultureInfo.InvariantCulture);
-}
 
 /// <summary>SDD-003 §3.1c's fractional flow.</summary>
 internal static class FractionalFlow

@@ -37,7 +37,18 @@ internal readonly record struct RockTruth(
     Permeability Permeability,
     Length NetThickness,             // h
     Area DrainageArea,               // A
-    double RockCompressibility);     // c_f, 1/Pa
+    double RockCompressibility,      // c_f, 1/Pa
+
+    /// <summary>
+    /// The rock's Corey curve (SDD-003 §3.1c) — what turns a water saturation
+    /// into a water cut.
+    ///
+    /// <para>On the ROCK because that is what it is a property of: two
+    /// compartments in one field with different rock water out differently, and
+    /// a curve held anywhere else would make that expressible only by
+    /// accident.</para>
+    /// </summary>
+    RelativePermeabilityCurve Wettability);
 
 /// <summary>
 /// A declared hydraulic connection to another compartment. Zero
@@ -56,6 +67,17 @@ internal readonly record struct CompartmentLink(
 internal sealed record InitialConditions(
     Pressure Pressure,                      // Pi
     SurfaceVolume OilInPlace,               // N, stock-tank m³
+
+    /// <summary>
+    /// PV, reservoir m³ — the volume the saturations are fractions OF.
+    ///
+    /// <para>Kept because water saturation is DERIVED from it and the cumulative
+    /// terms (SDD-003 §3.1c), never stored: a saturation held as its own field
+    /// would be a second owner of a fact the material balance already
+    /// determines, and the two would drift the first time one was updated
+    /// without the other (law L5).</para>
+    /// </summary>
+    ReservoirVolume PoreVolume,
     StandardGasVolume GasInPlace,           // G (free gas cap)
     double GasCapRatio,                     // m
     double ConnateWaterSaturation,          // Swc
