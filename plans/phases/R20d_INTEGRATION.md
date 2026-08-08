@@ -51,6 +51,14 @@ The order is by what each step unblocks, not by phase number.
 | 7 | **Equipment content (R20c.9)** | The sixteen catalogue sheets become loadable kinds; `Defaults.CompletionFor` becomes a loader. Variety arrives here |
 | 8 | **R20 · R21 · R25** | Scenarios and balance on real content; the full host surface; the advisor |
 
+**R20d.3/.4 are scouted before they are started** (finding 162). A well produces
+one material because SDD-003 §6.1 pins the oil conversion and never says what
+else comes up the hole; gas needs an air-density constant `PhysicalConstants`
+does not carry; water has no source because `FractionalFlow` is built, tested,
+internal and called by nothing. Three SDD amendments come first. That ordering is
+not caution — it is what R20d.1 cost by not doing it: four gaps found one at a
+time, mid-wire, and one revert.
+
 **What step 4 has cost so far, and why that is the point.** One attempt at
 wiring the solver into the loop found FOUR gaps in the elements between a well
 and a sale: a separator with no pressure to impose (157), an S4 that could only
