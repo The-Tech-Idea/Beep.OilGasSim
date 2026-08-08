@@ -205,6 +205,37 @@ public sealed record ObjectiveView(
     ContentId RealityProfile);            // scores are stamped (18 §5b.6)
 ```
 
+> **R20d.1 amendment — the chain, as one row per element.** §2's views split the
+> two halves of the bottleneck report across the hierarchy: `FieldView` carries
+> `DeferredByElement` and `FacilityView` carries `UnitUtilisation`. That is right
+> for the finished surface, and unusable for the subset a wired-but-incomplete
+> loop can fill — there is no facility hierarchy yet, and the question a player
+> asks does not respect one:
+>
+> ```csharp
+> // One row per element in the chain, in the solver's own topological order.
+> public sealed record ChainElementView(
+>     EntityRef Element, string DisplayId,
+>     MassRate Throughput,                                        // what crossed it
+>     IReadOnlyList<(ConstraintKind Kind, Mass Deferred)> Deferred);   // what it refused
+> ```
+>
+> **Deferral is the jam and throughput is the flow**, which together are the
+> whole of "where is my production going and what is stopping it". They come
+> from `SolveReport` directly — §8's attribution pass already computes the
+> deferral per element per constraint against what each completion WANTED, so
+> this projection reads a number the solver committed to rather than deriving a
+> second opinion about it.
+>
+> `Utilisation` is deliberately absent: it needs the raw
+> `ConstraintEvaluation`s, and `SolveReport` reports only the violations
+> ([SDD-002](SDD-002_STREAMS_AND_FLOW.md) §8). "How full is it" therefore waits
+> on a §8 amendment; "what is it refusing" does not, and is the half a player
+> acts on.
+>
+> The rows fold into `FieldView.DeferredByElement` and
+> `FacilityView.UnitUtilisation` when those views have something to hang from.
+
 > **Contract pass 10 — `FinanceView` was missing from the root.** This section
 > listed fourteen members and claimed "the exact 16-section ⇔ R21 §2.4b
 > correspondence (V11)" while omitting the projection R21 §2.4b calls *"where
