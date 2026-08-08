@@ -98,7 +98,12 @@ content and in this document's transforms, and in no interface anywhere
 ## 1. Separator
 
 ```text
-Inlet stream at (P_sep from network, T from stream/ambient):
+P_sep is the vessel's DECLARED operating pressure (datasheet, §8) — held by its
+back-pressure controller, and therefore IMPOSED on the network rather than read
+from it. Every outlet leg leaves at P_sep; the upstream element sees P_sep as
+its discharge pressure, which is how a separator reaches the reservoir.
+
+Inlet stream at (P_sep, T from stream/ambient):
   split = fluidModel.SplitAt(composition, P_sep, T)         // ideal phase fractions
   Efficiency per phase pair from the tier datasheet, DERATED by throughput:
      eff_eff = eff_rated · Clamp01(Q_rated / Q_actual)      // linear residence-time derate, pinned
@@ -111,6 +116,35 @@ Constraints: GasCapacity  = actual-condition gas volumetric rate vs rating
 Multi-stage: a train is N chained separator elements at declared stage
 pressures — no special multi-stage code; recovery gain emerges (R8-V4).
 ```
+
+> **R20d.1 amendment (finding 157).** The first line of this block used to read
+> "*P_sep from network*", three lines above a multi-stage rule that speaks of
+> "*declared stage pressures*". Both cannot be true, and §8's closed datasheet
+> registry settled it by accident: it listed no pressure field, so there was
+> nowhere to declare one, and `Separator` shipped stamping its INLET pressure on
+> every outlet leg. The consequences are not subtle once the chain is wired.
+>
+> - **The vessel imposes nothing.** A separator's pressure drop, as the solver
+>   measures it (`inlet − outlet[0].P`), is exactly zero, so S4 propagates the
+>   network's terminal sink boundary all the way to the wellhead and every well
+>   flows against atmosphere.
+> - **Nothing breaks out.** The flash is computed at the inlet pressure, which
+>   for a completion's outlet is *reservoir* pressure — so the "ideal split" is
+>   taken at reservoir conditions and a separator separates nothing.
+> - **R8-V4 cannot pass.** N chained vessels would all sit at one pressure, and
+>   the recovery gain that is supposed to *emerge* from a train has nothing to
+>   emerge from.
+>
+> Resolved in favour of *declared*, which is both the physical statement — a
+> vessel is held at a set pressure by a controller — and the only reading under
+> which multi-stage separation means anything.
+>
+> **Why it survived R8.** FV5 (backpressure reaches the reservoir) is proven
+> against `Restrictor`, a synthetic test element carrying a hard-coded 5-bar
+> drop. The solver's propagation is correct and tested; no *shipped* element
+> ever exercised it. That is finding 150's shape exactly — a mechanism proven
+> against a fixture with no production counterpart — and it stays invisible for
+> as long as the loop does not call the thing.
 
 ## 2. Oil treating (heater-treater · desalter · stabiliser)
 
@@ -383,7 +417,7 @@ a stream can fail either end — rich gas is off-spec as surely as lean.
 ## 8. Datasheet field registry (content ⇄ code)
 
 Per-unit-kind closed datasheet blocks (SDD-004 §6): separator {gasRating,
-liquidRating, effGL, effLG, effLW}; treater {eff, spec_capable, heatDuty};
+liquidRating, **operatingPressure**, effGL, effLG, effLW}; treater {eff, spec_capable, heatDuty};
 compressor {maxPower, η_poly, maxStageRatio, driver, derateCurve}; tank
 {capacity, lossRate}; pipe-spec {D, rating, roughness, U-value};
 meter {σ}; berth {loadingRate}; power source {maxPower, η_driver, fuelType|grid,
