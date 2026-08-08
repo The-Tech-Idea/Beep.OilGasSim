@@ -146,6 +146,56 @@ pressures — no special multi-stage code; recovery gain emerges (R8-V4).
 > against a fixture with no production counterpart — and it stays invisible for
 > as long as the loop does not call the thing.
 
+## 1b. Manifold / header — the commingling element
+
+> **R20d.1 declaration (finding 159).** [01](../design/01_CONCEPT_MATRIX.md) §C5
+> names the concept and gives its contract as `IFlowNode`;
+> [04](../design/04_MATERIAL_AND_FLOW.md) §5 stage 3 is *"Wellhead → manifold
+> (gathering)"* with commingled provenance as its whole subject; catalogue
+> [C06](../catalog/C06_WELLSITE_AND_GATHERING.md) prices the tier ladder; R6-V14
+> — "a new high-pressure well kills weak wells" — is a statement about header
+> pressure. **No SDD declared an element and `IFlowNode` exists in no
+> assembly**, so a field's second well had nowhere to go: `FlowNetwork` refuses
+> two edges into one inlet (FD4), which is correct, and the element that is
+> supposed to accept them was never written.
+>
+> Declared as a `SDD-002` §5 flow element like every other, **not** as a new
+> `IFlowNode` contract. 01 §C5's name predates `IFlowElement`, and a second
+> element interface would be exactly the type hierarchy design 02 §4.1 forbids —
+> the solver knows one kind of thing.
+
+```text
+Ports: N inlets (tier: header slots) + 1 Main outlet.
+Transform:
+  outlet mass     = Σ inlet masses, per material            // a header stores nothing
+  outlet provenance = Allocation.Blend[(inlet_i.provenance, inlet_i.mass)]
+  outlet P        = inlets[0].P                             // NO drop of its own
+  outlet T        = mass-weighted mean of the inlet temperatures
+Constraints: none. A header has no capacity; the flowline downstream does, and
+             reporting one here would throttle wells for being connected.
+```
+
+**Why the outlet takes an inlet's pressure rather than the lowest or a mean.** A
+header imposes ONE pressure on everything tied into it, and S4 already produces
+exactly that: every element feeding a manifold is handed the same demanded inlet
+pressure, because the demand is stored per element and they all feed the same
+one. So in the converged state every inlet is at the header pressure and the
+three candidate rules agree. Taking `inlets[0].P` is the one that also makes
+`ΔP_element` exactly zero, which is what a header's contribution to S4 should be
+— a `min` would report a fictitious drop during iteration and slow convergence
+for no physical reason.
+
+**The commingling trap falls out and is not coded.** A header passes its
+downstream demand to every well equally, so a new high-rate well raises the
+throughput through whatever is downstream, raises the drop across it, raises the
+header pressure — and the weakest well on the line goes DEAD. That is R6-V14,
+and it is backpressure arithmetic rather than a rule anybody wrote.
+
+**Slots are a real limit.** A fixed header has a declared number of them
+(C06's ladder), so a field that has filled its manifold must buy a bigger one
+before the next well can be tied in. Refused at tie-in with the slot count in
+the reason, never by silently sharing a port.
+
 ## 2. Oil treating (heater-treater · desalter · stabiliser)
 
 ```text
@@ -417,7 +467,8 @@ a stream can fail either end — rich gas is off-spec as surely as lean.
 ## 8. Datasheet field registry (content ⇄ code)
 
 Per-unit-kind closed datasheet blocks (SDD-004 §6): separator {gasRating,
-liquidRating, **operatingPressure**, effGL, effLG, effLW}; treater {eff, spec_capable, heatDuty};
+liquidRating, **operatingPressure**, effGL, effLG, effLW}; **manifold {slots}**;
+treater {eff, spec_capable, heatDuty};
 compressor {maxPower, η_poly, maxStageRatio, driver, derateCurve}; tank
 {capacity, lossRate}; pipe-spec {D, rating, roughness, U-value};
 meter {σ}; berth {loadingRate}; power source {maxPower, η_driver, fuelType|grid,
