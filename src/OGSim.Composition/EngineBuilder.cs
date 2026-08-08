@@ -486,6 +486,40 @@ internal static class Defaults
         OperatingPressure: Pressure.FromBar(15.0));
 
     /// <summary>
+    /// The vessel ladder (catalogue C07), in the order a field climbs it.
+    ///
+    /// <para>DECLARED ORDER, not sorted by capacity: the rungs are a progression
+    /// a designer authored, and a bigger-is-later rule would silently reorder a
+    /// ladder whose rungs trade throughput against something else. The first rung
+    /// is what a field is built with.</para>
+    /// </summary>
+    public static IReadOnlyList<Facilities.SeparatorTier> SeparatorLadder { get; } =
+    [
+        SeparatorTier,
+        SeparatorTier with
+        {
+            Id = new ContentId("separator-3phase-e2"),
+            GasCapacity = new MassRate(150.0),
+            LiquidCapacity = new MassRate(40.0),
+            Volume = new ReservoirVolume(90.0),
+            DesignRate = new ReservoirRate(0.15),
+        },
+    ];
+
+    /// <summary>
+    /// What a bigger vessel costs and how long it takes. NO RIG (SDD-007 §1's
+    /// null case): construction crews are not the drilling rig, so a field can
+    /// debottleneck and drill in the same months — which is what makes the
+    /// decision interesting rather than merely sequential.
+    /// </summary>
+    public static ActivityTerms InstallSeparatorTerms { get; } = new(
+        Template: new ContentId("install-separator"),
+        Cost: Money.FromMillions(6.0),
+        DurationTicks: 3,
+        Rig: null,
+        Outcomes: SurveyOutcomes);
+
+    /// <summary>
     /// What the sales contract requires. EMPTY, and honestly: a specification is
     /// a list of limits on measured stream properties, this composition ships one
     /// material with no contaminants, and every limit that could be written would

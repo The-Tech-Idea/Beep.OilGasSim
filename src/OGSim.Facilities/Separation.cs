@@ -124,7 +124,7 @@ public sealed record SeparatorTier(
 /// </summary>
 public sealed class Separator : IPressureController
 {
-    private readonly SeparatorTier _tier;
+    private SeparatorTier _tier;
     private readonly ISeparationModel _model;
     private readonly IFluidPropertyModel _fluid;
     private readonly int _materialCount;
@@ -168,6 +168,38 @@ public sealed class Separator : IPressureController
     /// to — which is how a separator reaches the reservoir at all.
     /// </summary>
     public Pressure SetPoint => _tier.OperatingPressure;
+
+    /// <summary>What is currently fitted (SDD-006 §0c).</summary>
+    public SeparatorTier Tier => _tier;
+
+    /// <summary>
+    /// Fits a tier into this socket (SDD-006 §0c, design 07 §4b.3b).
+    ///
+    /// <para>The ELEMENT keeps its identity — its id, its place in the network,
+    /// its tie-ins — and what is fitted into it changes. That is refitting rather
+    /// than replacing, and it is deliberate: the flow registry is write-once with
+    /// no removal, because an element that could vanish mid-tick would take its
+    /// connections with it. It is also what happens on a site, where the
+    /// foundations and the permit stay.</para>
+    ///
+    /// <para>Called by a COMPLETED operation and never directly, or it is a free
+    /// upgrade: the install takes months of a player's time and money and lands
+    /// through the one activity engine like everything else.</para>
+    /// </summary>
+    public void Fit(SeparatorTier tier)
+    {
+        ArgumentNullException.ThrowIfNull(tier);
+
+        if (tier.DesignRate.CubicMetresPerSecond <= 0.0)
+            throw new ModelFault("SDD-006 §2", null,
+                $"separator tier {tier.Id.Value} declares a non-positive design rate");
+
+        if (tier.OperatingPressure.Pascals <= 0.0)
+            throw new ModelFault("SDD-006 §1", null,
+                $"separator tier {tier.Id.Value} declares a non-positive operating pressure");
+
+        _tier = tier;
+    }
 
     /// <summary>The ports by name, so a caller wiring the chain never writes a
     /// bare index — a mistyped integer is a silently different network.</summary>

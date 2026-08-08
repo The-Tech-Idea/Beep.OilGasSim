@@ -12,6 +12,7 @@
 
 using OGSim.Composition;
 using OGSim.Contracts;
+using OGSim.Company;
 using OGSim.Kernel;
 
 namespace OGSim.Composition.Tests;
@@ -215,6 +216,103 @@ public sealed class ChainTests
 
         foreach (ChainElementView element in engine.ReadModel.Chain)
             Assert.False(element.IsBottleneck);
+    }
+
+    // ------------------------------------------- see the jam, build past it
+
+    /// <summary>
+    /// THE LOOP AN OPERATIONS GAME IS PLAYED ON, end to end: the vessel refuses
+    /// production, the read model names it and says how much it is costing, the
+    /// player pays for a bigger one, waits, and the field flows again.
+    ///
+    /// <para>Every step of that was unreachable a session ago. The chain was
+    /// bypassed, so nothing could bind; nothing was projected, so a jam was
+    /// invisible; and a unit's tier was fixed at construction, so the catalogue's
+    /// ladder could not be climbed.</para>
+    /// </summary>
+    [Fact]
+    public void R12bV8_a_player_sees_the_jam_pays_for_a_bigger_vessel_and_the_field_flows()
+    {
+        (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled();
+
+        // TWO wells: one fits inside the first vessel comfortably, and the
+        // second is what puts the field over it. That is the moment the game
+        // is about — the well that pays for itself only if the surface can
+        // carry what it makes.
+        Produce(engine, target);
+        Produce(engine, target);
+
+        engine.Pipeline.AdvanceTick();
+
+        // The jam, named and priced.
+        ChainElementView jammed = Assert.Single(engine.ReadModel!.Bottlenecks);
+        Assert.Equal("separator", jammed.DisplayId);
+
+        double capped = engine.ReadModel.ProducedThisTick.CubicMetres;
+
+        // Buy the next rung. No rig — construction is not the drilling crew.
+        Assert.IsType<Accepted>(engine.Commands.Submit(new InstallSeparatorCommand()));
+
+        engine.Pipeline.AdvanceTick();
+        while (engine.ReadModel!.ActivitiesRunning > 0) engine.Pipeline.AdvanceTick();
+
+        // The field flows again, and the separator has stopped refusing.
+        Assert.True(engine.ReadModel!.ProducedThisTick.CubicMetres > capped,
+            $"after the refit the field delivered {engine.ReadModel.ProducedThisTick.CubicMetres} m³, " +
+            $"no more than the {capped} m³ the old vessel allowed");
+
+        Assert.DoesNotContain(engine.ReadModel.Bottlenecks,
+            element => element.DisplayId == "separator");
+    }
+
+    /// <summary>
+    /// A refit is CAPEX: the money buys something the company still owns next
+    /// month (SDD-009 §1), unlike a survey which is bought and consumed.
+    /// </summary>
+    [Fact]
+    public void R12bV8_a_vessel_is_capitalised_and_a_survey_is_not()
+    {
+        (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled();
+        Produce(engine, target);
+
+        OGSim.Company.CostLedger ledger = engine.Provided.Resolve<OGSim.Company.CompanyState>().Ledger;
+        Money before = ledger.BalanceOf(Account.Capex_PPE);
+
+        Assert.IsType<Accepted>(engine.Commands.Submit(new InstallSeparatorCommand()));
+
+        engine.Pipeline.AdvanceTick();
+        while (engine.ReadModel!.ActivitiesRunning > 0) engine.Pipeline.AdvanceTick();
+
+        Assert.True(ledger.BalanceOf(Account.Capex_PPE) > before,
+            "a vessel the company still owns next month is capital, not an expense");
+    }
+
+    /// <summary>
+    /// At the top of the ladder the answer is a REFUSAL with a reason, not a
+    /// silent no-op: a player who has bought the biggest vessel in the catalogue
+    /// must be told that debottlenecking here is finished, rather than paying
+    /// three months to have nothing change.
+    /// </summary>
+    [Fact]
+    public void R12bV8_the_top_of_the_ladder_is_refused_with_a_reason()
+    {
+        (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled();
+        Produce(engine, target);
+
+        // Climb to the top.
+        for (var rung = 1; rung < Defaults.SeparatorLadder.Count; rung++)
+        {
+            Assert.IsType<Accepted>(engine.Commands.Submit(new InstallSeparatorCommand()));
+
+            engine.Pipeline.AdvanceTick();
+            while (engine.ReadModel!.ActivitiesRunning > 0) engine.Pipeline.AdvanceTick();
+        }
+
+        var rejected = Assert.IsType<Rejected>(
+            engine.Commands.Submit(new InstallSeparatorCommand()));
+
+        Assert.Contains(rejected.Reasons,
+            reason => reason.LocId == "$loc:reject.top-of-the-ladder");
     }
 
     // ------------------------------------------------------------- the header

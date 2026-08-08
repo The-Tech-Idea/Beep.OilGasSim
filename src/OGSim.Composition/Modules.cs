@@ -416,6 +416,7 @@ internal sealed class FieldModule() : EngineModule(Declare(
         typeof(WirelineLogCommand),
         typeof(CutCoreCommand),
         typeof(SeismicSurveyCommand),
+        typeof(InstallSeparatorCommand),
     ]))
 {
     public override void Compose(IModuleComposition composition)
@@ -508,6 +509,12 @@ internal sealed class FieldModule() : EngineModule(Declare(
             new SeismicSurveyActivity(
                 Defaults.SeismicSurveyTerms, Defaults.SeismicSource,
                 Defaults.OilInPlaceKind, subsurface, door),
+
+            // The verb that answers a bottleneck (R12b.8). It could not exist
+            // until the chain was wired: an installed vessel would have been
+            // paid for and bypassed (finding 153).
+            new InstallSeparatorActivity(
+                Defaults.InstallSeparatorTerms, chain.Separator, Defaults.SeparatorLadder),
         ];
 
         var activities = new ActivityState(scheduler, company, catalogue);
