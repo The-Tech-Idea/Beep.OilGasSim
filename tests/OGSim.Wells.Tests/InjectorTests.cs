@@ -20,7 +20,12 @@ public class InjectorTests
                 new Area(2.0e5),
                 new Length(0.108),
                 new Viscosity(0.5e-3),
-                initialSkin, plugging, new ReservoirVolume(referenceVolumeM3)));
+                initialSkin, plugging, new ReservoirVolume(referenceVolumeM3)),
+
+            // Oil, gas, water — the shipped catalogue's shape, so an injector
+            // built here is the one the chain would wire.
+            waterOrdinal: 2,
+            materialCount: 3);
 
     private static readonly Pressure Reservoir = new(20.0e6);
 

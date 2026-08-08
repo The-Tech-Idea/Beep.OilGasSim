@@ -30,21 +30,115 @@ public sealed record InjectionConditions(
 /// <summary>
 /// SDD-003 §3.1d. A disposal or water-injection well.
 /// </summary>
-public sealed class Injector
+public sealed class Injector : IFlowElement
 {
     private readonly InjectionConditions _conditions;
+    private readonly int _materialCount;
+    private readonly int _waterOrdinal;
     private double _cumulativeInjectedM3;
 
-    public Injector(EntityId<ICompletion> id, InjectionConditions conditions)
+    // Pushed in before the solve, exactly as a completion is refreshed with its
+    // compartment's pressure (finding 137): an injector's acceptance depends on
+    // what it is injecting against, and Transform is pure.
+    private Pressure _reservoirPressure;
+    private Pressure _injectionPressure;
+
+    public Injector(
+        EntityId<ICompletion> id,
+        InjectionConditions conditions,
+        int waterOrdinal,
+        int materialCount)
     {
         ArgumentNullException.ThrowIfNull(conditions);
         Validate(conditions);
 
-        Id = id;
+        InjectorId = id;
+        Id = new EntityId<IFlowElement>(id.Value);
         _conditions = conditions;
+        _waterOrdinal = waterOrdinal;
+        _materialCount = materialCount;
     }
 
-    public EntityId<ICompletion> Id { get; }
+    public EntityId<ICompletion> InjectorId { get; }
+
+    /// <summary>SDD-003 §3.1d's R20d.4 amendment. An injector is a flow element:
+    /// the `Injectivity` constraint it reports is read by the SOLVER, from
+    /// `IFlowElement.EvaluateConstraints`, and nowhere else.</summary>
+    public EntityId<IFlowElement> Id { get; }
+
+    /// <summary>One inlet, no outlets — water in, nothing out. A sink from the
+    /// network's point of view.</summary>
+    public IReadOnlyList<PortSpec> Ports { get; } =
+        [new PortSpec(new PortId(0), PortDirection.Inlet, PortRole.Water)];
+
+    /// <summary>The one port, named so a caller wiring the chain never writes a
+    /// bare index.</summary>
+    public static PortId Inlet { get; } = new(0);
+
+    /// <summary>
+    /// The conditions it injects against, pushed in before the solve.
+    ///
+    /// <para>Pushed rather than pulled for the same reason a completion's are
+    /// (finding 137): <c>Transform</c> is pure and <c>OGSim.Wells</c> cannot see
+    /// a compartment. The composition that owns both sides passes the
+    /// numbers.</para>
+    /// </summary>
+    public void SetInjectionConditions(Pressure reservoir, Pressure injection)
+    {
+        _reservoirPressure = reservoir;
+        _injectionPressure = injection;
+    }
+
+    /// <summary>
+    /// Everything offered leaves the network here (SDD-003 §3.1d's R20d.4
+    /// amendment).
+    ///
+    /// <para>Reported as DISPOSED and never as a receipt against the
+    /// compartment: SDD-002 §9 makes injection-as-pressure-support a commit-stage
+    /// act, and an injector doing both would put the same mass on both sides of
+    /// the tick balance. This well disposes; it claims nothing about
+    /// pressure.</para>
+    /// </summary>
+    public TransformResult Transform(TransformInput input)
+    {
+        ArgumentNullException.ThrowIfNull(input);
+
+        Composition arriving = input.Inlets.Count > 0
+            ? input.Inlets[0].MassRates
+            : Composition.Zero(_materialCount);
+
+        return new TransformResult(
+            [],
+            Sourced: Composition.Zero(_materialCount),
+            FuelConsumed: Composition.Zero(_materialCount),
+            Disposed: new DisposedMass(
+                Composition.Zero(_materialCount),
+                Composition.Zero(_materialCount),
+                Discharged: arriving),
+            PowerDraw: new Power(0.0));
+    }
+
+    /// <summary>
+    /// SDD-002 §5's constraint, so the solver throttles the FIELD against
+    /// disposal exactly as it throttles it against a separator (R10-V3).
+    ///
+    /// <para>Volumetric, because injectivity is: the Darcy form answers in
+    /// reservoir m³/s, so the offered mass is turned into a rate through water's
+    /// density rather than compared against a mass rating that does not
+    /// exist.</para>
+    /// </summary>
+    public IReadOnlyList<ConstraintEvaluation> EvaluateConstraints(TransformInput input)
+    {
+        ArgumentNullException.ThrowIfNull(input);
+
+        if (input.Inlets.Count == 0) return [];
+
+        double offered =
+            input.Inlets[0].MassRates[new MaterialId(_waterOrdinal)].KgPerSecond
+            / PhysicalConstants.WaterDensityKgPerM3;
+
+        return [ConstraintAt(_injectionPressure, _reservoirPressure, offered)];
+    }
 
     public ReservoirVolume CumulativeInjected => new(_cumulativeInjectedM3);
 
@@ -79,7 +173,7 @@ public sealed class Injector
 
         if (denominator <= 0.0)
             throw new ModelFault("SDD-003 §3.1d", null,
-                $"injector {Id.Value}: skin {Format(CurrentSkin)} makes the Darcy " +
+                $"injector {InjectorId.Value}: skin {Format(CurrentSkin)} makes the Darcy " +
                 "denominator non-positive");
 
         return new ReservoirRate(
@@ -102,7 +196,7 @@ public sealed class Injector
     {
         if (injected.CubicMetres < 0.0)
             throw new InvariantFault("SDD-003 §3.1d", null,
-                $"injector {Id.Value} was committed a negative volume");
+                $"injector {InjectorId.Value} was committed a negative volume");
 
         _cumulativeInjectedM3 += injected.CubicMetres;
     }

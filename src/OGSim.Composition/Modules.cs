@@ -245,10 +245,29 @@ internal sealed class FacilitiesModule() : EngineModule(Declare(
             Defaults.TheFlare, Defaults.FlareCapacity, Defaults.FlareCombustionEfficiency,
             Defaults.MaterialCount);
 
+        // THE WATER LEG GOES TO A DISPOSAL WELL. Its Injectivity constraint is
+        // read by the solver and nowhere else (SDD-003 §3.1d's R20d.4
+        // amendment), so this is what lets a watered-out field be throttled by
+        // disposal and by nothing upstream at all — and the plugging term makes
+        // that worse every year.
+        var disposal = new OGSim.Wells.Injector(
+            Defaults.TheDisposalWell, Defaults.Disposal,
+            Defaults.WaterOrdinal.Ordinal, Defaults.MaterialCount);
+
         network.Add(manifold);
         network.Add(separator);
         network.Add(custody);
         network.Add(flare);
+        // Set once, not refreshed: a DISPOSAL well injects into a disposal
+        // formation, not into the producing compartment. Its acceptance
+        // therefore depends on that formation's pressure and the pump's, neither
+        // of which the field's own depletion moves — which is also why it does
+        // not support the reservoir, and why injection-for-pressure is a
+        // separate mechanic (SDD-003 §3.1d's R20d.4 amendment).
+        disposal.SetInjectionConditions(
+            Defaults.DisposalFormationPressure, Defaults.DisposalPressure);
+
+        network.Add(disposal);
 
         network.Connect(new FlowConnection(
             manifold.Id, manifold.Outlet,
@@ -267,7 +286,11 @@ internal sealed class FacilitiesModule() : EngineModule(Declare(
             separator.Id, OGSim.Facilities.Separator.GasOutlet,
             flare.Id, OGSim.Facilities.Flare.Inlet));
 
-        composition.Provide(new SurfaceChain(manifold, separator, custody, flare));
+        network.Connect(new FlowConnection(
+            separator.Id, OGSim.Facilities.Separator.WaterOutlet,
+            disposal.Id, OGSim.Wells.Injector.Inlet));
+
+        composition.Provide(new SurfaceChain(manifold, separator, custody, flare, disposal));
     }
 }
 
@@ -284,7 +307,8 @@ internal sealed record SurfaceChain(
     OGSim.Facilities.Manifold Manifold,
     OGSim.Facilities.Separator Separator,
     OGSim.Facilities.CustodyTransferPoint Custody,
-    OGSim.Facilities.Flare Flare)
+    OGSim.Facilities.Flare Flare,
+    OGSim.Wells.Injector Disposal)
 {
     /// <summary>Where a well ties in, and how many can. One list rather than a
     /// count, so a caller cannot forget which port a slot index means.</summary>
@@ -308,6 +332,7 @@ internal sealed record SurfaceChain(
         if (element == Separator.Id) return "separator";
         if (element == Custody.Id) return "custody-meter";
         if (element == Flare.Id) return "flare";
+        if (element == Disposal.Id) return "water-disposal";
 
         return "well-" + element.Value.ToString(
             System.Globalization.CultureInfo.InvariantCulture);

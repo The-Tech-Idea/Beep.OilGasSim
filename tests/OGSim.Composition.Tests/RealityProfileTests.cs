@@ -122,7 +122,7 @@ public sealed class RealityProfileTests
             engine.Pipeline.AdvanceTick();
 
             Assert.Equal(
-                ["well-1", "manifold", "separator", "custody-meter", "flare"],
+                ["well-1", "manifold", "separator", "custody-meter", "flare", "water-disposal"],
                 engine.ReadModel!.Chain.Select(element => element.DisplayId));
 
             // And the verb that answers a bottleneck is on offer either way.

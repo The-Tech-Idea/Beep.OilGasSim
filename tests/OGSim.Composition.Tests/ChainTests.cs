@@ -180,14 +180,22 @@ public sealed class ChainTests
         engine.Pipeline.AdvanceTick();
 
         Assert.Equal(
-            ["well-1", "manifold", "separator", "custody-meter", "flare"],
+            ["well-1", "manifold", "separator", "custody-meter", "flare", "water-disposal"],
             engine.ReadModel!.Chain.Select(element => element.DisplayId));
     }
 
-    /// <summary>Every element reports what crossed it, so a host can show the
-    /// flow rather than only its two ends.</summary>
+    /// <summary>
+    /// Every element on the FLOWING legs reports what crossed it, so a host can
+    /// draw the line rather than only its two ends.
+    ///
+    /// <para>The water leg is deliberately excluded: a field at connate
+    /// saturation produces no water, so the disposal well is dry and reads zero.
+    /// That is SDD-003 §3.1c's breakthrough — an idle leg on a young field is a
+    /// true statement about it, and a chain that showed water moving before
+    /// breakthrough would be the wrong one.</para>
+    /// </summary>
     [Fact]
-    public void R20dV1_every_element_reports_what_crossed_it()
+    public void R20dV1_every_element_on_a_flowing_leg_reports_what_crossed_it()
     {
         (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled();
         Produce(engine, target);
@@ -195,8 +203,33 @@ public sealed class ChainTests
         engine.Pipeline.AdvanceTick();
 
         foreach (ChainElementView element in engine.ReadModel!.Chain)
+        {
+            if (element.DisplayId == "water-disposal") continue;
+
             Assert.True(element.Throughput.Kilograms > 0.0,
                 $"{element.DisplayId} shows no throughput, so a host cannot draw the flow");
+        }
+    }
+
+    /// <summary>
+    /// The water leg is DRY before breakthrough, and the chain says so rather
+    /// than omitting it. A player can see the disposal well is there, is
+    /// connected, and is doing nothing yet — which is what makes it obvious what
+    /// changes when the field starts making water.
+    /// </summary>
+    [Fact]
+    public void R20dV4_the_water_leg_is_present_and_dry_before_breakthrough()
+    {
+        (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled();
+        Produce(engine, target);
+
+        engine.Pipeline.AdvanceTick();
+
+        ChainElementView disposal = Assert.Single(
+            engine.ReadModel!.Chain, element => element.DisplayId == "water-disposal");
+
+        Assert.Equal(0.0, disposal.Throughput.Kilograms, precision: 9);
+        Assert.False(disposal.IsBottleneck);
     }
 
     /// <summary>

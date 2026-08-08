@@ -93,6 +93,7 @@ internal static class Defaults
     [
         (new ContentId("crude-oil"), PhaseAtStandardConditions.Liquid, []),
         (new ContentId("natural-gas"), PhaseAtStandardConditions.Gas, []),
+        (new ContentId("produced-water"), PhaseAtStandardConditions.Aqueous, []),
     ];
 
     /// <summary>
@@ -104,6 +105,10 @@ internal static class Defaults
     public static MaterialId OilOrdinal { get; } = new(0);
 
     public static MaterialId GasOrdinal { get; } = new(1);
+
+    /// <summary>"crude-oil" &lt; "natural-gas" &lt; "produced-water" by ordinal
+    /// comparison, which is the sort the catalogue uses (SDD-004 §6).</summary>
+    public static MaterialId WaterOrdinal { get; } = new(2);
 
     /// <summary>
     /// ρ_sc of the produced gas — <c>γg · ρ_air,sc</c> (SDD-003 §6.1b). The
@@ -119,7 +124,7 @@ internal static class Defaults
     /// three places must agree on it: the completion's stream width, an
     /// operation's mass report, and any zero composition either of them builds.
     /// </summary>
-    public const int MaterialCount = 2;
+    public const int MaterialCount = 3;
 
     /// <summary>
     /// The company's one rig. **One**, deliberately: a rig drills a single well
@@ -471,6 +476,41 @@ internal static class Defaults
     public static EntityId<IFlowElement> TheCustodyPoint { get; } = new(1_000_003);
 
     public static EntityId<IFlowElement> TheFlare { get; } = new(1_000_004);
+
+    public static EntityId<ICompletion> TheDisposalWell { get; } = new(1_000_005);
+
+    /// <summary>
+    /// The disposal well's completion (SDD-003 §3.1d). Its INJECTIVITY is what
+    /// throttles a watered-out field, and the plugging term is why that gets
+    /// worse: the formation takes less every year, so disposal is an ongoing
+    /// problem rather than a one-time build.
+    /// </summary>
+    public static Wells.InjectionConditions Disposal { get; } = new(
+        Permeability: new Permeability(5.0e-13),
+        InjectionInterval: new Length(40.0),
+        DrainageArea: new Area(2.0e5),
+        WellboreRadius: new Length(0.108),
+        WaterViscosity: new Viscosity(0.5e-3),
+        InitialSkin: 0.0,
+        PluggingPerReferenceVolume: 2.0,
+        ReferenceVolume: new ReservoirVolume(1.0e6));
+
+    /// <summary>What the disposal pump delivers at. Above the formation's own
+    /// pressure, or nothing goes in at all (SDD-003 §3.1d).</summary>
+    public static Pressure DisposalPressure { get; } = new(28.0e6);
+
+    /// <summary>
+    /// The pressure of the formation being disposed INTO — a different rock from
+    /// the one being produced, which is what a disposal well is.
+    ///
+    /// <para>It does not move with the field's depletion, and that is the point:
+    /// a disposal well is somewhere to put water, not pressure support. Injection
+    /// that supports the reservoir is the same element committing a RECEIPT
+    /// against the compartment instead of disposing, and SDD-002 §9 keeps the two
+    /// apart so the same mass cannot land on both sides of the tick
+    /// balance.</para>
+    /// </summary>
+    public static Pressure DisposalFormationPressure { get; } = new(20.0e6);
 
     /// <summary>
     /// The flare's throughput, generous because a flare that binds would shut a
