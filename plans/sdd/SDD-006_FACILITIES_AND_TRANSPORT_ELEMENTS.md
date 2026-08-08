@@ -493,6 +493,38 @@ public interface ICustodyTransferPoint : IFlowElement
 property with a band**, because a sales-gas contract sets them independently and
 a stream can fail either end — rich gas is off-spec as surely as lean.
 
+## 7b. Export capacity — a socket, not a constant
+
+> **R20d.8 amendment (finding 165). The offtake rate was a constant and the
+> field's only hard ceiling.** Stage 6's own comment names three answers to a
+> full tank — "more storage, more export and less production" — and export was
+> the one with no verb behind it. So every field, at every size, produced at
+> exactly the rate the shipped export line took, and the reservoir could not
+> reach the player: measured, a 500e6 m³ accumulation earned the same over
+> twenty years as one a tenth its size.
+>
+> **Export is a socket with a tier fitted, exactly like the separator** (§0c):
+>
+> ```text
+> ExportTier:  offtake (kg/s)          — what the line contracts to take
+> Fit(tier):   the socket keeps its identity; capacity is what changed
+> ```
+>
+> A LADDER, climbed by an activity that costs money and takes months, because
+> the decision is the point: a bigger line is only worth building if there is
+> enough underneath to fill it, and that judgement is made on believed reserves
+> against a capital bill. A player who overbuilds against a field that was
+> smaller than they thought has bought capacity they will never use — which is
+> the authentic version of this decision and the reason it must not be derived
+> automatically from truth.
+>
+> **This is why the plant is NOT sized from the accumulation.** The tempting fix
+> to finding 164's second half was to compute the right facilities from what the
+> generator put in the ground. That would delete the decision and hand the player
+> the answer to a question the whole information layer exists to make them
+> guess. The reservoir sets what CAN be produced; the player sizes what actually
+> lifts it, and is wrong about it at their own expense.
+
 ## 8. Datasheet field registry (content ⇄ code)
 
 Per-unit-kind closed datasheet blocks (SDD-004 §6): separator {gasRating,
