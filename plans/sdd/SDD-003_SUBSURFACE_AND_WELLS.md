@@ -351,7 +351,32 @@ fidelity is bookkeeping of replaced volume, not a displacement front.
 W_influx(tick) = J_aq · (P_aq − Pr) · Δt        capped by remaining aquifer expansion
 P_aq updated by its own material balance (an aquifer is a water compartment)
 J_aq: productivity index, content per aquifer (m³/s/Pa)
+W_ei: total expansion available, SIZED AGAINST THE COMPARTMENT'S PORE VOLUME
+      — content states a STRENGTH (a multiple of PV), never an absolute volume
 ```
+
+> **R20d.8 amendment (finding 164). An aquifer belongs to a compartment, and the
+> engine had one for the whole world.** This section's own words are "an aquifer
+> is a water compartment" and "content per aquifer", and composition provided a
+> single `IAquiferModel` that every compartment drew on. With one compartment
+> that is invisible; with two it is one aquifer being spent twice; and against a
+> compartment of a different size it is simply wrong — an aquifer sized for a
+> large field repressurises a small one **above its discovery pressure**, which
+> the material balance refuses outright rather than solving for a pressure that
+> cannot exist.
+>
+> **Content states a STRENGTH, not a volume.** `W_ei = strength · PV` and the
+> productivity index scales with `k·h`, so an accumulation carries the aquifer
+> its own size and rock justify: a strong regional aquifer is `strength ≈ 4`, a
+> weak edge one `≈ 0.2`, and no aquifer at all is `0` — the same number meaning
+> the same thing whatever the field is. Absolutes cannot do that, and the
+> difference is the whole reason a generated world can produce fields that play
+> differently rather than one field with the numbers moved.
+>
+> The same reasoning reaches the surface: facility capacities, export rates and
+> a scenario's target are all quantities *of a field* and belong in the same
+> derivation. That is the wider half of this finding and is R20d.8's, not this
+> section's.
 
 ## 4. Fluid model
 
