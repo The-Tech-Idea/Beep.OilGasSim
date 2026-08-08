@@ -254,10 +254,27 @@ public class WorldGenerationTests
         Assert.True(worlds > 0);
         Assert.True(totalAccumulations > 0, "no world produced any accumulation");
 
-        // Charged traps exist, and so do dry ones — the fraction is an outcome
-        // of the algorithm rather than a target.
-        Assert.True(withAccumulations < worlds || totalAccumulations < worlds * 10,
-            "every trap appears to be charged; fill-spill is not spilling");
+        // CHARGED TRAPS EXIST AND SO DO DRY ONES, asserted by comparing two
+        // charge settings on the same basins rather than against an absolute
+        // count.
+        //
+        // The absolute number used to be a fair proxy — traps were a draw of
+        // four to six, so "fewer than ten a world" meant something. Since
+        // R20d.8.6 they are the closed highs of a generated horizon, so how many
+        // a basin HAS is a property of its structure (around sixty-five at this
+        // grid size) and no fixed number can distinguish a spilling algorithm
+        // from a generous one. What still distinguishes them is that raising the
+        // charge admits traps a lower setting turned away: if nothing were being
+        // rejected, both settings would return every closure and these would be
+        // equal.
+        var generous = 0;
+
+        for (ulong seed = 1; seed <= 200; seed++)
+            generous += Generate(seed, Parameters(richness: 2.0)).Accumulations.Count;
+
+        Assert.True(generous > totalAccumulations,
+            $"a basin charged twice as hard yielded no more accumulations " +
+            $"({generous} against {totalAccumulations}); fill-spill is not spilling");
     }
 
     // ------------------------------------------------------------ parameters
@@ -473,5 +490,124 @@ public class WorldGenerationTests
         Assert.True(offshore > 0,
             "eight basins generated with half their cells under water produced no " +
             "offshore accumulation at all; water depth is not being read from the terrain");
+    }
+
+    // ------------------------------------- the structure decides (R20d.8.6)
+    //
+    // A trap used to be a cell picked at random with a log-normal volume drawn
+    // beside it — two numbers that had nothing to do with each other. It is now a
+    // closed high on a generated horizon, and its size is the rock between its
+    // crest and its spill point. Everything below asks whether that is really
+    // true, because a horizon that produced the same answers as the old draw
+    // would be an expensive way to keep them.
+
+    /// <summary>
+    /// R15-V3 / MB5. The size distribution is LONG-TAILED, and nothing imposes
+    /// it: the biggest closure in a basin holds many times what the median one
+    /// does because structures vary, which is why one field in a play is worth
+    /// ten of the rest.
+    /// </summary>
+    [Fact]
+    public void R20d8V5_field_sizes_are_long_tailed_without_being_drawn_that_way()
+    {
+        var volumes = new List<double>();
+
+        for (ulong seed = 1; seed <= 20; seed++)
+        {
+            IReadOnlyList<GeneratedAccumulation> found = Generate(seed).Accumulations;
+
+            for (int i = 0; i < found.Count; i++)
+                volumes.Add(found[i].Compartments[0].PoreVolume.CubicMetres);
+        }
+
+        volumes.Sort();
+
+        double median = volumes[volumes.Count / 2];
+        double biggest = volumes[^1];
+
+        Assert.True(biggest > median * 10.0,
+            $"the largest accumulation ({biggest:0}) is only {biggest / median:0.0}x the " +
+            "median; the structure is producing one size of field");
+    }
+
+    /// <summary>
+    /// A TRAP'S SIZE IS ITS OWN STRUCTURE. Volume and footprint move together,
+    /// because both are read off the same closure — which is what makes a big
+    /// field big on the map as well as in the ground, and what lets a seismic
+    /// survey of the surface say anything about the volume beneath it.
+    /// </summary>
+    [Fact]
+    public void R20d8V5_volume_and_footprint_come_from_the_same_closure()
+    {
+        IReadOnlyList<GeneratedAccumulation> found = Generate(4UL).Accumulations;
+
+        Assert.True(found.Count > 2, "too few accumulations to compare");
+
+        GeneratedAccumulation biggest = found[0], smallest = found[0];
+
+        for (int i = 1; i < found.Count; i++)
+        {
+            if (Volume(found[i]) > Volume(biggest)) biggest = found[i];
+            if (Volume(found[i]) < Volume(smallest)) smallest = found[i];
+        }
+
+        Assert.True(biggest.Closure.Area.SquareMetres > smallest.Closure.Area.SquareMetres,
+            "the accumulation holding the most oil does not cover the most ground");
+    }
+
+    /// <summary>
+    /// DEPTH IS WHERE THE CREST IS. It used to be an independent uniform draw,
+    /// so a basin's deep traps and its big ones were unrelated — and every
+    /// consequence of depth (pressure, temperature, access class, whether the
+    /// well is HPHT) was therefore unrelated to the structure it came from.
+    ///
+    /// <para>Read off the horizon, the basin has a shallow side and a deep one,
+    /// so depths spread across the relief instead of clustering.</para>
+    /// </summary>
+    [Fact]
+    public void R20d8V5_depth_is_read_from_the_horizon()
+    {
+        var depths = new List<double>();
+
+        for (ulong seed = 1; seed <= 10; seed++)
+        {
+            IReadOnlyList<GeneratedAccumulation> found = Generate(seed).Accumulations;
+
+            for (int i = 0; i < found.Count; i++)
+                depths.Add(found[i].Compartments[0].Depth.Metres);
+        }
+
+        depths.Sort();
+
+        Assert.True(depths[0] >= 1000.0, "a trap surfaced above the horizon's crest");
+        Assert.True(depths[^1] - depths[0] > 500.0,
+            $"every trap is at much the same depth ({depths[0]:0} to {depths[^1]:0}); " +
+            "the regional dip is not reaching the traps");
+    }
+
+    /// <summary>
+    /// AND PRESSURE FOLLOWS DEPTH, which is the chain the whole slice exists to
+    /// make real: where a structure sits decides what it is worth and what it
+    /// takes to produce it. A deeper crest is a higher initial pressure, every
+    /// time, because both are read from the same number.
+    /// </summary>
+    [Fact]
+    public void R20d8V5_a_deeper_trap_starts_at_a_higher_pressure()
+    {
+        IReadOnlyList<GeneratedAccumulation> found = Generate(4UL).Accumulations;
+
+        GeneratedCompartment deepest = found[0].Compartments[0];
+        GeneratedCompartment shallowest = found[0].Compartments[0];
+
+        for (int i = 1; i < found.Count; i++)
+        {
+            GeneratedCompartment at = found[i].Compartments[0];
+
+            if (at.Depth.Metres > deepest.Depth.Metres) deepest = at;
+            if (at.Depth.Metres < shallowest.Depth.Metres) shallowest = at;
+        }
+
+        Assert.True(deepest.InitialPressure.Pascals > shallowest.InitialPressure.Pascals,
+            "the deepest trap does not start at the highest pressure");
     }
 }

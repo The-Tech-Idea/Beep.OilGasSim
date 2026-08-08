@@ -76,18 +76,29 @@ public sealed class BasinWorldGenerator : IWorldGenerator
     private static IReadOnlyList<GeneratedAccumulation> GenerateGeology(
         WorldParameters parameters, StepStreams streams, GeneratedTerrain terrain)
     {
+        IRandomStream structure = streams.For(WorldStep.Structure);
         IRandomStream traps = streams.For(WorldStep.Traps);
         IRandomStream charge = streams.For(WorldStep.Charge);
         IRandomStream sizing = streams.For(WorldStep.Accumulations);
         IRandomStream plays = streams.For(WorldStep.PlaysAndClasses);
 
-        // Step 5: candidate traps, scaled by the basin's size.
-        int candidates = 4 + traps.NextInt(Math.Max(1, parameters.WidthCells / 8));
+        // Step 4: the surface everything else is read off. A basin's traps are
+        // its structural highs, so this is generated FIRST and the traps are
+        // FOUND rather than drawn (SDD-010 §2 step 4).
+        var horizon = new StructuralHorizon(
+            parameters.WidthCells, parameters.HeightCells,
+            unchecked((ulong)structure.NextInt(int.MaxValue)),
+            crestDepth: ShallowestHorizonMetres,
+            relief: HorizonReliefMetres);
+
+        // Step 5: every closed high with a worthwhile column.
+        IReadOnlyList<Closure> closures = horizon.Traps(MinimumClosureHeightMetres);
 
         var accumulations = new List<GeneratedAccumulation>();
 
-        for (int i = 0; i < candidates; i++)
+        for (int i = 0; i < closures.Count; i++)
         {
+            Closure closure = closures[i];
             // Step 5's subtlety class, drawn per trap — TRUTH, read by the
             // screening gate rather than the other way round. A below-tier
             // survey spawns nothing at all, which is why R15-V10 asks for zero
@@ -100,29 +111,30 @@ public sealed class BasinWorldGenerator : IWorldGenerator
             // rule that says "make some empty" (R15-V7).
             if (charge.NextUnit() > (1.0 - SpillFraction) * parameters.ResourceRichness) continue;
 
-            // Step 7: volume is log-normal — the size distribution real basins
-            // show, and the reason one field in a play is worth ten of the rest.
-            double logVolume = 12.0 + sizing.NextNormal() * 1.4;
-            double volume = DetMath.Exp(logVolume) * parameters.ResourceRichness;
+            // Step 7: the volume is THE TRAP'S OWN — the rock between its crest
+            // and its spill point, times a porosity draw. Size is therefore a
+            // consequence of structure rather than a number: a broad gentle
+            // closure holds more than a small sharp one, and the log-normal
+            // distribution real basins show emerges from the surface instead of
+            // being imposed on it (R15-V3).
+            double porosity = 0.12 + sizing.NextUnit() * 0.15;
 
-            var depth = new Length(1200.0 + sizing.NextUnit() * 3500.0);
+            double cellArea = CellSizeMetres * CellSizeMetres;
+            double volume = closure.ColumnMetres * cellArea * porosity
+                          * parameters.ResourceRichness;
 
-            // WHERE IT IS. A cell on the generated grid, not a slot in a row —
-            // so the ground above the trap is real ground with an elevation, and
-            // an accumulation under water is offshore because of where it is
-            // rather than because nothing ever asked.
-            int cell = traps.NextInt(terrain.ClassByCell.Length);
+            // Depth is where the crest actually is on the horizon, so pressure,
+            // temperature and access all follow from the structure rather than
+            // from a second unrelated draw.
+            var depth = new Length(horizon.DepthAt(closure.Crest));
 
-            // AND HOW BIG ITS STRUCTURE IS. Closure area scales with the volume
-            // drawn above: a bigger accumulation is a bigger trap, which is what
-            // a well drilled into it drains (SDD-010 §2.5's closure polygon,
-            // consumed as drainage area). A fixed footprint would have made
-            // every well in the basin drain the same area whatever it found.
-            Polygon closure = ClosureAt(terrain, cell, volume);
+            int cell = closure.Crest;
+
+            Polygon footprint = FootprintOf(closure, cell, horizon.Width);
 
             accumulations.Add(new GeneratedAccumulation(
                 Play: new ContentId(plays.NextUnit() < 0.5 ? "play-a" : "play-b"),
-                Closure: closure,
+                Closure: footprint,
                 Subtlety: subtlety,
                 Access: AccessFor(depth, WaterDepthAt(terrain, cell)),
                 Fluid: depth.Metres > 3200.0 ? FluidForm.ModifiedBlackOil : FluidForm.BlackOil,
@@ -130,7 +142,7 @@ public sealed class BasinWorldGenerator : IWorldGenerator
                 [
                     new GeneratedCompartment(
                         PoreVolume: new ReservoirVolume(volume),
-                        Porosity: 0.12 + sizing.NextUnit() * 0.15,
+                        Porosity: porosity,
                         OilSaturation: 0.60 + sizing.NextUnit() * 0.25,
                         InitialPressure: new Pressure(depth.Metres * 1.0e4),
                         Temperature: new Temperature(288.0 + depth.Metres * 0.03),
@@ -180,28 +192,22 @@ public sealed class BasinWorldGenerator : IWorldGenerator
     }
 
     /// <summary>
-    /// The trap's footprint on the map: a square centred on its cell, with an
-    /// area that grows with the accumulation it holds.
+    /// The trap's footprint on the map — a square of the closure's OWN AREA,
+    /// placed at its crest.
     ///
-    /// <para>A SQUARE and not a contour walk, which is what SDD-010 §2.5
-    /// specifies — a closure polygon should be the contour of the structural
-    /// horizon at the spill point. There is no generated horizon yet (steps 1–4
-    /// are not implemented), so there is nothing to walk. What this DOES give
-    /// honestly is position and extent, which is what everything downstream
-    /// consumes; the shape becomes real when the horizon does.</para>
+    /// <para>The area is real now: it is the number of cells the closure floods,
+    /// so a broad structure has a broad footprint and a well drilled into it
+    /// drains accordingly. The SHAPE is not — SDD-010 §2.5 wants the contour of
+    /// the horizon at the spill point, and tracing that boundary is the piece
+    /// still outstanding. Position and extent are honest; outline is not, and
+    /// nothing downstream reads the outline.</para>
     /// </summary>
-    private static Polygon ClosureAt(GeneratedTerrain terrain, int cell, double volume)
+    private static Polygon FootprintOf(Closure closure, int cell, int width)
     {
-        double cellSize = terrain.Elevation.CellSize.Metres;
+        double side = DetMath.Sqrt(closure.Cells * CellSizeMetres * CellSizeMetres);
 
-        double x = (cell % terrain.Elevation.Width) * cellSize;
-        double y = (cell / terrain.Elevation.Width) * cellSize;
-
-        // Side of a square holding this much rock at a nominal column height.
-        // The scaling is what matters rather than the constant: ten times the
-        // volume is a little over three times the footprint, which is the
-        // relationship between a field's size and the area a well drains.
-        double side = DetMath.Sqrt(volume / NominalColumnMetres);
+        double x = ((cell % width) * CellSizeMetres) - (side * 0.5);
+        double y = ((cell / width) * CellSizeMetres) - (side * 0.5);
 
         return new Polygon(
         [
@@ -210,12 +216,25 @@ public sealed class BasinWorldGenerator : IWorldGenerator
         ]);
     }
 
+    /// <summary>The grid's cell size, shared by the horizon and the
+    /// heightfield so a trap's cell and the ground above it are the same
+    /// place.</summary>
+    private const double CellSizeMetres = 1000.0;
+
+    /// <summary>The shallowest the reservoir horizon comes, in metres. A basin
+    /// dips away from here.</summary>
+    private const double ShallowestHorizonMetres = 1200.0;
+
+    /// <summary>How much the horizon falls across the basin, dip and structural
+    /// noise together.</summary>
+    private const double HorizonReliefMetres = 3500.0;
+
     /// <summary>
-    /// The column height a closure's footprint is computed against. Twenty
-    /// metres of net pay — an ordinary onshore reservoir, and the number that
-    /// turns a pore volume into an area.
+    /// The column a closure needs before it is worth calling a trap. Twenty
+    /// metres: below that the structure is a wrinkle, and a basin full of
+    /// wrinkles would bury the real prospects in noise.
     /// </summary>
-    private const double NominalColumnMetres = 20.0;
+    private const double MinimumClosureHeightMetres = 20.0;
 
     // ---------------------------------------------------------- surface
 
@@ -231,7 +250,7 @@ public sealed class BasinWorldGenerator : IWorldGenerator
             elevation[i] = (surface.NextUnit() - parameters.LandFraction) * 400.0;
 
         var heightfield = new Heightfield(
-            new Length(1000.0), parameters.WidthCells, parameters.HeightCells,
+            new Length(CellSizeMetres), parameters.WidthCells, parameters.HeightCells,
             [.. elevation]);
 
         // Sea level is elevation zero, so bathymetry is the same field going
