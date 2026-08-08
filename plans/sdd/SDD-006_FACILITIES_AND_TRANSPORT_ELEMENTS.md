@@ -573,8 +573,10 @@ a stream can fail either end — rich gas is off-spec as surely as lean.
 > multi-prospect case — there is still one chain — but it makes geography cost
 > something, which is the half a player can feel.
 >
-> Until the rest lands, one chain serves one field. Stated here so the limit
-> reads as a known gap rather than as a decision.
+> **Done (R20d.8.5).** `Pipeline.Route` exists, `FieldControl.OpenWell` calls it on the
+> first tie-in, and R20d8V4 asserts that developing a field lays the line to
+> where that field is. Until the rest lands, one chain serves one field. Stated
+> here so the limit reads as a known gap rather than as a decision.
 
 ## 8. Datasheet field registry (content ⇄ code)
 
