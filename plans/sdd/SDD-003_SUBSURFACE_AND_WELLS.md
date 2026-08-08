@@ -833,6 +833,45 @@ Coning gate: q_perf above critical rate (05 §3.3b constants: content) marks
 the perf "coning" — its water fraction ramps ahead of compartment average.
 ```
 
+### 6.1b The produced stream — what the completion puts on the network
+
+> **R20d.3 amendment (finding 162).** §6.1 above pins the oil conversion and
+> says nothing about what else comes up the hole, so `Completion` shipped with a
+> single material ordinal: a well that can only ever produce one substance. That
+> is the silence expressed as a field, and it is why a separator's gas and water
+> legs had nothing to carry.
+
+```text
+q_rc from §6.1 is the TOTAL LIQUID rate at reservoir conditions. The sandface
+water cut fw (§3.1c) splits it; Rs lifts the solution gas out of the oil:
+
+  q_rc,oil   = q_rc · (1 − fw)
+  q_rc,water = q_rc · fw
+  q_sc,oil   = q_rc,oil   / Bo(Pr)
+  q_sc,water = q_rc,water / Bw(Pr)
+  q_sc,gas   = q_sc,oil · Rs(Pr)              // sm³ gas per sm³ stock-tank oil
+  mass_m     = q_sc,m · ρ_sc,m                 per material m
+  ρ_sc,gas   = γg · ρ_air,sc                   // SDD-001 §1's constant; γg is air = 1
+```
+
+**Split the RATE, not the ratio.** The obvious form —
+`q_sc,water = q_sc,oil · fw/(1−fw)` — divides by zero at `fw = 1`, exactly when a
+well has watered out and the answer matters most. Splitting `q_rc` has no
+singularity: at `fw = 1` the oil term is zero and the completion is a water
+producer, which is the physical statement rather than a guard.
+
+**Before breakthrough the water term is structurally zero**, and that is §3.1c's
+own result rather than an omission: `krw = 0` at or below connate saturation, so
+`fw = 0` and no water flows at all. A compartment that has never been flooded and
+has no aquifer influx produces none — so this form is complete on the day it is
+written, and R20d.4 is "advance the saturation", not "add water to the stream".
+
+**Solution gas is produced with the oil and is not free gas.** `Rs(Pr)` is the
+gas *dissolved* in stock-tank oil at the compartment's current pressure
+(§3.1's Standing correlation), so it falls as the reservoir depletes below
+bubble point — which is the producing-GOR rise §3.1 already models through `Rp`.
+A gas cap's free gas is a separate term and arrives with the gas-cap drive.
+
 ### 6.2 Outflow (VLP)
 
 ```text

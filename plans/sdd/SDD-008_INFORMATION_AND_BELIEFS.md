@@ -92,6 +92,17 @@ public interface IBeliefStore
 }
 ```
 
+> **R20d.3 note on the truth door.** `SubsurfaceState`'s internal
+> `True…Of` members are this section's door and carry a comment saying nothing
+> may be added to them without returning here. `TrueWaterCutOf` is added on the
+> same terms as `TruePressureOf`, and for the same second reason: both are
+> DYNAMIC compartment facts that a completion must be refreshed with before it
+> solves (finding 137), so the door serves the belief sampler and the one
+> composition that pushes numbers between two modules that cannot see each
+> other. Neither member hands out a belief — a caller still has to put the
+> number through `Sample` to learn anything, and one that applies it to a belief
+> directly has walked through the wall.
+
 `Get` returning null rather than a wide prior is deliberate: "we have never
 looked" and "we looked and learned little" are different states, and only the
 first should leave a map region unrendered.

@@ -80,6 +80,22 @@ public static class PhysicalConstants
     public const double GasConstantJPerMolK = 8.31446261815324;// SDD-006 §3, §6
     public const double NormalZ10 = 1.281552;                  // SDD-008 §2
     public const double DefaultChokeCriticalRatio = 0.55;      // SDD-003 §6.3
+
+    // STANDARD CONDITIONS, and air at them. SDD-003 §3.1 states p_sc and T_sc in
+    // its own prose and nothing carried them; a gas specific gravity is relative
+    // to AIR (γg, air = 1) and there was no air density to multiply it by, so
+    // SDD-003 §6.1b's ρ_sc,gas could not be written without a literal — which is
+    // the rule this class exists to enforce.
+    public const double StandardPressurePa = 101_325.0;        // SDD-003 §3.1
+    public const double StandardTemperatureK = 288.706;        // SDD-003 §3.1 (60 °F)
+    public const double AirMolarMassKgPerMol = 0.0289647;      // SDD-001 §1 (dry air)
+
+    // DERIVED, not stated: ρ = pM/RT at standard conditions. Written as the
+    // ideal-gas form rather than as ~1.2255 so the number is checkable against
+    // the three constants above instead of being taken on trust.
+    public const double AirDensityAtStandardKgPerM3 =
+        StandardPressurePa * AirMolarMassKgPerMol
+        / (GasConstantJPerMolK * StandardTemperatureK);
 }
 ```
 
