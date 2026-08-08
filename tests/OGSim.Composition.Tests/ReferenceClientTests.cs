@@ -36,7 +36,8 @@ public sealed class ReferenceClientTests
                 rockCompressibility: 4.5e-10,
                 gasOilContact: new Length(1900.0),
                 oilWaterContact: new Length(2100.0),
-                Defaults.Wettability, Defaults.Drive);
+                Defaults.Wettability, Defaults.Drive,
+                Defaults.AquiferStrength, Defaults.AquiferResponseTime);
 
         return (built.Engine, prospect);
     }
@@ -110,4 +111,56 @@ public sealed class ReferenceClientTests
                  })
             Assert.DoesNotContain(module, referenced);
     }
+
+    // ------------------------------------- one content set, many field sizes
+    //
+    // Finding 164. THE POINT of an aquifer stated as a strength: the shipped
+    // content has to mean the same thing against a field of any size. It could
+    // not before — a single engine-wide aquifer sized for the shipped field
+    // repressurised a small one ABOVE its discovery pressure, which the
+    // material balance refuses outright, so the small field faulted rather than
+    // playing badly.
+
+    /// <summary>
+    /// The same content, fields two orders of magnitude apart, all of them
+    /// playable. Not "all of them the same" — a small field should be a worse
+    /// business, and the next test says so — but none of them impossible.
+    /// </summary>
+    [Theory]
+    [InlineData(5.0e6)]
+    [InlineData(100.0e6)]
+    [InlineData(500.0e6)]
+    public void R20d8V1_one_aquifer_setting_plays_against_any_field_size(double poreVolume)
+    {
+        (Engine engine, EntityId<IReservoirCompartmentEntity> prospect) = Field(poreVolume);
+
+        Session session = new Operator(engine, prospect, wellTarget: 3, hurdle: Money.Zero)
+            .Play(months: 240);
+
+        // THE ASSERTION IS THAT THIS RAN. A field the shipped aquifer was wrong
+        // for did not produce a poor result — it threw, because a compartment
+        // pushed above its own discovery pressure is a state the material
+        // balance will not solve for. Drilling is the evidence the run got
+        // somewhere rather than falling over on tick one.
+        Assert.True(session.WellsDrilled > 0,
+            $"a field of {poreVolume} m³ pore volume never got a well down");
+    }
+
+    // WHAT IS NOT ASSERTED HERE, and why. There is no test that a bigger field
+    // is a bigger business, because today it is not one — and that is worth
+    // recording rather than tuning past.
+    //
+    // Measured over twenty years: a 50e6 m³ field earns $602M and a 500e6 m³
+    // field $601M. Ten times the oil, the same money, the smaller field very
+    // slightly ahead. Both spend every month against the same absolute export
+    // limit, and both stop at the same absolute target — which a 5e6 m³ field
+    // also clears, since even that holds around $1.5B of oil against a $600M
+    // goal.
+    //
+    // The aquifer now scales with the compartment, so the reservoir governs what
+    // CAN come out. Nothing yet sizes the plant that lifts it or the goal that
+    // judges it, so what DOES come out is the same whatever was found. The
+    // accumulation has to reach the surface and the objective before "how big is
+    // it?" is a question a player can answer by playing — the other half of
+    // finding 164, and R20d.8's.
 }

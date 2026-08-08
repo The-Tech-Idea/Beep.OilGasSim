@@ -377,6 +377,28 @@ W_ei: total expansion available, SIZED AGAINST THE COMPARTMENT'S PORE VOLUME
 > a scenario's target are all quantities *of a field* and belong in the same
 > derivation. That is the wider half of this finding and is R20d.8's, not this
 > section's.
+>
+> **§3.3a — sizing an aquifer against its compartment.** Two numbers, both from
+> the compartment and one content parameter:
+>
+> ```
+> W_ei = strength · PV                       (m³ of total expansion available)
+> J_aq = strength · PV / (P_i · τ)           (m³/s/Pa)
+> ```
+>
+> `τ` is the aquifer's RESPONSE TIME — the single content number that says how
+> quickly water arrives, holding the size question separate from the speed
+> question. Read it directly: at full drawdown (a reservoir pulled to zero
+> against `P_i`) a strength-1 aquifer delivers one pore volume in `τ`. A slow
+> regional aquifer is decades and arrives long after the pressure it was meant
+> to support; a small connected one is months and holds the field up from the
+> start. That is the *feel* of a water drive, and it is one number.
+>
+> Deriving `J_aq` rather than stating it is what keeps strength meaning one
+> thing: an absolute `J` against a field ten times larger would be an aquifer
+> that is nominally strong and practically absent, and the same content would
+> play as two different drives. Both terms scale together, so `strength` alone
+> answers "how much water, how fast, relative to this field".
 
 ## 4. Fluid model
 

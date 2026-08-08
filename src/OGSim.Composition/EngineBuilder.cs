@@ -794,24 +794,33 @@ internal static class Defaults
     /// <summary>The pressure a fresh field and its aquifer both start at.</summary>
     public static Pressure InitialReservoirPressure { get; } = new(30.0e6);
 
-    /// <summary>J_aq, m³/s/Pa. Enough to replace a developed field's voidage at
-    /// a few MPa of drawdown, which is what "supported" means.</summary>
-    public const double AquiferProductivityIndex = 1.0e-8;
+    /// <summary>
+    /// HOW BIG THE WATER LEG IS, as a multiple of the field's own pore volume
+    /// (SDD-003 §3.3a) — so the same number means the same thing whatever the
+    /// field, which an absolute volume cannot do.
+    ///
+    /// <para>SEVERAL TIMES the pore volume, because a Fetkovich aquifer's own
+    /// pressure falls in proportion to what it has delivered: one sized like the
+    /// field runs itself down to the reservoir's pressure after a tenth of its
+    /// water has arrived, and then stops. The field held its pressure and never
+    /// watered out, which took the late game with it. A regional aquifer keeps
+    /// pushing, so the water reaches the producers, the cut climbs the S-curve
+    /// and the field ends by drowning rather than by running dry — which is how
+    /// most fields actually end.</para>
+    /// </summary>
+    public const double AquiferStrength = 4.0;
 
     /// <summary>
-    /// W_ei — the total expansion available. SEVERAL TIMES the pore volume,
-    /// because a Fetkovich aquifer's own pressure falls in proportion to what it
-    /// has delivered: one sized like the field runs itself down to the
-    /// reservoir's pressure after a tenth of its water has arrived, and then
-    /// stops. The field held its pressure and never watered out, which took the
-    /// late game with it.
+    /// τ — how QUICKLY that water arrives, held separate from how much of it
+    /// there is (SDD-003 §3.3a). Forty years: a regional aquifer is slow, which
+    /// is why a field's early pressure is its own expansion and the water only
+    /// becomes the story a decade or two in.
     ///
-    /// <para>A regional aquifer keeps pushing, so the water reaches the
-    /// producers, the water cut climbs the S-curve and the field ends by
-    /// drowning rather than by running dry — which is how most fields actually
-    /// end.</para>
+    /// <para>The two numbers are independent on purpose. A big slow aquifer and
+    /// a small fast one are different fields to develop, and one strength
+    /// parameter could not tell them apart.</para>
     /// </summary>
-    public static ReservoirVolume AquiferExpansion { get; } = new(400.0e6);
+    public static Duration AquiferResponseTime { get; } = Duration.FromTicks(40.0 * 12.0);
 
     public static RelativePermeabilityCurve Wettability { get; } =
         RelativePermeabilityCurve.Validated(

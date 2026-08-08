@@ -161,7 +161,6 @@ internal sealed class ProductionLoop
     private readonly FieldEconomics _economics;
     private readonly Temperature _reservoirTemperature;
     private readonly IFlowSolver _solver;
-    private readonly IAquiferModel _aquifer;
     private readonly IFlowElementRegistry _network;
     private readonly Temperature _ambient;
     private readonly Density _surfaceDensity;
@@ -203,7 +202,6 @@ internal sealed class ProductionLoop
         IFluidPropertyModel fluid,
         IAuditTrail audit,
         IFlowSolver solver,
-        IAquiferModel aquifer,
         IFlowElementRegistry network,
         IReadOnlyList<EntityId<IFlowElement>> meteredPoints,
         Func<EntityId<IFlowElement>, string> names,
@@ -225,7 +223,6 @@ internal sealed class ProductionLoop
         ArgumentNullException.ThrowIfNull(fluid);
         ArgumentNullException.ThrowIfNull(audit);
         ArgumentNullException.ThrowIfNull(solver);
-        ArgumentNullException.ThrowIfNull(aquifer);
         ArgumentNullException.ThrowIfNull(network);
         ArgumentNullException.ThrowIfNull(meteredPoints);
         ArgumentNullException.ThrowIfNull(names);
@@ -242,7 +239,6 @@ internal sealed class ProductionLoop
         _fluid = fluid;
         _audit = audit;
         _solver = solver;
-        _aquifer = aquifer;
         _network = network;
         _names = names;
         _tank = tank;
@@ -506,7 +502,10 @@ internal sealed class ProductionLoop
             // up by it and waters out because of it; a drive that refuses influx
             // faults on a non-zero one rather than absorbing it silently
             // (SDD-003 §4.2b).
-            ReservoirVolume influx = _aquifer.InfluxDuring(pressure, Duration.FromTicks(1.0));
+            //
+            // Asked of the COMPARTMENT: an aquifer belongs to one, and the engine
+            // held a single shared one until finding 164.
+            ReservoirVolume influx = _subsurface.InfluxFor(compartment, Duration.FromTicks(1.0));
 
             withdrawals.Add(new CompartmentWithdrawal(
                 compartment,
@@ -766,10 +765,13 @@ public sealed class FieldControl
         Length gasOilContact,
         Length oilWaterContact,
         RelativePermeabilityCurve wettability,
-        ContentId drive) =>
+        ContentId drive,
+        double aquiferStrength,
+        Duration aquiferResponseTime) =>
         _subsurface.Create(
             generated, permeability, netThickness, drainageArea,
-            rockCompressibility, gasOilContact, oilWaterContact, wettability, drive);
+            rockCompressibility, gasOilContact, oilWaterContact, wettability, drive,
+            aquiferStrength, aquiferResponseTime);
 
     /// <summary>
     /// Brings a completion online against a compartment and ties it into the

@@ -34,7 +34,8 @@ public sealed class RealityProfileTests
             rockCompressibility: 4.5e-10,
             gasOilContact: new Length(1900.0),
             oilWaterContact: new Length(2100.0),
-            Defaults.Wettability, Defaults.Drive);
+            Defaults.Wettability, Defaults.Drive,
+            Defaults.AquiferStrength, Defaults.AquiferResponseTime);
 
         field.OpenWell(
             Defaults.CompletionFor(field.NextWellId(), target, new Length(2000.0)), target);

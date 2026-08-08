@@ -78,7 +78,7 @@ internal abstract class EngineModule(ModuleManifest manifest) : IModule
 
 /// <summary>
 /// R5. Owns the compartments — and owns them <b>internally</b>: the module
-/// provides `IDriveMechanism` and `IAquiferModel`, never the compartment itself,
+/// provides `IDriveMechanism` and its own state, never the compartment itself,
 /// because `IReservoirCompartment` is internal to `OGSim.Subsurface` and
 /// nothing outside can name it.
 /// </summary>
@@ -86,7 +86,7 @@ internal sealed class SubsurfaceModule() : EngineModule(Declare(
     "subsurface",
     provides:
     [
-        typeof(IDriveMechanism), typeof(IAquiferModel),
+        typeof(IDriveMechanism),
         typeof(OGSim.Subsurface.SubsurfaceState),
     ],
     requires: [typeof(IFluidPropertyModel), typeof(TickProduction)],
@@ -107,10 +107,12 @@ internal sealed class SubsurfaceModule() : EngineModule(Declare(
         var drive = new OGSim.Subsurface.SolutionGasDrive();
 
         composition.Provide<IDriveMechanism>(drive);
-        composition.Provide<IAquiferModel>(new OGSim.Subsurface.FetkovichAquifer(
-            Defaults.AquiferProductivityIndex,
-            Defaults.InitialReservoirPressure,
-            Defaults.AquiferExpansion));
+
+        // NO ENGINE-WIDE AQUIFER (finding 164). One was provided here, and one
+        // body of water shared by every compartment is two fields spending the
+        // same water — and, sized for either, wrong for the other. A compartment
+        // now builds its own from its pore volume when it is created
+        // (SDD-003 §3.3a).
 
         var state = new OGSim.Subsurface.SubsurfaceState(
             composition.Require<IFluidPropertyModel>(), drive,
@@ -472,7 +474,6 @@ internal sealed class FieldModule() : EngineModule(Declare(
         typeof(OGSim.Information.ObservationSampler),
         typeof(IFlowSolver),
         typeof(IFiscalRegime),
-        typeof(IAquiferModel),
         typeof(IFlowElementRegistry),
         typeof(SurfaceChain),
     ],
@@ -538,7 +539,6 @@ internal sealed class FieldModule() : EngineModule(Declare(
             composition.Require<IFluidPropertyModel>(),
             composition.Require<IAuditTrail>(),
             composition.Require<IFlowSolver>(),
-            composition.Require<IAquiferModel>(),
             network,
             chain.MeteredPoints,
             chain.NameOf,

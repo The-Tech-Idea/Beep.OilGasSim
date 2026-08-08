@@ -107,10 +107,18 @@ internal sealed class SubsurfaceState : IStateOwner
         Length gasOilContact,
         Length oilWaterContact,
         RelativePermeabilityCurve wettability,
-        ContentId drive)
+        ContentId drive,
+        double aquiferStrength,
+        Duration aquiferResponseTime)
     {
         ArgumentNullException.ThrowIfNull(generated);
         ArgumentNullException.ThrowIfNull(wettability);
+
+        if (aquiferStrength < 0.0 || !double.IsFinite(aquiferStrength))
+            throw new ContentFault("SDD-003 §3.3a", null,
+                $"aquifer strength {aquiferStrength.ToString(System.Globalization.CultureInfo.InvariantCulture)} " +
+                "is not a finite multiple of pore " +
+                "volume; zero is how a compartment says it has no aquifer");
 
         var rock = new RockTruth(
             generated.Porosity, permeability, netThickness, drainageArea, rockCompressibility,
@@ -147,8 +155,48 @@ internal sealed class SubsurfaceState : IStateOwner
         _compartments.Add(compartment);
         _byId.Add(id, compartment);
 
+        // THE COMPARTMENT'S OWN AQUIFER, sized against it (SDD-003 §3.3a).
+        //
+        // Strength ZERO attaches nothing, which is the difference between "an
+        // aquifer that cannot deliver" and "no aquifer" — the model itself
+        // refuses the first, and this is where the second is said.
+        _aquifers.Add(id, aquiferStrength == 0.0
+            ? null
+            : new FetkovichAquifer(
+                productivityIndex: aquiferStrength * generated.PoreVolume.CubicMetres
+                    / (generated.InitialPressure.Pascals * aquiferResponseTime.Seconds),
+                generated.InitialPressure,
+                new ReservoirVolume(aquiferStrength * generated.PoreVolume.CubicMetres)));
+
         return id;
     }
+
+    /// <summary>
+    /// What this compartment's aquifer delivers this tick, at the pressure the
+    /// compartment is currently at. Zero for a compartment with no aquifer — a
+    /// legitimate answer and the common one, since only a water drive admits
+    /// influx at all (SDD-003 §4.2b).
+    ///
+    /// <para>Asked PER COMPARTMENT because an aquifer belongs to one: a single
+    /// engine-wide aquifer would be one body of water spent twice by two fields,
+    /// and sized for either it would be wrong for the other (finding 164).</para>
+    /// </summary>
+    public ReservoirVolume InfluxFor(
+        EntityId<IReservoirCompartmentEntity> compartment, Duration over)
+    {
+        if (!_aquifers.TryGetValue(compartment, out IAquiferModel? aquifer))
+            throw new InvariantFault("SDD-003 §3.3a", null,
+                $"compartment {compartment.Value} does not exist, so it has no aquifer");
+
+        return aquifer is null
+            ? new ReservoirVolume(0.0)
+            : aquifer.InfluxDuring(Find(compartment).Pr, over);
+    }
+
+    // Null MEANS no aquifer, and every compartment has an entry: a missing key
+    // is a compartment that does not exist, which is a defect worth telling
+    // apart from a field that simply has no water leg.
+    private readonly Dictionary<EntityId<IReservoirCompartmentEntity>, IAquiferModel?> _aquifers = [];
 
     /// <summary>
     /// Water compressibility at reservoir conditions — 4.4e-10 1/Pa, the

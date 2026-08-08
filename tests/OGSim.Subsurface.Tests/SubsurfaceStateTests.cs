@@ -54,7 +54,13 @@ public sealed class SubsurfaceStateTests
             // not answer what its water cut is at all.
             RelativePermeabilityCurve.Validated(
                 swc: 0.30, sor: 0.25, krwMax: 0.35, kroMax: 0.90, nw: 3.0, no: 2.0),
-            new ContentId("solution-gas-drive"));
+            new ContentId("solution-gas-drive"),
+
+            // NO AQUIFER. These tests supply influx directly as a withdrawal
+            // term, which is what stage 6 does — a compartment that also made
+            // its own would be counted twice (SDD-003 §3.3a).
+            aquiferStrength: 0.0,
+            Duration.FromTicks(1.0));
 
     private static CompartmentWithdrawal Produce(
         EntityId<IReservoirCompartmentEntity> id, double stockTankOil) =>
