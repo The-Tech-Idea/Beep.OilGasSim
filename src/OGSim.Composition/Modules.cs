@@ -501,6 +501,7 @@ internal sealed class FieldModule() : EngineModule(Declare(
         typeof(CutCoreCommand),
         typeof(SeismicSurveyCommand),
         typeof(InstallSeparatorCommand),
+        typeof(SetWellChokeCommand),
     ]))
 {
     public override void Compose(IModuleComposition composition)
@@ -642,6 +643,12 @@ internal sealed class FieldModule() : EngineModule(Declare(
 
         for (int i = 0; i < activities.Catalogue.Count; i++)
             activities.Catalogue[i].Register(composition, orders);
+
+        // NOT an activity: a valve turn is not a project (SDD-003 §5.1's R20.4
+        // amendment), so it is a command pair of its own rather than a template
+        // on the scheduled-activity engine.
+        composition.HandleCommand(
+            new SetWellChokeValidator(field), new SetWellChokeApplier(field, audit));
     }
 }
 

@@ -25,6 +25,18 @@ public sealed record ChokeSetting(double CriticalPressureRatio, ReservoirRate Cr
     /// and not a fallback — a well with no choke installed genuinely has none.</summary>
     public static ChokeSetting Open { get; } =
         new(CriticalPressureRatio: 0.0, CriticalRate: new ReservoirRate(double.PositiveInfinity));
+
+    /// <summary>
+    /// Closed (SDD-003 §5.1's R20.4 amendment). Always critical, capped at
+    /// nothing.
+    ///
+    /// <para>The same §6.3 rule reaching its limit rather than a special case —
+    /// which is why shutting a well in needs no solver change, and why a shut
+    /// well is correctly reported PRESSURE-DECOUPLED: a closed valve does not
+    /// care what the network is doing.</para>
+    /// </summary>
+    public static ChokeSetting Closed { get; } =
+        new(CriticalPressureRatio: 1.0, CriticalRate: new ReservoirRate(0.0));
 }
 
 /// <summary>What a completion needs to turn a solved rate into a stream.</summary>
@@ -74,7 +86,7 @@ public sealed class Completion : ICompletion
     // detail of this game — it is the game, so the field a well reads Pr from
     // has to be the one the material balance moved.
     private CompletionFluid _fluid;
-    private readonly ChokeSetting _choke;
+    private ChokeSetting _choke;
     private readonly int _oilOrdinal;
     private readonly int _gasOrdinal;
     private readonly int _materialCount;
@@ -175,6 +187,25 @@ public sealed class Completion : ICompletion
     /// <summary>What the well currently believes the compartment is at — the
     /// value the next solve will use.</summary>
     public Pressure ReservoirPressure => _fluid.ReservoirPressure;
+
+    /// <summary>What the valve is set to. A player's lever (design 04 §5 stage 3).</summary>
+    public ChokeSetting Choke => _choke;
+
+    /// <summary>
+    /// Whether this well is closed in.
+    ///
+    /// <para>Distinct from DEAD, and the distinction is the point: a dead well
+    /// cannot flow at any rate and a shut-in well is choosing not to. Whether
+    /// re-opening is worth trying turns on which one it is.</para>
+    /// </summary>
+    public bool IsShutIn => _choke.CriticalRate.CubicMetresPerSecond <= 0.0;
+
+    /// <summary>Turns the valve (SDD-003 §5.1's R20.4 amendment).</summary>
+    public void SetChoke(ChokeSetting choke)
+    {
+        ArgumentNullException.ThrowIfNull(choke);
+        _choke = choke;
+    }
 
     public OperatingPoint SolveOperatingPoint(Pressure wellheadBackpressure)
     {

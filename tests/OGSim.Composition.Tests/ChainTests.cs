@@ -410,6 +410,99 @@ public sealed class ChainTests
             reason => reason.LocId == "$loc:reject.top-of-the-ladder");
     }
 
+    // --------------------------------------------------- stopping a losing well
+
+    /// <summary>
+    /// THE LEVER THE ECONOMICS DEMAND. Operating cost scales with the liquid a
+    /// field lifts, so a well eventually costs more to produce than it earns —
+    /// and until this a player could watch that happen and do nothing.
+    /// </summary>
+    [Fact]
+    public void R20V4_a_well_can_be_shut_in_and_stops_producing()
+    {
+        (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled();
+        Produce(engine, target);
+
+        engine.Pipeline.AdvanceTick();
+        Assert.True(engine.ReadModel!.ProducedThisTick.CubicMetres > 0.0);
+
+        Assert.IsType<Accepted>(engine.Commands.Submit(
+            new SetWellChokeCommand(new EntityId<ICompletion>(1), Open: false)));
+
+        engine.Pipeline.AdvanceTick();
+
+        Assert.Equal(0.0, engine.ReadModel!.ProducedThisTick.CubicMetres, precision: 9);
+    }
+
+    /// <summary>
+    /// And it is REVERSIBLE, which is what distinguishes shutting a well in from
+    /// abandoning it. A shut well is choosing not to flow; a dead one cannot.
+    /// </summary>
+    [Fact]
+    public void R20V4_a_shut_well_can_be_opened_again()
+    {
+        (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled();
+        Produce(engine, target);
+
+        var well = new EntityId<ICompletion>(1);
+
+        engine.Commands.Submit(new SetWellChokeCommand(well, Open: false));
+        engine.Pipeline.AdvanceTick();
+        Assert.Equal(0.0, engine.ReadModel!.ProducedThisTick.CubicMetres, precision: 9);
+
+        Assert.IsType<Accepted>(engine.Commands.Submit(new SetWellChokeCommand(well, Open: true)));
+        engine.Pipeline.AdvanceTick();
+
+        Assert.True(engine.ReadModel!.ProducedThisTick.CubicMetres > 0.0,
+            "a shut-in well is choosing not to flow, not unable to");
+    }
+
+    /// <summary>
+    /// Shutting a well in stops the lifting cost it was incurring. That is the
+    /// point of the lever: a watered-out well is stopped because keeping it open
+    /// costs money, and the saving has to be real or the decision is not.
+    /// </summary>
+    [Fact]
+    public void R20V4_shutting_a_well_in_stops_what_it_was_costing_to_lift()
+    {
+        (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled();
+        Produce(engine, target);
+
+        OGSim.Company.CostLedger ledger =
+            engine.Provided.Resolve<OGSim.Company.CompanyState>().Ledger;
+
+        engine.Pipeline.AdvanceTick();
+        long before = Math.Abs(ledger.BalanceOf(Account.Opex).Cents);
+
+        engine.Pipeline.AdvanceTick();
+        long producing = Math.Abs(ledger.BalanceOf(Account.Opex).Cents) - before;
+
+        engine.Commands.Submit(
+            new SetWellChokeCommand(new EntityId<ICompletion>(1), Open: false));
+
+        before = Math.Abs(ledger.BalanceOf(Account.Opex).Cents);
+        engine.Pipeline.AdvanceTick();
+        long shut = Math.Abs(ledger.BalanceOf(Account.Opex).Cents) - before;
+
+        Assert.True(shut < producing,
+            $"a shut-in month cost {shut}c against a producing month's {producing}c — if " +
+            "stopping a well saves nothing, stopping it is not a decision");
+    }
+
+    /// <summary>Setting a valve to where it already is is refused, because "shut
+    /// it in" and "it is already shut in" are different answers.</summary>
+    [Fact]
+    public void R20V4_a_choke_change_that_changes_nothing_is_refused()
+    {
+        (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled();
+        Produce(engine, target);
+
+        var rejected = Assert.IsType<Rejected>(engine.Commands.Submit(
+            new SetWellChokeCommand(new EntityId<ICompletion>(1), Open: true)));
+
+        Assert.Contains(rejected.Reasons, reason => reason.LocId == "$loc:reject.choke-unchanged");
+    }
+
     // ------------------------------------------------------------- economics
 
     /// <summary>

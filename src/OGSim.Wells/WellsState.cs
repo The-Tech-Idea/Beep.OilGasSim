@@ -70,6 +70,14 @@ public sealed class WellsState : IStateOwner
     /// <summary>Every open completion, in the order they were opened.</summary>
     public IReadOnlyList<Completion> Completions => _completions;
 
+    /// <summary>
+    /// One open completion by id, or null. A player's lever needs to name the
+    /// well it is pulled on, and a lookup that faulted would make "shut in a
+    /// well that is not there" an engine halt rather than a rejection.
+    /// </summary>
+    public Completion? Find(EntityId<ICompletion> completion) =>
+        _byId.TryGetValue(completion, out Completion? found) ? found : null;
+
     public EntityId<IReservoirCompartmentEntity> CompartmentOf(EntityId<ICompletion> completion) =>
         _drains.TryGetValue(completion, out EntityId<IReservoirCompartmentEntity> found)
             ? found

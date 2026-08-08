@@ -782,6 +782,26 @@ public sealed class FieldControl
     /// <summary>A completion's one outlet: the wellhead.</summary>
     private static PortId WellheadOutlet { get; } = new(0);
 
+    /// <summary>One open well by id, or null — the door a player's lever is
+    /// pulled through.</summary>
+    public Completion? WellNamed(EntityId<ICompletion> well) => _wells.Find(well);
+
+    /// <summary>
+    /// Turns a well's valve (SDD-003 §5.1's R20.4 amendment).
+    ///
+    /// <para>Cannot fail: the validator has already proven the well exists and
+    /// that the setting is a change (R1 §2.5).</para>
+    /// </summary>
+    public void SetChoke(EntityId<ICompletion> well, ChokeSetting choke)
+    {
+        if (_wells.Find(well) is not Completion found)
+            throw new InvariantFault("R1 §2.5", null,
+                $"the choke command passed validation and well {well.Value} is not open; " +
+                "an applier cannot fail");
+
+        found.SetChoke(choke);
+    }
+
     public int CompartmentCount => _subsurface.Count;
 
     public int WellCount => _wells.Count;
