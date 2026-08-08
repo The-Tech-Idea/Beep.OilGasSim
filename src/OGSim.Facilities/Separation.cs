@@ -122,7 +122,7 @@ public sealed record SeparatorTier(
 /// field ten years later, and reporting one number would make the bottleneck
 /// report unable to say which — the whole content of §8's attribution.</para>
 /// </summary>
-public sealed class Separator : IFlowElement
+public sealed class Separator : IPressureController
 {
     private readonly SeparatorTier _tier;
     private readonly ISeparationModel _model;
@@ -161,6 +161,13 @@ public sealed class Separator : IFlowElement
     }
 
     public EntityId<IFlowElement> Id { get; }
+
+    /// <summary>
+    /// SDD-002 §7 S4. The vessel holds its inlet here, so the upstream element
+    /// sees P_sep rather than whatever the network's terminal sink discharges
+    /// to — which is how a separator reaches the reservoir at all.
+    /// </summary>
+    public Pressure SetPoint => _tier.OperatingPressure;
 
     /// <summary>Inlet, then gas and liquid outlets. Three-phase adds water.</summary>
     public IReadOnlyList<PortSpec> Ports { get; } =

@@ -317,6 +317,80 @@ public class SolverTests
             $"backpressure did not propagate: {harsh} not less than {gentle}");
     }
 
+    /// <summary>
+    /// SDD-002 §7 S4, finding 158. A controller HOLDS its inlet: the well behind
+    /// it sees the set point, not the network's terminal sink boundary.
+    ///
+    /// <para>Before the distinction existed, the solver inferred every element's
+    /// pressure from what the stream lost crossing it — so a vessel emitting at
+    /// its set point looked like a drop of "whatever arrived minus the set
+    /// point", which grows with the pressure upstream. A separator fed from a
+    /// completion at reservoir pressure demanded an inlet high enough to shut the
+    /// well it exists to receive from.</para>
+    /// </summary>
+    [Fact]
+    public void FV5_a_controller_holds_the_wellhead_at_its_set_point()
+    {
+        var well = new SyntheticCompletion(1, productivityIndex: 1e-9, reservoirBar: 200.0);
+        var topology = new FlowTopology(
+            [well, new Controller(2, setPointBar: 30.0), new Sink(3)],
+            [Edge(1, 0, 2, 0), Edge(2, 1, 3, 0)]);
+
+        var clock = new SimulationClock(new GameDate(1965, 1));
+        var solver = new FlowSolver(
+            SolverSettings.Pinned, new AuditTrail(clock, new AuditRetention(500)));
+
+        CompletionState state = solver.Solve(WholeTick, topology).CompletionStates.Single();
+
+        Assert.Equal(30.0e5, state.WellheadBackpressure.Pascals, precision: 0);
+    }
+
+    /// <summary>
+    /// A FLOOR, not a fixed value — and R8-V5 is why. A controller holds pressure
+    /// UP; it is a restriction, not a pump. When something downstream demands
+    /// more than the set point, the valve is wide open and the demand passes
+    /// through.
+    ///
+    /// <para>Pinning the set point outright would make every facility a wall: a
+    /// filling tank could never back up through the separator ahead of it, and
+    /// the one verification the whole backpressure chain exists for would become
+    /// unpassable.</para>
+    /// </summary>
+    [Fact]
+    public void R8V5_a_demand_above_the_set_point_passes_through_the_controller()
+    {
+        static double BackpressureBehind(double dropBar)
+        {
+            var well = new SyntheticCompletion(1, productivityIndex: 1e-9, reservoirBar: 200.0);
+
+            // The restrictor is DOWNSTREAM of the controller, so its drop is
+            // exactly the "something backing up" case.
+            var topology = new FlowTopology(
+                [
+                    well,
+                    new Controller(2, setPointBar: 30.0),
+                    new Restrictor(3, 1e9) { DropBar = dropBar },
+                    new Sink(4),
+                ],
+                [Edge(1, 0, 2, 0), Edge(2, 1, 3, 0), Edge(3, 1, 4, 0)]);
+
+            var clock = new SimulationClock(new GameDate(1965, 1));
+            var solver = new FlowSolver(
+                SolverSettings.Pinned, new AuditTrail(clock, new AuditRetention(500)));
+
+            return solver.Solve(WholeTick, topology)
+                         .CompletionStates.Single().WellheadBackpressure.Pascals;
+        }
+
+        // Below the set point: the controller holds, and the well sees 30 bar.
+        Assert.Equal(30.0e5, BackpressureBehind(5.0), precision: 0);
+
+        // Above it: the tank is filling, the valve is open, and the well feels it.
+        Assert.True(BackpressureBehind(120.0) > 30.0e5,
+            "a demand above the set point must reach the wellhead, or a full tank " +
+            "could never shut a well in (R8-V5)");
+    }
+
     [Fact] // S4: a pressure-decoupled completion holds its rate through the swing
     public void FV5_a_choked_completion_is_not_moved_by_backpressure()
     {

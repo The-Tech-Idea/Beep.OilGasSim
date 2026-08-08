@@ -95,6 +95,35 @@ internal sealed class Sink(ulong id) : IFlowElement
 }
 
 /// <summary>
+/// A vessel held at a set point: it HOLDS its inlet rather than dropping what it
+/// is handed (SDD-002 §7 S4). The synthetic twin of a separator's back-pressure
+/// controller, with no separation to obscure what S4 does with it.
+/// </summary>
+internal sealed class Controller(ulong id, double setPointBar) : IPressureController
+{
+    public EntityId<IFlowElement> Id { get; } = new(id);
+
+    public Pressure SetPoint { get; } = Pressure.FromBar(setPointBar);
+
+    public IReadOnlyList<PortSpec> Ports { get; } = [Synthetic.Inlet(0), Synthetic.Outlet(1)];
+
+    public TransformResult Transform(TransformInput input)
+    {
+        MaterialStream inlet = input.Inlets.Count > 0
+            ? input.Inlets[0]
+            : Synthetic.Stream(0.0, 0.0);
+
+        // Mass through unchanged, leaving at the set point — a controller is a
+        // restriction, and the pressure it holds is what it emits.
+        return new TransformResult(
+            [inlet with { P = SetPoint }],
+            Synthetic.Zero, Synthetic.Zero, Synthetic.NoDisposal, new Power(0.0));
+    }
+
+    public IReadOnlyList<ConstraintEvaluation> EvaluateConstraints(TransformInput input) => [];
+}
+
+/// <summary>
 /// Passes everything through but reports a capacity. The element the solver
 /// throttles against — FV5's backpressure and FV7's bottleneck both run on this.
 /// </summary>

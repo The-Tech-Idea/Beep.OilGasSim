@@ -107,6 +107,36 @@ public interface IFlowElement
     IReadOnlyList<ConstraintEvaluation> EvaluateConstraints(TransformInput input);
 }
 
+/// <summary>
+/// An element that HOLDS its inlet at a pressure instead of dropping the one it
+/// is handed (SDD-002 §7 S4).
+///
+/// <para>S4's <c>P_downstream + ΔP</c> describes a FRICTION element — a
+/// flowline, a choke — and the solver infers ΔP the only way a pure transform
+/// allows, from what the stream lost crossing it. For a vessel held at a set
+/// point by a controller that inference yields "whatever arrived minus my set
+/// point", which grows with the pressure upstream: a separator fed from a
+/// completion at reservoir pressure would demand an inlet high enough to shut
+/// the well it exists to receive from.</para>
+///
+/// <para>What the arithmetic could not say is that <b>a controller decouples
+/// upstream from downstream</b> — the entire purpose of the device, and a
+/// concept this design already has one instance of in the critical-choke
+/// completion S4 flags pressure-decoupled.</para>
+/// </summary>
+public interface IPressureController : IFlowElement
+{
+    /// <summary>
+    /// What the controller holds its inlet at. S4 propagates this as a FLOOR,
+    /// not a fixed value: a controller can hold pressure up — it is a
+    /// restriction, not a pump — so a downstream demand above the set point
+    /// passes straight through. Pinning it outright would make a facility a
+    /// wall, and a full tank could never back up through the separator ahead of
+    /// it (R8-V5).
+    /// </summary>
+    Pressure SetPoint { get; }
+}
+
 public sealed record ForcedShutIn(
     EntityId<IFlowElement> Completion,
     double RelativeResidual);

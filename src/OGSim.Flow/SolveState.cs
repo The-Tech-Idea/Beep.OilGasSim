@@ -324,7 +324,15 @@ internal sealed class SolveState
                 && _inletPressurePa.TryGetValue(downstream[0].To, out double demanded))
                 outletPa = demanded;
 
-            _inletPressurePa[element.Id] = outletPa + PressureDropOf(element.Id);
+            // A CONTROLLER holds its inlet rather than dropping what it is given
+            // (SDD-002 §7 S4), and its inferred drop would be the fictitious
+            // "whatever arrived minus my set point". A FLOOR, not a fix: a
+            // controller holds pressure up, so a demand above the set point
+            // passes through — which is how a full tank still backs up through
+            // the separator ahead of it (R8-V5).
+            _inletPressurePa[element.Id] = element is IPressureController controller
+                ? Math.Max(controller.SetPoint.Pascals, outletPa)
+                : outletPa + PressureDropOf(element.Id);
         }
     }
 
