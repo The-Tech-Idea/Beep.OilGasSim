@@ -439,6 +439,9 @@ S4  BACKWARD   with rates fixed, from each sink upward, starting at the network
                discharges to somewhere, and zero absolute would let a completion
                flow against a vacuum):
                  P_upstream = P_downstream + ΔP_element(q)   // element's hydraulic transform
+               EXCEPT an IPressureController, which holds its inlet at a set
+               point rather than dropping what it is handed:
+                 P_upstream = max(SetPoint, P_downstream)    // a FLOOR, not a fix
                yielding new Pwh_w for every completion — EXCEPT completions whose
                choke reports critical flow (SDD-003 §6.3): they are flagged
                PRESSURE-DECOUPLED and keep their rate until the ratio goes
@@ -454,6 +457,40 @@ S6  BUDGET     outer iterations S1–S5 capped at maxOuterIterations (content,
                  event flow.forcedShutIn), restart S1 with fresh budget.
                Ladder steps ≤ completion count → termination by construction.
 ```
+
+> **R20d.1 amendment (finding 158): S4 assumed every element drops pressure.**
+> `P_downstream + ΔP` describes a *friction* element — a flowline, a choke, a
+> restriction — and the implementation infers ΔP the only way it can from a pure
+> transform: `inlet_seen − outlet[0].P`. That is exactly right for a pipe.
+>
+> It is wrong for a vessel held at a set point by a controller, which
+> [SDD-006](SDD-006_FACILITIES_AND_TRANSPORT_ELEMENTS.md) §1 now says a
+> separator is. Such an element's inferred "drop" is `whatever arrived − my set
+> point` — a fictitious number that grows with the pressure upstream, so a
+> separator fed from a completion at reservoir pressure would demand an inlet of
+> `101 325 + (P_res − P_sep)` and shut the well it is supposed to be receiving
+> from. The physics S4 could not say is that **a controller decouples upstream
+> from downstream**, which is the entire purpose of the device — and a concept
+> this design already has one instance of, in the critical-choke completion S4
+> flags PRESSURE-DECOUPLED.
+>
+> ```csharp
+> /// An element that HOLDS its inlet at a pressure instead of dropping the one
+> /// it is handed. S4 propagates the set point rather than an inferred drop.
+> public interface IPressureController : IFlowElement { Pressure SetPoint { get; } }
+> ```
+>
+> **A FLOOR, not a fixed value**, and that is load-bearing. A controller can hold
+> pressure *up* — it is a restriction, not a pump — so when downstream demand
+> rises above the set point the valve is wide open and the element passes the
+> demand through. Pinning `P_upstream = SetPoint` outright would make a facility
+> a wall: a full tank could never back up through the separator ahead of it, and
+> **R8-V5 (filling a tank reduces reservoir withdrawal) would become
+> unpassable** — the one verification the whole backpressure chain exists for.
+>
+> The controller's own frictional loss is deliberately not added. It is
+> negligible beside the step it imposes, and the only number available to stand
+> in for it is the fictitious drop described above.
 
 **Numeric guards (every step):** any `NaN`/`Infinity` in any stream, pressure or
 rate → immediate **model fault naming the element** — never propagated, never
