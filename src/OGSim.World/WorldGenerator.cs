@@ -67,27 +67,20 @@ public sealed class BasinWorldGenerator : IWorldGenerator
         // step runs cannot shift what another step draws.
         GeneratedSurface surface = GenerateSurface(parameters, streams);
 
-        (IReadOnlyList<GeneratedAccumulation> accumulations,
-         IReadOnlyList<double> capacities) = GenerateGeology(parameters, streams, surface.Terrain);
+        IReadOnlyList<GeneratedAccumulation> accumulations =
+            GenerateGeology(parameters, streams, surface.Terrain);
 
         for (int i = 0; i < accumulations.Count; i++) sink.AddAccumulation(accumulations[i]);
 
         sink.SetSurface(surface);
         sink.AddJurisdiction(GenerateJurisdiction(parameters, streams));
 
-        DeliverRegionalData(accumulations, capacities, sink, streams);
+        DeliverRegionalData(accumulations, sink, streams);
     }
 
     // ---------------------------------------------------------- geology
 
-    /// <summary>
-    /// The structures and, alongside them, what each COULD hold. Capacity
-    /// travels separately because regional data observes it and a dry structure
-    /// has no compartment to carry it — gravity and magnetics see a trap, not
-    /// what is in it (SDD-010 §4b).
-    /// </summary>
-    private static (IReadOnlyList<GeneratedAccumulation> Structures,
-                    IReadOnlyList<double> Capacities) GenerateGeology(
+    private static IReadOnlyList<GeneratedAccumulation> GenerateGeology(
         WorldParameters parameters, StepStreams streams, GeneratedTerrain terrain)
     {
         IRandomStream structure = streams.For(WorldStep.Structure);
@@ -134,7 +127,6 @@ public sealed class BasinWorldGenerator : IWorldGenerator
                        * ChargeFractionOfCapacity * parameters.ResourceRichness;
 
         var accumulations = new List<GeneratedAccumulation>();
-        var capacities = new List<double>();
 
         for (int i = 0; i < path.Count; i++)
         {
@@ -173,14 +165,17 @@ public sealed class BasinWorldGenerator : IWorldGenerator
 
             Polygon footprint = FootprintOf(closure, cell, horizon.Width);
 
-            capacities.Add(capacity);
-
             accumulations.Add(new GeneratedAccumulation(
                 Play: new ContentId(plays.NextUnit() < 0.5 ? "play-a" : "play-b"),
                 Closure: footprint,
                 Subtlety: subtlety,
                 Access: AccessFor(depth, WaterDepthAt(terrain, cell)),
                 Fluid: depth.Metres > 3200.0 ? FluidForm.ModifiedBlackOil : FluidForm.BlackOil,
+
+                // WHAT THE STRUCTURE COULD HOLD (SDD-010 §4b). Every closed high
+                // has one; only some of them got any oil. This is what a survey
+                // measures, which is why a dry prospect can be surveyed at all.
+                Capacity: new ReservoirVolume(capacity),
                 // EMPTY WHEN THE CHARGE NEVER ARRIVED (SDD-010 §4b). The
                 // structure is still real, still mappable and still drillable —
                 // it is a prospect a company can lose money on, which is the
@@ -198,7 +193,7 @@ public sealed class BasinWorldGenerator : IWorldGenerator
                 ]));
         }
 
-        return (accumulations, capacities);
+        return accumulations;
     }
 
     /// <summary>
@@ -509,7 +504,6 @@ public sealed class BasinWorldGenerator : IWorldGenerator
     /// </summary>
     private static void DeliverRegionalData(
         IReadOnlyList<GeneratedAccumulation> accumulations,
-        IReadOnlyList<double> capacities,
         IWorldSink sink,
         StepStreams streams)
     {
@@ -534,7 +528,7 @@ public sealed class BasinWorldGenerator : IWorldGenerator
             // prospects are indistinguishable from the surface. That is the
             // position a company is really in, and the reason POS is worth
             // computing at all.
-            double truth = DetMath.Ln(capacities[i]);
+            double truth = DetMath.Ln(accumulation.Capacity.CubicMetres);
 
             sink.DeliverRegionalObservation(new Observation(
                 Subject: new EntityRef(EntityKind.Prospect, (ulong)(i + 1)),

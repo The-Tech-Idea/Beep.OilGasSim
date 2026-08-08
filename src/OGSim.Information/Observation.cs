@@ -166,8 +166,22 @@ public sealed class ProspectRisk
     /// prior's magnitude is exactly "how many wells' worth of conviction we
     /// started with" — which is a quantity a geologist can argue about.</para>
     /// </summary>
-    public void Observe(PosFactor factor, bool present)
+    public void Observe(PosFactor factor, bool present) => Observe(factor, present, 1.0);
+
+    /// <summary>
+    /// Beta-Bernoulli with a WEIGHT (SDD-008 §4's w_hard / w_soft). Without one
+    /// every piece of evidence counted as exactly one well, so a seismic survey
+    /// and a drilled hole moved a factor equally — a category error rather than
+    /// a balance question, because a survey images a structure and a well proves
+    /// it.
+    /// </summary>
+    public void Observe(PosFactor factor, bool present, double weight)
     {
+        if (weight <= 0.0 || !double.IsFinite(weight))
+            throw new ModelFault("SDD-008 §4", null,
+                "evidence carries positive finite weight; a zero-weight observation is " +
+                "one nobody made, which is said by not making it");
+
         // A well that proves or disproves a SHARED element has said something
         // about the play, not about this prospect — so the evidence is recorded
         // where the belief lives. Writing it here instead would make a dry hole
@@ -175,15 +189,15 @@ public sealed class ProspectRisk
         // opposite of what a shared factor means.
         if (_shared.Contains(factor))
         {
-            _play!.Observe(factor, present);
+            _play!.Observe(factor, present, weight);
             return;
         }
 
         FactorBelief current = _factors[factor];
 
         _factors[factor] = present
-            ? current with { Alpha = current.Alpha + 1.0 }
-            : current with { Beta = current.Beta + 1.0 };
+            ? current with { Alpha = current.Alpha + weight }
+            : current with { Beta = current.Beta + weight };
     }
 
     /// <summary>
@@ -222,10 +236,16 @@ public sealed class ProspectRisk
     /// </summary>
     public void Weigh(PosFactor factor, double mean)
     {
-        if (mean is <= 0.0 or > 1.0)
+        // STRICTLY INSIDE (0, 1), both ends. Zero leaves α at zero and one
+        // leaves β at zero, and either way the factor is frozen: no amount of
+        // evidence can move a mean whose denominator it cannot change. A
+        // certainty is not a strong belief, it is an unfalsifiable one — which
+        // is the same reason the prior itself is validated.
+        if (mean is <= 0.0 or >= 1.0)
             throw new ModelFault("SDD-008 §4", null,
-                "a factor's mean is a probability in (0, 1]; zero could never be moved " +
-                "off zero by any amount of evidence");
+                $"a factor's mean is a probability strictly inside (0, 1); " +
+                $"{mean.ToString(System.Globalization.CultureInfo.InvariantCulture)} would " +
+                "freeze the factor, because no evidence could ever move it again");
 
         if (_shared.Contains(factor))
             throw new ModelFault("SDD-008 §4", null,

@@ -225,6 +225,13 @@ internal static class Defaults
 
     public static ContentId OilInPlaceKind { get; } = new("oil-in-place");
 
+    /// <summary>
+    /// How big the STRUCTURE is, which is a different question from how much is
+    /// in it (SDD-010 §4b). Every closed high has one; only some hold oil, and
+    /// which is which is what probability of success answers.
+    /// </summary>
+    public static ContentId StructureCapacityKind { get; } = new("structure-capacity");
+
     // ------------------------------------------------- measurement sources
     //
     // What the observation model prices a reading at (SDD-008 §3). Distinct from
@@ -256,6 +263,10 @@ internal static class Defaults
             "porosity" => BeliefSpace.Linear,
             "permeability" => BeliefSpace.Log,
             "oil-in-place" => BeliefSpace.Log,
+
+            // A volume, so multiplicative — and a structure that could hold a
+            // NEGATIVE amount is not a belief anybody could act on.
+            "structure-capacity" => BeliefSpace.Log,
             _ => throw new ModelFault("SDD-008 §2", null,
                 $"no belief space is declared for property kind '{kind.Value}'"),
         };
@@ -973,6 +984,17 @@ internal sealed class RegionalObservationModel : IObservationModel
             // the two worth buying separately (design 05 §2).
             ("seismic-2d", "oil-in-place") => 0.6,
             ("seismic-3d", "oil-in-place") => 0.35,
+
+            // AND IT SEES A STRUCTURE WHETHER OR NOT ANYTHING IS IN IT
+            // (SDD-010 §4b). This is the pair a survey over an undrilled
+            // prospect actually uses — the one above needs an accumulation to
+            // measure, which is exactly what has not been established yet.
+            //
+            // Sharper than the same source's oil-in-place row, because it is an
+            // easier question: mapping a closure is geometry, and how much oil
+            // sits in it is not.
+            ("seismic-2d", "structure-capacity") => 0.45,
+            ("seismic-3d", "structure-capacity") => 0.25,
 
             // A log reads porosity well and permeability only through a
             // transform, which is why 0.5 in log units — a factor of 1.65 — is

@@ -101,6 +101,7 @@ public sealed class StructuralEqualityTests
             DetectClass.D1,
             new AccessRequirements(DepthClass.Standard, WaterDepthClass.Onshore, false, false, false),
             FluidForm.BlackOil,
+            new ReservoirVolume(2e6),
             [new GeneratedCompartment(
                 new ReservoirVolume(1e6), 0.2, 0.7,
                 new Pressure(30e6), Temperature.FromCelsius(90.0), new Length(2000.0))]);

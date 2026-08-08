@@ -46,7 +46,7 @@ public sealed class ActivityTests
         // their reservoir directly rather than generating a basin, so it is
         // already known to be there — placed and found in one step, carrying no
         // exploration risk because there is nothing left to be wrong about.
-        built.Engine.Provided.Resolve<WorldState>().DeclareKnownField(target);
+        built.Engine.Provided.Resolve<WorldState>().DeclareKnownField(target, new ReservoirVolume(100.0e6));
 
         return (built.Engine, target);
     }
@@ -83,6 +83,16 @@ public sealed class ActivityTests
         Engine engine, EntityId<IReservoirCompartmentEntity> target, string kind) =>
         engine.Provided.Resolve<IBeliefStore>()
             .Get(new EntityRef(EntityKind.Compartment, target.Value), new ContentId(kind));
+
+    /// <summary>
+    /// What a survey teaches, which is about the STRUCTURE rather than the
+    /// compartment: seismic images a closure, and it does so whether or not
+    /// anything is in it (SDD-010 §4b).
+    /// </summary>
+    private static Belief? BeliefAboutStructure(Engine engine, EntityId<IProspect> prospect) =>
+        engine.Provided.Resolve<IBeliefStore>()
+            .Get(new EntityRef(EntityKind.Prospect, prospect.Value),
+                 new ContentId("structure-capacity"));
 
     private static Money CapitalSpentBy(Engine engine) =>
         engine.Provided.Resolve<OGSim.Company.CompanyState>().Ledger.BalanceOf(Account.Capex_PPE);
@@ -136,7 +146,7 @@ public sealed class ActivityTests
     {
         (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled();
 
-        Assert.IsType<Accepted>(engine.Commands.Submit(new SeismicSurveyCommand(target)));
+        Assert.IsType<Accepted>(engine.Commands.Submit(new SeismicSurveyCommand(Structure(engine, target))));
 
         Assert.IsType<Rejected>(engine.Commands.Submit(new WellTestCommand(target)));
         Assert.IsType<Rejected>(engine.Commands.Submit(new WirelineLogCommand(target)));
@@ -153,12 +163,12 @@ public sealed class ActivityTests
     {
         (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled();
 
-        Assert.Null(BeliefAbout(engine, target, "oil-in-place"));
+        Assert.Null(BeliefAboutStructure(engine, Structure(engine, target)));
 
-        engine.Commands.Submit(new SeismicSurveyCommand(target));
+        engine.Commands.Submit(new SeismicSurveyCommand(Structure(engine, target)));
         RunToQuiet(engine);
 
-        Belief? learned = BeliefAbout(engine, target, "oil-in-place");
+        Belief? learned = BeliefAboutStructure(engine, Structure(engine, target));
 
         Assert.NotNull(learned);
         Assert.Equal(Provenance.Seismic, learned.Value.BestSource);
@@ -183,7 +193,7 @@ public sealed class ActivityTests
         Assert.IsType<Accepted>(
             engine.Commands.Submit(new DrillWellCommand(Structure(engine, target), new Length(2000.0))));
 
-        Assert.IsType<Accepted>(engine.Commands.Submit(new SeismicSurveyCommand(target)));
+        Assert.IsType<Accepted>(engine.Commands.Submit(new SeismicSurveyCommand(Structure(engine, target))));
 
         engine.Pipeline.AdvanceTick();
 
@@ -229,7 +239,7 @@ public sealed class ActivityTests
         Learn(engine, target, "porosity", () => new WirelineLogCommand(target));
 
         Assert.NotNull(BeliefAbout(engine, target, "permeability"));
-        Assert.Null(BeliefAbout(engine, target, "oil-in-place"));
+        Assert.Null(BeliefAboutStructure(engine, Structure(engine, target)));
     }
 
     /// <summary>
@@ -290,10 +300,10 @@ public sealed class ActivityTests
     {
         (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled();
 
-        Assert.IsType<Accepted>(engine.Commands.Submit(new SeismicSurveyCommand(target)));
+        Assert.IsType<Accepted>(engine.Commands.Submit(new SeismicSurveyCommand(Structure(engine, target))));
 
         Rejected second = Assert.IsType<Rejected>(
-            engine.Commands.Submit(new SeismicSurveyCommand(target)));
+            engine.Commands.Submit(new SeismicSurveyCommand(Structure(engine, target))));
 
         Assert.Contains(second.Reasons, r => r.LocId == "$loc:reject.already-under-way");
     }
@@ -343,7 +353,7 @@ public sealed class ActivityTests
         (Engine surveying, EntityId<IReservoirCompartmentEntity> surveyTarget) = Undrilled();
         (Engine drilling, EntityId<IReservoirCompartmentEntity> drillTarget) = Undrilled();
 
-        surveying.Commands.Submit(new SeismicSurveyCommand(surveyTarget));
+        surveying.Commands.Submit(new SeismicSurveyCommand(Structure(surveying, surveyTarget)));
         drilling.Commands.Submit(new DrillWellCommand(Structure(drilling, drillTarget), new Length(2000.0)));
 
         surveying.Pipeline.AdvanceTick();
@@ -369,7 +379,7 @@ public sealed class ActivityTests
         engine.Pipeline.AdvanceTick();
         Money before = engine.ReadModel!.Cash;
 
-        engine.Commands.Submit(new SeismicSurveyCommand(target));
+        engine.Commands.Submit(new SeismicSurveyCommand(Structure(engine, target)));
         engine.Pipeline.AdvanceTick();
 
         Assert.True(engine.ReadModel!.Cash < before, "the survey must have been paid for");

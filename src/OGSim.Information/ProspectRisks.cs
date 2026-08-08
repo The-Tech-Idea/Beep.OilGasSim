@@ -54,10 +54,10 @@ public sealed class ProspectRisks
     /// </summary>
     public void Register(EntityRef prospect, ContentId play, double trapConfidence)
     {
-        if (trapConfidence is <= 0.0 or > 1.0)
+        if (trapConfidence is <= 0.0 or >= 1.0)
             throw new ModelFault("SDD-008 §4", prospect,
-                "trap confidence is a fraction in (0, 1]; a structure nobody believes in " +
-                "at all is not a prospect");
+                "trap confidence is strictly inside (0, 1); a structure nobody believes in " +
+                "is not a prospect, and one nobody could ever doubt is not a risk");
 
         if (!_plays.TryGetValue(play, out ProspectRisk? shared))
         {
@@ -94,13 +94,20 @@ public sealed class ProspectRisks
     /// What a well proved or disproved. Shared elements land on the play, so one
     /// hole re-prices every prospect exposed to it (SDD-008 §4).
     /// </summary>
-    public void Drilled(EntityRef prospect, PosFactor factor, bool present)
+    public void Drilled(EntityRef prospect, PosFactor factor, bool present) =>
+        Learned(prospect, factor, present, weight: 1.0);
+
+    /// <summary>
+    /// Evidence of a stated strength (SDD-008 §4). A well is hard evidence; a
+    /// survey images rather than proves, and says so by weighing less.
+    /// </summary>
+    public void Learned(EntityRef prospect, PosFactor factor, bool present, double weight)
     {
         if (!_prospects.TryGetValue(prospect, out ProspectRisk? risk))
             throw new InvariantFault("SDD-008 §4", prospect,
                 $"a well reported on prospect {prospect.Value}, which carries no risk " +
                 "assessment; every prospect is registered when the world places it");
 
-        risk.Observe(factor, present);
+        risk.Observe(factor, present, weight);
     }
 }

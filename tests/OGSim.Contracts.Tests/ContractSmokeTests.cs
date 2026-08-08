@@ -201,6 +201,7 @@ public class ContractSmokeTests
             DetectClass.D2,
             new AccessRequirements(DepthClass.Deep, WaterDepthClass.Onshore, Hpht: false, Tight: false, Sour: true),
             FluidForm.BlackOil,
+            new ReservoirVolume(3.0e7),
             [new GeneratedCompartment(
                 new ReservoirVolume(2.0e7), 0.22, 0.75,
                 new Pressure(3.2e7), new Temperature(370), Length.FromFeet(9500))]));

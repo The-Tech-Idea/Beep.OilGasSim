@@ -50,7 +50,7 @@ public sealed class ProductionLoopTests
         // their reservoir directly rather than generating a basin, so it is
         // already known to be there — placed and found in one step, carrying no
         // exploration risk because there is nothing left to be wrong about.
-        built.Engine.Provided.Resolve<WorldState>().DeclareKnownField(compartment);
+        built.Engine.Provided.Resolve<WorldState>().DeclareKnownField(compartment, new ReservoirVolume(100.0e6));
 
         built.Engine.Provided.Resolve<FieldControl>().OpenWell(Well(compartment), compartment);
 

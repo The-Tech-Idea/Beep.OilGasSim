@@ -41,7 +41,7 @@ public sealed class GameplayTests
         // their reservoir directly rather than generating a basin, so it is
         // already known to be there — placed and found in one step, carrying no
         // exploration risk because there is nothing left to be wrong about.
-        built.Engine.Provided.Resolve<WorldState>().DeclareKnownField(target);
+        built.Engine.Provided.Resolve<WorldState>().DeclareKnownField(target, new ReservoirVolume(100.0e6));
 
         return (built.Engine, target);
     }
@@ -360,7 +360,12 @@ public sealed class GameplayTests
 
         BeliefEntryView learned = Survey(engine, target);
 
-        Assert.Equal(new EntityRef(EntityKind.Compartment, target.Value), learned.Subject);
+        // The STRUCTURE, not the compartment. Seismic images a closure, and it
+        // does so whether or not there is anything in it — which is why a survey
+        // is the first move rather than a follow-up (SDD-010 §4b).
+        Assert.Equal(
+            new EntityRef(EntityKind.Prospect, Structure(engine, target).Value),
+            learned.Subject);
         Assert.Equal(Provenance.Seismic, learned.BestSource);
     }
 
@@ -424,7 +429,8 @@ public sealed class GameplayTests
 
         for (var attempt = 0; attempt < 40; attempt++)
         {
-            Assert.IsType<Accepted>(engine.Commands.Submit(new SeismicSurveyCommand(target)));
+            Assert.IsType<Accepted>(
+                engine.Commands.Submit(new SeismicSurveyCommand(Structure(engine, target))));
 
             engine.Pipeline.AdvanceTick();
             while (engine.ReadModel!.ActivitiesRunning > 0) engine.Pipeline.AdvanceTick();
@@ -597,7 +603,7 @@ public sealed class GameplayTests
         // way to burn the opening cash without ever earning any back.
         for (var month = 0; month < 120; month++)
         {
-            engine.Commands.Submit(new SeismicSurveyCommand(target));
+            engine.Commands.Submit(new SeismicSurveyCommand(Structure(engine, target)));
             engine.Pipeline.AdvanceTick();
 
             if (engine.ReadModel!.Outcome != ObjectiveState.Pending) break;

@@ -15,14 +15,23 @@ using OGSim.Kernel;
 namespace OGSim.Composition;
 
 /// <summary>Shoot a seismic survey over a compartment.</summary>
+/// <summary>
+/// Shoot seismic over a PROSPECT (SDD-010 §4b).
+///
+/// <para>It named a compartment until R20d.7.5, which meant a company could only
+/// survey a field it had already found — backwards, and contradicted by this
+/// activity's own reason for existing: a survey needs no wellbore, which is what
+/// makes it the FIRST move.</para>
+/// </summary>
 public sealed record SeismicSurveyCommand(
-    EntityId<IReservoirCompartmentEntity> Target) : Command(Subject: null);
+    EntityId<IProspect> Target) : Command(Subject: null);
 
 internal sealed class SeismicSurveyActivity(
     ActivityTerms terms,
     ContentId source,
-    ContentId oilInPlaceKind,
-    OGSim.Subsurface.SubsurfaceState subsurface,
+    ContentId capacityKind,
+    WorldState world,
+    OGSim.Information.ProspectRisks risks,
     ObservationDoor door) : Activity<SeismicSurveyCommand>(terms)
 {
     /// <summary>
@@ -38,7 +47,7 @@ internal sealed class SeismicSurveyActivity(
     {
         ArgumentNullException.ThrowIfNull(command);
 
-        return (new EntityRef(EntityKind.Compartment, command.Target.Value), NoDepth);
+        return (new EntityRef(EntityKind.Prospect, command.Target.Value), NoDepth);
     }
 
     /// <summary>
@@ -55,12 +64,39 @@ internal sealed class SeismicSurveyActivity(
 
         if (!done.Succeeded) return;
 
-        var target = new EntityId<IReservoirCompartmentEntity>(done.Target.Value);
+        var target = new EntityId<IProspect>(done.Target.Value);
 
-        // Oil in place as the accumulation WAS, not what is left of it — the
-        // door reads initial conditions, so a company cannot deduce its own
-        // cumulative offtake by re-shooting (SDD-008 §3).
-        door.Deliver(source, oilInPlaceKind, done.Target,
-                     subsurface.TrueOilInPlaceOf(target).CubicMetres, Provenance.Seismic);
+        // WHAT THE STRUCTURE COULD HOLD, sharpened. Seismic images a closure far
+        // better than a regional gravity pass does, and it images DRY closures
+        // exactly as well as charged ones — which is what stops a survey being a
+        // way to ask whether there is oil (SDD-010 §4b).
+        door.Deliver(source, capacityKind, done.Target,
+                     world.CapacityOf(target).CubicMetres, Provenance.Seismic);
+
+        // AND IT MOVES THE RISK IT CAN ACTUALLY SEE (SDD-008 §4). Trap hard,
+        // because imaging a closure is close to proving there is one; reservoir
+        // soft, because amplitude hints at the rock and no more. Source, seal
+        // and timing are untouched — seismic has nothing to say about them, and
+        // a survey that quietly improved every factor would make "which survey
+        // answers my weakest element?" a question with one answer.
+        //
+        // This is what makes showing the five factors worth anything. A player
+        // reading "one in six, and it is the trap we doubt" can buy something
+        // about it; the same player told only "one in six" can only drill.
+        EntityRef prospect = done.Target;
+
+        if (!risks.Knows(prospect)) return;
+
+        risks.Learned(prospect, PosFactor.Trap, present: true, weight: HardEvidence);
+        risks.Learned(prospect, PosFactor.Reservoir, present: true, weight: SoftEvidence);
     }
+
+    /// <summary>
+    /// SDD-008 §4's w_hard — what a measurement aimed straight at an element is
+    /// worth. Two wells' conviction: strong, and still short of drilling.
+    /// </summary>
+    private const double HardEvidence = 2.0;
+
+    /// <summary>w_soft — a hint, worth a quarter of that.</summary>
+    private const double SoftEvidence = 0.5;
 }

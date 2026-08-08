@@ -567,4 +567,74 @@ public sealed class NewGameTests
 
         Assert.Fail("sixty basins produced no dry structure with a sibling in its play");
     }
+
+    // ------------------------------------ the survey answers a factor (R20d.7.5)
+
+    /// <summary>
+    /// SEISMIC MOVES THE TRAP FACTOR AND NOTHING IT CANNOT SEE. That asymmetry
+    /// is what makes the five-factor decomposition worth showing: a player
+    /// reading "one in six, and it is the trap we doubt" can buy something about
+    /// it, while the same player told only "one in six" can only drill or walk.
+    ///
+    /// <para>A survey that quietly improved every factor would collapse the
+    /// decision back into "buy surveys until POS is high enough", which is not a
+    /// decision at all.</para>
+    /// </summary>
+    [Fact]
+    public void R20d7V4_a_survey_sharpens_the_factors_it_can_see_and_no_others()
+    {
+        Engine engine = BasinWithSeveralProspects();
+        engine.Pipeline.AdvanceTick();
+
+        ProspectView before = engine.ReadModel!.Prospects[0];
+
+        Assert.IsType<Accepted>(engine.Commands.Submit(
+            new SeismicSurveyCommand(new EntityId<IProspect>(before.Prospect.Value))));
+
+        for (var month = 0; month < 12; month++) engine.Pipeline.AdvanceTick();
+
+        ProspectView after = engine.ReadModel!.Prospects[0];
+
+        // A survey can fail outright — that is the honest bad outcome, and it
+        // leaves everything where it was.
+        if (after.Trap == before.Trap) return;
+
+        Assert.True(after.Trap > before.Trap, "seismic made the trap look worse");
+        Assert.True(after.Reservoir > before.Reservoir, "seismic taught nothing about the rock");
+
+        // Untouched: no surface survey has anything to say about whether a
+        // source rock cooked, whether the seal held, or whether the timing
+        // worked out.
+        Assert.Equal(before.Source, after.Source, precision: 12);
+        Assert.Equal(before.Seal, after.Seal, precision: 12);
+        Assert.Equal(before.Timing, after.Timing, precision: 12);
+    }
+
+    /// <summary>
+    /// AND IT WEIGHS LESS THAN A WELL. A survey images a structure; a well
+    /// proves it. If the two moved a factor equally, drilling would be a slow
+    /// expensive way to buy what seismic already sold — and the whole appraisal
+    /// ladder would collapse into its cheapest rung.
+    /// </summary>
+    [Fact]
+    public void R20d7V4_a_survey_is_weaker_evidence_than_a_well()
+    {
+        var risks = new OGSim.Information.ProspectRisks(Defaults.ExplorationPrior);
+
+        var surveyed = new EntityRef(EntityKind.Prospect, 1);
+        var drilled = new EntityRef(EntityKind.Prospect, 2);
+
+        // Two prospects in DIFFERENT plays, so the shared factors cannot carry
+        // one's evidence into the other's reading.
+        risks.Register(surveyed, new ContentId("play-a"), trapConfidence: 0.7);
+        risks.Register(drilled, new ContentId("play-b"), trapConfidence: 0.7);
+
+        risks.Learned(surveyed, PosFactor.Trap, present: true, weight: 2.0);
+        risks.Drilled(drilled, PosFactor.Trap, present: true);
+
+        Assert.True(
+            OGSim.Information.ProspectRisk.MeanOf(risks.Of(surveyed)[PosFactor.Trap])
+            > OGSim.Information.ProspectRisk.MeanOf(risks.Of(drilled)[PosFactor.Trap]),
+            "weighted evidence is not being applied; every observation counts as one well");
+    }
 }

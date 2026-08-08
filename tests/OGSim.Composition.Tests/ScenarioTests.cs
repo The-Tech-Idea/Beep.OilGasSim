@@ -207,7 +207,7 @@ public sealed class ScenarioTests
     public void R24V15_the_runner_hands_back_the_entries_due_this_tick()
     {
         var atTwelve = new ScriptedCommand(new Tick(12), new SeismicSurveyCommand(
-            new EntityId<IReservoirCompartmentEntity>(1)));
+            new EntityId<IProspect>(1)));
 
         var runner = new ScenarioRunner(
             Asking(CashAtLeast(1_000), script: [atTwelve]), Paths.Schema);

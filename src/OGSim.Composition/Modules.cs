@@ -624,7 +624,8 @@ internal sealed class FieldModule() : EngineModule(Declare(
 
             new SeismicSurveyActivity(
                 Defaults.SeismicSurveyTerms, Defaults.SeismicSource,
-                Defaults.OilInPlaceKind, subsurface, door),
+                Defaults.StructureCapacityKind, composition.Require<WorldState>(),
+                composition.Require<OGSim.Information.ProspectRisks>(), door),
 
             // The verb that answers a bottleneck (R12b.8). It could not exist
             // until the chain was wired: an installed vessel would have been

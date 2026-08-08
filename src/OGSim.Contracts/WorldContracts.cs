@@ -43,6 +43,15 @@ public sealed record GeneratedAccumulation(
     DetectClass Subtlety,
     AccessRequirements Access,
     FluidForm Fluid,
+
+    /// <summary>
+    /// What the closure COULD hold, charged or not (SDD-010 §4b). Truth, like
+    /// <see cref="Subtlety"/> and <see cref="Access"/> — and the quantity a
+    /// SURVEY measures, because it is the only one every structure has. Without
+    /// it seismic could only be shot at a discovery, which is backwards.
+    /// </summary>
+    ReservoirVolume Capacity,
+
     IReadOnlyList<GeneratedCompartment> Compartments)
 {
     // Finding 131 — the reason PV7 had to compare compartments element by
@@ -54,10 +63,11 @@ public sealed record GeneratedAccumulation(
         && Subtlety == other.Subtlety
         && Access == other.Access
         && Fluid == other.Fluid
+        && Capacity == other.Capacity
         && Structural.Equal(Compartments, other.Compartments);
 
     public override int GetHashCode() =>
-        HashCode.Combine(Play, Closure, Subtlety, Access, Fluid,
+        HashCode.Combine(Play, Closure, Subtlety, Access, Fluid, Capacity,
                          Structural.HashOf(Compartments));
 }
 

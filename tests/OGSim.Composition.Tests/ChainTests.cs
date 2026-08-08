@@ -45,7 +45,7 @@ public sealed class ChainTests
         // their reservoir directly rather than generating a basin, so it is
         // already known to be there — placed and found in one step, carrying no
         // exploration risk because there is nothing left to be wrong about.
-        built.Engine.Provided.Resolve<WorldState>().DeclareKnownField(target);
+        built.Engine.Provided.Resolve<WorldState>().DeclareKnownField(target, new ReservoirVolume(100.0e6));
 
         return (built.Engine, target);
     }

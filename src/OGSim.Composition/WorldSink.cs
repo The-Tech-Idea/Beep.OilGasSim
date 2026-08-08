@@ -82,14 +82,34 @@ public sealed class WorldState
 
     /// <summary>Places a closed structure and hands back its identity. Every
     /// one the generator finds, charged or dry (SDD-010 §4b).</summary>
-    internal EntityId<IProspect> Place(Coordinate at)
+    internal EntityId<IProspect> Place(Coordinate at, ReservoirVolume capacity)
     {
         var prospect = new EntityId<IProspect>((ulong)(_prospects.Count + 1));
 
         _prospects.Add(prospect);
         _at.Add(at);
+        _capacity.Add(capacity);
 
         return prospect;
+    }
+
+    private readonly List<ReservoirVolume> _capacity = [];
+
+    /// <summary>
+    /// What a structure could hold — TRUTH, and what a survey measures. Every
+    /// closed high has one whether or not charge reached it, which is exactly
+    /// why a survey can be shot at a dry prospect and cannot be used to ask
+    /// whether there is oil (SDD-010 §4b).
+    /// </summary>
+    internal ReservoirVolume CapacityOf(EntityId<IProspect> prospect)
+    {
+        int index = _prospects.IndexOf(prospect);
+
+        return index < 0
+            ? throw new InvariantFault("SDD-010 §4b", null,
+                $"prospect {prospect.Value} was never placed, so it has no structure and " +
+                "nothing to measure")
+            : _capacity[index];
     }
 
     /// <summary>
@@ -100,9 +120,9 @@ public sealed class WorldState
     /// means.
     /// </summary>
     public EntityId<IProspect> DeclareKnownField(
-        EntityId<IReservoirCompartmentEntity> compartment)
+        EntityId<IReservoirCompartmentEntity> compartment, ReservoirVolume capacity)
     {
-        EntityId<IProspect> prospect = Place(default);
+        EntityId<IProspect> prospect = Place(default, capacity);
 
         Found(prospect, compartment);
 
@@ -240,7 +260,8 @@ public sealed class WorldSink : IWorldSink
         // EVERY CLOSED STRUCTURE IS A PROSPECT, charged or not (SDD-010 §4b).
         // The id is assigned here and in generation order, which is what lets
         // the generator name its regional observations positionally.
-        EntityId<IProspect> prospect = _world.Place(accumulation.Closure.Centroid);
+        EntityId<IProspect> prospect =
+            _world.Place(accumulation.Closure.Centroid, accumulation.Capacity);
 
         _prospectsPlaced++;
 

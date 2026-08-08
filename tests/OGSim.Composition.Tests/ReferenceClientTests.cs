@@ -44,7 +44,7 @@ public sealed class ReferenceClientTests
         // already known to be there — placed and found in one step, carrying no
         // exploration risk because there is nothing left to be wrong about.
         return (built.Engine,
-                built.Engine.Provided.Resolve<WorldState>().DeclareKnownField(prospect));
+                built.Engine.Provided.Resolve<WorldState>().DeclareKnownField(prospect, new ReservoirVolume(poreVolume)));
     }
 
     /// <summary>
