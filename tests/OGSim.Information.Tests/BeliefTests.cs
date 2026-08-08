@@ -390,9 +390,12 @@ public class ProspectRiskTests
         // A well fails on source rock. The play's belief moves...
         play.Observe(PosFactor.Source, present: false);
 
-        prospectA.ShareFrom(play, PosFactor.Source);
-        prospectB.ShareFrom(play, PosFactor.Source);
-
+        // ...AND NOBODY RE-SYNCS. This test used to call ShareFrom again here,
+        // which meant it was demonstrating the correlation by performing it: the
+        // factor was copied, so a prospect kept its old number until a caller
+        // remembered to refresh, and no caller ever did. A shared factor is now
+        // bound, so the play moving IS the prospect moving.
+        //
         // ...and every prospect sharing that factor moves with it, because they
         // were never independent. That is the whole content of "the play died",
         // and correlating OUTCOMES instead would have needed a covariance
@@ -406,5 +409,67 @@ public class ProspectRiskTests
     {
         var fault = Assert.Throws<ModelFault>(() => new ProspectRisk(new FactorBelief(0.0, 1.0)));
         Assert.Contains("positive alpha and beta", fault.Fault.Detail);
+    }
+
+    /// <summary>
+    /// AND A WELL DRILLED ON A PROSPECT INFORMS THE PLAY, not just itself. The
+    /// evidence is recorded where the belief lives — otherwise a dry hole on
+    /// source rock would tell the company something about one prospect and
+    /// nothing about the twenty others that depend on the same source.
+    /// </summary>
+    [Fact]
+    public void R14V10_evidence_on_a_shared_factor_is_recorded_on_the_play()
+    {
+        ProspectRisk play = New();
+        ProspectRisk drilled = New();
+        ProspectRisk untouched = New();
+
+        drilled.ShareFrom(play, PosFactor.Source);
+        untouched.ShareFrom(play, PosFactor.Source);
+
+        double before = untouched.ProbabilityOfSuccess;
+
+        // The well is on `drilled`, and it fails on the shared element.
+        drilled.Observe(PosFactor.Source, present: false);
+
+        Assert.True(untouched.ProbabilityOfSuccess < before,
+            "a dry hole on a shared element left the rest of the play untouched");
+    }
+
+    /// <summary>
+    /// A PROSPECT-LOCAL FACTOR STAYS LOCAL. Trap geometry is this structure's
+    /// own, so proving it says nothing about the next one — and if it did, the
+    /// distinction between play-shared and prospect-local would be decoration.
+    /// </summary>
+    [Fact]
+    public void R14V10_a_local_factor_does_not_move_the_play()
+    {
+        ProspectRisk play = New();
+        ProspectRisk drilled = New();
+        ProspectRisk untouched = New();
+
+        drilled.ShareFrom(play, PosFactor.Source);
+        untouched.ShareFrom(play, PosFactor.Source);
+
+        double before = untouched.ProbabilityOfSuccess;
+
+        drilled.Observe(PosFactor.Trap, present: false);
+
+        Assert.Equal(before, untouched.ProbabilityOfSuccess, precision: 12);
+    }
+
+    /// <summary>
+    /// A prospect belongs to ONE play. Sharing from a second is refused rather
+    /// than silently accepted, because its risk would then depend on which call
+    /// came last — a defect that would show up as an unreproducible POS.
+    /// </summary>
+    [Fact]
+    public void R14V10_a_prospect_cannot_belong_to_two_plays()
+    {
+        ProspectRisk prospect = New();
+
+        prospect.ShareFrom(New(), PosFactor.Source);
+
+        Assert.Throws<ModelFault>(() => prospect.ShareFrom(New(), PosFactor.Reservoir));
     }
 }

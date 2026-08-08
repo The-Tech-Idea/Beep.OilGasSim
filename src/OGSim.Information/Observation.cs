@@ -124,13 +124,25 @@ public sealed class ProspectRisk
         PosFactor.Trap, PosFactor.Timing,
     ];
 
+    // Which factors belong to the play rather than to this prospect. Membership
+    // is only ever asked, never enumerated (rule D-5).
+    private readonly HashSet<PosFactor> _shared = [];
+
+    private ProspectRisk? _play;
+
     public ProspectRisk(FactorBelief prior)
     {
         Validate(prior);
         foreach (PosFactor factor in Factors) _factors[factor] = prior;
     }
 
-    public FactorBelief this[PosFactor factor] => _factors[factor];
+    /// <summary>
+    /// The belief about one factor — READ THROUGH to the play when this prospect
+    /// shares it, so a prospect never holds a stale copy of a number the play
+    /// has since moved.
+    /// </summary>
+    public FactorBelief this[PosFactor factor] =>
+        _shared.Contains(factor) ? _play![factor] : _factors[factor];
 
     /// <summary>Mean of a Beta: <c>α/(α+β)</c>.</summary>
     public static double MeanOf(FactorBelief belief) =>
@@ -142,7 +154,7 @@ public sealed class ProspectRisk
         get
         {
             double product = 1.0;
-            for (int i = 0; i < Factors.Length; i++) product *= MeanOf(_factors[Factors[i]]);
+            for (int i = 0; i < Factors.Length; i++) product *= MeanOf(this[Factors[i]]);
             return product;
         }
     }
@@ -156,6 +168,17 @@ public sealed class ProspectRisk
     /// </summary>
     public void Observe(PosFactor factor, bool present)
     {
+        // A well that proves or disproves a SHARED element has said something
+        // about the play, not about this prospect — so the evidence is recorded
+        // where the belief lives. Writing it here instead would make a dry hole
+        // on source rock inform only the prospect that drilled it, which is the
+        // opposite of what a shared factor means.
+        if (_shared.Contains(factor))
+        {
+            _play!.Observe(factor, present);
+            return;
+        }
+
         FactorBelief current = _factors[factor];
 
         _factors[factor] = present
@@ -175,7 +198,20 @@ public sealed class ProspectRisk
     public void ShareFrom(ProspectRisk play, PosFactor factor)
     {
         ArgumentNullException.ThrowIfNull(play);
-        _factors[factor] = play[factor];
+
+        // BOUND, not copied. This was a copy, and the difference is the whole
+        // mechanism: a copy means the play moves and every prospect keeps the
+        // number it had until someone remembers to re-sync. Nothing enforced
+        // that, no caller did it, and R14-V10 passed only because the test
+        // performed the refresh itself — the correlation was being demonstrated
+        // by hand rather than by the code.
+        if (_play is not null && !ReferenceEquals(_play, play))
+            throw new ModelFault("SDD-008 §4", null,
+                "a prospect belongs to one play; sharing factors from a second would " +
+                "leave its risk depending on which call came last");
+
+        _play = play;
+        _shared.Add(factor);
     }
 
     private static void Validate(FactorBelief belief)
