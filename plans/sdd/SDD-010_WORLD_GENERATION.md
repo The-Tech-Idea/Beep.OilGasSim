@@ -223,6 +223,20 @@ public sealed record WorldParameters(
 > integrity there will be more failure modes to tell apart, and the diagnosis
 > becomes a field on the handoff rather than a single mapping.
 
+### A structure carries its capacity
+
+> **R20d.7.5 amendment.** `GeneratedAccumulation` gains
+> `ReservoirVolume Capacity` — what the closure could hold, whether or not
+> anything reached it. A truth attribute like `Subtlety` and `Access`, and for
+> the same reason: it is what a SURVEY measures.
+>
+> Without it, seismic could only be shot at a compartment, so a company could
+> only survey fields it had already discovered — exactly backwards, and
+> contradicted by the activity's own reason for existing ("a survey needs no
+> wellbore, which is what makes it the first move rather than a follow-up").
+> Capacity is the one quantity every structure has, so it is the one a survey can
+> sharpen before anybody drills.
+
 ## 5. Test mapping
 
 R15-V1 (PV7 identity) · V2 (substreams) · V3/MB5 (size log-normality emerges

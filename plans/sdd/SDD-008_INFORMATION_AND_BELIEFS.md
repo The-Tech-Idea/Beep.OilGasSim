@@ -237,6 +237,25 @@ public enum PosFactor { Source, Reservoir, Seal, Trap, Timing }
   declared strength. Conjugate, auditable, and the play-correlation mechanism
   *is* the shared Beta — no separate correlation machinery (R14-V6).
 
+> **R20d.7.5 amendment. Survey updates, and the weights.** This section
+> specifies `w_hard` and `w_soft` (content defaults 2.0 and 0.5) and
+> `ProspectRisk.Observe` had no weight at all — every piece of evidence counted
+> as exactly one well. So a seismic survey and a drilled hole would have moved a
+> factor by the same amount, which is not a balance question but a category
+> error: a survey images a structure and a well proves it.
+>
+> ```text
+> Observe(factor, present, weight)   α or β += weight
+> seismic:  Trap      hard   — it images the closure
+>           Reservoir soft   — amplitude hints at the rock, and no more
+> ```
+>
+> **This is what makes the five factors worth showing** (SDD-017's
+> `ProspectView`). A player reading "one in six, and it is the trap we doubt"
+> can buy the survey that addresses the trap; a player reading the same about
+> source cannot, and has to drill or walk away. Without per-factor updates the
+> decomposition is decoration.
+
 **On discovery, beliefs re-key, never reset:** the prospect's property beliefs
 and volumetrics become the accumulation's (same Mu/Sigma/provenance, new
 entity), and appraisal continues updating them through §2.1. Nothing is thrown
