@@ -290,4 +290,119 @@ public sealed class NewGameTests
         Assert.Null(engine.Provided.Resolve<WorldState>()
             .DistanceToMarket(new EntityId<IReservoirCompartmentEntity>(1)));
     }
+
+    // -------------------------------------------- the choice a player makes (R20d.7)
+
+    /// <summary>
+    /// A NEW GAME OFFERS PROSPECTS TO CHOOSE BETWEEN, each with a probability of
+    /// success. Until the world generated structures there was nothing for POS
+    /// to be about, so `ProspectRisk` sat built and tested and unused for four
+    /// phases — the read model reported wells a company already had and nothing
+    /// it might drill next.
+    /// </summary>
+    [Fact]
+    public void R20d7V1_a_new_game_offers_prospects_with_odds()
+    {
+        Engine engine = BasinWithSeveralProspects();
+        engine.Pipeline.AdvanceTick();
+
+        IReadOnlyList<ProspectView> offered = engine.ReadModel!.Prospects;
+
+        Assert.NotEmpty(offered);
+
+        for (int i = 0; i < offered.Count; i++)
+        {
+            Assert.InRange(offered[i].ProbabilityOfSuccess, 0.0, 1.0);
+
+            // Five factors at 0.7 multiply to about one in six. A POS anywhere
+            // near certainty would mean the factors were not being multiplied,
+            // which is the arithmetic that makes exploration hard.
+            Assert.True(offered[i].ProbabilityOfSuccess < 0.5,
+                $"a prospect is offered at {offered[i].ProbabilityOfSuccess:0.00} before " +
+                "anyone has drilled anything; the five factors are not being multiplied");
+        }
+    }
+
+    /// <summary>
+    /// AND THEY ARE NOT ALL THE SAME BET. A subtly expressed trap is a worse
+    /// prospect than an obvious one, because how confidently a structure is
+    /// mapped is part of whether it is there — which is what a detect class
+    /// means, said as risk rather than only as visibility.
+    /// </summary>
+    [Fact]
+    public void R20d7V1_a_subtler_trap_is_a_worse_prospect()
+    {
+        var odds = new HashSet<double>();
+
+        for (ulong seed = 1UL; seed < 20UL && odds.Count < 2; seed++)
+        {
+            Engine engine = NewGame(seed);
+            engine.Pipeline.AdvanceTick();
+
+            IReadOnlyList<ProspectView> offered = engine.ReadModel!.Prospects;
+
+            for (int i = 0; i < offered.Count; i++) odds.Add(offered[i].ProbabilityOfSuccess);
+        }
+
+        Assert.True(odds.Count > 1,
+            "every prospect in the basin carries identical odds; the trap factor is not " +
+            "being weighted by how the structure is expressed");
+    }
+
+    /// <summary>
+    /// THE PLAY DIES TOGETHER. A well that fails on a shared element re-prices
+    /// every OTHER prospect drawing on the same petroleum system — and that is
+    /// the whole reason exploration is a campaign rather than a series of
+    /// independent bets. A player learns something they did not pay for.
+    ///
+    /// <para>The second assertion is the one that stops this being a global
+    /// penalty dressed up: prospects in a DIFFERENT play must not move at all.
+    /// If they did, "spread the risk across plays" would be advice with no
+    /// mechanism behind it.</para>
+    /// </summary>
+    [Fact]
+    public void R20d7V1_a_dry_hole_reprices_its_play_and_only_its_play()
+    {
+        // A basin with two prospects in ONE play and at least one in another —
+        // the only shape in which both halves of the claim can be checked.
+        for (ulong seed = 1UL; seed < 60UL; seed++)
+        {
+            Engine engine = NewGame(seed);
+            engine.Pipeline.AdvanceTick();
+
+            IReadOnlyList<ProspectView> before = engine.ReadModel!.Prospects;
+
+            int sibling = -1, stranger = -1;
+
+            for (int i = 1; i < before.Count; i++)
+            {
+                if (before[i].Play == before[0].Play && sibling < 0) sibling = i;
+                if (before[i].Play != before[0].Play && stranger < 0) stranger = i;
+            }
+
+            if (sibling < 0 || stranger < 0) continue;
+
+            var risks = engine.Provided.Resolve<OGSim.Information.ProspectRisks>();
+
+            // A hole on the first prospect finds no source rock.
+            risks.Drilled(before[0].Prospect, PosFactor.Source, present: false);
+
+            engine.Pipeline.AdvanceTick();
+
+            IReadOnlyList<ProspectView> after = engine.ReadModel!.Prospects;
+
+            Assert.True(after[sibling].Source < before[sibling].Source,
+                "a dry hole on source rock left the rest of its own play untouched");
+
+            Assert.Equal(before[stranger].Source, after[stranger].Source, precision: 12);
+
+            // And the trap factor is the prospect's own, so a source failure
+            // leaves it exactly where it was.
+            Assert.Equal(before[sibling].Trap, after[sibling].Trap, precision: 12);
+
+            return;
+        }
+
+        Assert.Fail("sixty basins produced none with two plays represented");
+    }
 }

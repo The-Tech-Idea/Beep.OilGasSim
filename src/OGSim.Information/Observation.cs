@@ -214,6 +214,30 @@ public sealed class ProspectRisk
         _shared.Add(factor);
     }
 
+    /// <summary>
+    /// Re-weights one factor to a given mean WITHOUT changing how much evidence
+    /// stands behind it — α+β is preserved, so a prospect mapped with less
+    /// confidence starts lower but is moved by the first well exactly as far as
+    /// a confident one would be.
+    /// </summary>
+    public void Weigh(PosFactor factor, double mean)
+    {
+        if (mean is <= 0.0 or > 1.0)
+            throw new ModelFault("SDD-008 §4", null,
+                "a factor's mean is a probability in (0, 1]; zero could never be moved " +
+                "off zero by any amount of evidence");
+
+        if (_shared.Contains(factor))
+            throw new ModelFault("SDD-008 §4", null,
+                $"factor {factor} belongs to the play; re-weighting it here would let one " +
+                "prospect quietly restate what the whole play believes");
+
+        FactorBelief current = _factors[factor];
+        double evidence = current.Alpha + current.Beta;
+
+        _factors[factor] = new FactorBelief(evidence * mean, evidence * (1.0 - mean));
+    }
+
     private static void Validate(FactorBelief belief)
     {
         if (belief.Alpha <= 0.0 || belief.Beta <= 0.0)

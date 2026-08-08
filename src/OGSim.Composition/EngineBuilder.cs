@@ -820,6 +820,36 @@ internal static class Defaults
     // and the water it pushes in arrives at the producers — which is the story
     // the late game is made of and the reason any of the water work matters.
 
+    /// <summary>
+    /// What a company believes about a petroleum system before it has drilled
+    /// anything (SDD-008 §4). Mean 0.7 per factor — and five of those multiply
+    /// to about one chance in six, which is the honest arithmetic of exploration
+    /// and the reason a player reasoning factor by factor over-estimates.
+    ///
+    /// <para>The MAGNITUDE is the deliberate part: α+β = 4 is four wells' worth
+    /// of conviction, so the first result moves the number visibly and the
+    /// tenth barely does. A heavy prior would make drilling uninformative, which
+    /// would take the campaign out of exploration.</para>
+    /// </summary>
+    public static FactorBelief ExplorationPrior { get; } = new(Alpha: 2.8, Beta: 1.2);
+
+    /// <summary>
+    /// How confidently a trap of each subtlety class is mapped (design 06 §2.2).
+    /// A four-way dome on good seismic is nearly certain to be there; a subtle
+    /// stratigraphic pinch-out is a interpretation somebody could be wrong
+    /// about — which is exactly what a detect class means, expressed as risk
+    /// rather than as visibility alone.
+    /// </summary>
+    public static double TrapConfidenceOf(DetectClass subtlety) => subtlety switch
+    {
+        DetectClass.D0 => 0.95,
+        DetectClass.D1 => 0.80,
+        DetectClass.D2 => 0.60,
+        DetectClass.D3 => 0.40,
+        _ => throw new ContentFault("SDD-008 §4", null,
+            $"no trap confidence is stated for detect class {subtlety}"),
+    };
+
     /// <summary>The pressure a fresh field and its aquifer both start at.</summary>
     public static Pressure InitialReservoirPressure { get; } = new(30.0e6);
 
@@ -1117,7 +1147,8 @@ public static class EngineBuilder
             new WorldSink(
                 ready.Engine.Provided.Resolve<FieldControl>(),
                 ready.Engine.Provided.Resolve<IBeliefStore>(),
-                ready.Engine.Provided.Resolve<WorldState>()),
+                ready.Engine.Provided.Resolve<WorldState>(),
+                ready.Engine.Provided.Resolve<OGSim.Information.ProspectRisks>()),
 
             // The world-generation stream, and only it. Adding a draw to any
             // other subsystem can never shift what this world contains

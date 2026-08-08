@@ -62,6 +62,41 @@ public sealed record WellStatusView(
     SurfaceVolume ProducedThisTick);
 
 /// <summary>
+/// An undrilled structure and what the company thinks its chances are
+/// (SDD-008 §4, SDD-017 §2's R20d.7 amendment).
+///
+/// <para>THE CHOICE THE EXPLORATION GAME IS MADE OF. A basin offers dozens of
+/// these and a company can afford to drill a handful, so the whole of the early
+/// game is reading this list and being wrong about it in an informed way.</para>
+///
+/// <para>POS is the PRODUCT of five factor means, and it is carried alongside
+/// them rather than instead of them: "one chance in six" tells a player what to
+/// expect and not what to do about it, whereas "one chance in six, and it is the
+/// seal we doubt" is the difference between drilling and shooting more
+/// seismic.</para>
+/// </summary>
+public sealed record ProspectView(
+    EntityRef Prospect,
+
+    /// <summary>
+    /// The petroleum system it draws on. THE FIELD THAT SAYS TWO BETS ARE NOT
+    /// INDEPENDENT: source, reservoir and seal are one belief across a play, so
+    /// a dry hole on any prospect in it re-prices all the others. A player who
+    /// cannot see this is choosing between prospects that look separate and are
+    /// not, and cannot reason about spreading risk across plays at all.
+    /// </summary>
+    ContentId Play,
+
+    Coordinate At,
+    Length ToMarket,
+    double ProbabilityOfSuccess,
+    double Source,
+    double Reservoir,
+    double Seal,
+    double Trap,
+    double Timing);
+
+/// <summary>
 /// The month's facts, as an objective reads them and the read model reports
 /// them.
 ///
@@ -124,7 +159,17 @@ public sealed record FieldReadModel(
     /// re-opening it or abandoning it all name a well, and a count cannot be
     /// named.</para>
     /// </summary>
-    IReadOnlyList<WellStatusView> Wellbores)
+    IReadOnlyList<WellStatusView> Wellbores,
+
+    /// <summary>
+    /// Every structure the world placed that the company has not drilled, with
+    /// what it believes about each (SDD-017 §2's R20d.7 amendment).
+    ///
+    /// <para>Empty for a hand-built field, which is correct rather than missing:
+    /// a prospect is something a world GENERATED and a scenario that placed its
+    /// reservoir directly has nothing to explore.</para>
+    /// </summary>
+    IReadOnlyList<ProspectView> Prospects)
 {
     /// <summary>Where the chain is jammed, if anywhere — the elements that
     /// refused production this tick.</summary>
@@ -176,7 +221,9 @@ internal sealed class FieldProjection(
     CompanyState company,
     FieldControl field,
     ActivityState activities,
-    IBeliefStore beliefs)
+    IBeliefStore beliefs,
+    WorldState world,
+    OGSim.Information.ProspectRisks risks)
 {
     public FieldPosition Take(Tick tick, GameDate date, bool insolvent) =>
         new(tick, date, company.Ledger.Cash, field.WellCount, activities.InProgress,
@@ -185,7 +232,45 @@ internal sealed class FieldProjection(
     public FieldReadModel Publish(FieldPosition position, ScenarioProgress progress) =>
         new(position.Tick, position.Date, position.Cash, position.Wells,
             position.ActivitiesRunning, position.ProducedThisTick, position.Insolvent,
-            progress, Project(beliefs), loop.Chain(), field.Wells());
+            progress, Project(beliefs), loop.Chain(), field.Wells(), Prospects());
+
+    /// <summary>
+    /// The undrilled structures, in the order the world placed them (D-5).
+    ///
+    /// <para>Rebuilt whole each tick like every other part of the read model,
+    /// because POS moves when a well reports and a host holding last month's
+    /// list would be choosing against a number the company no longer
+    /// believes.</para>
+    /// </summary>
+    private IReadOnlyList<ProspectView> Prospects()
+    {
+        var seen = new List<ProspectView>();
+
+        IReadOnlyList<EntityId<IReservoirCompartmentEntity>> prospects = world.Prospects;
+
+        for (int i = 0; i < prospects.Count; i++)
+        {
+            var at = new EntityRef(EntityKind.Compartment, prospects[i].Value);
+
+            if (!risks.Knows(at)) continue;
+
+            OGSim.Information.ProspectRisk risk = risks.Of(at);
+
+            seen.Add(new ProspectView(
+                at,
+                risks.PlayOf(at),
+                world.PositionOf(prospects[i]),
+                world.DistanceToMarket(prospects[i]) ?? new Length(0.0),
+                risk.ProbabilityOfSuccess,
+                OGSim.Information.ProspectRisk.MeanOf(risk[PosFactor.Source]),
+                OGSim.Information.ProspectRisk.MeanOf(risk[PosFactor.Reservoir]),
+                OGSim.Information.ProspectRisk.MeanOf(risk[PosFactor.Seal]),
+                OGSim.Information.ProspectRisk.MeanOf(risk[PosFactor.Trap]),
+                OGSim.Information.ProspectRisk.MeanOf(risk[PosFactor.Timing])));
+        }
+
+        return seen;
+    }
 
     /// <summary>
     /// SDD-008 §8's projection, at the close: everything the company has learned,

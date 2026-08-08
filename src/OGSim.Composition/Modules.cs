@@ -477,6 +477,7 @@ internal sealed class FieldModule() : EngineModule(Declare(
         typeof(IFlowElementRegistry),
         typeof(SurfaceChain),
         typeof(WorldState),
+        typeof(OGSim.Information.ProspectRisks),
     ],
     // Provided here because the field is where an asset is CREATED, and
     // registration is unconditional at creation (SDD-007 §6).
@@ -645,7 +646,9 @@ internal sealed class FieldModule() : EngineModule(Declare(
         composition.Own(activities);
 
         var projection = new FieldProjection(
-            loop, company, field, activities, composition.Require<IBeliefStore>());
+            loop, company, field, activities, composition.Require<IBeliefStore>(),
+            composition.Require<WorldState>(),
+            composition.Require<OGSim.Information.ProspectRisks>());
 
         // The scenario is CONTENT (design 03 §3.3): the win condition is an
         // objective over a read-model path, not a comparison compiled into a
@@ -699,6 +702,7 @@ internal sealed class InformationModule() : EngineModule(Declare(
         typeof(IBeliefStore),
         typeof(IObservationModel),
         typeof(OGSim.Information.ObservationSampler),
+        typeof(OGSim.Information.ProspectRisks),
     ],
     requires: [typeof(IAuditTrail), typeof(IRandomSource)],
     ownsState: NothingOwnedYet,
@@ -715,6 +719,12 @@ internal sealed class InformationModule() : EngineModule(Declare(
 
         var model = new RegionalObservationModel();
         composition.Provide<IObservationModel>(model);
+
+        // R20d.7's POS, composed at last. `ProspectRisk` was built, tested and
+        // consumed by nobody for four phases — because a probability of success
+        // is a statement about a PROSPECT and nothing generated prospects. The
+        // world does now.
+        composition.Provide(new OGSim.Information.ProspectRisks(Defaults.ExplorationPrior));
 
         // R14.3's sampler, COMPOSED. It existed, was tested and was provided by
         // nobody, so the first activity that measured anything sampled truth by

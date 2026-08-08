@@ -273,6 +273,31 @@ public sealed record ObjectiveView(
   supplying its section through a projection contract — the read model
   assembly references belief and ledger types, never truth (R21-V4).
 
+> **R20d.7 amendment (finding 168). `ProspectView`.** POS was specified in
+> SDD-008 §4, implemented as `ProspectRisk`, unit-tested, and consumed by
+> nothing for four phases — because a probability of success is a statement
+> about a PROSPECT and nothing generated prospects. R20d.8 generates dozens, so
+> the question a player actually plays becomes askable and the read model has to
+> answer it.
+>
+> ```csharp
+> public sealed record ProspectView(
+>     EntityRef Prospect, ContentId Play, Coordinate At, Length ToMarket,
+>     double ProbabilityOfSuccess,
+>     double Source, double Reservoir, double Seal, double Trap, double Timing);
+> ```
+>
+> The five factors travel WITH the product, not instead of it: "one chance in
+> six" tells a player what to expect and not what to do, whereas "one in six and
+> it is the seal we doubt" is the difference between drilling and shooting more
+> seismic. `Play` is carried for the same reason — it is the field that says two
+> bets are not independent, and without it a player cannot reason about
+> spreading risk across plays at all.
+>
+> Empty for a hand-built field, which is correct and not missing: a prospect is
+> something a world GENERATED, and a scenario that placed its reservoir directly
+> has nothing to explore.
+
 ## 3. The path registry (SDD-014 §2's source)
 
 Generated **from these records by reflection at build time**: every public

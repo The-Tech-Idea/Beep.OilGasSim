@@ -100,6 +100,15 @@ public sealed class WorldState
     /// route oil to a sea that is not there or charge a test field for a journey
     /// it never makes.</para>
     /// </summary>
+    /// <summary>Where a prospect sits, for a map and for measuring against
+    /// anything else on it.</summary>
+    public Coordinate PositionOf(EntityId<IReservoirCompartmentEntity> prospect)
+    {
+        int index = _prospects.IndexOf(prospect);
+
+        return index < 0 ? default : _at[index];
+    }
+
     public Length? DistanceToMarket(EntityId<IReservoirCompartmentEntity> prospect)
     {
         int index = _prospects.IndexOf(prospect);
@@ -129,16 +138,23 @@ public sealed class WorldSink : IWorldSink
     private readonly FieldControl _field;
     private readonly IBeliefStore _beliefs;
     private readonly WorldState _world;
+    private readonly OGSim.Information.ProspectRisks _risks;
 
-    public WorldSink(FieldControl field, IBeliefStore beliefs, WorldState world)
+    public WorldSink(
+        FieldControl field,
+        IBeliefStore beliefs,
+        WorldState world,
+        OGSim.Information.ProspectRisks risks)
     {
         ArgumentNullException.ThrowIfNull(field);
         ArgumentNullException.ThrowIfNull(beliefs);
         ArgumentNullException.ThrowIfNull(world);
+        ArgumentNullException.ThrowIfNull(risks);
 
         _field = field;
         _beliefs = beliefs;
         _world = world;
+        _risks = risks;
     }
 
     private EntityId<IReservoirCompartmentEntity> _prospectJustBuilt;
@@ -176,6 +192,20 @@ public sealed class WorldSink : IWorldSink
                 Defaults.AquiferResponseTime);
 
             _world.Add(_prospectJustBuilt, accumulation.Closure.Centroid);
+
+            // WHAT THE COMPANY THINKS ITS CHANCES ARE (SDD-008 §4). Registered
+            // with the PLAY it belongs to, so source, reservoir and seal are one
+            // belief shared across every prospect drawing on the same system —
+            // and a dry hole on any of them re-prices all the others.
+            //
+            // The trap factor is this structure's own, weighted by how subtly it
+            // is expressed: a four-way dome is nearly certainly there, a
+            // stratigraphic pinch-out is an interpretation. That is what a
+            // detect class means, said as risk rather than only as visibility.
+            _risks.Register(
+                new EntityRef(EntityKind.Compartment, _prospectJustBuilt.Value),
+                accumulation.Play,
+                Defaults.TrapConfidenceOf(accumulation.Subtlety));
         }
     }
 
