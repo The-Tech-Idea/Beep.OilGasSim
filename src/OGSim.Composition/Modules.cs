@@ -604,7 +604,8 @@ internal sealed class FieldModule() : EngineModule(Declare(
             new DrillWellActivity(
                 Defaults.DrillWellTerms, Defaults.MaximumDrillingDepth, field,
                 Defaults.CompletionFor,
-                composition.Require<OGSim.Information.ProspectRisks>()),
+                composition.Require<OGSim.Information.ProspectRisks>(),
+                composition.Require<WorldState>()),
 
             new WellTestActivity(
                 Defaults.WellTestTerms, Defaults.WellTestSource,

@@ -39,8 +39,15 @@ namespace OGSim.Composition;
 /// </summary>
 public sealed class WorldState
 {
-    private readonly List<EntityId<IReservoirCompartmentEntity>> _prospects = [];
+    private readonly List<EntityId<IProspect>> _prospects = [];
     private readonly List<Coordinate> _at = [];
+
+    // The compartment behind a prospect, for the ones charge reached. A prospect
+    // missing from this is a DRY STRUCTURE: real, mappable, drillable, and with
+    // nothing under it (SDD-010 §4b). Truth — a caller outside composition
+    // cannot see it, and drilling is the only thing that asks.
+    private readonly Dictionary<EntityId<IProspect>,
+                                EntityId<IReservoirCompartmentEntity>> _found = [];
     private readonly List<ClimateRegion> _climate = [];
     private readonly List<Jurisdiction> _jurisdictions = [];
 
@@ -67,17 +74,84 @@ public sealed class WorldState
     /// choose between — and, once R20d.7's probability of success has a subject,
     /// what they are choosing on.
     /// </summary>
-    public IReadOnlyList<EntityId<IReservoirCompartmentEntity>> Prospects => _prospects;
+    public IReadOnlyList<EntityId<IProspect>> Prospects => _prospects;
 
     /// <summary>How many compartments generation built, so the subject the
     /// generator assumed can be checked rather than trusted.</summary>
     public int Count => _prospects.Count;
 
-    internal void Add(EntityId<IReservoirCompartmentEntity> prospect, Coordinate at)
+    /// <summary>Places a closed structure and hands back its identity. Every
+    /// one the generator finds, charged or dry (SDD-010 §4b).</summary>
+    internal EntityId<IProspect> Place(Coordinate at)
     {
+        var prospect = new EntityId<IProspect>((ulong)(_prospects.Count + 1));
+
         _prospects.Add(prospect);
         _at.Add(at);
+
+        return prospect;
     }
+
+    /// <summary>
+    /// A field a SCENARIO declares outright rather than one a world buried
+    /// (SDD-010 §4b). It is already known to be there, so it is placed and found
+    /// in one step and carries no exploration risk — there is nothing left to be
+    /// wrong about, which is exactly what "here is your field, develop it"
+    /// means.
+    /// </summary>
+    public EntityId<IProspect> DeclareKnownField(
+        EntityId<IReservoirCompartmentEntity> compartment)
+    {
+        EntityId<IProspect> prospect = Place(default);
+
+        Found(prospect, compartment);
+
+        return prospect;
+    }
+
+    internal void Found(EntityId<IProspect> prospect, EntityId<IReservoirCompartmentEntity> in_)
+    {
+        _found.Add(prospect, in_);
+        _structureOf.Add(in_, prospect);
+    }
+
+    private readonly Dictionary<EntityId<IReservoirCompartmentEntity>,
+                                EntityId<IProspect>> _structureOf = [];
+
+    /// <summary>
+    /// How far a DISCOVERED field is from market — the same distance as the
+    /// structure it was found in, asked the other way round because the surface
+    /// chain is laid when a well is tied into a compartment and the compartment
+    /// is what that code has in hand.
+    /// </summary>
+    public Length? DistanceToMarketOf(EntityId<IReservoirCompartmentEntity> compartment) =>
+        _structureOf.TryGetValue(compartment, out EntityId<IProspect> prospect)
+            ? DistanceToMarket(prospect)
+            : null;
+
+    /// <summary>
+    /// Which structure a known compartment belongs to. For a scenario that
+    /// declared its field outright, this is what a drilling command aims at —
+    /// the prospect, because that is what drilling targets whether or not
+    /// anybody already knows what is under it.
+    /// </summary>
+    public EntityId<IProspect> ProspectFor(EntityId<IReservoirCompartmentEntity> compartment) =>
+        _structureOf.TryGetValue(compartment, out EntityId<IProspect> prospect)
+            ? prospect
+            : throw new InvariantFault("SDD-010 §4b", null,
+                $"compartment {compartment.Value} belongs to no structure; a field is either " +
+                "generated or declared, and neither happened here");
+
+    /// <summary>
+    /// What is actually under a prospect, or null for a dry structure — TRUTH,
+    /// and the only thing entitled to ask is a bit that has already been
+    /// drilled. It is `internal` for that reason: a read model that could call
+    /// this would hand the player the answer POS exists to make them guess.
+    /// </summary>
+    internal EntityId<IReservoirCompartmentEntity>? Beneath(EntityId<IProspect> prospect) =>
+        _found.TryGetValue(prospect, out EntityId<IReservoirCompartmentEntity> found)
+            ? found
+            : null;
 
     internal void Surface(GeneratedSurface surface)
     {
@@ -102,14 +176,14 @@ public sealed class WorldState
     /// </summary>
     /// <summary>Where a prospect sits, for a map and for measuring against
     /// anything else on it.</summary>
-    public Coordinate PositionOf(EntityId<IReservoirCompartmentEntity> prospect)
+    public Coordinate PositionOf(EntityId<IProspect> prospect)
     {
         int index = _prospects.IndexOf(prospect);
 
         return index < 0 ? default : _at[index];
     }
 
-    public Length? DistanceToMarket(EntityId<IReservoirCompartmentEntity> prospect)
+    public Length? DistanceToMarket(EntityId<IProspect> prospect)
     {
         int index = _prospects.IndexOf(prospect);
 
@@ -157,11 +231,34 @@ public sealed class WorldSink : IWorldSink
         _risks = risks;
     }
 
-    private EntityId<IReservoirCompartmentEntity> _prospectJustBuilt;
+    private ulong _prospectsPlaced;
 
     public void AddAccumulation(GeneratedAccumulation accumulation)
     {
         ArgumentNullException.ThrowIfNull(accumulation);
+
+        // EVERY CLOSED STRUCTURE IS A PROSPECT, charged or not (SDD-010 §4b).
+        // The id is assigned here and in generation order, which is what lets
+        // the generator name its regional observations positionally.
+        EntityId<IProspect> prospect = _world.Place(accumulation.Closure.Centroid);
+
+        _prospectsPlaced++;
+
+        // placed below
+
+        // WHAT THE COMPANY THINKS ITS CHANCES ARE (SDD-008 §4). Registered with
+        // the PLAY it belongs to, so source, reservoir and seal are one belief
+        // shared across every prospect drawing on the same system — and a dry
+        // hole on any of them re-prices all the others.
+        //
+        // The trap factor is this structure's own, weighted by how subtly it is
+        // expressed: a four-way dome is nearly certainly there, a stratigraphic
+        // pinch-out is an interpretation. That is what a detect class means,
+        // said as risk rather than only as visibility.
+        _risks.Register(
+            new EntityRef(EntityKind.Prospect, prospect.Value),
+            accumulation.Play,
+            Defaults.TrapConfidenceOf(accumulation.Subtlety));
 
         for (int i = 0; i < accumulation.Compartments.Count; i++)
         {
@@ -172,7 +269,7 @@ public sealed class WorldSink : IWorldSink
             // structure is reach all the way into the inflow equation — which is
             // the difference between a field that is large because a content
             // file says so and one that is large because of its shape.
-            _prospectJustBuilt = _field.AddCompartment(
+            _world.Found(prospect, _field.AddCompartment(
                 generated,
                 permeability: Defaults.Inflow.Permeability,
                 netThickness: Defaults.Inflow.PerforatedInterval,
@@ -189,23 +286,8 @@ public sealed class WorldSink : IWorldSink
                 Defaults.Wettability,
                 Defaults.Drive,
                 Defaults.AquiferStrength,
-                Defaults.AquiferResponseTime);
+                Defaults.AquiferResponseTime));
 
-            _world.Add(_prospectJustBuilt, accumulation.Closure.Centroid);
-
-            // WHAT THE COMPANY THINKS ITS CHANCES ARE (SDD-008 §4). Registered
-            // with the PLAY it belongs to, so source, reservoir and seal are one
-            // belief shared across every prospect drawing on the same system —
-            // and a dry hole on any of them re-prices all the others.
-            //
-            // The trap factor is this structure's own, weighted by how subtly it
-            // is expressed: a four-way dome is nearly certainly there, a
-            // stratigraphic pinch-out is an interpretation. That is what a
-            // detect class means, said as risk rather than only as visibility.
-            _risks.Register(
-                new EntityRef(EntityKind.Compartment, _prospectJustBuilt.Value),
-                accumulation.Play,
-                Defaults.TrapConfidenceOf(accumulation.Subtlety));
         }
     }
 
@@ -252,16 +334,14 @@ public sealed class WorldSink : IWorldSink
     {
         ArgumentNullException.ThrowIfNull(observation);
 
-        // THE GENERATOR NAMES ITS SUBJECT BY POSITION — accumulation i becomes
-        // compartment i+1 — which holds only while every accumulation has
-        // exactly one compartment. Checked rather than assumed: a multi-
-        // compartment accumulation would silently attach a belief about one
-        // structure to a different one, and a belief pointing at the wrong
-        // subject is worse than no belief at all.
-        if (observation.Subject.Value > (ulong)_world.Count)
+        // THE GENERATOR NAMES ITS SUBJECT BY POSITION — structure i becomes
+        // prospect i+1. Checked rather than assumed: a belief pointing at the
+        // wrong subject is worse than no belief at all, and it would be
+        // invisible — a plausible number attached to the wrong structure.
+        if (observation.Subject.Value > _prospectsPlaced)
             throw new InvariantFault("SDD-010 §4", observation.Subject,
-                $"regional data names compartment {observation.Subject.Value} and only " +
-                $"{_world.Count} were built; the generator's positional subject and the " +
+                $"regional data names prospect {observation.Subject.Value} and only " +
+                $"{_prospectsPlaced} were placed; the generator's positional subject and the " +
                 "compartments this sink created have drifted apart");
 
         _beliefs.Apply(observation);

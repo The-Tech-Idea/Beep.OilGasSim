@@ -37,12 +37,27 @@ public sealed class GameplayTests
                 Defaults.Wettability, Defaults.Drive,
                 Defaults.AquiferStrength, Defaults.AquiferResponseTime);
 
+        // A SCENARIO DECLARING A KNOWN FIELD (SDD-010 §4b). These fixtures place
+        // their reservoir directly rather than generating a basin, so it is
+        // already known to be there — placed and found in one step, carrying no
+        // exploration risk because there is nothing left to be wrong about.
+        built.Engine.Provided.Resolve<WorldState>().DeclareKnownField(target);
+
         return (built.Engine, target);
     }
 
+    /// <summary>
+    /// The structure a declared field sits in. Drilling targets a PROSPECT
+    /// (SDD-010 §4b) — a hole is put down where a company thinks there is
+    /// something, and whether there is, is what the well finds out.
+    /// </summary>
+    private static EntityId<IProspect> Structure(
+        Engine engine, EntityId<IReservoirCompartmentEntity> field) =>
+        engine.Provided.Resolve<WorldState>().ProspectFor(field);
+
     private static DrillWellCommand Drill(
-        EntityId<IReservoirCompartmentEntity> target, double depth = 2000.0) =>
-        new(target, new Length(depth));
+        Engine engine, EntityId<IReservoirCompartmentEntity> target, double depth = 2000.0) =>
+        new(Structure(engine, target), new Length(depth));
 
     // ------------------------------------------------------------- agency
 
@@ -59,7 +74,7 @@ public sealed class GameplayTests
         engine.Pipeline.AdvanceTick();
         Assert.Equal(0.0, engine.ReadModel!.ProducedThisTick.CubicMetres);
 
-        Assert.IsType<Accepted>(engine.Commands.Submit(Drill(target)));
+        Assert.IsType<Accepted>(engine.Commands.Submit(Drill(engine, target)));
 
         // Still drilling: committed, paid for, nothing to show.
         engine.Pipeline.AdvanceTick();
@@ -88,7 +103,7 @@ public sealed class GameplayTests
         // Six wells at 0.6 — with this seed some land and some do not, which is
         // the only assertion worth making: the outcome is neither guaranteed nor
         // impossible.
-        for (var attempt = 0; attempt < 6; attempt++) engine.Commands.Submit(Drill(target));
+        for (var attempt = 0; attempt < 6; attempt++) engine.Commands.Submit(Drill(engine, target));
 
         for (var month = 0; month < 6; month++) engine.Pipeline.AdvanceTick();
 
@@ -113,8 +128,8 @@ public sealed class GameplayTests
 
         for (var attempt = 0; attempt < 6; attempt++)
         {
-            first.Commands.Submit(Drill(firstTarget));
-            second.Commands.Submit(Drill(secondTarget));
+            first.Commands.Submit(Drill(first, firstTarget));
+            second.Commands.Submit(Drill(second, secondTarget));
         }
 
         for (var month = 0; month < 6; month++)
@@ -136,7 +151,7 @@ public sealed class GameplayTests
         engine.Pipeline.AdvanceTick();
         Money before = engine.ReadModel!.Cash;
 
-        engine.Commands.Submit(Drill(target));
+        engine.Commands.Submit(Drill(engine, target));
         engine.Pipeline.AdvanceTick();
 
         // The well is bought and the month is produced, so cash moves by both.
@@ -158,7 +173,7 @@ public sealed class GameplayTests
         // Too deep for the E1 drilling envelope, and — after we spend the money —
         // unaffordable too.
         Rejected rejected = Assert.IsType<Rejected>(
-            engine.Commands.Submit(Drill(target, depth: 9_000.0)));
+            engine.Commands.Submit(Drill(engine, target, depth: 9_000.0)));
 
         Assert.Contains(rejected.Reasons,
             reason => reason.LocId == "$loc:reject.beyond-drilling-envelope");
@@ -174,7 +189,7 @@ public sealed class GameplayTests
         (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled();
 
         Rejected rejected = Assert.IsType<Rejected>(
-            engine.Commands.Submit(Drill(target, depth: -1.0)));
+            engine.Commands.Submit(Drill(engine, target, depth: -1.0)));
 
         Assert.All(rejected.Reasons, reason =>
         {
@@ -196,9 +211,9 @@ public sealed class GameplayTests
     {
         (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled();
 
-        Assert.IsType<Accepted>(engine.Commands.Submit(Drill(target)));
+        Assert.IsType<Accepted>(engine.Commands.Submit(Drill(engine, target)));
 
-        Rejected rejected = Assert.IsType<Rejected>(engine.Commands.Submit(Drill(target)));
+        Rejected rejected = Assert.IsType<Rejected>(engine.Commands.Submit(Drill(engine, target)));
 
         RejectionReason reason = Assert.Single(rejected.Reasons);
         Assert.Equal("$loc:reject.resource-committed", reason.LocId);
@@ -215,13 +230,13 @@ public sealed class GameplayTests
     {
         (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled();
 
-        Assert.IsType<Accepted>(engine.Commands.Submit(Drill(target)));
+        Assert.IsType<Accepted>(engine.Commands.Submit(Drill(engine, target)));
 
         // Past the worst-case reservation: four months at the 1.8 disaster
         // factor is 216 days, so eight months clears any outcome.
         for (var month = 0; month < 8; month++) engine.Pipeline.AdvanceTick();
 
-        Assert.IsType<Accepted>(engine.Commands.Submit(Drill(target)));
+        Assert.IsType<Accepted>(engine.Commands.Submit(Drill(engine, target)));
     }
 
     /// <summary>
@@ -244,7 +259,7 @@ public sealed class GameplayTests
 
         Assert.True(engine.ReadModel!.Cash < Money.FromMillions(8.0));
 
-        Rejected rejected = Assert.IsType<Rejected>(engine.Commands.Submit(Drill(target)));
+        Rejected rejected = Assert.IsType<Rejected>(engine.Commands.Submit(Drill(engine, target)));
 
         Assert.Contains(rejected.Reasons,
             reason => reason.LocId == "$loc:reject.insufficient-cash");
@@ -264,7 +279,7 @@ public sealed class GameplayTests
         engine.Pipeline.AdvanceTick();
         Money atStart = engine.ReadModel!.Cash;
 
-        Assert.IsType<Accepted>(engine.Commands.Submit(Drill(target)));
+        Assert.IsType<Accepted>(engine.Commands.Submit(Drill(engine, target)));
 
         engine.Pipeline.AdvanceTick();
         Money afterOneMonth = engine.ReadModel!.Cash;
@@ -520,7 +535,7 @@ public sealed class GameplayTests
         for (var month = 0; month < 120; month++)
         {
             if (engine.ReadModel?.ActivitiesRunning == 0 && engine.ReadModel.Wells < 6)
-                engine.Commands.Submit(Drill(target));
+                engine.Commands.Submit(Drill(engine, target));
 
             // Wait for a second well before buying the bigger vessel: one well
             // cannot fill the first one, so the upgrade would be money spent on
@@ -602,7 +617,7 @@ public sealed class GameplayTests
     {
         (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled();
 
-        for (var attempt = 0; attempt < 5; attempt++) engine.Commands.Submit(Drill(target));
+        for (var attempt = 0; attempt < 5; attempt++) engine.Commands.Submit(Drill(engine, target));
 
         while (engine.ReadModel?.Outcome is null or ObjectiveState.Pending)
             engine.Pipeline.AdvanceTick();
@@ -638,7 +653,7 @@ public sealed class GameplayTests
         (Engine idle, _) = Undrilled();
         (Engine active, EntityId<IReservoirCompartmentEntity> target) = Undrilled();
 
-        Assert.IsType<Accepted>(active.Commands.Submit(Drill(target)));
+        Assert.IsType<Accepted>(active.Commands.Submit(Drill(active, target)));
 
         for (var month = 0; month < 24; month++)
         {

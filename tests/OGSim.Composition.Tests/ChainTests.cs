@@ -41,8 +41,23 @@ public sealed class ChainTests
                 Defaults.Wettability, Defaults.Drive,
                 Defaults.AquiferStrength, Defaults.AquiferResponseTime);
 
+        // A SCENARIO DECLARING A KNOWN FIELD (SDD-010 §4b). These fixtures place
+        // their reservoir directly rather than generating a basin, so it is
+        // already known to be there — placed and found in one step, carrying no
+        // exploration risk because there is nothing left to be wrong about.
+        built.Engine.Provided.Resolve<WorldState>().DeclareKnownField(target);
+
         return (built.Engine, target);
     }
+
+    /// <summary>
+    /// The structure a declared field sits in. Drilling targets a PROSPECT
+    /// (SDD-010 §4b) — a hole is put down where a company thinks there is
+    /// something, and whether there is, is what the well finds out.
+    /// </summary>
+    private static EntityId<IProspect> Structure(
+        Engine engine, EntityId<IReservoirCompartmentEntity> field) =>
+        engine.Provided.Resolve<WorldState>().ProspectFor(field);
 
     /// <summary>Opens a well directly, the way world generation will — no rig, no
     /// four months, no dice. What is under test is the chain, not drilling.</summary>
@@ -812,7 +827,7 @@ public sealed class ChainTests
         Assert.Equal(0, field.FreeSlots);
 
         var rejected = Assert.IsType<Rejected>(
-            engine.Commands.Submit(new DrillWellCommand(target, new Length(2000.0))));
+            engine.Commands.Submit(new DrillWellCommand(Structure(engine, target), new Length(2000.0))));
 
         Assert.Contains(rejected.Reasons,
             reason => reason.LocId == "$loc:reject.no-manifold-slot");

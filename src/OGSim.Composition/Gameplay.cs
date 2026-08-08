@@ -246,11 +246,11 @@ internal sealed class FieldProjection(
     {
         var seen = new List<ProspectView>();
 
-        IReadOnlyList<EntityId<IReservoirCompartmentEntity>> prospects = world.Prospects;
+        IReadOnlyList<EntityId<IProspect>> prospects = world.Prospects;
 
         for (int i = 0; i < prospects.Count; i++)
         {
-            var at = new EntityRef(EntityKind.Compartment, prospects[i].Value);
+            var at = new EntityRef(EntityKind.Prospect, prospects[i].Value);
 
             if (!risks.Knows(at)) continue;
 

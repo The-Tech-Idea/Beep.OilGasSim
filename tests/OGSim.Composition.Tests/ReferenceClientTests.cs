@@ -16,7 +16,7 @@ namespace OGSim.Composition.Tests;
 
 public sealed class ReferenceClientTests
 {
-    private static (Engine Engine, EntityId<IReservoirCompartmentEntity> Prospect) Field(
+    private static (Engine Engine, EntityId<IProspect> Prospect) Field(
         double poreVolume = 100.0e6)
     {
         Built built = Assert.IsType<Built>(EngineBuilder.Build(Fixture.Settings()));
@@ -39,7 +39,12 @@ public sealed class ReferenceClientTests
                 Defaults.Wettability, Defaults.Drive,
                 Defaults.AquiferStrength, Defaults.AquiferResponseTime);
 
-        return (built.Engine, prospect);
+        // A SCENARIO DECLARING A KNOWN FIELD (SDD-010 §4b). These fixtures place
+        // their reservoir directly rather than generating a basin, so it is
+        // already known to be there — placed and found in one step, carrying no
+        // exploration risk because there is nothing left to be wrong about.
+        return (built.Engine,
+                built.Engine.Provided.Resolve<WorldState>().DeclareKnownField(prospect));
     }
 
     /// <summary>
@@ -50,7 +55,7 @@ public sealed class ReferenceClientTests
     [Fact]
     public void R21V2_a_client_using_only_the_surface_can_play_and_win()
     {
-        (Engine engine, EntityId<IReservoirCompartmentEntity> prospect) = Field();
+        (Engine engine, EntityId<IProspect> prospect) = Field();
 
         Session session = new Operator(engine, prospect, wellTarget: 6, hurdle: Money.Zero).Play(months: 120);
 
@@ -70,7 +75,7 @@ public sealed class ReferenceClientTests
     [Fact]
     public void R21V2_a_client_left_running_closes_the_field_when_it_is_finished()
     {
-        (Engine engine, EntityId<IReservoirCompartmentEntity> prospect) = Field();
+        (Engine engine, EntityId<IProspect> prospect) = Field();
 
         // A HURDLE, which is how the decision is actually made: this operator
         // wants $4M a month from the field and closes it when it stops
@@ -132,7 +137,7 @@ public sealed class ReferenceClientTests
     [InlineData(500.0e6)]
     public void R20d8V1_one_aquifer_setting_plays_against_any_field_size(double poreVolume)
     {
-        (Engine engine, EntityId<IReservoirCompartmentEntity> prospect) = Field(poreVolume);
+        (Engine engine, EntityId<IProspect> prospect) = Field(poreVolume);
 
         Session session = new Operator(engine, prospect, wellTarget: 3, hurdle: Money.Zero)
             .Play(months: 240);
@@ -170,7 +175,7 @@ public sealed class ReferenceClientTests
 
     private static Money Earned(double poreVolume)
     {
-        (Engine engine, EntityId<IReservoirCompartmentEntity> prospect) = Field(poreVolume);
+        (Engine engine, EntityId<IProspect> prospect) = Field(poreVolume);
 
         return new Operator(engine, prospect, wellTarget: 3, hurdle: Money.Zero)
             .Play(months: 240)

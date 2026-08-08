@@ -813,7 +813,7 @@ public sealed class FieldControl
         //
         // Only on the FIRST tie-in: later wells join a line that is already laid,
         // and re-routing under oil is refused by the pipeline itself.
-        if (_slotsTaken == 0 && _world.DistanceToMarket(drains) is Length toMarket)
+        if (_slotsTaken == 0 && _world.DistanceToMarketOf(drains) is Length toMarket)
             _chain.Flowline.Route(_chain.Flowline.Geometry with { PipeLength = toMarket });
 
         EntityId<ICompletion> opened = _wells.Open(completion, drains);

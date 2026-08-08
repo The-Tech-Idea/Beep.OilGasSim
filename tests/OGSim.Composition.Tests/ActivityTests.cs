@@ -42,8 +42,23 @@ public sealed class ActivityTests
                 Defaults.Wettability, Defaults.Drive,
                 Defaults.AquiferStrength, Defaults.AquiferResponseTime);
 
+        // A SCENARIO DECLARING A KNOWN FIELD (SDD-010 §4b). These fixtures place
+        // their reservoir directly rather than generating a basin, so it is
+        // already known to be there — placed and found in one step, carrying no
+        // exploration risk because there is nothing left to be wrong about.
+        built.Engine.Provided.Resolve<WorldState>().DeclareKnownField(target);
+
         return (built.Engine, target);
     }
+
+    /// <summary>
+    /// The structure a declared field sits in. Drilling targets a PROSPECT
+    /// (SDD-010 §4b) — a hole is put down where a company thinks there is
+    /// something, and whether there is, is what the well finds out.
+    /// </summary>
+    private static EntityId<IProspect> Structure(
+        Engine engine, EntityId<IReservoirCompartmentEntity> field) =>
+        engine.Provided.Resolve<WorldState>().ProspectFor(field);
 
     /// <summary>An engine with one well already producing, so the downhole
     /// measurements have something to be run in.</summary>
@@ -56,7 +71,7 @@ public sealed class ActivityTests
         while (engine.ReadModel is null || engine.ReadModel.Wells == 0)
         {
             if (engine.ReadModel?.ActivitiesRunning == 0)
-                engine.Commands.Submit(new DrillWellCommand(target, new Length(2000.0)));
+                engine.Commands.Submit(new DrillWellCommand(Structure(engine, target), new Length(2000.0)));
 
             engine.Pipeline.AdvanceTick();
         }
@@ -166,7 +181,7 @@ public sealed class ActivityTests
         (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled();
 
         Assert.IsType<Accepted>(
-            engine.Commands.Submit(new DrillWellCommand(target, new Length(2000.0))));
+            engine.Commands.Submit(new DrillWellCommand(Structure(engine, target), new Length(2000.0))));
 
         Assert.IsType<Accepted>(engine.Commands.Submit(new SeismicSurveyCommand(target)));
 
@@ -298,7 +313,7 @@ public sealed class ActivityTests
             new WellTestCommand(target),
             new WirelineLogCommand(target),
             new CutCoreCommand(target),
-            new DrillWellCommand(target, new Length(-1.0)),
+            new DrillWellCommand(Structure(engine, target), new Length(-1.0)),
         ];
 
         foreach (Command command in impossible)
@@ -329,7 +344,7 @@ public sealed class ActivityTests
         (Engine drilling, EntityId<IReservoirCompartmentEntity> drillTarget) = Undrilled();
 
         surveying.Commands.Submit(new SeismicSurveyCommand(surveyTarget));
-        drilling.Commands.Submit(new DrillWellCommand(drillTarget, new Length(2000.0)));
+        drilling.Commands.Submit(new DrillWellCommand(Structure(drilling, drillTarget), new Length(2000.0)));
 
         surveying.Pipeline.AdvanceTick();
         drilling.Pipeline.AdvanceTick();

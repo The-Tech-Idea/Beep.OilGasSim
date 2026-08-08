@@ -67,20 +67,27 @@ public sealed class BasinWorldGenerator : IWorldGenerator
         // step runs cannot shift what another step draws.
         GeneratedSurface surface = GenerateSurface(parameters, streams);
 
-        IReadOnlyList<GeneratedAccumulation> accumulations =
-            GenerateGeology(parameters, streams, surface.Terrain);
+        (IReadOnlyList<GeneratedAccumulation> accumulations,
+         IReadOnlyList<double> capacities) = GenerateGeology(parameters, streams, surface.Terrain);
 
         for (int i = 0; i < accumulations.Count; i++) sink.AddAccumulation(accumulations[i]);
 
         sink.SetSurface(surface);
         sink.AddJurisdiction(GenerateJurisdiction(parameters, streams));
 
-        DeliverRegionalData(accumulations, sink, streams);
+        DeliverRegionalData(accumulations, capacities, sink, streams);
     }
 
     // ---------------------------------------------------------- geology
 
-    private static IReadOnlyList<GeneratedAccumulation> GenerateGeology(
+    /// <summary>
+    /// The structures and, alongside them, what each COULD hold. Capacity
+    /// travels separately because regional data observes it and a dry structure
+    /// has no compartment to carry it — gravity and magnetics see a trap, not
+    /// what is in it (SDD-010 §4b).
+    /// </summary>
+    private static (IReadOnlyList<GeneratedAccumulation> Structures,
+                    IReadOnlyList<double> Capacities) GenerateGeology(
         WorldParameters parameters, StepStreams streams, GeneratedTerrain terrain)
     {
         IRandomStream structure = streams.For(WorldStep.Structure);
@@ -127,6 +134,7 @@ public sealed class BasinWorldGenerator : IWorldGenerator
                        * ChargeFractionOfCapacity * parameters.ResourceRichness;
 
         var accumulations = new List<GeneratedAccumulation>();
+        var capacities = new List<double>();
 
         for (int i = 0; i < path.Count; i++)
         {
@@ -156,8 +164,6 @@ public sealed class BasinWorldGenerator : IWorldGenerator
 
             charged -= volume;
 
-            if (volume <= 0.0) continue;
-
             // Depth is where the crest actually is on the horizon, so pressure,
             // temperature and access all follow from the structure rather than
             // from a second unrelated draw.
@@ -167,13 +173,20 @@ public sealed class BasinWorldGenerator : IWorldGenerator
 
             Polygon footprint = FootprintOf(closure, cell, horizon.Width);
 
+            capacities.Add(capacity);
+
             accumulations.Add(new GeneratedAccumulation(
                 Play: new ContentId(plays.NextUnit() < 0.5 ? "play-a" : "play-b"),
                 Closure: footprint,
                 Subtlety: subtlety,
                 Access: AccessFor(depth, WaterDepthAt(terrain, cell)),
                 Fluid: depth.Metres > 3200.0 ? FluidForm.ModifiedBlackOil : FluidForm.BlackOil,
-                Compartments:
+                // EMPTY WHEN THE CHARGE NEVER ARRIVED (SDD-010 §4b). The
+                // structure is still real, still mappable and still drillable —
+                // it is a prospect a company can lose money on, which is the
+                // whole subject of probability of success. Discarding it here
+                // was finding 169.
+                Compartments: volume <= 0.0 ? [] :
                 [
                     new GeneratedCompartment(
                         PoreVolume: new ReservoirVolume(volume),
@@ -185,7 +198,7 @@ public sealed class BasinWorldGenerator : IWorldGenerator
                 ]));
         }
 
-        return accumulations;
+        return (accumulations, capacities);
     }
 
     /// <summary>
@@ -496,6 +509,7 @@ public sealed class BasinWorldGenerator : IWorldGenerator
     /// </summary>
     private static void DeliverRegionalData(
         IReadOnlyList<GeneratedAccumulation> accumulations,
+        IReadOnlyList<double> capacities,
         IWorldSink sink,
         StepStreams streams)
     {
@@ -508,18 +522,23 @@ public sealed class BasinWorldGenerator : IWorldGenerator
             // Regional data sees D0 only. Everything subtler is silent.
             if (accumulation.Subtlety != DetectClass.D0) continue;
 
-            GeneratedCompartment compartment = accumulation.Compartments[0];
-            // Oil in place: pore volume × porosity × oil saturation. The BELIEF is
-            // about the derived quantity, because that is what a company books
-            // and argues about — not about the three factors separately.
-            double inPlace = compartment.PoreVolume.CubicMetres
-                           * compartment.Porosity * compartment.OilSaturation;
-
-            double truth = DetMath.Ln(inPlace);
+            // WHAT THE STRUCTURE COULD HOLD, not what is in it (SDD-010 §4b).
+            //
+            // Regional gravity and magnetics see a trap. Observing oil-in-place
+            // instead would be impossible for a dry structure — there is none,
+            // and ln(0) is undefined — and, far worse, a belief that existed
+            // only for charged traps would tell a player which prospects hold
+            // oil for free. The PRESENCE of a reading would be the leak.
+            //
+            // Capacity exists for every closed high, so dry and charged
+            // prospects are indistinguishable from the surface. That is the
+            // position a company is really in, and the reason POS is worth
+            // computing at all.
+            double truth = DetMath.Ln(capacities[i]);
 
             sink.DeliverRegionalObservation(new Observation(
-                Subject: new EntityRef(EntityKind.Compartment, (ulong)(i + 1)),
-                PropertyKind: new ContentId("oil-in-place"),
+                Subject: new EntityRef(EntityKind.Prospect, (ulong)(i + 1)),
+                PropertyKind: new ContentId("structure-capacity"),
                 Value: truth + regional.NextNormal() * RegionalSigmaLog,
                 Sigma: RegionalSigmaLog,
                 Space: BeliefSpace.Log,

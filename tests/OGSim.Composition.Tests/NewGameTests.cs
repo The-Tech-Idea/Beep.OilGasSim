@@ -34,6 +34,23 @@ public sealed class NewGameTests
     private static WorldState WorldOf(Engine engine) => engine.Provided.Resolve<WorldState>();
 
     /// <summary>
+    /// The nth structure that charge actually reached. Most prospects are dry
+    /// (SDD-010 §4b), and only a discovery has a field to develop.
+    /// </summary>
+    private static EntityId<IProspect> Discovery(WorldState world, int nth)
+    {
+        var seen = 0;
+
+        for (int i = 0; i < world.Prospects.Count; i++)
+        {
+            if (world.Beneath(world.Prospects[i]) is null) continue;
+            if (seen++ == nth) return world.Prospects[i];
+        }
+
+        throw new InvalidOperationException($"this basin has fewer than {nth + 1} discoveries");
+    }
+
+    /// <summary>
     /// A basin with at least two prospects that can both reach market. Found by
     /// walking seeds rather than by naming one, because how many traps a basin
     /// charges is exactly the thing generation decides — a hard-coded seed would
@@ -47,12 +64,13 @@ public sealed class NewGameTests
             Engine engine = NewGame(seed);
             WorldState world = WorldOf(engine);
 
-            var reachable = 0;
+            var discoveries = 0;
 
             for (int i = 0; i < world.Prospects.Count; i++)
-                if (world.DistanceToMarket(world.Prospects[i]) is not null) reachable++;
+                if (world.DistanceToMarket(world.Prospects[i]) is not null
+                    && world.Beneath(world.Prospects[i]) is not null) discoveries++;
 
-            if (reachable > 1) return engine;
+            if (discoveries > 1) return engine;
         }
 
         throw new InvalidOperationException(
@@ -142,11 +160,16 @@ public sealed class NewGameTests
             Engine engine = NewGame(seed);
             IBeliefStore beliefs = engine.Provided.Resolve<IBeliefStore>();
 
-            foreach (EntityId<IReservoirCompartmentEntity> prospect in WorldOf(engine).Prospects)
+            foreach (EntityId<IProspect> prospect in WorldOf(engine).Prospects)
             {
                 Belief? held = beliefs.Get(
-                    new EntityRef(EntityKind.Compartment, prospect.Value),
-                    new ContentId("oil-in-place"));
+                    new EntityRef(EntityKind.Prospect, prospect.Value),
+
+                    // WHAT THE STRUCTURE COULD HOLD, not what is in it. A
+                    // reading that existed only for charged prospects would tell
+                    // a player which ones to drill for free — the presence of the
+                    // belief would be the leak (SDD-010 §4b).
+                    new ContentId("structure-capacity"));
 
                 if (held is null) continue;      // subtler than D0 — silent, by design
 
@@ -208,7 +231,7 @@ public sealed class NewGameTests
 
         var distances = new List<double>();
 
-        foreach (EntityId<IReservoirCompartmentEntity> prospect in world.Prospects)
+        foreach (EntityId<IProspect> prospect in world.Prospects)
             if (world.DistanceToMarket(prospect) is Length away)
                 distances.Add(away.Metres);
 
@@ -238,11 +261,15 @@ public sealed class NewGameTests
         FieldControl field = engine.Provided.Resolve<FieldControl>();
         SurfaceChain chain = engine.Provided.Resolve<SurfaceChain>();
 
-        EntityId<IReservoirCompartmentEntity> chosen = world.Prospects[0];
+        // A DISCOVERY, because a line is laid to a field that turned out to be
+        // there. A dry structure never gets one.
+        EntityId<IProspect> chosen = Discovery(world, 0);
         Length expected = world.DistanceToMarket(chosen)!.Value;
 
+        EntityId<IReservoirCompartmentEntity> reservoir = world.Beneath(chosen)!.Value;
+
         field.OpenWell(
-            Defaults.CompletionFor(field.NextWellId(), chosen, new Length(2000.0)), chosen);
+            Defaults.CompletionFor(field.NextWellId(), reservoir, new Length(2000.0)), reservoir);
 
         Assert.Equal(expected.Metres, chain.Flowline.PipeLength.Metres, precision: 6);
     }
@@ -260,16 +287,17 @@ public sealed class NewGameTests
         FieldControl field = engine.Provided.Resolve<FieldControl>();
         SurfaceChain chain = engine.Provided.Resolve<SurfaceChain>();
 
-        EntityId<IReservoirCompartmentEntity> first = world.Prospects[0];
+        EntityId<IReservoirCompartmentEntity> first = world.Beneath(Discovery(world, 0))!.Value;
 
         field.OpenWell(
             Defaults.CompletionFor(field.NextWellId(), first, new Length(2000.0)), first);
 
         Length laid = chain.Flowline.PipeLength;
 
-        // A well on a DIFFERENT prospect — the case that would move the line if
+        // A well on a DIFFERENT discovery — the case that would move the line if
         // anything were going to.
-        EntityId<IReservoirCompartmentEntity> elsewhere = world.Prospects[^1];
+        EntityId<IReservoirCompartmentEntity> elsewhere =
+            world.Beneath(Discovery(world, 1))!.Value;
 
         field.OpenWell(
             Defaults.CompletionFor(field.NextWellId(), elsewhere, new Length(2000.0)), elsewhere);
@@ -288,7 +316,7 @@ public sealed class NewGameTests
         Engine engine = Assert.IsType<Built>(EngineBuilder.Build(Fixture.Settings())).Engine;
 
         Assert.Null(engine.Provided.Resolve<WorldState>()
-            .DistanceToMarket(new EntityId<IReservoirCompartmentEntity>(1)));
+            .DistanceToMarket(new EntityId<IProspect>(1)));
     }
 
     // -------------------------------------------- the choice a player makes (R20d.7)
@@ -432,7 +460,7 @@ public sealed class NewGameTests
 
             double was = before[sibling].ProbabilityOfSuccess;
 
-            var target = new EntityId<IReservoirCompartmentEntity>(before[0].Prospect.Value);
+            var target = new EntityId<IProspect>(before[0].Prospect.Value);
 
             Assert.IsType<Accepted>(
                 engine.Commands.Submit(new DrillWellCommand(target, new Length(2000.0))));
@@ -453,5 +481,90 @@ public sealed class NewGameTests
         }
 
         Assert.Fail("sixty basins produced no discovery on a play with a second prospect");
+    }
+
+    // ------------------------------------------ a well can now be wrong (R20d.7.4)
+
+    /// <summary>
+    /// MOST PROSPECTS ARE DRY, and they reach the player. Fill-spill has always
+    /// produced empty traps; until now the generator discarded them, so every
+    /// structure a company could see held oil and probability of success had
+    /// nothing to be right or wrong about (finding 169).
+    /// </summary>
+    [Fact]
+    public void R20d7V3_a_basin_offers_more_structures_than_it_holds_fields()
+    {
+        Engine engine = BasinWithSeveralProspects();
+        WorldState world = WorldOf(engine);
+
+        var dry = 0;
+
+        for (int i = 0; i < world.Prospects.Count; i++)
+            if (world.Beneath(world.Prospects[i]) is null) dry++;
+
+        Assert.True(dry > 0,
+            "every structure in the basin holds oil; the empty traps are still dying inside " +
+            "the generator");
+    }
+
+    /// <summary>
+    /// AND DRILLING ONE IS A DRY HOLE — because the rock is empty, not because a
+    /// table said so. The money is spent, no well appears, and what the company
+    /// bought is knowledge: this world leaves a trap empty for exactly one
+    /// reason, so the well disproved SOURCE, and source is play-shared.
+    ///
+    /// <para>That last step is the point of the whole slice. A dry hole now
+    /// makes every sibling prospect worth less, so exploration is a campaign in
+    /// which being wrong costs more than the well.</para>
+    /// </summary>
+    [Fact]
+    public void R20d7V3_drilling_a_dry_structure_reprices_its_play()
+    {
+        for (ulong seed = 1UL; seed < 60UL; seed++)
+        {
+            Engine engine = NewGame(seed);
+            WorldState world = WorldOf(engine);
+
+            var empty = -1;
+
+            for (int i = 0; i < world.Prospects.Count; i++)
+                if (world.Beneath(world.Prospects[i]) is null) { empty = i; break; }
+
+            if (empty < 0) continue;
+
+            engine.Pipeline.AdvanceTick();
+
+            IReadOnlyList<ProspectView> before = engine.ReadModel!.Prospects;
+
+            EntityId<IProspect> target = world.Prospects[empty];
+
+            var sibling = -1;
+
+            for (int i = 0; i < before.Count; i++)
+                if (before[i].Prospect.Value != target.Value
+                    && before[i].Play == before[empty].Play) { sibling = i; break; }
+
+            if (sibling < 0) continue;
+
+            double was = before[sibling].ProbabilityOfSuccess;
+
+            Assert.IsType<Accepted>(
+                engine.Commands.Submit(new DrillWellCommand(target, new Length(2000.0))));
+
+            for (var month = 0; month < 12; month++) engine.Pipeline.AdvanceTick();
+
+            // The hole may have been lost mechanically rather than drilled — that
+            // teaches nothing and is a different outcome. Walk on if so.
+            if (engine.ReadModel!.Prospects[sibling].ProbabilityOfSuccess == was) continue;
+
+            Assert.Equal(0, engine.ReadModel!.Wells);
+
+            Assert.True(engine.ReadModel!.Prospects[sibling].ProbabilityOfSuccess < was,
+                "a dry hole made the rest of its play look BETTER");
+
+            return;
+        }
+
+        Assert.Fail("sixty basins produced no dry structure with a sibling in its play");
     }
 }

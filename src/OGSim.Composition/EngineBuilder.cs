@@ -281,6 +281,18 @@ internal static class Defaults
             // Nobody ever knows STOIIP to better than about 15%, and a game that
             // let a player get there would have no reason for appraisal.
             "oil-in-place" => 0.15,
+
+            // How big a STRUCTURE is, which is what regional gravity and
+            // seismic actually see (SDD-010 §4b). Looser than oil-in-place is
+            // tight: mapping a closure is geometry and gets genuinely good with
+            // better data, whereas how much oil is in it never does.
+            //
+            // A separate kind from oil-in-place on purpose. Knowing the trap
+            // could hold a hundred million barrels says nothing about whether it
+            // holds any — that second question is what probability of success
+            // answers, and merging the two would let a big structure read as a
+            // big discovery.
+            "structure-capacity" => 0.10,
             _ => throw new ModelFault("INV8", null,
                 $"no sigma floor is declared for property kind '{kind.Value}'"),
         };

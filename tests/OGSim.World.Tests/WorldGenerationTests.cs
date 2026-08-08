@@ -51,6 +51,22 @@ public class WorldGenerationTests
         return sink;
     }
 
+    /// <summary>
+    /// The structures charge actually reached. The sink receives EVERY closed
+    /// high now (SDD-010 §4b) — a dry one is a prospect a company can drill and
+    /// lose on, which is the whole point — so a test about volumes, depths or
+    /// how much was charged has to say which it means.
+    /// </summary>
+    private static IReadOnlyList<GeneratedAccumulation> Charged(RecordingSink sink)
+    {
+        var found = new List<GeneratedAccumulation>();
+
+        for (int i = 0; i < sink.Accumulations.Count; i++)
+            if (sink.Accumulations[i].Compartments.Count > 0) found.Add(sink.Accumulations[i]);
+
+        return found;
+    }
+
     // ------------------------------------------------------------ PV7
 
     [Fact] // PV7 / R15-V1: the same seed reproduces the world exactly
@@ -189,6 +205,11 @@ public class WorldGenerationTests
         // A vague reading still says "something is here", and the whole point of
         // a subtlety class is that a subtle trap is invisible until the survey
         // tier catches up with it.
+        // EVERY D0 STRUCTURE, charged or not (SDD-010 §4b). Regional data
+        // reports what a trap could hold, which a dry one has as much as a full
+        // one — and that is deliberate: a reading that appeared only for charged
+        // structures would tell a player which prospects hold oil for free, so
+        // its very presence would be the leak.
         int visible = world.Accumulations.Count(a => a.Subtlety == DetectClass.D0);
 
         Assert.Equal(visible, world.Observations.Count);
@@ -247,8 +268,8 @@ public class WorldGenerationTests
             RecordingSink world = Generate(seed);
             worlds++;
 
-            if (world.Accumulations.Count > 0) withAccumulations++;
-            totalAccumulations += world.Accumulations.Count;
+            if (Charged(world).Count > 0) withAccumulations++;
+            totalAccumulations += Charged(world).Count;
         }
 
         Assert.True(worlds > 0);
@@ -274,7 +295,7 @@ public class WorldGenerationTests
         var generous = 0;
 
         for (ulong seed = 1; seed <= 200; seed++)
-            generous += Generate(seed, Parameters(richness: 2.0)).Accumulations.Count;
+            generous += Charged(Generate(seed, Parameters(richness: 2.0))).Count;
 
         Assert.True(generous > totalAccumulations,
             $"a basin charged twice as hard yielded no more accumulations " +
@@ -290,7 +311,7 @@ public class WorldGenerationTests
 
         for (ulong seed = 1; seed <= 60; seed++)
         {
-            lean += Generate(seed, Parameters(richness: 0.5)).Accumulations.Count;
+            lean += Charged(Generate(seed, Parameters(richness: 0.5))).Count;
             rich += Generate(seed, Parameters(richness: 1.0)).Accumulations.Count;
         }
 
@@ -323,7 +344,7 @@ public class WorldGenerationTests
     {
         RecordingSink world = Generate(555UL);
 
-        foreach (GeneratedAccumulation accumulation in world.Accumulations)
+        foreach (GeneratedAccumulation accumulation in Charged(world))
         {
             Length depth = accumulation.Compartments[0].Depth;
 
@@ -435,7 +456,7 @@ public class WorldGenerationTests
     [Fact]
     public void R20d8V3_accumulations_sit_at_distinct_places_on_the_map()
     {
-        IReadOnlyList<GeneratedAccumulation> found = Generate(21UL).Accumulations;
+        IReadOnlyList<GeneratedAccumulation> found = Charged(Generate(21UL));
 
         Assert.True(found.Count > 1, "one accumulation cannot show a spatial spread");
 
@@ -453,7 +474,7 @@ public class WorldGenerationTests
     [Fact]
     public void R20d8V3_a_bigger_accumulation_has_a_bigger_closure()
     {
-        IReadOnlyList<GeneratedAccumulation> found = Generate(21UL).Accumulations;
+        IReadOnlyList<GeneratedAccumulation> found = Charged(Generate(21UL));
 
         GeneratedAccumulation biggest = found[0], smallest = found[0];
 
@@ -485,7 +506,7 @@ public class WorldGenerationTests
         // traps onto dry land, and that is the world being a world.
         foreach (ulong seed in new ulong[] { 1UL, 2UL, 3UL, 4UL, 5UL, 6UL, 7UL, 8UL })
         {
-            IReadOnlyList<GeneratedAccumulation> found = Generate(seed).Accumulations;
+            IReadOnlyList<GeneratedAccumulation> found = Charged(Generate(seed));
 
             for (int i = 0; i < found.Count; i++)
                 if (found[i].Access.WaterDepth != WaterDepthClass.Onshore) offshore++;
@@ -518,7 +539,7 @@ public class WorldGenerationTests
 
         for (ulong seed = 1; seed <= 20; seed++)
         {
-            IReadOnlyList<GeneratedAccumulation> found = Generate(seed).Accumulations;
+            IReadOnlyList<GeneratedAccumulation> found = Charged(Generate(seed));
 
             for (int i = 0; i < found.Count; i++)
                 volumes.Add(found[i].Compartments[0].PoreVolume.CubicMetres);
@@ -543,7 +564,7 @@ public class WorldGenerationTests
     [Fact]
     public void R20d8V5_volume_and_footprint_come_from_the_same_closure()
     {
-        IReadOnlyList<GeneratedAccumulation> found = Generate(4UL).Accumulations;
+        IReadOnlyList<GeneratedAccumulation> found = Charged(Generate(4UL));
 
         Assert.True(found.Count > 2, "too few accumulations to compare");
 
@@ -575,7 +596,7 @@ public class WorldGenerationTests
 
         for (ulong seed = 1; seed <= 10; seed++)
         {
-            IReadOnlyList<GeneratedAccumulation> found = Generate(seed).Accumulations;
+            IReadOnlyList<GeneratedAccumulation> found = Charged(Generate(seed));
 
             for (int i = 0; i < found.Count; i++)
                 depths.Add(found[i].Compartments[0].Depth.Metres);
@@ -598,7 +619,7 @@ public class WorldGenerationTests
     [Fact]
     public void R20d8V5_a_deeper_trap_starts_at_a_higher_pressure()
     {
-        IReadOnlyList<GeneratedAccumulation> found = Generate(4UL).Accumulations;
+        IReadOnlyList<GeneratedAccumulation> found = Charged(Generate(4UL));
 
         GeneratedCompartment deepest = found[0].Compartments[0];
         GeneratedCompartment shallowest = found[0].Compartments[0];
@@ -652,7 +673,7 @@ public class WorldGenerationTests
     private static double ShallowestCharged(ulong seed, double richness)
     {
         IReadOnlyList<GeneratedAccumulation> found =
-            Generate(seed, Parameters(richness: richness)).Accumulations;
+            Charged(Generate(seed, Parameters(richness: richness)));
 
         var shallowest = double.MaxValue;
 
@@ -676,8 +697,8 @@ public class WorldGenerationTests
 
         for (ulong seed = 1; seed <= 30; seed++)
         {
-            lean += Generate(seed, Parameters(richness: 0.5)).Accumulations.Count;
-            rich += Generate(seed, Parameters(richness: 2.0)).Accumulations.Count;
+            lean += Charged(Generate(seed, Parameters(richness: 0.5))).Count;
+            rich += Charged(Generate(seed, Parameters(richness: 2.0))).Count;
         }
 
         Assert.True(rich > lean,

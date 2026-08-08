@@ -9,6 +9,17 @@ namespace OGSim.Contracts;
 /// <summary>Marker for compartment entity ids (truth object itself is internal to OGSim.Subsurface).</summary>
 public interface IReservoirCompartmentEntity { }
 
+/// <summary>
+/// A closed structure a company can drill (SDD-010 §4b). Distinct from a
+/// compartment because most prospects are dry, and a dry one has no material
+/// balance to solve — <c>Swc = 1</c> divides by zero in the formation-expansion
+/// term, which is a real singularity and not an obstacle to route around.
+///
+/// <para>A prospect with a compartment behind it is a discovery; one without is
+/// a dry hole. Which it is, is truth.</para>
+/// </summary>
+public interface IProspect { }
+
 /// <summary>Detectability class of an accumulation (design 06 §2.3).</summary>
 public enum DetectClass { D0, D1, D2, D3 }
 

@@ -37,6 +37,12 @@ public sealed class RealityProfileTests
             Defaults.Wettability, Defaults.Drive,
             Defaults.AquiferStrength, Defaults.AquiferResponseTime);
 
+        // A SCENARIO DECLARING A KNOWN FIELD (SDD-010 §4b). These fixtures place
+        // their reservoir directly rather than generating a basin, so it is
+        // already known to be there — placed and found in one step, carrying no
+        // exploration risk because there is nothing left to be wrong about.
+        built.Engine.Provided.Resolve<WorldState>().DeclareKnownField(target);
+
         field.OpenWell(
             Defaults.CompletionFor(field.NextWellId(), target, new Length(2000.0)), target);
 

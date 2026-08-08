@@ -25,9 +25,17 @@ public sealed record GeneratedCompartment(
     Length Depth);
 
 /// <summary>
-/// One charged trap (SDD-010 §2.5–2.7): subtlety (DetectClass) and
-/// AccessRequirements are TRUTH attributes here — below-tier surveys spawn
-/// nothing because screening reads these, not the other way round.
+/// ONE CLOSED STRUCTURE (SDD-010 §2.5–2.7, §4b) — charged or not.
+///
+/// <para><c>Compartments</c> is EMPTY when fill-spill left the trap dry, and
+/// that is the point: a prospect a company can drill and lose on has to reach
+/// the engine, or probability of success has nothing to be right or wrong
+/// about. A structure is what the world found; a compartment is what turned out
+/// to be in it.</para>
+///
+/// <para>Subtlety (DetectClass) and AccessRequirements are TRUTH attributes
+/// here — below-tier surveys spawn nothing because screening reads these, not
+/// the other way round.</para>
 /// </summary>
 public sealed record GeneratedAccumulation(
     ContentId Play,

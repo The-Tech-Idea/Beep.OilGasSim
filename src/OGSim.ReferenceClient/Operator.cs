@@ -38,7 +38,7 @@ public sealed record Session(
 public sealed class Operator
 {
     private readonly Engine _engine;
-    private readonly EntityId<IReservoirCompartmentEntity> _prospect;
+    private readonly EntityId<IProspect> _prospect;
     private readonly int _wellTarget;
 
     /// <summary>
@@ -54,7 +54,7 @@ public sealed class Operator
 
     public Operator(
         Engine engine,
-        EntityId<IReservoirCompartmentEntity> prospect,
+        EntityId<IProspect> prospect,
         int wellTarget,
         Money hurdle)
     {

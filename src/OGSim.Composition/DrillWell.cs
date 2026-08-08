@@ -10,8 +10,17 @@ using OGSim.Kernel;
 namespace OGSim.Composition;
 
 /// <summary>Drill and complete a well on a known compartment.</summary>
+/// <summary>
+/// Drill a PROSPECT — a closed structure, which may or may not hold anything
+/// (SDD-010 §4b).
+///
+/// <para>It named a compartment until R20d.7.4, and a compartment is oil that is
+/// already known to be there. Aiming at one meant every well was drilled into a
+/// discovery that had already happened, which is why probability of success had
+/// nothing to be wrong about.</para>
+/// </summary>
 public sealed record DrillWellCommand(
-    EntityId<IReservoirCompartmentEntity> Target,
+    EntityId<IProspect> Target,
     Length TotalDepth) : Command(Subject: null);
 
 /// <summary>
@@ -27,7 +36,8 @@ internal sealed class DrillWellActivity(
     Length maximumDepth,
     FieldControl field,
     WellDesign design,
-    OGSim.Information.ProspectRisks risks) : Activity<DrillWellCommand>(terms)
+    OGSim.Information.ProspectRisks risks,
+    WorldState world) : Activity<DrillWellCommand>(terms)
 {
     /// <summary>A well is PP&amp;E: the money buys something the company still
     /// owns next month (SDD-009 §1).</summary>
@@ -45,7 +55,7 @@ internal sealed class DrillWellActivity(
     {
         ArgumentNullException.ThrowIfNull(command);
 
-        return (new EntityRef(EntityKind.Compartment, command.Target.Value), command.TotalDepth);
+        return (new EntityRef(EntityKind.Prospect, command.Target.Value), command.TotalDepth);
     }
 
     public override IReadOnlyList<RejectionReason> OwnRefusals(DrillWellCommand command)
@@ -85,29 +95,45 @@ internal sealed class DrillWellActivity(
         // what the player has bought is knowledge — which is the whole of
         // exploration economics and the reason drilling is a decision rather
         // than a button.
-        var prospect = new EntityRef(EntityKind.Compartment, done.Target.Value);
+        var target = new EntityId<IProspect>(done.Target.Value);
+        var prospect = new EntityRef(EntityKind.Prospect, done.Target.Value);
 
         if (!done.Succeeded)
         {
-            // WHAT A DRY HOLE SHOULD TEACH, and does not yet (finding 169). A
-            // failed well here is a roll on the outcome table, not a report on
-            // the rock: the generator emits only CHARGED traps, so truth always
-            // says there is oil under this structure and a "dry hole" contradicts
-            // it. Attributing the failure to source or seal would therefore write
-            // a diagnosis nobody derived from truth, which is exactly what
-            // SDD-008 §4 requires ("truth-derived, R14 §2.5") and F-3 forbids
-            // inventing.
-            //
-            // Left recording nothing rather than recording a guess. The fix is
-            // for dry structures to exist in the world so a well can genuinely
-            // find one — R20d.8's remaining slice, not something to paper over
-            // here.
+            // THE JOB WAS LOST, which is not the same as the rock being empty.
+            // The outcome table decides whether the hole was drilled — on time,
+            // late, over budget, or abandoned mechanically — and says nothing
+            // about what was under it. So a mechanical failure teaches the
+            // company nothing about the petroleum system, and recording a
+            // geological diagnosis here would invent one (SDD-008 §4 requires
+            // the diagnosis be truth-derived).
             return;
         }
 
-        var target = new EntityId<IReservoirCompartmentEntity>(done.Target.Value);
+        // THE HOLE WAS DRILLED. What it found is TRUTH — whether charge ever
+        // reached this structure — and not a roll (SDD-010 §4b, finding 169).
+        EntityId<IReservoirCompartmentEntity>? found = world.Beneath(target);
 
-        field.OpenWell(design(field.NextWellId(), target, done.Depth), target);
+        if (found is null)
+        {
+            // A DRY HOLE. The money is spent, the months are gone, and what the
+            // company bought is knowledge: this generator leaves a trap empty
+            // for exactly one reason — the charge ran out before it migrated
+            // this far — so the well disproved SOURCE at this location. That is
+            // derived from how the world was made, which is what SDD-008 §4
+            // means by a truth-derived diagnosis.
+            //
+            // Source is play-shared, so the news is bad for every prospect
+            // drawing on the same system. That is the whole of "the play died",
+            // and it is the moment exploration stops being a formality.
+            if (risks.Knows(prospect)) risks.Drilled(prospect, PosFactor.Source, present: false);
+
+            return;
+        }
+
+        EntityId<IReservoirCompartmentEntity> reservoir = found.Value;
+
+        field.OpenWell(design(field.NextWellId(), reservoir, done.Depth), reservoir);
 
         // A DISCOVERY DE-RISKS THE PLAY (SDD-008 §4). The well proved every
         // element at this location — there was a source, a reservoir, a seal, a
