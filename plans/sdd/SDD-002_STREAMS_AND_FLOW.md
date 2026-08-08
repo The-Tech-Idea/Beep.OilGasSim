@@ -373,9 +373,18 @@ single deterministic order every pass uses.
 > {
 >     void Add(IFlowElement element);              // the module that made it registers it
 >     void Connect(FlowConnection connection);     // and the tie-ins it made
+>     IReadOnlyList<IFlowElement> Registered { get; }   // everything, available or not
 >     FlowTopology ViewFor(IReadOnlyCollection<EntityRef> available);   // per segment
 > }
 > ```
+>
+> **R20d.1 amendment.** `Registered` was on the shipped class and on no
+> interface, which meant nothing holding the contract could **build** an
+> availability set: stage 4 has to say which elements are available this segment,
+> and the only thing that knows what exists is the registry. `ViewFor` filters by
+> a set the caller has to be able to name, and the caller could not name it. The
+> whole-field list is also what a read model and a save report — what is present,
+> not what one segment happened to solve.
 >
 > **The registry holds edges; the modules keep their equipment.** L5 is not
 > strained by this: "the state behind [an edge]" is the *flowline* — its length,

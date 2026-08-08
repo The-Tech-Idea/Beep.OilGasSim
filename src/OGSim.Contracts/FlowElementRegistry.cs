@@ -31,6 +31,17 @@ public interface IFlowElementRegistry
     void Connect(FlowConnection connection);
 
     /// <summary>
+    /// Every registered element, available or not.
+    ///
+    /// <para>Stage 4 has to say which elements are available this segment, and
+    /// the only thing that knows what exists is the registry — so without this a
+    /// caller holding the contract could not build the set
+    /// <see cref="ViewFor"/> filters by. It is also what a whole-field view
+    /// reports: what is present, not what one segment happened to solve.</para>
+    /// </summary>
+    IReadOnlyList<IFlowElement> Registered { get; }
+
+    /// <summary>
     /// One segment's view: the registered elements that are available, and the
     /// connections among them. A VIEW — the registry is not modified, so the
     /// four segments of a tick each see one unchanging field and an abandoned
@@ -113,9 +124,7 @@ public sealed class FlowElementRegistry : IFlowElementRegistry
         return new FlowTopology(elements, connections);
     }
 
-    /// <summary>Every registered element, available or not — what a whole-field
-    /// view (a read model, a save) reports rather than what a segment solves.</summary>
-    public IReadOnlyList<IFlowElement> All => _elements;
+    public IReadOnlyList<IFlowElement> Registered => _elements;
 
     /// <summary>An element's availability reference, so a caller building a
     /// segment's set does not have to know how the two identities relate.</summary>
