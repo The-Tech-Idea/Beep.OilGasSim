@@ -162,6 +162,67 @@ public sealed record WorldParameters(
 > [C16](../catalog/C16_TERRAIN_CLASSES.md)); the template's cut tables map
 > (height, slope, climate) onto class ids.
 
+## 4b. Dry structures are prospects too
+
+> **R20d.7 amendment (finding 169). The generator's empty traps die inside it.**
+> §2.6's fill-spill produces charged-and-empty traps naturally, R15-V7 asserts
+> that it does, and an uncharged closure is then discarded before it reaches
+> `IWorldSink`. So every prospect a player can see holds oil, and the drilling
+> activity decides dry-or-wet on a 0.38 outcome row that never consults the
+> rock. **Probability of success can therefore be neither right nor wrong**, and
+> exploration — the half of this game the whole information layer exists to serve
+> — is a formality.
+>
+> **The sink receives every closed structure.** `GeneratedAccumulation` already
+> has the shape for it: `Compartments` is empty when the trap took no charge.
+> The record's summary line ("one charged trap") is what changes, not its
+> fields.
+>
+> ### A prospect is not a compartment
+>
+> Measured while settling this: a dry structure **cannot** be modelled as a
+> compartment with no oil. `SubsurfaceState.Create` derives connate water as
+> `1 − So`, and the material balance refuses `Swc = 1` because the
+> formation-expansion term `Efw` divides by `(1 − Swc)`. That is a correct
+> refusal about a real singularity, not an obstacle to work around — a trap full
+> of water has no hydrocarbon material balance to solve.
+>
+> So identity splits, and it should have anyway:
+>
+> ```text
+> Prospect     EntityKind.Prospect — a closed structure, drilled or not.
+>              Every one the generator finds, charged or dry.
+> Compartment  created ONLY where charge arrived. Truth; the thing that flows.
+> ```
+>
+> `DrillWellCommand` therefore targets a **prospect**, and what the well finds is
+> read from truth: a prospect with a compartment behind it is a discovery, one
+> without is a dry hole. The outcome table keeps what it is actually for —
+> whether the job ran on time, over budget, or was lost mechanically — and stops
+> deciding what is in the ground.
+>
+> ### Regional data sees structure, not fluid
+>
+> Starting beliefs currently observe **oil in place**, which cannot survive this:
+> a dry trap has none, `ln(0)` is undefined, and — worse — a belief that exists
+> only for charged traps would tell a player which ones hold oil for free. The
+> presence of a reading would be the leak.
+>
+> Regional gravity and magnetics see a **structure**, not what is in it. The
+> observation becomes the closure's CAPACITY (`structure-capacity`), which every
+> closed high has whether or not charge reached it. Dry and charged prospects are
+> then indistinguishable from the surface, which is exactly the position a
+> company is really in and the reason POS is worth computing at all.
+>
+> ### What a dry hole proves
+>
+> SDD-008 §4 wants the failed element named from truth. This generator has
+> exactly one way to leave a trap empty — fill-spill ran out before the charge
+> reached it — so an uncharged structure failed on **Source**, and that is a
+> derivation rather than a guess. When steps 1–3 model maturity and seal
+> integrity there will be more failure modes to tell apart, and the diagnosis
+> becomes a field on the handoff rather than a single mapping.
+
 ## 5. Test mapping
 
 R15-V1 (PV7 identity) · V2 (substreams) · V3/MB5 (size log-normality emerges
