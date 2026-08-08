@@ -553,9 +553,28 @@ a stream can fail either end — rich gas is off-spec as surely as lean.
 >    singleton owned by a module. `SurfaceChain` is already a unit-of-composition;
 >    what changes is how many there are and when they exist.
 >
-> Until then, distance is generated, rendered, and charged for by nobody. Stated
-> here so that the flowline's constant length is read as a known gap rather than
-> as a decision.
+> **§7c.1 — the first step, taken: a pipeline is a socket and its ROUTE is what
+> is fitted.** The full per-field chain is above; what can be done without it is
+> the same §0c move already made for the separator and the export line. The
+> element is registered at composition (the flow registry is write-once, so it
+> must be), and the geometry it carries is set when the line is actually laid:
+>
+> ```text
+> Route(geometry):  the element keeps its id, its tie-ins and its spec;
+>                   PipeLength and InnerDiameter are what changed.
+>   REFUSED while the line holds linefill — a route cannot change under oil
+>   that is already in it, and re-routing a full line would either destroy
+>   owned mass or teleport it (the conservation check would catch the second
+>   and nothing would catch the first).
+> ```
+>
+> A flowline is therefore laid from the field that is being developed to the
+> harbour it is routed to, and its length is that distance. This does not fix the
+> multi-prospect case — there is still one chain — but it makes geography cost
+> something, which is the half a player can feel.
+>
+> Until the rest lands, one chain serves one field. Stated here so the limit
+> reads as a known gap rather than as a decision.
 
 ## 8. Datasheet field registry (content ⇄ code)
 
