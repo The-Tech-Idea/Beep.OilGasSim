@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- R21 §2.5: the client plays through the PUBLISHED SURFACE and nothing
+         else. Composition is referenced for the engine and its read model;
+         nothing here may reach a module, and a reference to one would be the
+         defect this project exists to catch. -->
+    <ProjectReference Include="..\OGSim.Composition\OGSim.Composition.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -21,6 +21,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\OGSim.Composition\OGSim.Composition.csproj" />
+    <ProjectReference Include="..\..\src\OGSim.ReferenceClient\OGSim.ReferenceClient.csproj" />
   </ItemGroup>
 
 </Project>

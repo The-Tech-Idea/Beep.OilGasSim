@@ -834,6 +834,42 @@ public sealed class FieldControl
     public bool IsAbandoned => _wells.Count > 0 && _abandoned.Count == _wells.Count;
 
     /// <summary>
+    /// Every well and its state (SDD-017 §2's R21.5 amendment) — the list a
+    /// well-level command is aimed with.
+    ///
+    /// <para>Walked in the order the wells were opened, so a host's list does
+    /// not reshuffle between months (D-5). Production is deliberately absent
+    /// here and reported as zero: what a WELL produced needs a per-completion
+    /// split of the solve, and the loop totals the field — a number invented per
+    /// well would be a plausible fiction, so the honest answer is the field's
+    /// own total on the read model beside it.</para>
+    /// </summary>
+    public IReadOnlyList<WellStatusView> Wells()
+    {
+        IReadOnlyList<Completion> completions = _wells.Completions;
+        var rows = new List<WellStatusView>(completions.Count);
+
+        for (int i = 0; i < completions.Count; i++)
+        {
+            Completion well = completions[i];
+
+            WellStatus status =
+                _abandoned.Contains(well.CompletionId) ? WellStatus.Abandoned
+                : well.IsShutIn ? WellStatus.ShutIn
+                : WellStatus.Producing;
+
+            rows.Add(new WellStatusView(
+                new EntityRef(EntityKind.Completion, well.CompletionId.Value),
+                "well-" + well.CompletionId.Value.ToString(
+                    System.Globalization.CultureInfo.InvariantCulture),
+                status,
+                new SurfaceVolume(0.0)));
+        }
+
+        return rows;
+    }
+
+    /// <summary>
     /// Plugs a well and discharges its obligation (SDD-007 §6).
     ///
     /// <para>The completion stays in the network, permanently shut: registration

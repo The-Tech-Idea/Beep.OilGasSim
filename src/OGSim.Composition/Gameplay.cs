@@ -46,6 +46,22 @@ public sealed record BeliefEntryView(
     GameDate AsOf);
 
 /// <summary>
+/// One well, as a host renders it and a client acts on it (SDD-017 §2's R21.5
+/// amendment).
+///
+/// <para>Narrower than SDD-017's <c>WellView</c>, which carries a site, an
+/// operating point and sampled curves the current loop has no source for. What
+/// it does carry is the part every well-level command needs: WHICH well, and
+/// what state it is in — because a read model that reported only how MANY wells
+/// there were could be looked at and not acted on.</para>
+/// </summary>
+public sealed record WellStatusView(
+    EntityRef Well,
+    string DisplayId,
+    WellStatus Status,
+    SurfaceVolume ProducedThisTick);
+
+/// <summary>
 /// The month's facts, as an objective reads them and the read model reports
 /// them.
 ///
@@ -99,7 +115,16 @@ public sealed record FieldReadModel(
     /// cash and barrels and not this can tell that the field is underperforming
     /// and not why.</para>
     /// </summary>
-    IReadOnlyList<ChainElementView> Chain)
+    IReadOnlyList<ChainElementView> Chain,
+
+    /// <summary>
+    /// Every well the company has, and what state it is in (SDD-017 §2).
+    ///
+    /// <para>The list a well-level command is aimed with: shutting one in,
+    /// re-opening it or abandoning it all name a well, and a count cannot be
+    /// named.</para>
+    /// </summary>
+    IReadOnlyList<WellStatusView> Wellbores)
 {
     /// <summary>Where the chain is jammed, if anywhere — the elements that
     /// refused production this tick.</summary>
@@ -128,12 +153,13 @@ public sealed record FieldReadModel(
         && ProducedThisTick == other.ProducedThisTick
         && Insolvent == other.Insolvent && Progress == other.Progress
         && Structural.Equal(Beliefs, other.Beliefs)
-        && Structural.Equal(Chain, other.Chain);
+        && Structural.Equal(Chain, other.Chain)
+        && Structural.Equal(Wellbores, other.Wellbores);
 
     public override int GetHashCode() =>
         HashCode.Combine(Tick, Date, Cash, Wells, ActivitiesRunning, ProducedThisTick,
             HashCode.Combine(Insolvent, Progress, Structural.HashOf(Beliefs),
-                             Structural.HashOf(Chain)));
+                             Structural.HashOf(Chain), Structural.HashOf(Wellbores)));
 }
 
 /// <summary>
@@ -159,7 +185,7 @@ internal sealed class FieldProjection(
     public FieldReadModel Publish(FieldPosition position, ScenarioProgress progress) =>
         new(position.Tick, position.Date, position.Cash, position.Wells,
             position.ActivitiesRunning, position.ProducedThisTick, position.Insolvent,
-            progress, Project(beliefs), loop.Chain());
+            progress, Project(beliefs), loop.Chain(), field.Wells());
 
     /// <summary>
     /// SDD-008 §8's projection, at the close: everything the company has learned,
