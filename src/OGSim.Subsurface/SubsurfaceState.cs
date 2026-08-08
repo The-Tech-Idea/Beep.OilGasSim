@@ -78,6 +78,26 @@ internal sealed class SubsurfaceState : IStateOwner
     /// assembly assembles them into truth. Making those two types public to
     /// tidy the signature would have put a compartment's true porosity in a
     /// shape any consumer could hold.</param>
+    /// <summary>
+    /// Every drive this module ships, by name. A compartment HAS a drive
+    /// (SDD-003 §4.2b) and world generation picks it: a water-drive compartment
+    /// admits aquifer influx and a solution-gas one refuses it, which is what
+    /// makes "does this field water out?" a property of the field rather than a
+    /// switch somewhere else.
+    /// </summary>
+    internal static IDriveMechanism DriveNamed(ContentId drive) => drive.Value switch
+    {
+        "solution-gas-drive" => new SolutionGasDrive(),
+        "water-drive" => new WaterDrive(),
+        "gas-cap-expansion-drive" => new GasCapExpansionDrive(),
+        "compaction-drive" => new CompactionDrive(),
+        "gravity-drainage-drive" => new GravityDrainageDrive(),
+        "combination-drive" => new CombinationDrive(),
+        _ => throw new ContentFault("SDD-003 §4.2b", null,
+            $"no drive mechanism '{drive.Value}' exists; a compartment cannot be created " +
+            "with a drive nobody implements"),
+    };
+
     public EntityId<IReservoirCompartmentEntity> Create(
         GeneratedCompartment generated,
         Permeability permeability,
@@ -86,7 +106,8 @@ internal sealed class SubsurfaceState : IStateOwner
         double rockCompressibility,
         Length gasOilContact,
         Length oilWaterContact,
-        RelativePermeabilityCurve wettability)
+        RelativePermeabilityCurve wettability,
+        ContentId drive)
     {
         ArgumentNullException.ThrowIfNull(generated);
         ArgumentNullException.ThrowIfNull(wettability);
@@ -121,7 +142,7 @@ internal sealed class SubsurfaceState : IStateOwner
             Mass: InPlace.Empty(materialCount: 0));
 
         var compartment = new ReservoirCompartment(
-            id, initial, contacts, rock, _defaultDrive, []);
+            id, initial, contacts, rock, DriveNamed(drive), []);
 
         _compartments.Add(compartment);
         _byId.Add(id, compartment);

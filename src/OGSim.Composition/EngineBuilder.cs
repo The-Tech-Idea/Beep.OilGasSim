@@ -602,6 +602,15 @@ internal static class Defaults
     /// is what makes the S-curve steep or gentle, and it is the number a player
     /// is really looking at when a field waters out early.</para>
     /// </summary>
+    /// <summary>
+    /// The shipped field's drive (SDD-003 §4.2b). WATER DRIVE, and that is a
+    /// game decision as much as a geological one: a water-drive compartment
+    /// admits aquifer influx, so it holds its pressure up, produces longer — and
+    /// waters out. Solution-gas drive refuses influx and would give a field that
+    /// simply declines and stops, which is a shorter and quieter story.
+    /// </summary>
+    public static ContentId Drive { get; } = new("water-drive");
+
     public static RelativePermeabilityCurve Wettability { get; } =
         RelativePermeabilityCurve.Validated(
             swc: 0.30, sor: 0.25, krwMax: 0.35, kroMax: 0.90, nw: 3.0, no: 2.0);

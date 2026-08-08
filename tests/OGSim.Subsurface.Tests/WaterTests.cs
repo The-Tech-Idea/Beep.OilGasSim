@@ -224,3 +224,138 @@ public class WaterfloodTests
         return low / 1.0e6;
     }
 }
+
+/// <summary>
+/// R20d.4 — the compartment waters out (SDD-003 §3.1c, §3.3).
+///
+/// <para>The truth half of the late-life game. Fractional flow and the aquifer
+/// were both built, tested and called by nothing; these assert them working
+/// together on a real compartment, which is where breakthrough actually
+/// happens.</para>
+/// </summary>
+public class BreakthroughTests
+{
+    private static readonly Viscosity Water = new(0.5e-3);
+    private static readonly Viscosity Oil = new(2.0e-3);
+
+    private static SubsurfaceState WaterDriven()
+    {
+        var state = new SubsurfaceState(
+            new BlackOilModel(
+                new BlackOilInputs(
+                    new ApiGravity(35.0), 0.75, Temperature.FromCelsius(93.3), 100.0,
+                    FluidForm.BlackOil),
+                new ValidityRange(
+                    new Pressure(500.0), new Pressure(60e6),
+                    Temperature.FromCelsius(10.0), Temperature.FromCelsius(180.0))),
+            new WaterDrive(),
+            maxTickPressureDropFraction: 0.4);
+
+        return state;
+    }
+
+    private static EntityId<IReservoirCompartmentEntity> Add(SubsurfaceState state) =>
+        state.Create(
+            new GeneratedCompartment(
+                PoreVolume: new ReservoirVolume(1.0e6),
+                Porosity: 0.22,
+                OilSaturation: 0.7,
+                InitialPressure: new Pressure(30.0e6),
+                Temperature: Temperature.FromCelsius(93.3),
+                Depth: new Length(2000.0)),
+            permeability: new Permeability(1.0e-13),
+            netThickness: new Length(20.0),
+            drainageArea: new Area(2.0e5),
+            rockCompressibility: 4.5e-10,
+            gasOilContact: new Length(1900.0),
+            oilWaterContact: new Length(2100.0),
+            RelativePermeabilityCurve.Validated(
+                swc: 0.30, sor: 0.25, krwMax: 0.35, kroMax: 0.90, nw: 3.0, no: 2.0),
+            new ContentId("water-drive"));
+
+    /// <summary>
+    /// BREAKTHROUGH IS NOT SCHEDULED. It is the first tick the saturation
+    /// exceeds connate — and before that the water cut is exactly zero because
+    /// krw is, not because anything checked a date.
+    /// </summary>
+    [Fact]
+    public void R10V1_a_compartment_at_connate_saturation_produces_no_water()
+    {
+        SubsurfaceState state = WaterDriven();
+        EntityId<IReservoirCompartmentEntity> id = Add(state);
+
+        Assert.Equal(0.0, state.TrueWaterCutOf(id, Water, Oil), precision: 12);
+    }
+
+    /// <summary>
+    /// Aquifer influx raises the saturation, the saturation raises the water
+    /// cut, and the field waters out. Three mechanisms that existed separately
+    /// and had never met.
+    ///
+    /// <para>Influx is paired with production, because that is what a water
+    /// drive IS: the aquifer replaces much of the voidage, so the compartment
+    /// falls in pressure slowly and fills with water while it does. Influx that
+    /// MATCHED the voidage would hold the pressure at its initial value and any
+    /// excess would need a pressure above it — which the material balance
+    /// refuses outright rather than solving for a pressure it cannot reach, and
+    /// which is the honest answer: a field cannot be repressurised above
+    /// discovery by its own aquifer.</para>
+    /// </summary>
+    [Fact]
+    public void R10V1_aquifer_influx_waters_the_compartment_out()
+    {
+        SubsurfaceState state = WaterDriven();
+        EntityId<IReservoirCompartmentEntity> id = Add(state);
+
+        double before = state.TrueWaterCutOf(id, Water, Oil);
+
+        // Twenty years of a well-supported field: most of what is taken is
+        // replaced, and what replaces it is water.
+        for (var month = 0; month < 240; month++)
+            state.CommitTick(
+            [
+                new CompartmentWithdrawal(
+                    id,
+                    new SurfaceVolume(1_000.0),
+                    new StandardGasVolume(0.0),
+                    new SurfaceVolume(0.0),
+                    Influx: new ReservoirVolume(600.0),
+                    Injected: new ReservoirVolume(0.0),
+                    ReservoirVolume: new ReservoirVolume(1_200.0)),
+            ]);
+
+        double after = state.TrueWaterCutOf(id, Water, Oil);
+
+        Assert.Equal(0.0, before, precision: 12);
+        Assert.True(after > 0.0,
+            $"water that arrived from the aquifer must reach the producer ({after}), or a " +
+            "water drive is pressure support with no consequence");
+    }
+
+    /// <summary>
+    /// A field with NO aquifer never waters out, however long it produces. The
+    /// water has to come from somewhere, and a volumetric depletion reservoir
+    /// with connate water only has nowhere for it to come from.
+    /// </summary>
+    [Fact]
+    public void R10V1_without_influx_a_field_never_waters_out()
+    {
+        SubsurfaceState state = WaterDriven();
+        EntityId<IReservoirCompartmentEntity> id = Add(state);
+
+        for (var month = 0; month < 240; month++)
+            state.CommitTick(
+            [
+                new CompartmentWithdrawal(
+                    id,
+                    new SurfaceVolume(100.0),
+                    new StandardGasVolume(0.0),
+                    new SurfaceVolume(0.0),
+                    Influx: new ReservoirVolume(0.0),
+                    Injected: new ReservoirVolume(0.0),
+                    ReservoirVolume: new ReservoirVolume(120.0)),
+            ]);
+
+        Assert.Equal(0.0, state.TrueWaterCutOf(id, Water, Oil), precision: 12);
+    }
+}

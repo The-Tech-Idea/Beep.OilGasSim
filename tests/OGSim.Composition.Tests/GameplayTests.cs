@@ -34,7 +34,7 @@ public sealed class GameplayTests
                 rockCompressibility: 4.5e-10,
                 gasOilContact: new Length(1900.0),
                 oilWaterContact: new Length(2100.0),
-                Defaults.Wettability);
+                Defaults.Wettability, Defaults.Drive);
 
         return (built.Engine, target);
     }

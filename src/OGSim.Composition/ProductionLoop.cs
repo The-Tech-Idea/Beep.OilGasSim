@@ -147,6 +147,7 @@ internal sealed class ProductionLoop
     private readonly FieldEconomics _economics;
     private readonly Temperature _reservoirTemperature;
     private readonly IFlowSolver _solver;
+    private readonly IAquiferModel _aquifer;
     private readonly IFlowElementRegistry _network;
     private readonly Temperature _ambient;
     private readonly Density _surfaceDensity;
@@ -174,6 +175,7 @@ internal sealed class ProductionLoop
         IFluidPropertyModel fluid,
         IAuditTrail audit,
         IFlowSolver solver,
+        IAquiferModel aquifer,
         IFlowElementRegistry network,
         IReadOnlyList<EntityId<IFlowElement>> meteredPoints,
         Func<EntityId<IFlowElement>, string> names,
@@ -190,6 +192,7 @@ internal sealed class ProductionLoop
         ArgumentNullException.ThrowIfNull(fluid);
         ArgumentNullException.ThrowIfNull(audit);
         ArgumentNullException.ThrowIfNull(solver);
+        ArgumentNullException.ThrowIfNull(aquifer);
         ArgumentNullException.ThrowIfNull(network);
         ArgumentNullException.ThrowIfNull(meteredPoints);
         ArgumentNullException.ThrowIfNull(names);
@@ -202,6 +205,7 @@ internal sealed class ProductionLoop
         _fluid = fluid;
         _audit = audit;
         _solver = solver;
+        _aquifer = aquifer;
         _network = network;
         _names = names;
         _economics = economics;
@@ -418,13 +422,30 @@ internal sealed class ProductionLoop
             // this replaced was a stated simplification with a task against it
             // (R20c.11); solving per element made the honest form free, because
             // the compartment is already in hand.
+            Pressure pressure = _subsurface.TruePressureOf(compartment);
+            double waterCut = _subsurface.TrueWaterCutOf(compartment, WaterViscosity, _fluid.MuOil(pressure));
+
+            // SDD-003 §6.1b splits the RATE: the Darcy form gives the total
+            // liquid, and fw says how much of it is water. No singularity at
+            // fw = 1 — the oil term simply goes to zero and the well is a water
+            // producer, which is the physical statement.
+            var oilReservoir = new ReservoirVolume(reservoirVolume * (1.0 - waterCut));
+            var waterReservoir = new ReservoirVolume(reservoirVolume * waterCut);
+
+            SurfaceVolume oil = _fluid.Bo(pressure).Shrink(oilReservoir);
+
+            // AQUIFER INFLUX, over the month. A water-drive compartment is held
+            // up by it and waters out because of it; a drive that refuses influx
+            // faults on a non-zero one rather than absorbing it silently
+            // (SDD-003 §4.2b).
+            ReservoirVolume influx = _aquifer.InfluxDuring(pressure, Duration.FromTicks(1.0));
+
             withdrawals.Add(new CompartmentWithdrawal(
                 compartment,
-                _fluid.Bo(_subsurface.TruePressureOf(compartment))
-                     .Shrink(new ReservoirVolume(reservoirVolume)),
-                new StandardGasVolume(0.0),
-                new SurfaceVolume(0.0),
-                Influx: new ReservoirVolume(0.0),
+                oil,
+                new StandardGasVolume(oil.CubicMetres * _fluid.Rs(pressure)),
+                _fluid.Bw(pressure).Shrink(waterReservoir),
+                Influx: influx,
                 Injected: new ReservoirVolume(0.0),
                 ReservoirVolume: new ReservoirVolume(reservoirVolume)));
         }
@@ -516,6 +537,14 @@ internal sealed class ProductionLoop
         Money.RoundHalfEven(unitPrice.Cents * quantity);
 
     private const double KilogramsPerTonne = 1000.0;
+
+    /// <summary>
+    /// μw at reservoir conditions, Pa·s. A property of the water rather than of
+    /// the oil system, so <c>IFluidPropertyModel</c> does not carry one — and it
+    /// is half of the mobility ratio that decides how steep the S-curve is
+    /// (SDD-003 §3.1c). Content the day a water material has properties.
+    /// </summary>
+    private static Viscosity WaterViscosity { get; } = new(0.5e-3);
 }
 
 /// <summary>
@@ -575,10 +604,11 @@ public sealed class FieldControl
         double rockCompressibility,
         Length gasOilContact,
         Length oilWaterContact,
-        RelativePermeabilityCurve wettability) =>
+        RelativePermeabilityCurve wettability,
+        ContentId drive) =>
         _subsurface.Create(
             generated, permeability, netThickness, drainageArea,
-            rockCompressibility, gasOilContact, oilWaterContact, wettability);
+            rockCompressibility, gasOilContact, oilWaterContact, wettability, drive);
 
     /// <summary>
     /// Brings a completion online against a compartment and ties it into the

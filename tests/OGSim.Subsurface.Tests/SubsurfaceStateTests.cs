@@ -53,7 +53,8 @@ public sealed class SubsurfaceStateTests
             // rather than the S-curve, but a compartment without a curve could
             // not answer what its water cut is at all.
             RelativePermeabilityCurve.Validated(
-                swc: 0.30, sor: 0.25, krwMax: 0.35, kroMax: 0.90, nw: 3.0, no: 2.0));
+                swc: 0.30, sor: 0.25, krwMax: 0.35, kroMax: 0.90, nw: 3.0, no: 2.0),
+            new ContentId("solution-gas-drive"));
 
     private static CompartmentWithdrawal Produce(
         EntityId<IReservoirCompartmentEntity> id, double stockTankOil) =>
