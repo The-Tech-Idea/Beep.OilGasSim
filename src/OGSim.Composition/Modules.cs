@@ -716,7 +716,7 @@ internal sealed class ObjectivesModule() : EngineModule(Declare(
 /// dependency graph — five modules require `IFluidPropertyModel` and nothing it
 /// requires is provided by any of them.
 /// </summary>
-internal sealed class MaterialsModule() : EngineModule(Declare(
+internal sealed class MaterialsModule(RealityProfile profile) : EngineModule(Declare(
     "materials",
     provides: [typeof(IFluidPropertyModel), typeof(IMaterialCatalog)],
     requires: [],
@@ -727,21 +727,49 @@ internal sealed class MaterialsModule() : EngineModule(Declare(
     {
         ArgumentNullException.ThrowIfNull(composition);
 
-        var fluid = new BlackOilModel(Defaults.Fluid, Defaults.Validity);
         var catalogue = new MaterialCatalogue(Defaults.Materials);
 
-        // THE SECOND HALF OF A TWO-PHASE CONSTRUCTION, and it was missing.
-        // `BlackOilModel.SplitAt` asks the catalogue what phase a material is at
-        // standard conditions, and the binding is deferred because the fluid
-        // system and the catalogue both load from content and neither can be
-        // built first. Nothing called `SplitAt` until a separator did, so the
-        // engine composed and ran for four phases with the second half never
-        // performed — and then faulted at exactly the right moment, naming the
-        // field, because the model refuses to default (law L2).
-        fluid.BindMaterials(catalogue);
+        // THE FIDELITY AXIS, at the one slot that currently varies (SDD-005
+        // §7b). Both implementations are registered under their own names and
+        // the profile picks; an unnamed slot keeps the module's own choice,
+        // which is why the simulation profile is empty rather than exhaustive.
+        var plugins = new PluginRegistry();
 
-        composition.Provide<IFluidPropertyModel>(fluid);
+        plugins.Register<IFluidPropertyModel>(
+            new ContentId("black-oil-correlations"),
+            () => Bound(new BlackOilModel(Defaults.Fluid, Defaults.Validity), catalogue));
+
+        plugins.Register<IFluidPropertyModel>(
+            new ContentId("arcade-fluid"),
+            () => new ArcadeFluidModel(
+                Defaults.Fluid, Defaults.CompletionBo, Defaults.Validity, catalogue));
+
+        IFluidPropertyModel fluid = profile.Selected(Defaults.FluidSlot) is ContentId chosen
+            ? plugins.Bind<IFluidPropertyModel>(chosen)
+            : Bound(new BlackOilModel(Defaults.Fluid, Defaults.Validity), catalogue);
+
+        composition.Provide(fluid);
         composition.Provide<IMaterialCatalog>(catalogue);
+    }
+
+    /// <summary>
+    /// THE SECOND HALF OF A TWO-PHASE CONSTRUCTION, and it was missing.
+    ///
+    /// <para><c>BlackOilModel.SplitAt</c> asks the catalogue what phase a
+    /// material is at standard conditions, and the binding is deferred because
+    /// the fluid system and the catalogue both load from content and neither can
+    /// be built first. Nothing called <c>SplitAt</c> until a separator did, so
+    /// the engine composed and ran for four phases with the second half never
+    /// performed — and then faulted at exactly the right moment naming the
+    /// field, because the model refuses to default (law L2, finding 161).</para>
+    ///
+    /// <para>Here rather than at the call site so the plugin factory and the
+    /// direct construction cannot bind differently.</para>
+    /// </summary>
+    private static IFluidPropertyModel Bound(BlackOilModel fluid, IMaterialCatalog catalogue)
+    {
+        fluid.BindMaterials(catalogue);
+        return fluid;
     }
 }
 

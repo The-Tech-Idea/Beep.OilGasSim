@@ -30,13 +30,20 @@ internal sealed class TestModule(
 
 internal static class Fixture
 {
-    public static EngineSettings Settings(FaultHandling handling = FaultHandling.Strict) =>
+    /// <summary>
+    /// The default fixture plays at SIMULATION fidelity — the full models — so a
+    /// test that does not say otherwise is testing the physics the design
+    /// specifies rather than the simplified one (design 18 §5b).
+    /// </summary>
+    public static EngineSettings Settings(
+        FaultHandling handling = FaultHandling.Strict, string profile = "simulation") =>
         new(new GameDate(1965, 1),
             WorldSeed: 20260806UL,
             new AuditRetention(DetailWindowTicks: 12),
             new RecordingSink(),
             LogLevel.Info,
-            handling);
+            handling,
+            new ContentId(profile));
 
     public static ModuleManifest Manifest(
         string name,
@@ -85,7 +92,8 @@ public sealed class ShippedSetTests
             new SimulationClock(new GameDate(1965, 1)), new AuditRetention(12));
 
         IReadOnlyList<IModule> modules = EngineBuilder.ShippedModules(
-            audit, new SimulationClock(new GameDate(1965, 1)), new RandomSource(1UL));
+            audit, new SimulationClock(new GameDate(1965, 1)), new RandomSource(1UL),
+            Defaults.Simulation);
 
         var provided = new HashSet<Type>();
         foreach (IModule module in modules)
@@ -111,7 +119,8 @@ public sealed class ShippedSetTests
             new SimulationClock(new GameDate(1965, 1)), new AuditRetention(12));
 
         var reversed = new List<IModule>(EngineBuilder.ShippedModules(
-            audit, new SimulationClock(new GameDate(1965, 1)), new RandomSource(1UL)));
+            audit, new SimulationClock(new GameDate(1965, 1)), new RandomSource(1UL),
+            Defaults.Simulation));
         reversed.Reverse();
 
         Built forward = Assert.IsType<Built>(EngineBuilder.Build(Fixture.Settings()));

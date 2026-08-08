@@ -553,6 +553,46 @@ internal static class Defaults
     /// the barrels a player reads.</summary>
     public static Density SurfaceOilDensity { get; } = Density.FromSpecificGravity(0.85);
 
+    // ------------------------------------------------------ reality profiles
+    //
+    // Design 18 §5b's fidelity axis, at its two shipped ends. Content in a
+    // finished game (R25.1); stated here as the records a loader will produce.
+
+    public static ModelSlot FluidSlot { get; } = new("fluid-properties");
+
+    /// <summary>
+    /// The full model everywhere. The EMPTY bundle, and correctly so: a profile
+    /// names departures from the shipped set, and simulation IS the shipped set.
+    /// </summary>
+    public static RealityProfile Simulation { get; } = new(new ContentId("simulation"), []);
+
+    /// <summary>
+    /// Fluid properties computed simply (SDD-005 §7b). Everything a decision is
+    /// made on survives — oil shrinks, gas comes out of solution, the chain and
+    /// the meter behave identically. What goes is the pressure dependence a
+    /// player cannot perceive.
+    /// </summary>
+    public static RealityProfile Arcade { get; } = new(
+        new ContentId("arcade"),
+        [new SetModelSelection(FluidSlot, new ContentId("arcade-fluid"))]);
+
+    /// <summary>
+    /// The shipped profiles, walked in declared order (D-5). A run naming one
+    /// that is not here is refused when the engine composes, rather than
+    /// silently played at whatever the modules happened to choose.
+    /// </summary>
+    public static IReadOnlyList<RealityProfile> Profiles { get; } = [Simulation, Arcade];
+
+    public static RealityProfile ProfileNamed(ContentId id)
+    {
+        for (int i = 0; i < Profiles.Count; i++)
+            if (Profiles[i].Id == id) return Profiles[i];
+
+        throw new ContentFault("SDD-005 §7b", null,
+            $"no reality profile '{id.Value}' is composed; a run cannot be played at a " +
+            "fidelity nobody defined");
+    }
+
     public static Integrity.DegradationCoefficients Decay { get; } =
         new(BaseRatePerYear: 0.05, WaterCutFactor: 1.0, SourFactor: 2.0,
             DutyFactor: 0.5, TemperatureFactor: 1.5, ServiceIntervalFactor: 0.2);
@@ -639,7 +679,19 @@ public sealed record EngineSettings(
     AuditRetention Retention,
     ILogSink LogSink,
     LogLevel MinimumLogLevel,
-    FaultHandling FaultHandling);
+    FaultHandling FaultHandling,
+
+    /// <summary>
+    /// Which reality profile the run is played at (design 18 §5b, SDD-005 §7b) —
+    /// arcade, standard or simulation.
+    ///
+    /// <para>A composition-time choice like the fault policy, and for the same
+    /// reason: it decides which implementation of each replaceable slot is
+    /// registered, so it has to be known before anything is built. Changing it
+    /// mid-game is a recompose, which is why 18 §5b.5 calls it "allowed and
+    /// logged" rather than free.</para>
+    /// </summary>
+    ContentId RealityProfile);
 
 /// <summary>
 /// A composed engine: the validated module set, the tick it runs, and the two
@@ -707,7 +759,8 @@ public static class EngineBuilder
     /// (SDD-001 §9, finding 126).</para>
     /// </summary>
     internal static IReadOnlyList<IModule> ShippedModules(
-        IAuditTrail audit, SimulationClock clock, IRandomSource random) =>
+        IAuditTrail audit, SimulationClock clock, IRandomSource random,
+        RealityProfile profile) =>
     [
         new SubsurfaceModule(),
         new WellsModule(),
@@ -721,7 +774,7 @@ public static class EngineBuilder
         new IntegrityModule(),
         new HseModule(),
         new ObjectivesModule(),
-        new MaterialsModule(),
+        new MaterialsModule(profile),
         new FieldModule(),
         new DiagnosticsModule(audit, clock, random),
     ];
@@ -735,7 +788,9 @@ public static class EngineBuilder
         var audit = new AuditTrail(clock, settings.Retention);
 
         return Build(
-            settings, ShippedModules(audit, clock, new RandomSource(settings.WorldSeed)),
+            settings,
+            ShippedModules(audit, clock, new RandomSource(settings.WorldSeed),
+                           Defaults.ProfileNamed(settings.RealityProfile)),
             clock, audit);
     }
 
