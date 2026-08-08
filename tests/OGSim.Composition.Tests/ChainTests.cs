@@ -410,6 +410,81 @@ public sealed class ChainTests
             reason => reason.LocId == "$loc:reject.top-of-the-ladder");
     }
 
+    // ------------------------------------------------------------- economics
+
+    /// <summary>
+    /// SDD-009 §3. The state takes its share, and the company keeps what is
+    /// left.
+    ///
+    /// <para>`IFiscalRegime` was composed at R16 and called by nobody, so a
+    /// company kept every barrel's full price and the fiscal terms of a licence
+    /// meant nothing — which made every capital decision trivially affordable
+    /// and therefore not a decision.</para>
+    /// </summary>
+    [Fact]
+    public void R20V4_royalty_and_tax_are_taken_out_of_what_the_field_earns()
+    {
+        (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled();
+        Produce(engine, target);
+
+        OGSim.Company.CostLedger ledger =
+            engine.Provided.Resolve<OGSim.Company.CompanyState>().Ledger;
+
+        engine.Pipeline.AdvanceTick();
+
+        // Revenue is a CREDIT and royalty and tax are DEBITS, so the sale
+        // carries the opposite sign to what the state takes out of it. Compared
+        // by magnitude, because what is under test is the share rather than the
+        // bookkeeping direction.
+        long gross = Math.Abs(ledger.BalanceOf(Account.Revenue).Cents);
+        long royalty = Math.Abs(ledger.BalanceOf(Account.Royalty).Cents);
+        long tax = Math.Abs(ledger.BalanceOf(Account.Tax).Cents);
+
+        Assert.True(gross > 0, "the field sold something");
+        Assert.True(royalty > 0, "a concession pays a royalty on gross");
+        Assert.True(tax > 0, "and tax on what is left after costs");
+
+        // Not a rounding: the state's share is a material fraction of the sale.
+        Assert.True(royalty + tax > gross / 5,
+            $"the state took {royalty + tax}c of a {gross}c sale — fiscal terms that take " +
+            "almost nothing are fiscal terms nobody plays around");
+    }
+
+    /// <summary>
+    /// The variable half of opex, and the one that ends a field's life: lifting
+    /// is charged on every tonne of LIQUID, oil and water alike, because the
+    /// pumps and the power do not care which.
+    ///
+    /// <para>A flat operating cost cannot express that, so watering out would be
+    /// something a player watches rather than something they answer.</para>
+    /// </summary>
+    [Fact]
+    public void R20V4_opex_scales_with_what_the_field_lifted()
+    {
+        static Money OpexWith(int wells)
+        {
+            (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled();
+            for (var well = 0; well < wells; well++) Produce(engine, target);
+
+            engine.Pipeline.AdvanceTick();
+
+            return engine.Provided.Resolve<OGSim.Company.CompanyState>()
+                         .Ledger.BalanceOf(Account.Opex);
+        }
+
+        long idle = Math.Abs(OpexWith(0).Cents);
+        long producing = Math.Abs(OpexWith(1).Cents);
+
+        // A field with no wells still pays its standing charge...
+        Assert.True(idle > 0, "the road and the people are paid for either way");
+
+        // ...and a producing one pays more, because something was lifted.
+        Assert.True(producing > idle,
+            $"a producing field cost {producing}c against an idle one's {idle}c — an " +
+            "operating cost that does not move with production cannot make a watered-out " +
+            "field uneconomic");
+    }
+
     // ------------------------------------------------ one bottleneck, then the next
 
     /// <summary>

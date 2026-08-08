@@ -30,7 +30,21 @@ public sealed record FieldEconomics(
     /// density, and the one place a density belongs is where mass becomes the
     /// barrels a player reads.</summary>
     Money OilPricePerTonne,
-    Money FixedOperatingCostPerTick);
+
+    /// <summary>The standing charge: people, power, chemicals, the road. Paid
+    /// whether or not the field produced, which is the whole shape of the
+    /// late-life decision.</summary>
+    Money FixedOperatingCostPerTick,
+
+    /// <summary>
+    /// What it costs to lift a tonne of LIQUID — oil and water alike.
+    ///
+    /// <para>The variable half, and the one that ends a field's life: a well at
+    /// 90% water cut pays to produce nine barrels of nothing for every one that
+    /// sells. A flat operating cost cannot express that, so watering out would
+    /// be something a player watches rather than something they answer.</para>
+    /// </summary>
+    Money LiftingCostPerTonne);
 
 /// <summary>
 /// One element of the chain, as a player watches it (SDD-017 §2).
@@ -173,6 +187,13 @@ internal sealed class ProductionLoop
     private OGSim.Kernel.Composition _stored;
     private Allocation _tankProvenance;
 
+    // What the field handled this tick, per material — what a lifting cost is
+    // charged on, and the reason a watered-out field stops paying.
+    private readonly double[] _handled;
+
+    private readonly IFiscalRegime _regime;
+    private readonly IReadOnlyList<int> _liquidOrdinals;
+
     public ProductionLoop(
         SubsurfaceState subsurface,
         WellsState wells,
@@ -187,6 +208,8 @@ internal sealed class ProductionLoop
         Func<EntityId<IFlowElement>, string> names,
         OGSim.Facilities.Tank tank,
         MassRate offtake,
+        IFiscalRegime regime,
+        IReadOnlyList<int> liquidOrdinals,
         FieldEconomics economics,
         Temperature reservoirTemperature,
         Temperature ambient,
@@ -205,6 +228,8 @@ internal sealed class ProductionLoop
         ArgumentNullException.ThrowIfNull(meteredPoints);
         ArgumentNullException.ThrowIfNull(names);
         ArgumentNullException.ThrowIfNull(tank);
+        ArgumentNullException.ThrowIfNull(regime);
+        ArgumentNullException.ThrowIfNull(liquidOrdinals);
         ArgumentNullException.ThrowIfNull(economics);
 
         _subsurface = subsurface;
@@ -219,7 +244,10 @@ internal sealed class ProductionLoop
         _names = names;
         _tank = tank;
         _offtake = offtake;
+        _regime = regime;
+        _liquidOrdinals = liquidOrdinals;
         _economics = economics;
+        _handled = new double[materialCount];
         _reservoirTemperature = reservoirTemperature;
         _ambient = ambient;
         _surfaceDensity = surfaceDensity;
@@ -274,6 +302,7 @@ internal sealed class ProductionLoop
         _byCompartment.Clear();
         _chain.Clear();
         _stored = OGSim.Kernel.Composition.Zero(_materialCount);
+        Array.Clear(_handled);
         double[] delivered = new double[_materialCount];
 
         for (int i = 0; i < plan.Segments.Count; i++)
@@ -342,6 +371,17 @@ internal sealed class ProductionLoop
         for (int i = 0; i < report.Deferrals.Count; i++)
             Flowing(report.Deferrals[i].Element)
                 .Refuse(report.Deferrals[i].Kind, report.Deferrals[i].Deferred);
+
+        // WHAT THE FIELD HANDLED, from the completions' own sourced mass: every
+        // barrel that came up the hole, whether it was sold, flared or disposed
+        // of. That is what a lifting cost is charged on.
+        for (int i = 0; i < report.Solutions.Count; i++)
+        {
+            OGSim.Kernel.Composition sourced = report.Solutions[i].Converged.Sourced;
+
+            for (int m = 0; m < _materialCount; m++)
+                _handled[m] += sourced[new MaterialId(m)].KgPerSecond * seconds;
+        }
 
         for (int i = 0; i < report.CompletionStates.Count; i++)
         {
@@ -550,14 +590,39 @@ internal sealed class ProductionLoop
         // Everything the chain does between the two lives in that difference,
         // and oil that failed the spec gate is oil the company has and cannot
         // sell.
+        // The month's OPEX first, because the fiscal assessment deducts it.
+        Money opex = OperatingCost();
+
         if (_sale is AuditId sale)
         {
-            Money revenue = Scale(
+            Money gross = Scale(
                 _economics.OilPricePerTonne, Delivered.Total.KgPerSecond / KilogramsPerTonne);
 
             _company.Ledger.Post(new Movement(
-                tick, Account.Cash, Account.Revenue, revenue,
+                tick, Account.Cash, Account.Revenue, gross,
                 MovementCategory.Production, Asset: null, Cause: sale));
+
+            // THE STATE TAKES ITS SHARE (SDD-009 §3). A royalty on gross and a
+            // tax on what is left after costs — the regime was composed at R16
+            // and called by nobody, so a company kept every barrel's full price
+            // and the fiscal terms of a licence meant nothing.
+            FiscalResult assessed = _regime.Assess(new FiscalInput(
+                GrossRevenue: gross,
+                RecoverableOpex: opex,
+                RecoverableCapex: Money.Zero,
+                Depreciation: Money.Zero,
+                CostPoolCarry: Money.Zero,
+                PriorRFactor: 0.0));
+
+            if (assessed.Royalty.Cents > 0)
+                _company.Ledger.Post(new Movement(
+                    tick, Account.Royalty, Account.Cash, assessed.Royalty,
+                    MovementCategory.Fiscal, Asset: null, Cause: sale));
+
+            if (assessed.Tax.Cents > 0)
+                _company.Ledger.Post(new Movement(
+                    tick, Account.Tax, Account.Cash, assessed.Tax,
+                    MovementCategory.Fiscal, Asset: null, Cause: sale));
         }
 
         // The field costs money to run whether or not it produced — which is the
@@ -568,7 +633,7 @@ internal sealed class ProductionLoop
             new Dictionary<string, AuditValue>(StringComparer.Ordinal));
 
         _company.Ledger.Post(new Movement(
-            tick, Account.Opex, Account.Cash, _economics.FixedOperatingCostPerTick,
+            tick, Account.Opex, Account.Cash, opex,
             MovementCategory.Operating, Asset: null, Cause: operating));
     }
 
@@ -583,6 +648,28 @@ internal sealed class ProductionLoop
         // of its value — which showed up as a producing field that could not
         // cover its own standing charge.
         Money.RoundHalfEven(unitPrice.Cents * quantity);
+
+    /// <summary>
+    /// What the field cost to run this month: a standing charge, plus a lifting
+    /// cost on every tonne of LIQUID handled — oil and water alike.
+    ///
+    /// <para><b>Water costs the same to lift as oil</b>, and that is the whole
+    /// economics of a watering-out field: the pumps, the power and the
+    /// separation do not care which it is, so a well at 90% water cut is paying
+    /// to produce nine barrels of nothing for every one that sells. It is what
+    /// eventually makes a field uneconomic while it is still producing, which is
+    /// the decision late life is made of — and without it watering out would be
+    /// something a player watches rather than something they answer.</para>
+    /// </summary>
+    private Money OperatingCost()
+    {
+        var liquid = 0.0;
+        for (int i = 0; i < _liquidOrdinals.Count; i++)
+            liquid += _handled[_liquidOrdinals[i]];
+
+        return _economics.FixedOperatingCostPerTick
+             + Scale(_economics.LiftingCostPerTonne, liquid / KilogramsPerTonne);
+    }
 
     private const double KilogramsPerTonne = 1000.0;
 

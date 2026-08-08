@@ -76,7 +76,13 @@ internal static class Defaults
         // mass, so the price is per tonne and the density is applied once, where
         // mass becomes the barrels a player reads.
         OilPricePerTonne: Money.FromMillions(377.0 / 0.85 / 1_000_000.0),
-        FixedOperatingCostPerTick: Money.FromMillions(0.3));
+        FixedOperatingCostPerTick: Money.FromMillions(0.3),
+
+        // ~$15/bbl of LIQUID lifted, which is an ordinary onshore figure. It is
+        // charged on water as readily as on oil, because the pumps and the power
+        // do not care which — and that is what eventually makes a watered-out
+        // field uneconomic while it is still producing.
+        LiftingCostPerTonne: Money.FromMillions(15.0 * 6.29 / 0.85 / 1_000_000.0));
 
     /// <summary>
     /// The catalogue, as content would carry it. ONE material, because the chain
@@ -109,6 +115,14 @@ internal static class Defaults
     /// <summary>"crude-oil" &lt; "natural-gas" &lt; "produced-water" by ordinal
     /// comparison, which is the sort the catalogue uses (SDD-004 §6).</summary>
     public static MaterialId WaterOrdinal { get; } = new(2);
+
+    /// <summary>
+    /// Which materials a pump has to lift. Oil and water — gas comes up with
+    /// them and is separated off, and charging a lifting cost on it would be
+    /// billing the field twice for the same barrel.
+    /// </summary>
+    public static IReadOnlyList<int> LiquidOrdinals { get; } =
+        [OilOrdinal.Ordinal, WaterOrdinal.Ordinal];
 
     /// <summary>
     /// ρ_sc of the produced gas — <c>γg · ρ_air,sc</c> (SDD-003 §6.1b). The
