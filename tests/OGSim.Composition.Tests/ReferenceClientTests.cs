@@ -146,21 +146,34 @@ public sealed class ReferenceClientTests
             $"a field of {poreVolume} m³ pore volume never got a well down");
     }
 
-    // WHAT IS NOT ASSERTED HERE, and why. There is no test that a bigger field
-    // is a bigger business, because today it is not one — and that is worth
-    // recording rather than tuning past.
-    //
-    // Measured over twenty years: a 50e6 m³ field earns $602M and a 500e6 m³
-    // field $601M. Ten times the oil, the same money, the smaller field very
-    // slightly ahead. Both spend every month against the same absolute export
-    // limit, and both stop at the same absolute target — which a 5e6 m³ field
-    // also clears, since even that holds around $1.5B of oil against a $600M
-    // goal.
-    //
-    // The aquifer now scales with the compartment, so the reservoir governs what
-    // CAN come out. Nothing yet sizes the plant that lifts it or the goal that
-    // judges it, so what DOES come out is the same whatever was found. The
-    // accumulation has to reach the surface and the objective before "how big is
-    // it?" is a question a player can answer by playing — the other half of
-    // finding 164, and R20d.8's.
+    /// <summary>
+    /// AND NOW THE SIZE IS THE STORY. A field ten times bigger is worth
+    /// materially more to develop — which it was not before finding 165: both
+    /// spent every month against one constant export line and earned within
+    /// 0.3% of each other, the smaller one fractionally ahead.
+    ///
+    /// <para>Not ten times more, and it should not be. The line is bought with
+    /// money the field has already made and takes months to lay, so a big
+    /// accumulation spends its early years at the same rate a small one does and
+    /// only pulls away once it has paid for the capacity to. That lag is the
+    /// development decision — and it exists because what is in the ground and
+    /// what lifts it are now two different things.</para>
+    /// </summary>
+    [Fact]
+    public void R20d8V1_a_bigger_reservoir_is_a_bigger_business()
+    {
+        Money big = Earned(500.0e6), small = Earned(50.0e6);
+
+        Assert.True(big > small,
+            $"ten times the oil earned no more: {big} against {small}");
+    }
+
+    private static Money Earned(double poreVolume)
+    {
+        (Engine engine, EntityId<IReservoirCompartmentEntity> prospect) = Field(poreVolume);
+
+        return new Operator(engine, prospect, wellTarget: 3, hurdle: Money.Zero)
+            .Play(months: 240)
+            .Cash;
+    }
 }

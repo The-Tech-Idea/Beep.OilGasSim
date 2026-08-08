@@ -507,6 +507,7 @@ internal sealed class FieldModule() : EngineModule(Declare(
         typeof(CutCoreCommand),
         typeof(SeismicSurveyCommand),
         typeof(InstallSeparatorCommand),
+        typeof(ExpandExportCommand),
         typeof(SetWellChokeCommand),
         typeof(AbandonWellCommand),
     ]))
@@ -531,6 +532,12 @@ internal sealed class FieldModule() : EngineModule(Declare(
             Defaults.AbandonWellTerms.Template);
 
 
+        // THE ROUTE TO MARKET. One per field, so its identity is the field's
+        // own — a company with two export lines has two fields, and that is
+        // R20d.8's world rather than this composition's.
+        var terminal = new OGSim.Facilities.ExportTerminal(
+            new EntityRef(EntityKind.Facility, 1), Defaults.ExportLadder[0]);
+
         var loop = new ProductionLoop(
             composition.Require<OGSim.Subsurface.SubsurfaceState>(),
             composition.Require<OGSim.Wells.WellsState>(),
@@ -543,7 +550,7 @@ internal sealed class FieldModule() : EngineModule(Declare(
             chain.MeteredPoints,
             chain.NameOf,
             chain.Tank,
-            Defaults.ExportOfftake,
+            terminal,
             composition.Require<IFiscalRegime>(),
             Defaults.LiquidOrdinals,
             () => field.IsAbandoned,
@@ -619,6 +626,12 @@ internal sealed class FieldModule() : EngineModule(Declare(
             // paid for and bypassed (finding 153).
             new InstallSeparatorActivity(
                 Defaults.InstallSeparatorTerms, chain.Separator, Defaults.SeparatorLadder),
+
+            // THE FIELD'S LAST CEILING (R20d.8). Debottleneck everything upstream
+            // and a field still sells only what the export line takes — which is
+            // why, until this, ten times the oil earned the same money.
+            new ExpandExportActivity(
+                Defaults.ExpandExportTerms, terminal, Defaults.ExportLadder),
 
             // The ENDING (R12b.10). Finding 153's other reason is gone too: opex
             // scales with the liquid lifted, so a watered-out well genuinely

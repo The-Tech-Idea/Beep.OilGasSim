@@ -120,8 +120,29 @@ public sealed class Operator
         // bottlenecks with the mass it is refusing.
         if (Producing(seen) < 2) return false;
 
-        return _engine.Commands.Submit(new InstallSeparatorCommand()) is Accepted;
+        var moved = _engine.Commands.Submit(new InstallSeparatorCommand()) is Accepted;
+
+        // AND THEN THE LINE. Debottlenecking the vessel only moves the ceiling
+        // to the export line, so a client that stopped at the separator would
+        // cap every field at the shipped offtake however much was under it —
+        // which is exactly what made a big field earn no more than a small one.
+        //
+        // Bought only when the field has the cash to survive being wrong about
+        // it (SDD-006 §7b): the line is a large commitment made on an estimate,
+        // and a company that spends its last dollar on capacity for oil that
+        // turns out not to be there has ended its own game.
+        if (seen.Cash > ExportLineWorthBuildingAt)
+            moved |= _engine.Commands.Submit(new ExpandExportCommand()) is Accepted;
+
+        return moved;
     }
+
+    /// <summary>
+    /// What a client wants in the bank before committing to a bigger line.
+    /// Roughly twice its price — enough that the months it takes to build are
+    /// survivable if the field disappoints.
+    /// </summary>
+    private static readonly Money ExportLineWorthBuildingAt = Money.FromMillions(100.0);
 
     /// <summary>
     /// Closes the field once it costs more to run than it earns.

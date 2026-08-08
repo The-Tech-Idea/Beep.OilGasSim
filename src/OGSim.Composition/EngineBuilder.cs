@@ -549,6 +549,35 @@ internal static class Defaults
     public static MassRate ExportOfftake { get; } = new(20.0);
 
     /// <summary>
+    /// The export ladder (SDD-006 §7b). The shipped line is what a company
+    /// signs for before it knows what it has found; the rungs above are what a
+    /// field earns the right to build.
+    ///
+    /// <para>DOUBLING, not creeping, because the decision has to be big enough
+    /// to be wrong. A rung that added a tenth would be an obvious yes at every
+    /// field size and therefore not a decision at all.</para>
+    /// </summary>
+    public static IReadOnlyList<Facilities.ExportTier> ExportLadder { get; } =
+    [
+        new(new ContentId("export-line-e1"), ExportOfftake),
+        new(new ContentId("export-line-e2"), new MassRate(40.0)),
+        new(new ContentId("export-line-e3"), new MassRate(80.0)),
+    ];
+
+    /// <summary>
+    /// What a bigger line costs and how long it takes. DEARER AND SLOWER than a
+    /// vessel: a separator is a unit dropped onto a pad, an export line is a
+    /// route — and the money committed before a barrel moves through it is what
+    /// makes overbuilding a small field hurt.
+    /// </summary>
+    public static ActivityTerms ExpandExportTerms { get; } = new(
+        Template: new ContentId("expand-export"),
+        Cost: Money.FromMillions(45.0),
+        DurationTicks: 9,
+        Rig: null,
+        Outcomes: SurveyOutcomes);
+
+    /// <summary>
     /// The gathering line from the header to the vessel (design 04 §5 stage 3,
     /// catalogue C06's size ladder).
     ///

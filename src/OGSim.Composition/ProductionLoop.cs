@@ -181,7 +181,7 @@ internal sealed class ProductionLoop
     private readonly Func<EntityId<IFlowElement>, string> _names;
 
     private readonly OGSim.Facilities.Tank _tank;
-    private readonly MassRate _offtake;
+    private readonly OGSim.Facilities.ExportTerminal _terminal;
 
     private OGSim.Kernel.Composition _stored;
     private Allocation _tankProvenance;
@@ -206,7 +206,7 @@ internal sealed class ProductionLoop
         IReadOnlyList<EntityId<IFlowElement>> meteredPoints,
         Func<EntityId<IFlowElement>, string> names,
         OGSim.Facilities.Tank tank,
-        MassRate offtake,
+        OGSim.Facilities.ExportTerminal terminal,
         IFiscalRegime regime,
         IReadOnlyList<int> liquidOrdinals,
         Func<bool> isAbandoned,
@@ -227,6 +227,7 @@ internal sealed class ProductionLoop
         ArgumentNullException.ThrowIfNull(meteredPoints);
         ArgumentNullException.ThrowIfNull(names);
         ArgumentNullException.ThrowIfNull(tank);
+        ArgumentNullException.ThrowIfNull(terminal);
         ArgumentNullException.ThrowIfNull(regime);
         ArgumentNullException.ThrowIfNull(liquidOrdinals);
         ArgumentNullException.ThrowIfNull(isAbandoned);
@@ -242,7 +243,7 @@ internal sealed class ProductionLoop
         _network = network;
         _names = names;
         _tank = tank;
-        _offtake = offtake;
+        _terminal = terminal;
         _regime = regime;
         _liquidOrdinals = liquidOrdinals;
         _isAbandoned = isAbandoned;
@@ -561,7 +562,11 @@ internal sealed class ProductionLoop
         // and stage 9 will account it as fugitive emissions.
         _tank.VapourLossOver(tick);
 
-        MaterialInventory lifted = _tank.Draw(new Mass(_offtake.KgPerSecond * tick.Seconds));
+        // Asked of the TERMINAL each tick rather than held: a line laid this
+        // month must lift against its new capacity from this month
+        // (SDD-006 §7b).
+        MaterialInventory lifted = _tank.Draw(
+            new Mass(_terminal.Tier.Offtake.KgPerSecond * tick.Seconds));
 
         Exported = lifted.Total;
     }
