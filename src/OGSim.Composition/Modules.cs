@@ -734,8 +734,8 @@ internal sealed class InformationModule() : EngineModule(Declare(
 
 internal sealed class WorldModule() : EngineModule(Declare(
     "world",
-    provides: [typeof(IWorldGenerator)],
-    requires: [],
+    provides: [typeof(IWorldGenerator), typeof(WorldSink)],
+    requires: [typeof(FieldControl), typeof(IBeliefStore)],
     ownsState: NothingOwnedYet,
     stages: NoStagesYet))   // world-gen runs once, at tick zero, not in the loop
 {
@@ -744,6 +744,13 @@ internal sealed class WorldModule() : EngineModule(Declare(
         ArgumentNullException.ThrowIfNull(composition);
 
         composition.Provide<IWorldGenerator>(new OGSim.World.BasinWorldGenerator());
+
+        // THE SINK, provided so `CreateNew` can find it — and so the generated
+        // world has exactly one place to land. It was the missing half: a
+        // generator was composed here for four phases and the only IWorldSink in
+        // the repository was a test double, so nothing ever ran it.
+        composition.Provide<WorldSink>(new WorldSink(
+            composition.Require<FieldControl>(), composition.Require<IBeliefStore>()));
     }
 }
 

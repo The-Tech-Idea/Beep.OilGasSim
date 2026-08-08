@@ -1081,6 +1081,44 @@ public static class EngineBuilder
         new DiagnosticsModule(audit, clock, random),
     ];
 
+    /// <summary>
+    /// START A NEW GAME (SDD-010 §4, SDD-017 §1b). Composes the engine, then runs
+    /// world generation into it — in that order, because the generator writes
+    /// truth into module stores and there are no stores until composition has
+    /// built them.
+    ///
+    /// <para>THIS IS WHERE A GAME LEARNS WHAT IT IS ABOUT. Everything that
+    /// follows — how much there is to find, how deep and how hot it is, how hard
+    /// it is to see, how big a well's drainage is, what the company believes on
+    /// the first morning — comes from what the generator drew here. Nothing
+    /// downstream states a field's size or its position; they are consequences of
+    /// this call, which is the whole point of generating a world rather than
+    /// authoring one.</para>
+    ///
+    /// <para>A refusal to compose is returned untouched rather than generated
+    /// into: an engine that could not be built has nowhere to put a world.</para>
+    /// </summary>
+    public static BuildResult CreateNew(EngineSettings settings, WorldParameters world)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+        ArgumentNullException.ThrowIfNull(world);
+
+        BuildResult built = Build(settings);
+
+        if (built is not Built ready) return built;
+
+        ready.Engine.Provided.Resolve<IWorldGenerator>().Generate(
+            world,
+            ready.Engine.Provided.Resolve<WorldSink>(),
+
+            // The world-generation stream, and only it. Adding a draw to any
+            // other subsystem can never shift what this world contains
+            // (SDD-001 §4's eight named streams).
+            ready.Engine.Provided.Resolve<IRandomSource>().Stream(StreamId.WorldGen));
+
+        return built;
+    }
+
     /// <summary>Composes the shipped set.</summary>
     public static BuildResult Build(EngineSettings settings)
     {
