@@ -256,6 +256,23 @@ public enum PosFactor { Source, Reservoir, Seal, Trap, Timing }
 > source cannot, and has to drill or walk away. Without per-factor updates the
 > decomposition is decoration.
 
+> **R20d.7.6 amendment. The re-key needs a method.** This paragraph has
+> specified re-keying since R14 and `IBeliefStore` has no way to do it, so a
+> discovery stranded everything the company had learned: the structure-capacity
+> belief a survey was bought for stayed on the prospect while the field it
+> described became a compartment nobody knew anything about.
+>
+> ```csharp
+> void ReKey(EntityRef from, EntityRef to);   // same Mu/Sigma/provenance/as-of
+> ```
+>
+> **A MOVE, not a copy.** Leaving the original would double-count: the prospect
+> and the accumulation would each answer for the same fact, and an appraisal
+> updating one would leave the other stale — which is law L5 in the information
+> layer. Re-keying onto a subject that already holds that kind is a fault rather
+> than a merge, because two beliefs about one fact have no correct combination
+> and picking either silently discards evidence.
+
 **On discovery, beliefs re-key, never reset:** the prospect's property beliefs
 and volumetrics become the accumulation's (same Mu/Sigma/provenance, new
 entity), and appraisal continues updating them through §2.1. Nothing is thrown
