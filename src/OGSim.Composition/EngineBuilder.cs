@@ -410,8 +410,19 @@ internal static class Defaults
     ];
 
     /// <summary>
-    /// Double the opening cash. Named so the goal and the opening position
-    /// cannot drift apart silently.
+    /// What the decade has to be worth. Named so the goal and the opening
+    /// position cannot drift apart silently.
+    ///
+    /// <para><b>Out of reach without debottlenecking, and that is the point.</b>
+    /// A player who drills and waits is capped by the first separator and ends
+    /// the decade under $500M; one who fits the bigger vessel, develops the
+    /// field and keeps it flowing clears it with room. The target sits between them, so
+    /// the run is decided by whether the constraints were answered rather than
+    /// by how long it was left alone.</para>
+    ///
+    /// <para>It was $100M — met in month six by a field that had not been
+    /// developed at all, which made every decision after the first one
+    /// decoration (R20.4's first measurement).</para>
     ///
     /// <para>Declared BEFORE the scenario that reads it: static initialisers run
     /// in declaration order, so a target declared below would be zero when the
@@ -419,7 +430,7 @@ internal static class Defaults
     /// is a scenario that cannot be lost rather than a compile error. The same
     /// trap the activity terms above carry a note about.</para>
     /// </summary>
-    private static Money TargetCash { get; } = Money.FromMillions(100.0);
+    private static Money TargetCash { get; } = Money.FromMillions(600.0);
 
     /// <summary>
     /// The scenario this composition ships (SDD-014 §5). Content in a finished
@@ -725,6 +736,31 @@ internal static class Defaults
     /// simply declines and stops, which is a shorter and quieter story.
     /// </summary>
     public static ContentId Drive { get; } = new("water-drive");
+
+    // ------------------------------------------------------------- the aquifer
+    //
+    // WHAT MAKES THE ARC FORTY YEARS RATHER THAN FOUR. The first numbers here
+    // were a token aquifer — a maximum influx of 1% of the pore volume and a
+    // productivity index an order of magnitude too small to replace what eight
+    // wells take. The field held its plateau for two months, peaked, and was
+    // finished inside four years, which is not a field's life; it is a tank
+    // being emptied.
+    //
+    // Sized as a real one, the aquifer holds the pressure up, the plateau lasts,
+    // and the water it pushes in arrives at the producers — which is the story
+    // the late game is made of and the reason any of the water work matters.
+
+    /// <summary>The pressure a fresh field and its aquifer both start at.</summary>
+    public static Pressure InitialReservoirPressure { get; } = new(30.0e6);
+
+    /// <summary>J_aq, m³/s/Pa. Enough to replace a developed field's voidage at
+    /// a few MPa of drawdown, which is what "supported" means.</summary>
+    public const double AquiferProductivityIndex = 1.0e-8;
+
+    /// <summary>W_ei — the total expansion available. Comparable to the pore
+    /// volume: a strong aquifer, and still a finite one, so support fades and
+    /// the field ends rather than producing for ever.</summary>
+    public static ReservoirVolume AquiferExpansion { get; } = new(60.0e6);
 
     public static RelativePermeabilityCurve Wettability { get; } =
         RelativePermeabilityCurve.Validated(

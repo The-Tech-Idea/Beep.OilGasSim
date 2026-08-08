@@ -108,7 +108,9 @@ internal sealed class SubsurfaceModule() : EngineModule(Declare(
 
         composition.Provide<IDriveMechanism>(drive);
         composition.Provide<IAquiferModel>(new OGSim.Subsurface.FetkovichAquifer(
-            productivityIndex: 1e-9, new Pressure(30e6), new ReservoirVolume(1e6)));
+            Defaults.AquiferProductivityIndex,
+            Defaults.InitialReservoirPressure,
+            Defaults.AquiferExpansion));
 
         var state = new OGSim.Subsurface.SubsurfaceState(
             composition.Require<IFluidPropertyModel>(), drive,

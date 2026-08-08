@@ -469,25 +469,70 @@ public sealed class GameplayTests
     // ------------------------------------------------------------- winning
 
     /// <summary>
-    /// The game can be WON. Until this existed the arc had one end — keep going
-    /// until the money runs out — and a game that can only be lost is not one.
+    /// The game can be WON, and winning takes more than drilling.
+    ///
+    /// <para>Wells alone are capped by the first separator, so a player who
+    /// drills and waits ends the decade short of the target — the constraint has
+    /// to be answered as well as the reservoir found. That is the shape R20.4's
+    /// first measurement was missing: at the old target the run was decided in
+    /// month six and every decision after the first was decoration.</para>
     /// </summary>
     [Fact]
-    public void A_player_who_drills_enough_wells_wins()
+    public void A_player_who_develops_the_field_wins()
     {
         (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled();
 
-        // Five wells: enough of them land to double the opening cash inside the
-        // decade the goal allows.
-        for (var attempt = 0; attempt < 5; attempt++) engine.Commands.Submit(Drill(target));
+        Assert.Equal(ObjectiveState.Met, Play(engine, target, debottleneck: true));
+    }
+
+    /// <summary>
+    /// And a player who only drills does NOT win. The wells are there, the oil
+    /// is flowing, and the surface cannot carry it — so the decade runs out.
+    ///
+    /// <para>This is the test that says the constraint is load-bearing. If
+    /// drilling alone were enough, every facility decision in the game would be
+    /// optional.</para>
+    /// </summary>
+    [Fact]
+    public void A_player_who_drills_and_never_debottlenecks_runs_out_of_time()
+    {
+        (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled();
+
+        Assert.Equal(ObjectiveState.Expired, Play(engine, target, debottleneck: false));
+    }
+
+    /// <summary>
+    /// Plays a decade: keep the rig busy, and optionally answer the bottleneck
+    /// the wells create.
+    ///
+    /// <para>ONE WELL AT A TIME, because that is what the engine allows — the
+    /// company owns one rig and the scheduler reserves it for a well's worst
+    /// case, so six drilling commands submitted at once are one well and five
+    /// refusals. A test that submitted them in a batch and called the result "a
+    /// developed field" was measuring a single well (R20.4's measurement).</para>
+    /// </summary>
+    private static ObjectiveState Play(
+        Engine engine, EntityId<IReservoirCompartmentEntity> target, bool debottleneck)
+    {
+        var upgraded = false;
 
         for (var month = 0; month < 120; month++)
         {
+            if (engine.ReadModel?.ActivitiesRunning == 0 && engine.ReadModel.Wells < 6)
+                engine.Commands.Submit(Drill(target));
+
+            // Wait for a second well before buying the bigger vessel: one well
+            // cannot fill the first one, so the upgrade would be money spent on
+            // capacity nothing uses.
+            if (debottleneck && !upgraded && engine.ReadModel?.Wells >= 2)
+                upgraded = engine.Commands.Submit(new InstallSeparatorCommand()) is Accepted;
+
             engine.Pipeline.AdvanceTick();
+
             if (engine.ReadModel!.Outcome != ObjectiveState.Pending) break;
         }
 
-        Assert.Equal(ObjectiveState.Met, engine.ReadModel!.Outcome);
+        return engine.ReadModel!.Outcome;
     }
 
     /// <summary>
