@@ -702,6 +702,36 @@ the ~20 equipment names [22](../design/22_DESIGN_COHERENCE.md) finding 82(c)
 records as never to be declared, and R6 §3's deliverable list naming it is the
 same stale phase-doc text that finding corrects at each `Rn.0`.
 
+> **R20.4 amendment — SHUTTING A WELL IN is a choke setting.**
+> [04](../design/04_MATERIAL_AND_FLOW.md) §5 stage 3 lists choke settings among
+> the player's levers and the completion held its choke `readonly`, so there was
+> no way to close one. That mattered the moment operating cost began to scale
+> with the liquid lifted: a watered-out well costs more to produce than it
+> earns, and a player could see it and not stop it.
+>
+> ```csharp
+> // Closed. Always critical, and capped at nothing.
+> public static ChokeSetting Closed { get; } =
+>     new(CriticalPressureRatio: 1.0, CriticalRate: new ReservoirRate(0.0));
+>
+> public void SetChoke(ChokeSetting choke);   // the valve, turned
+> ```
+>
+> **It needs no solver change**, and that is the argument for expressing it this
+> way rather than as a flag. §6.3 already caps a critical well's rate at the
+> choke's critical rate; a rate of zero is the same rule reaching its limit. The
+> well is correctly reported PRESSURE-DECOUPLED while shut — a closed valve does
+> not care what the network is doing, which is exactly what that flag means.
+>
+> **A shut-in well is not a DEAD one**, and the two must stay distinguishable: a
+> dead well cannot flow at any rate and a shut-in well is choosing not to. The
+> difference is the whole of whether re-opening is worth trying, and it survives
+> because the choke is what changed, not the inflow.
+>
+> Instantaneous rather than an operation: a valve turn is not a project. A tier
+> that needs a site visit to re-choke is a *content* distinction (07 §4b's remote
+> choke), not a reason to make every choke change take months.
+
 ## 6. The completion — the source element
 
 `ICompletion : IFlowElement`. Its `Transform` is the operating-point solve —
