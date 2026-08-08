@@ -175,6 +175,40 @@ pressures — no special multi-stage code; recovery gain emerges (R8-V4).
 > against a fixture with no production counterpart — and it stays invisible for
 > as long as the loop does not call the thing.
 
+## 1c. Gathering line — wellhead to manifold
+
+> **R20d.8 amendment (finding 167's other half).** Design 04 stage 3 is
+> "Wellhead → manifold (gathering)", with a per-well flowline whose pressure
+> drop is taken "over the line's length" and whose player levers include *"a
+> nearer manifold"*. **That line does not exist.** The element named `flowline`
+> in this composition sits AFTER the manifold — it is the trunk to the facility
+> — so every well has been tied straight into the header at zero distance.
+>
+> The consequence is finding 167's other half. A company that develops a second
+> discovery forty kilometres away ties it into the same header as the first and
+> pays nothing for the journey, so where a field is stops mattering the moment
+> the trunk has been laid. One host serving several fields is the ordinary
+> architecture; what makes it a decision is that each tieback is as long as it
+> is.
+>
+> ```text
+> Gathering line: one per well, created at tie-in.
+>   length   = distance from that well's structure to the manifold's site
+>   the manifold sits where the FIRST field was developed — a company builds
+>   its header at the field it is opening, and later fields reach it
+> ```
+>
+> A well on the host's own field has a short line and a distant tieback a long
+> one, so the same well drilled into two different structures is two different
+> propositions: more pressure drop, and less of what the reservoir can deliver
+> reaching the separator. **That is the whole reason a generated world puts
+> fields in places.**
+>
+> The line is a `Pipeline` like any other, so backpressure travels back up it and
+> the commingling trap (§1b) works through it unchanged — a strong new well
+> raises manifold pressure and can shut in weaker wells however far away they
+> are.
+
 ## 1b. Manifold / header — the commingling element
 
 > **R20d.1 declaration (finding 159).** [01](../design/01_CONCEPT_MATRIX.md) §C5
