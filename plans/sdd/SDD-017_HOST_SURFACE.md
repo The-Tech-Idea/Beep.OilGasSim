@@ -236,6 +236,25 @@ public sealed record ObjectiveView(
 > The rows fold into `FieldView.DeferredByElement` and
 > `FacilityView.UnitUtilisation` when those views have something to hang from.
 
+> **R21.5 amendment — the wells, as a subset read model can show them.** §2's
+> `WellView` carries a site, an operating point and sampled IPR/VLP curves,
+> none of which the current loop has a source for — and the subset read model
+> therefore carried a well COUNT and nothing else. A count cannot be acted on:
+> every well-level command names one, so a client could open a field and then
+> not shut a single well in.
+>
+> ```csharp
+> public sealed record WellStatusView(
+>     EntityRef Well, string DisplayId,
+>     WellStatus Status,                 // Producing · ShutIn · Abandoned
+>     SurfaceVolume ProducedThisTick);
+> ```
+>
+> Found by building the reference client (§2.5's own rule: *if it needs anything
+> the surface does not offer, the surface is incomplete*), which is where it was
+> supposed to be found. It folds into `WellView` when a site and an operating
+> point have sources.
+
 > **Contract pass 10 — `FinanceView` was missing from the root.** This section
 > listed fourteen members and claimed "the exact 16-section ⇔ R21 §2.4b
 > correspondence (V11)" while omitting the projection R21 §2.4b calls *"where
