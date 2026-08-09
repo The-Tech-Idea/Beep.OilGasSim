@@ -1,0 +1,33 @@
+{
+  "version": 7,
+  "environment": "Snow",
+  "tile_size": [
+    256,
+    128
+  ],
+  "projection": "2:1 isometric",
+  "source": "isometric_snow_terrain_tile_spritesheet.png",
+  "matched_boundaries": {
+    "left_equals_right": true,
+    "top_equals_bottom": true,
+    "corners_match": true
+  },
+  "rules": {
+    "smooth_internal_margin": false,
+    "detail_reaches_sides_and_corners": true,
+    "cross_variant_boundary_match": true,
+    "periodic_lattice_texture": true,
+    "edge_overdraw_px": 1,
+    "flat_top_only": true,
+    "sidewalls": false,
+    "baked_shadow": false
+  },
+  "godot": {
+    "filter": "Nearest",
+    "mipmaps": false,
+    "atlas_margin": 0,
+    "atlas_spacing": 0,
+    "scale_mode": "integer"
+  },
+  "base_detail_source_tile_index": 4
+}
