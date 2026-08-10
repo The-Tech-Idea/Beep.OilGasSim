@@ -859,7 +859,16 @@ public sealed class FieldControl
         // and re-routing under oil is refused by the pipeline itself.
         if (_slotsTaken == 0 && _world.DistanceToMarketOf(drains) is Length toMarket)
         {
-            _chain.Flowline.Route(_chain.Flowline.Geometry with { PipeLength = toMarket });
+            // FLOORED, like the gathering line. A field can sit on the harbour —
+            // the generator places structures on the same grid the coast is
+            // drawn on — and a trunk of zero length has no hydraulics to solve.
+            // A plant is still not built on top of the wellhead.
+            _chain.Flowline.Route(_chain.Flowline.Geometry with
+            {
+                PipeLength = toMarket.Metres > MinimumGatheringRun.Metres
+                    ? toMarket
+                    : MinimumGatheringRun,
+            });
 
             // AND THE HEADER GOES UP AT THE FIELD BEING OPENED (SDD-006 §1c).
             // A manifold is a structure somebody builds somewhere; later fields

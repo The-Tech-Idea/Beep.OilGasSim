@@ -793,22 +793,48 @@ public sealed class NewGameTests
             $"{campaign.DryHoles} dry — a hole went unaccounted for");
     }
 
-    // NO MULTI-BASIN CAMPAIGN TEST YET, and the reason is finding 170 rather
-    // than an omission.
-    //
-    // Running this client across thirteen generated basins faults: a marginal
-    // accumulation — the last trap on a fill-spill path, partly filled — is
-    // produced hard enough to drop its pressure 41% in one month, and the
-    // material balance refuses rather than integrating a step it cannot bound
-    // (SDD-003 §3.1, design 05 §3.1). The refusal is correct. What is wrong is
-    // that the well was ever allowed to pull that hard: `Defaults.CompletionFor`
-    // builds every well with one fixed set of inflow conditions, so a well on a
-    // two-million-cubic-metre structure has exactly the productivity of a well
-    // on a five-hundred-million one.
-    //
-    // Fill-spill made that visible by producing marginal fields for the first
-    // time. Recorded rather than tuned around, because the fix is a law-L5
-    // question — a well's productivity belongs to the rock it is in — and it
-    // needs the truth door widened, which SDD-008 §3 says is its own reviewed
-    // change.
+    /// <summary>
+    /// AND THE BEST BET IS SOMETIMES WRONG. A client that drills the highest
+    /// probability of success it can see still gets dry holes, because POS is a
+    /// BELIEF — built from how confidently a structure is mapped and what the
+    /// play has taught so far, neither of which is whether charge actually
+    /// arrived here.
+    ///
+    /// <para>If this ever passes with no dry holes across a dozen basins,
+    /// presence has stopped being read from truth and drilling has gone back to
+    /// being a formality (finding 169).</para>
+    ///
+    /// <para>This test is also finding 170's headstone. It faulted on first
+    /// writing — a marginal accumulation produced hard enough to drop its
+    /// pressure 41% in a month, which the material balance rightly refuses —
+    /// because every well was built with one fixed set of inflow conditions
+    /// whatever it was drilled into. It runs because a well is now built from
+    /// its own rock.</para>
+    /// </summary>
+    [Fact]
+    public void R21V2_the_best_prospect_on_the_board_is_sometimes_dry()
+    {
+        var dry = 0;
+        var found = 0;
+
+        // SIX BASINS AND FIVE YEARS, not thirteen and ten. Each month solves a
+        // network over every compartment the basin generated, so this test is
+        // the most expensive in the suite by an order of magnitude — and a suite
+        // nobody runs catches nothing. Six is still enough that a run in which
+        // every best-odds prospect held oil would be a genuine surprise.
+        for (ulong seed = 1UL; seed < 7UL; seed++)
+        {
+            DrillingSeason season = new Explorer(NewGame(seed), drillAbove: 0.0, wellTarget: 2)
+                .Play(months: 60);
+
+            dry += season.DryHoles;
+            found += season.Discoveries;
+        }
+
+        Assert.True(found > 0, "six basins produced no discovery at all");
+
+        Assert.True(dry > 0,
+            $"six campaigns drilled the best prospect on the board and never once " +
+            $"missed ({found} discoveries, {dry} dry); presence is not being read from truth");
+    }
 }
