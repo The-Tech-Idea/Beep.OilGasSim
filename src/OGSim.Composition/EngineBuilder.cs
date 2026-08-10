@@ -85,6 +85,27 @@ internal static class Defaults
         LiftingCostPerTonne: Money.FromMillions(15.0 * 6.29 / 0.85 / 1_000_000.0));
 
     /// <summary>
+    /// The market this game is played in (SDD-009 §6).
+    ///
+    /// <para>Reversion 0.02 a month is a half-life of about three years — long
+    /// enough that a downturn is something a company sits through rather than
+    /// waits out, and short enough that it ends inside a field's life.
+    /// Volatility 0.09 in log space is roughly a 9% monthly move, which is the
+    /// order oil actually does.</para>
+    ///
+    /// <para>A shock one month in fifty, at three times the ordinary move. Rare
+    /// enough to be an event a player remembers, big enough to change what they
+    /// were going to do — and drawn every month whether or not it fires, so
+    /// adding jumps cannot shift the sequence of ordinary moves.</para>
+    /// </summary>
+    public static IPriceModel Market { get; } = new OGSim.Company.MeanRevertingPrice(
+        longRunMean: Economics.OilPricePerTonne,
+        reversion: 0.02,
+        volatility: 0.09,
+        jumpChance: 0.02,
+        jumpScale: 0.27);
+
+    /// <summary>
     /// The catalogue, as content would carry it. ONE material, because the chain
     /// this composition ships has one thing to move; the nine of
     /// `content/materials/` arrive with R20c.9.

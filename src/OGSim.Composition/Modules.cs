@@ -412,7 +412,7 @@ internal sealed class OperationsModule() : EngineModule(Declare(
 /// </summary>
 internal sealed class CompanyModule() : EngineModule(Declare(
     "company",
-    provides: [typeof(IFiscalRegime), typeof(OGSim.Company.CompanyState)],
+    provides: [typeof(IFiscalRegime), typeof(IPriceModel), typeof(OGSim.Company.CompanyState)],
     requires: [typeof(IAuditTrail)],
     ownsState: ["company.ledger"],
     stages: NoStagesYet))
@@ -423,6 +423,12 @@ internal sealed class CompanyModule() : EngineModule(Declare(
 
         composition.Provide<IFiscalRegime>(new OGSim.Company.RoyaltyTaxRegime(
             new ContentId("concession"), royaltyRate: 0.125, taxRate: 0.40));
+
+        // THE MARKET (SDD-009 §6). `IPriceModel` was declared in the contract
+        // layer and implemented by nobody, so the oil price was a constant and
+        // two of the kernel's eight named streams existed for a market that
+        // never moved.
+        composition.Provide(Defaults.Market);
 
         IAuditTrail audit = composition.Require<IAuditTrail>();
 
@@ -482,6 +488,7 @@ internal sealed class FieldModule() : EngineModule(Declare(
         typeof(OGSim.Information.ObservationSampler),
         typeof(IFlowSolver),
         typeof(IFiscalRegime),
+        typeof(IPriceModel),
         typeof(IFlowElementRegistry),
         typeof(SurfaceChain),
         typeof(WorldState),
@@ -586,6 +593,12 @@ internal sealed class FieldModule() : EngineModule(Declare(
             chain.Tank,
             terminal,
             composition.Require<IFiscalRegime>(),
+
+            // The market, and the ONE stream it may draw from (SDD-009 §6). The
+            // stream is handed to the model rather than held by it, so a model
+            // that wanted to draw from the weather could not.
+            composition.Require<IPriceModel>(),
+            composition.Require<IRandomSource>().Stream(StreamId.Price),
             Defaults.LiquidOrdinals,
             () => field.IsAbandoned,
             Defaults.Economics,

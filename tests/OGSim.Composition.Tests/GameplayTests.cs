@@ -515,19 +515,32 @@ public sealed class GameplayTests
     }
 
     /// <summary>
-    /// And a player who only drills does NOT win. The wells are there, the oil
-    /// is flowing, and the surface cannot carry it — so the decade runs out.
+    /// And a player who only drills does WORSE. The wells are there, the oil is
+    /// flowing, and the surface cannot carry it.
     ///
     /// <para>This is the test that says the constraint is load-bearing. If
-    /// drilling alone were enough, every facility decision in the game would be
+    /// drilling alone were as good, every facility decision in the game would be
     /// optional.</para>
+    ///
+    /// <para>ASKED AS A COMPARISON, not as an outcome, and the reason is
+    /// R20d.11: the oil price moves now, so "the decade runs out" became a
+    /// statement about the market as much as about the chain — a bottlenecked
+    /// field on a good run can still reach the target. Both companies here play
+    /// the same world at the same seed and therefore see exactly the same
+    /// prices, so what is left between them is the decision.</para>
     /// </summary>
     [Fact]
-    public void A_player_who_drills_and_never_debottlenecks_runs_out_of_time()
+    public void A_player_who_drills_and_never_debottlenecks_earns_less()
     {
-        (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled();
+        (Engine open, EntityId<IReservoirCompartmentEntity> openTarget) = Undrilled();
+        (Engine jammed, EntityId<IReservoirCompartmentEntity> jammedTarget) = Undrilled();
 
-        Assert.Equal(ObjectiveState.Expired, Play(engine, target, debottleneck: false));
+        Play(open, openTarget, debottleneck: true);
+        Play(jammed, jammedTarget, debottleneck: false);
+
+        Assert.True(open.ReadModel!.Cash > jammed.ReadModel!.Cash,
+            $"debottlenecking earned {open.ReadModel!.Cash} against {jammed.ReadModel!.Cash} " +
+            "for not bothering; the surface constraint is not load-bearing");
     }
 
     /// <summary>

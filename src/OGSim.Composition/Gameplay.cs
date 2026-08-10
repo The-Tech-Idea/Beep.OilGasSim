@@ -169,7 +169,17 @@ public sealed record FieldReadModel(
     /// a prospect is something a world GENERATED and a scenario that placed its
     /// reservoir directly has nothing to explore.</para>
     /// </summary>
-    IReadOnlyList<ProspectView> Prospects)
+    IReadOnlyList<ProspectView> Prospects,
+
+    /// <summary>
+    /// What a tonne of oil fetches this month (SDD-009 §6).
+    ///
+    /// <para>A read model that showed a company its cash and not the price it
+    /// was earning would let a player watch revenue fall and be unable to tell a
+    /// declining field from a falling market — which are the same number and
+    /// opposite decisions: one says build, the other says wait.</para>
+    /// </summary>
+    Money OilPrice)
 {
     /// <summary>Where the chain is jammed, if anywhere — the elements that
     /// refused production this tick.</summary>
@@ -232,7 +242,8 @@ internal sealed class FieldProjection(
     public FieldReadModel Publish(FieldPosition position, ScenarioProgress progress) =>
         new(position.Tick, position.Date, position.Cash, position.Wells,
             position.ActivitiesRunning, position.ProducedThisTick, position.Insolvent,
-            progress, Project(beliefs), loop.Chain(), field.Wells(), Prospects());
+            progress, Project(beliefs), loop.Chain(), field.Wells(), Prospects(),
+            loop.OilPrice);
 
     /// <summary>
     /// The undrilled structures, in the order the world placed them (D-5).
