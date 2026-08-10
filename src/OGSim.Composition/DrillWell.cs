@@ -29,13 +29,22 @@ public sealed record DrillWellCommand(
 /// as an argument rather than being read off a static.
 /// </summary>
 internal delegate OGSim.Wells.Completion WellDesign(
-    ulong id, EntityId<IReservoirCompartmentEntity> compartment, Length totalDepth);
+    ulong id,
+    EntityId<IReservoirCompartmentEntity> compartment,
+    Length totalDepth,
+
+    /// <summary>
+    /// The rock this well is in (SDD-008 §2c). Passed rather than read off a
+    /// static, because a well's productivity is a fact about ITS compartment —
+    /// and a design that supplied its own would be stating a physical fact twice
+    /// (finding 170).
+    /// </summary>
+    OGSim.Wells.InflowConditions rock);
 
 internal sealed class DrillWellActivity(
     ActivityTerms terms,
     Length maximumDepth,
     FieldControl field,
-    WellDesign design,
     OGSim.Information.ProspectRisks risks,
     WorldState world,
     IBeliefStore beliefs) : Activity<DrillWellCommand>(terms)
@@ -134,7 +143,7 @@ internal sealed class DrillWellActivity(
 
         EntityId<IReservoirCompartmentEntity> reservoir = found.Value;
 
-        field.OpenWell(design(field.NextWellId(), reservoir, done.Depth), reservoir);
+        field.Drill(reservoir, done.Depth);
 
         // THE PROSPECT BECOMES A FIELD, and the company keeps what it paid for
         // (SDD-008 §4). Seismic bought a belief about this structure's size;

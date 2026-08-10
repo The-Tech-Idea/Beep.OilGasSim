@@ -37,6 +37,13 @@ public sealed class ProductionLoopTests
                 InitialPressure: new Pressure(30.0e6),
                 Temperature: Temperature.FromCelsius(93.3),
                 Depth: new Length(2000.0)),
+            // GOOD ROCK, kept. This fixture is the one that always built its
+            // own well to match — 2e-13 and 30 m in both places — so it is the
+            // one place finding 170 never bit, and the facility-limited test
+            // below needs exactly this deliverability to have a separator to
+            // jam. The other fixtures declared this rock and drilled wells at
+            // Defaults.Inflow's 1e-13 and 20 m; those were brought down to what
+            // their wells actually were.
             permeability: new Permeability(2.0e-13),
             netThickness: new Length(30.0),
             drainageArea: new Area(2.0e5),
@@ -52,7 +59,7 @@ public sealed class ProductionLoopTests
         // exploration risk because there is nothing left to be wrong about.
         built.Engine.Provided.Resolve<WorldState>().DeclareKnownField(compartment, new ReservoirVolume(100.0e6));
 
-        built.Engine.Provided.Resolve<FieldControl>().OpenWell(Well(compartment), compartment);
+        built.Engine.Provided.Resolve<FieldControl>().Drill(compartment, new Length(2000.0));
 
         return (built.Engine, company);
     }

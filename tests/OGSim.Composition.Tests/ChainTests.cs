@@ -32,8 +32,15 @@ public sealed class ChainTests
                     InitialPressure: new Pressure(30.0e6),
                     Temperature: Temperature.FromCelsius(93.3),
                     Depth: new Length(2000.0)),
-                permeability: new Permeability(2.0e-13),
-                netThickness: new Length(30.0),
+                // Rock the shipped plant is sized for. It said 2e-13 and 30 m
+                // while every well was built from Defaults.Inflow's 1e-13 and
+                // 20 m — a compartment stating rock nobody read (finding 170).
+                // Now that a well is built from the rock it is in, the two have
+                // to agree or these fixtures would be testing a field three
+                // times more productive than the one the chain was designed
+                // against.
+                permeability: new Permeability(1.0e-13),
+                netThickness: new Length(20.0),
                 drainageArea: new Area(2.0e5),
                 rockCompressibility: 4.5e-10,
                 gasOilContact: new Length(1900.0),
@@ -65,8 +72,7 @@ public sealed class ChainTests
     {
         FieldControl field = engine.Provided.Resolve<FieldControl>();
 
-        field.OpenWell(Defaults.CompletionFor(field.NextWellId(), target, new Length(2000.0)),
-                       target);
+        field.Drill(target, new Length(2000.0));
     }
 
     // --------------------------------------------------- the money comes off the meter
@@ -145,7 +151,11 @@ public sealed class ChainTests
 
         // What the completion would give at the vessel's pressure, solved
         // independently of the network, then shrunk and taken over the month.
-        OGSim.Wells.Completion well = Defaults.CompletionFor(1, target, new Length(2000.0));
+        // The same rock the field would build the well from, so this
+        // independent solve and the engine's are answering one question
+        // (SDD-008 §2c).
+        OGSim.Wells.Completion well = Defaults.CompletionFor(
+            1, target, new Length(2000.0), Defaults.Inflow);
         well.SetReservoirConditions(
             new Pressure(30.0e6), Defaults.ReservoirTemperature,
             engine.Provided.Resolve<IFluidPropertyModel>().Rs(new Pressure(30.0e6)),

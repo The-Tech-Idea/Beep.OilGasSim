@@ -742,6 +742,7 @@ public sealed class FieldControl
     private readonly ContentId _abandonmentTemplate;
     private readonly WorldState _world;
     private readonly GatheringLine _gatheringLine;
+    private readonly WellDesign _design;
 
     private int _slotsTaken;
 
@@ -753,7 +754,8 @@ public sealed class FieldControl
         IObligationRegistry obligations,
         ContentId abandonmentTemplate,
         WorldState world,
-        GatheringLine gatheringLine)
+        GatheringLine gatheringLine,
+        WellDesign design)
     {
         _subsurface = subsurface;
         _wells = wells;
@@ -763,6 +765,7 @@ public sealed class FieldControl
         _abandonmentTemplate = abandonmentTemplate;
         _world = world;
         _gatheringLine = gatheringLine;
+        _design = design;
     }
 
     /// <summary>
@@ -805,7 +808,35 @@ public sealed class FieldControl
     /// produce, put its mass on an unconnected port, and look like it was
     /// working while earning nothing.</para>
     /// </summary>
-    public EntityId<ICompletion> OpenWell(
+    /// <summary>
+    /// DRILLS A WELL INTO A COMPARTMENT, building it from that compartment's own
+    /// rock (SDD-008 §2c).
+    ///
+    /// <para>The completion used to arrive ready-made from the caller, carrying
+    /// whatever inflow conditions the caller happened to have — which was one
+    /// fixed set, for every well in the game. Building it HERE is what makes a
+    /// well's productivity a fact about the rock it is in rather than a constant
+    /// (finding 170), and it removes the caller's ability to hand over a well
+    /// that does not match the reservoir it is drilled into.</para>
+    /// </summary>
+    public EntityId<ICompletion> Drill(
+        EntityId<IReservoirCompartmentEntity> drains, Length totalDepth)
+    {
+        Completion completion = _design(
+            NextWellId(),
+            drains,
+            totalDepth,
+            Defaults.Inflow with
+            {
+                Permeability = _subsurface.TruePermeabilityOf(drains),
+                PerforatedInterval = _subsurface.TrueNetThicknessOf(drains),
+                DrainageArea = _subsurface.TrueDrainageAreaOf(drains),
+            });
+
+        return OpenWell(completion, drains);
+    }
+
+    private EntityId<ICompletion> OpenWell(
         Completion completion, EntityId<IReservoirCompartmentEntity> drains)
     {
         ArgumentNullException.ThrowIfNull(completion);

@@ -380,7 +380,10 @@ internal static class Defaults
     /// content can describe.
     /// </summary>
     public static Wells.Completion CompletionFor(
-        ulong id, EntityId<IReservoirCompartmentEntity> compartment, Length totalDepth)
+        ulong id,
+        EntityId<IReservoirCompartmentEntity> compartment,
+        Length totalDepth,
+        Wells.InflowConditions rock)
     {
         var tubing = new Wells.TubingGeometry(
             totalDepth, totalDepth, new Length(0.0889), 4.6e-5);
@@ -390,7 +393,11 @@ internal static class Defaults
             new EntityId<IWellbore>(id),
             [new Perforation(compartment, totalDepth, totalDepth + new Length(30.0),
                              Skin: 0.0, Isolated: false)],
-            new Wells.CompositeInflowModel(Inflow),
+            // THE ROCK THIS WELL IS ACTUALLY IN (SDD-008 §2c). It was
+            // `Defaults.Inflow` — one fixed set for every well ever drilled, so a
+            // marginal structure produced exactly like a giant one and the
+            // material balance eventually refused the step (finding 170).
+            new Wells.CompositeInflowModel(rock),
             new Wells.HydrostaticFrictionOutflowModel(
                 tubing, Density.FromSpecificGravity(0.85), lift: null),
             new Wells.CompletionFluid(

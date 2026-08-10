@@ -269,8 +269,7 @@ public sealed class NewGameTests
 
         EntityId<IReservoirCompartmentEntity> reservoir = world.Beneath(chosen)!.Value;
 
-        field.OpenWell(
-            Defaults.CompletionFor(field.NextWellId(), reservoir, new Length(2000.0)), reservoir);
+        field.Drill(reservoir, new Length(2000.0));
 
         Assert.Equal(expected.Metres, chain.Flowline.PipeLength.Metres, precision: 6);
     }
@@ -290,8 +289,7 @@ public sealed class NewGameTests
 
         EntityId<IReservoirCompartmentEntity> first = world.Beneath(Discovery(world, 0))!.Value;
 
-        field.OpenWell(
-            Defaults.CompletionFor(field.NextWellId(), first, new Length(2000.0)), first);
+        field.Drill(first, new Length(2000.0));
 
         Length laid = chain.Flowline.PipeLength;
 
@@ -300,8 +298,7 @@ public sealed class NewGameTests
         EntityId<IReservoirCompartmentEntity> elsewhere =
             world.Beneath(Discovery(world, 1))!.Value;
 
-        field.OpenWell(
-            Defaults.CompletionFor(field.NextWellId(), elsewhere, new Length(2000.0)), elsewhere);
+        field.Drill(elsewhere, new Length(2000.0));
 
         Assert.Equal(laid.Metres, chain.Flowline.PipeLength.Metres, precision: 6);
     }
@@ -731,8 +728,7 @@ public sealed class NewGameTests
         // The header goes up at the first field developed.
         EntityId<IReservoirCompartmentEntity> host = world.Beneath(Discovery(world, 0))!.Value;
 
-        field.OpenWell(
-            Defaults.CompletionFor(field.NextWellId(), host, new Length(2000.0)), host);
+        field.Drill(host, new Length(2000.0));
 
         engine.Pipeline.AdvanceTick();
 
@@ -741,8 +737,7 @@ public sealed class NewGameTests
         // A second discovery, somewhere else in the basin.
         EntityId<IReservoirCompartmentEntity> away = world.Beneath(Discovery(world, 1))!.Value;
 
-        field.OpenWell(
-            Defaults.CompletionFor(field.NextWellId(), away, new Length(2000.0)), away);
+        field.Drill(away, new Length(2000.0));
 
         engine.Pipeline.AdvanceTick();
 

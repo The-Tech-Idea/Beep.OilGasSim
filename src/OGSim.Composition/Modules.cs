@@ -561,7 +561,9 @@ internal sealed class FieldModule() : EngineModule(Declare(
                 hydraulics,
                 fluid,
                 Defaults.SurfaceOilDensity,
-                Defaults.MaterialCount));
+                Defaults.MaterialCount),
+
+            Defaults.CompletionFor);
 
 
         // THE ROUTE TO MARKET. One per field, so its identity is the field's
@@ -632,7 +634,6 @@ internal sealed class FieldModule() : EngineModule(Declare(
         [
             new DrillWellActivity(
                 Defaults.DrillWellTerms, Defaults.MaximumDrillingDepth, field,
-                Defaults.CompletionFor,
                 composition.Require<OGSim.Information.ProspectRisks>(),
                 composition.Require<WorldState>(),
                 composition.Require<IBeliefStore>()),

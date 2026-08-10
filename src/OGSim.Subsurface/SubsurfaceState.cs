@@ -256,6 +256,24 @@ internal sealed class SubsurfaceState : IStateOwner
     internal double TruePorosityOf(EntityId<IReservoirCompartmentEntity> compartment) =>
         Find(compartment).Rock.Porosity;
 
+    /// <summary>
+    /// Net pay and drainage area — the other two thirds of what a well's inflow
+    /// is made of (SDD-008 §2c).
+    ///
+    /// <para>NOT a widening of what a player may see. These go into the solver,
+    /// where they decide what the well actually does; a company still learns its
+    /// field's rock by testing it. The door tells apart what is TRUE, which the
+    /// engine must compute with, and what is KNOWN, which only an observation
+    /// may say — and it had only ever been asked for the second, which is how a
+    /// well on a marginal structure came to have the productivity of a well on a
+    /// giant one (finding 170).</para>
+    /// </summary>
+    internal Length TrueNetThicknessOf(EntityId<IReservoirCompartmentEntity> compartment) =>
+        Find(compartment).Rock.NetThickness;
+
+    internal Area TrueDrainageAreaOf(EntityId<IReservoirCompartmentEntity> compartment) =>
+        Find(compartment).Rock.DrainageArea;
+
     internal Permeability TruePermeabilityOf(EntityId<IReservoirCompartmentEntity> compartment) =>
         Find(compartment).Rock.Permeability;
 

@@ -28,8 +28,15 @@ public sealed class RealityProfileTests
                 InitialPressure: new Pressure(30.0e6),
                 Temperature: Temperature.FromCelsius(93.3),
                 Depth: new Length(2000.0)),
-            permeability: new Permeability(2.0e-13),
-            netThickness: new Length(30.0),
+                // Rock the shipped plant is sized for. It said 2e-13 and 30 m
+                // while every well was built from Defaults.Inflow's 1e-13 and
+                // 20 m — a compartment stating rock nobody read (finding 170).
+                // Now that a well is built from the rock it is in, the two have
+                // to agree or these fixtures would be testing a field three
+                // times more productive than the one the chain was designed
+                // against.
+                permeability: new Permeability(1.0e-13),
+                netThickness: new Length(20.0),
             drainageArea: new Area(2.0e5),
             rockCompressibility: 4.5e-10,
             gasOilContact: new Length(1900.0),
@@ -43,8 +50,7 @@ public sealed class RealityProfileTests
         // exploration risk because there is nothing left to be wrong about.
         built.Engine.Provided.Resolve<WorldState>().DeclareKnownField(target, new ReservoirVolume(100.0e6));
 
-        field.OpenWell(
-            Defaults.CompletionFor(field.NextWellId(), target, new Length(2000.0)), target);
+        field.Drill(target, new Length(2000.0));
 
         return built.Engine;
     }
