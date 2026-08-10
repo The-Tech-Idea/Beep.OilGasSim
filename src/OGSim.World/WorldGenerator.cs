@@ -92,10 +92,22 @@ public sealed class BasinWorldGenerator : IWorldGenerator
         // Step 4: the surface everything else is read off. A basin's traps are
         // its structural highs, so this is generated FIRST and the traps are
         // FOUND rather than drawn (SDD-010 §2 step 4).
+        // STEP 3, and it has to come first: HOW DEEPLY THIS BASIN WAS BURIED.
+        //
+        // It was a constant, so every basin in every world sat at the same
+        // depth — and with the same depth comes the same maturity, the same
+        // charge and the same answer to "is there oil here?". Drawn per basin,
+        // a shallow one never cooked its source and a deep one cracked it to
+        // gas, and neither can be told from the other by looking at the map.
+        IRandomStream burial = streams.For(WorldStep.BurialThermal);
+
+        double datum = ShallowestBasinMetres
+                     + (burial.NextUnit() * (DeepestBasinMetres - ShallowestBasinMetres));
+
         var horizon = new StructuralHorizon(
             parameters.WidthCells, parameters.HeightCells,
             unchecked((ulong)structure.NextInt(int.MaxValue)),
-            crestDepth: ShallowestHorizonMetres,
+            crestDepth: datum,
             relief: HorizonReliefMetres);
 
         // Step 5: every closed high with a worthwhile column.
@@ -123,8 +135,25 @@ public sealed class BasinWorldGenerator : IWorldGenerator
         // absolute would make grid size decide whether the world had any oil.
         double porosityMidpoint = MinimumPorosity + (PorositySpread * 0.5);
 
+        // STEP 3: HOW MUCH OF THE SOURCE ROCK EVER COOKED (SDD-010 §2 step 3).
+        //
+        // The source lies below the reservoir, so its depth is the horizon plus
+        // the section between them, and how deep it got decides what it made. A
+        // basin whose source never reached the oil window has no oil in it at
+        // all however many fine structures it has, and one whose source went too
+        // deep cracked its oil to gas — which this engine cannot produce, so
+        // those basins are oil-barren too.
+        //
+        // THAT IS WHERE DRY BASINS COME FROM (design 06 §5's "elephants,
+        // marginal fields, dry basins"). Until this, every basin had charge in
+        // proportion to its traps, so the answer to "is there anything here?"
+        // was always yes and only the amount varied. A player could not be
+        // wrong about a whole basin, which is the largest way to be wrong there
+        // is.
+        double mature = MatureFraction(horizon);
+
         double charged = TotalCapacity(path, porosityMidpoint)
-                       * ChargeFractionOfCapacity * parameters.ResourceRichness;
+                       * ChargeFractionOfCapacity * parameters.ResourceRichness * mature;
 
         var accumulations = new List<GeneratedAccumulation>();
 
@@ -170,7 +199,15 @@ public sealed class BasinWorldGenerator : IWorldGenerator
                 Closure: footprint,
                 Subtlety: subtlety,
                 Access: AccessFor(depth, WaterDepthAt(terrain, cell)),
-                Fluid: depth.Metres > 3200.0 ? FluidForm.ModifiedBlackOil : FluidForm.BlackOil,
+                // Lighter oil from a source that cooked harder — read off where
+                // the SOURCE is, not where the trap ended up. The two are only
+                // loosely related, and it was the trap's own depth before, which
+                // said a shallow trap must hold heavy oil however hot its
+                // kitchen ran.
+                Fluid: horizon.DepthAt(closure.Crest) + SourceBelowReservoirMetres
+                       > DeepOilWindowMetres
+                    ? FluidForm.ModifiedBlackOil
+                    : FluidForm.BlackOil,
 
                 // WHAT THE STRUCTURE COULD HOLD (SDD-010 §4b). Every closed high
                 // has one; only some of them got any oil. This is what a survey
@@ -201,6 +238,49 @@ public sealed class BasinWorldGenerator : IWorldGenerator
     /// migrates up-dip out of the kitchen. Ties broken by cell so two runs of
     /// one seed fill the same traps in the same order (rule D-5).
     /// </summary>
+    /// <summary>
+    /// The fraction of the basin's source rock sitting in the oil window
+    /// (SDD-010 §2 step 3's depth bands).
+    ///
+    /// <para>A table lookup on generated depth, which is the pinned choice —
+    /// legible and tunable, and it means a basin's whole prospectivity follows
+    /// from how deeply its section was buried rather than from a draw. Two
+    /// basins with identical structures can be worth very different amounts,
+    /// and a player cannot tell which by looking at the map.</para>
+    /// </summary>
+    private static double MatureFraction(StructuralHorizon horizon)
+    {
+        var mature = 0;
+
+        // Cell order (rule D-5). Every cell of the source horizon is either in
+        // the window or it is not; the fraction is the kitchen's size.
+        for (int cell = 0; cell < horizon.Count; cell++)
+        {
+            double source = horizon.DepthAt(cell) + SourceBelowReservoirMetres;
+
+            if (source >= ShallowOilWindowMetres && source <= DeepGasWindowMetres) mature++;
+        }
+
+        return mature / (double)horizon.Count;
+    }
+
+    /// <summary>How far below the reservoir the source section lies. A kitchen
+    /// is not the reservoir it charges.</summary>
+    private const double SourceBelowReservoirMetres = 800.0;
+
+    /// <summary>The top of the oil window: above this the source is immature and
+    /// has generated nothing at all.</summary>
+    private const double ShallowOilWindowMetres = 2300.0;
+
+    /// <summary>Where oil starts giving way to gas — still charge, but lighter
+    /// (SDD-010 §2 step 3).</summary>
+    private const double DeepOilWindowMetres = 3600.0;
+
+    /// <summary>The base of anything this engine can produce. Below it the oil
+    /// has cracked to gas, which no part of this composition can lift — so for
+    /// the purposes of an oil company the rock below here made nothing.</summary>
+    private const double DeepGasWindowMetres = 4200.0;
+
     private static IReadOnlyList<Closure> MigrationOrder(IReadOnlyList<Closure> closures)
     {
         var ordered = new List<Closure>(closures);
@@ -294,13 +374,27 @@ public sealed class BasinWorldGenerator : IWorldGenerator
     /// place.</summary>
     private const double CellSizeMetres = 1000.0;
 
-    /// <summary>The shallowest the reservoir horizon comes, in metres. A basin
-    /// dips away from here.</summary>
-    private const double ShallowestHorizonMetres = 1200.0;
+    /// <summary>
+    /// How shallow a basin's section can be. At this depth the source has never
+    /// entered the oil window, so the basin has fine structures and nothing in
+    /// them (SDD-010 §2 step 3).
+    /// </summary>
+    private const double ShallowestBasinMetres = 700.0;
 
-    /// <summary>How much the horizon falls across the basin, dip and structural
-    /// noise together.</summary>
-    private const double HorizonReliefMetres = 3500.0;
+    /// <summary>
+    /// And how deep. Down here the source went past the oil window and cracked
+    /// what it made to gas — which this composition cannot lift, so for an oil
+    /// company the basin is barren for the opposite reason.
+    /// </summary>
+    private const double DeepestBasinMetres = 4200.0;
+
+    /// <summary>
+    /// How much the horizon falls across the basin, dip and structural noise
+    /// together. Smaller than the range of burial above, so a basin is
+    /// PREDOMINANTLY shallow or deep rather than every basin spanning every
+    /// window and averaging out to the same prospectivity.
+    /// </summary>
+    private const double HorizonReliefMetres = 1600.0;
 
     /// <summary>
     /// The column a closure needs before it is worth calling a trap. Twenty
