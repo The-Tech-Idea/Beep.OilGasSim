@@ -63,6 +63,37 @@ Staleness (02 §1.2 "properties can go stale"): σ grows by a per-kind drift per
 year *for dynamic kinds only* (pressure, contacts — things production changes);
 static rock properties do not drift. Drift is content; zero is legal.
 
+## 2c. The door also serves physics, not only sampling
+
+> **R20d.9 amendment (finding 170).** The truth door's members have all been
+> things an ACTIVITY samples — pressure, porosity, permeability, water cut, oil
+> in place — and its comment reads as though sampling were the only reason to
+> open it. There is a second reason, and leaving it unsaid produced a defect that
+> survived four phases.
+>
+> **A well's productivity is a fact about the rock it is in.** `InflowConditions`
+> carries permeability, net thickness and drainage area; `Defaults.CompletionFor`
+> supplied one fixed set for every well ever drilled, so a well on a
+> two-million-cubic-metre structure had exactly the productivity of a well on a
+> five-hundred-million one. Those three quantities are compartment truth and the
+> completion held an unrelated copy — law L5, invisible for as long as every
+> field in every test was the same size.
+>
+> ```csharp
+> internal Length TrueNetThicknessOf(EntityId<IReservoirCompartmentEntity>);
+> internal Area   TrueDrainageAreaOf(EntityId<IReservoirCompartmentEntity>);
+> ```
+>
+> **This is not a widening of what a PLAYER may see.** Nothing here reaches a
+> read model: the numbers go into the solver, where they decide what the well
+> actually does, and a company still learns its field's permeability the way it
+> always did — by testing it. The distinction the door needs to make is between
+> *what is true* (the engine must compute with it) and *what is known* (only
+> observation may say), and it had only ever been asked for the second.
+>
+> A composition that builds a well from anything else is stating a physical fact
+> twice, which is the defect this closes.
+
 ## 3. Observation sampling
 
 ```csharp
