@@ -24,8 +24,13 @@ using OGSim.Kernel;
 
 namespace OGSim.ReferenceClient;
 
-/// <summary>What a campaign came to.</summary>
-public sealed record Campaign(
+/// <summary>
+/// What a drilling campaign came to.
+///
+/// <para>NOT `Campaign`, which is a scenario's chapters (SDD-014). One concept
+/// one name, and the other concept had the name first (rule N1).</para>
+/// </summary>
+public sealed record DrillingSeason(
     ObjectiveState Outcome,
     Tick Ended,
     Money Cash,
@@ -53,6 +58,9 @@ public sealed class Explorer
     private int _discoveries;
     private int _dryHoles;
 
+    // A hole is down and the answer has not come back yet.
+    private bool _awaitingResult;
+
     /// <summary>
     /// <paramref name="drillAbove"/> is the probability of success at which this
     /// company will commit a rig. Below it, the prospect is worth a survey and
@@ -67,7 +75,7 @@ public sealed class Explorer
         _wellTarget = wellTarget;
     }
 
-    public Campaign Play(int months)
+    public DrillingSeason Play(int months)
     {
         for (var month = 0; month < months; month++)
         {
@@ -83,14 +91,14 @@ public sealed class Explorer
 
             _engine.Pipeline.AdvanceTick();
 
-            Account(wellsBefore);
+            Resolve(wellsBefore);
 
             if (_engine.ReadModel!.Outcome != ObjectiveState.Pending) break;
         }
 
         FieldReadModel final = _engine.ReadModel!;
 
-        return new Campaign(
+        return new DrillingSeason(
             final.Outcome, final.Tick, final.Cash,
             _surveyed, _drilled.Count, _discoveries, _dryHoles);
     }
@@ -114,7 +122,10 @@ public sealed class Explorer
             if (_engine.Commands.Submit(
                     new DrillWellCommand(
                         new EntityId<IProspect>(best.Prospect.Value), WellDepth)) is Accepted)
+            {
                 _drilled.Add(best.Prospect.Value);
+                _awaitingResult = true;
+            }
 
             return;
         }
@@ -194,15 +205,23 @@ public sealed class Explorer
     /// <summary>
     /// Read the result off the surface: a well appeared, or it did not.
     ///
-    /// <para>A host cannot see the rock. What it can see is whether it now owns
-    /// a wellbore it did not own last month, which is exactly how a real company
-    /// learns the same thing — the news arrives as an asset or as a bill.</para>
+    /// <para>A HOST CANNOT SEE THE ROCK. What it can see is whether it now owns
+    /// a wellbore it did not own last month, and that is exactly how a real
+    /// company learns the same thing — the news arrives as an asset or as a
+    /// bill. Nothing here asks the engine what was down there.</para>
+    ///
+    /// <para>Read only once the rig is free, because a drill takes months and a
+    /// well that has not finished is not yet a dry hole.</para>
     /// </summary>
-    private void Account(int wellsBefore)
+    private void Resolve(int wellsBefore)
     {
-        var wellsNow = _engine.ReadModel!.Wells;
+        if (!_awaitingResult) return;
+        if (_engine.ReadModel!.ActivitiesRunning > 0) return;
 
-        if (wellsNow > wellsBefore) _discoveries++;
+        _awaitingResult = false;
+
+        if (_engine.ReadModel!.Wells > wellsBefore) _discoveries++;
+        else _dryHoles++;
     }
 
     private static Length WellDepth { get; } = new(2000.0);

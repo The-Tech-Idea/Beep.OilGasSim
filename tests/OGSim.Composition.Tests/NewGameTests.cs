@@ -8,6 +8,7 @@
 using OGSim.Composition;
 using OGSim.Contracts;
 using OGSim.Kernel;
+using OGSim.ReferenceClient;
 
 namespace OGSim.Composition.Tests;
 
@@ -767,4 +768,52 @@ public sealed class NewGameTests
 
         throw new InvalidOperationException($"no element called {named} is on the network");
     }
+
+    // ------------------------------------- a client that explores (R21.5)
+
+    /// <summary>
+    /// R21-V2, the half nobody had played. `Operator` is handed a field and
+    /// develops it; this reads a basin, decides what is worth a survey and what
+    /// is worth a hole, and finds out whether it was right — from the read model
+    /// and the command bus alone.
+    ///
+    /// <para>If a decision cannot be taken from that surface it cannot be taken
+    /// by a host either, which is the only thing a reference client is for.</para>
+    /// </summary>
+    [Fact]
+    public void R21V2_a_client_can_explore_a_basin_it_was_told_nothing_about()
+    {
+        Engine engine = BasinWithSeveralProspects();
+
+        DrillingSeason campaign = new Explorer(engine, drillAbove: 0.16, wellTarget: 3)
+            .Play(months: 360);
+
+        Assert.True(campaign.Drilled > 0, "the client never put a hole down");
+
+        // Exploration is a search, not an inventory (SDD-010 §4b): a company
+        // that drilled several structures in a basin the charge did not fill
+        // should have found some of both.
+        Assert.True(campaign.Discoveries + campaign.DryHoles == campaign.Drilled,
+            $"{campaign.Drilled} holes resolved into {campaign.Discoveries} discoveries and " +
+            $"{campaign.DryHoles} dry — a hole went unaccounted for");
+    }
+
+    // NO MULTI-BASIN CAMPAIGN TEST YET, and the reason is finding 170 rather
+    // than an omission.
+    //
+    // Running this client across thirteen generated basins faults: a marginal
+    // accumulation — the last trap on a fill-spill path, partly filled — is
+    // produced hard enough to drop its pressure 41% in one month, and the
+    // material balance refuses rather than integrating a step it cannot bound
+    // (SDD-003 §3.1, design 05 §3.1). The refusal is correct. What is wrong is
+    // that the well was ever allowed to pull that hard: `Defaults.CompletionFor`
+    // builds every well with one fixed set of inflow conditions, so a well on a
+    // two-million-cubic-metre structure has exactly the productivity of a well
+    // on a five-hundred-million one.
+    //
+    // Fill-spill made that visible by producing marginal fields for the first
+    // time. Recorded rather than tuned around, because the fix is a law-L5
+    // question — a well's productivity belongs to the rock it is in — and it
+    // needs the truth door widened, which SDD-008 §3 says is its own reviewed
+    // change.
 }
