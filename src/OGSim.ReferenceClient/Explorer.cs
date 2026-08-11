@@ -219,7 +219,15 @@ public sealed class Explorer
         // charged whether or not it does.
         if (_borrows && seen.Cash < WorkingCash)
         {
-            Money headroom = seen.Borrowing.BorrowingBase - seen.Debt;
+            // NOT TO THE LIMIT. A borrowing base falls as reserves deplete —
+            // they are what is LEFT — so a company drawn to the last cent is in
+            // breach the month after, every time, and lives in a cure window it
+            // never leaves. Prudence here is not caution, it is the difference
+            // between using a facility and being owned by one.
+            Money ceiling = Money.RoundHalfEven(
+                seen.Borrowing.BorrowingBase.Cents * PrudentDrawFraction);
+
+            Money headroom = ceiling - seen.Debt;
 
             if (headroom > Money.Zero) _engine.Commands.Submit(new BorrowCommand(headroom));
         }
@@ -272,6 +280,14 @@ public sealed class Explorer
     private static Length WellDepth { get; } = new(2000.0);
 
     private static Money ExportLineWorthBuildingAt { get; } = Money.FromMillions(100.0);
+
+    /// <summary>
+    /// How much of the base a company will actually draw. Two thirds leaves room
+    /// for the base to fall as the field empties without putting the facility
+    /// into breach — which it does every month, because reserves are what
+    /// remains rather than what was ever there.
+    /// </summary>
+    private const double PrudentDrawFraction = 0.66;
 
     /// <summary>The cash a company keeps in front of it. Below this it draws on
     /// the facility rather than waiting for revenue it has not earned yet.</summary>

@@ -1170,4 +1170,118 @@ public sealed class NewGameTests
             $"borrowing against reserves earned {funded} against {unfunded} for waiting; " +
             "the borrowing base is not actionable through the read model");
     }
+
+    /// <summary>
+    /// THE COVENANT, END TO END. Every piece of this was built separately and
+    /// the chain between them had never once been run: a field depletes, its
+    /// remaining reserves fall, the borrowing base falls with them, debt drawn
+    /// against yesterday's reserves is suddenly above today's base, and the
+    /// facility goes into cure.
+    ///
+    /// <para>That is the shape a leveraged company actually fails in, and it is
+    /// worth asserting as one sequence rather than four unit tests: each part
+    /// passing says nothing about whether the parts are connected, which is the
+    /// lesson findings 164–173 keep teaching.</para>
+    ///
+    /// <para>THE CURE WINDOW IS THE POINT. The bank does not call — it starts a
+    /// clock, and a company that pays down or produces its way back inside is
+    /// clear again. A breach that went straight to amortising would make a
+    /// depleting field an ambush.</para>
+    /// </summary>
+    [Fact]
+    public void R20d15V4_a_depleting_field_breaches_its_covenant_and_gets_a_window()
+    {
+        for (ulong seed = 1UL; seed < 60UL; seed++)
+        {
+            Engine engine = NewGame(seed);
+            WorldState world = WorldOf(engine);
+
+            var charged = -1;
+
+            for (int i = 0; i < world.Prospects.Count; i++)
+                if (world.Beneath(world.Prospects[i]) is not null) { charged = i; break; }
+
+            if (charged < 0) continue;
+
+            engine.Commands.Submit(
+                new DrillWellCommand(world.Prospects[charged], new Length(2000.0)));
+
+            for (var month = 0; month < 12; month++) engine.Pipeline.AdvanceTick();
+
+            if (engine.ReadModel!.Wells == 0) continue;      // the hole was lost
+
+            Money available = engine.ReadModel!.Borrowing.BorrowingBase;
+
+            if (available <= Money.Zero) continue;
+
+            // DRAWN TO THE LIMIT ON PURPOSE. A borrowing base falls as reserves
+            // deplete — they are what is LEFT — so a company drawn to the last
+            // cent breaches the month after, every time. That is the mechanism
+            // working, not a defect, and it is why a prudent company draws a
+            // fraction; this test wants the breach.
+            Assert.IsType<Accepted>(engine.Commands.Submit(new BorrowCommand(available)));
+
+            var sawCuring = false;
+
+            // Produce. Reserves are what is LEFT, so they fall as the field
+            // empties, and the base falls with them.
+            for (var month = 0; month < 480; month++)
+            {
+                engine.Pipeline.AdvanceTick();
+
+                CovenantStatus covenant = engine.ReadModel!.Covenant;
+
+                if (covenant.State == CovenantState.Curing)
+                {
+                    sawCuring = true;
+
+                    Assert.True(covenant.TicksRemaining > 0,
+                        "a cure window with no time left in it is a called loan");
+                }
+
+                // AMORTISING IS NEVER REACHED WITHOUT CURING FIRST. The bank
+                // does not call, and a company that had no warning could not
+                // have acted on one.
+                if (covenant.State == CovenantState.Amortising)
+                {
+                    Assert.True(sawCuring,
+                        "the facility went to amortisation without a cure window; the bank " +
+                        "called the loan, which SDD-009 §5 pins that it never does");
+
+                    return;
+                }
+            }
+
+            Assert.True(sawCuring,
+                "forty years of depletion against a fully drawn facility and the covenant " +
+                "never even went into cure; the base is not following the reserves");
+
+            return;
+        }
+
+        Assert.Fail("sixty basins produced no discovery worth lending against");
+    }
+
+    /// <summary>
+    /// AND A PRUDENT COMPANY STAYS OUT OF IT. The exploring client draws a
+    /// fraction of its base rather than all of it, so the base can fall as the
+    /// field empties without putting the facility into breach.
+    ///
+    /// <para>This is the assertion that was missing when the borrowing client
+    /// shipped: the earnings test compared two companies and never once looked
+    /// at the covenant, so a client living permanently in a cure window would
+    /// have passed it. Comparing outcomes is not the same as checking the state
+    /// they were reached from.</para>
+    /// </summary>
+    [Fact]
+    public void R20d15V4_a_client_that_borrows_prudently_does_not_live_in_breach()
+    {
+        Engine engine = BasinWithSeveralProspects();
+
+        new Explorer(engine, drillAbove: 0.0, wellTarget: 2,
+                     buildBelow: double.MaxValue, borrows: true)
+            .Play(months: 180);
+
+        Assert.Equal(CovenantState.Clear, engine.ReadModel!.Covenant.State);
+    }
 }
