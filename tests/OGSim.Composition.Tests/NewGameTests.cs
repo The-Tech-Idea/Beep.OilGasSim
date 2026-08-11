@@ -1347,4 +1347,78 @@ public sealed class NewGameTests
 
         Assert.Fail("sixty basins produced no well that could be drilled and plugged");
     }
+
+    /// <summary>
+    /// SC6, END TO END: a market that falls writes reserves down, and the
+    /// borrowing base falls with them. Reserves stop where production stops
+    /// paying, so a lower price raises the economic limit, the tail of the
+    /// decline drops below it, and barrels beyond stop being reserves without
+    /// having gone anywhere.
+    ///
+    /// <para>THE WELL IS SHUT IN, and that is what makes this a test of the
+    /// market rather than of depletion. Reserves fall as a field produces too,
+    /// so a producing field cannot tell the two causes apart — with nothing
+    /// coming out, the only thing left that can move the base is the price.</para>
+    ///
+    /// <para>Each of these steps has its own passing test. Nothing had ever
+    /// checked that a price the engine actually generated moved a base the
+    /// engine actually offered.</para>
+    /// </summary>
+    [Fact]
+    public void R20d13V2_a_falling_market_writes_the_borrowing_base_down()
+    {
+        for (ulong seed = 1UL; seed < 60UL; seed++)
+        {
+            Engine engine = NewGame(seed);
+            WorldState world = WorldOf(engine);
+
+            var charged = -1;
+
+            for (int i = 0; i < world.Prospects.Count; i++)
+                if (world.Beneath(world.Prospects[i]) is not null) { charged = i; break; }
+
+            if (charged < 0) continue;
+
+            engine.Commands.Submit(
+                new DrillWellCommand(world.Prospects[charged], new Length(2000.0)));
+
+            for (var month = 0; month < 12; month++) engine.Pipeline.AdvanceTick();
+
+            if (engine.ReadModel!.Wells == 0) continue;      // the hole was lost
+
+            // SHUT IT IN. From here the field produces nothing, so remaining
+            // reserves cannot fall by depletion and the base can only move with
+            // the market.
+            EntityRef well = engine.ReadModel!.Wellbores[0].Well;
+
+            engine.Commands.Submit(
+                new SetWellChokeCommand(new EntityId<ICompletion>(well.Value), Open: false));
+
+            (Money Price, Money Base) high = (Money.Zero, Money.Zero);
+            (Money Price, Money Base) low = (Money.FromMillions(1.0e9), Money.Zero);
+
+            for (var month = 0; month < 96; month++)
+            {
+                engine.Pipeline.AdvanceTick();
+
+                if (engine.ReadModel!.Insolvent) break;
+
+                Money price = engine.ReadModel!.OilPrice;
+                Money bookable = engine.ReadModel!.Borrowing.BorrowingBase;
+
+                if (price > high.Price) high = (price, bookable);
+                if (price < low.Price) low = (price, bookable);
+            }
+
+            if (high.Base <= Money.Zero) continue;      // never had a base to write down
+
+            Assert.True(low.Base < high.Base,
+                $"the market ran from {low.Price} to {high.Price} and the borrowing base " +
+                $"did not move: {low.Base} against {high.Base}");
+
+            return;
+        }
+
+        Assert.Fail("sixty basins produced no discovery that could be shut in and watched");
+    }
 }
