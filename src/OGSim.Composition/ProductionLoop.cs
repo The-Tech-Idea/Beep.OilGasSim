@@ -195,7 +195,11 @@ internal sealed class ProductionLoop
     private readonly IObligationRegistry _obligations;
     private readonly ReservesBook _reserves;
     private readonly OGSim.Facilities.GasCapture _chainGasPlant;
+    private readonly OGSim.Wells.Injector _disposal;
     private readonly Money _gasPrice;
+
+    // Reset each tick by the plan that consumes it.
+    private double _disposedThisTick;
     private readonly OGSim.Company.MarketState _market;
     private readonly IRandomStream _priceStream;
     private readonly IReadOnlyList<int> _liquidOrdinals;
@@ -221,6 +225,7 @@ internal sealed class ProductionLoop
         IObligationRegistry obligations,
         ReservesBook reserves,
         OGSim.Facilities.GasCapture gasPlant,
+        OGSim.Wells.Injector disposal,
         Money gasPrice,
         IReadOnlyList<int> liquidOrdinals,
         Func<bool> isAbandoned,
@@ -265,6 +270,7 @@ internal sealed class ProductionLoop
         _obligations = obligations;
         _reserves = reserves;
         _chainGasPlant = gasPlant;
+        _disposal = disposal;
         _gasPrice = gasPrice;
         _liquidOrdinals = liquidOrdinals;
         _isAbandoned = isAbandoned;
@@ -393,6 +399,15 @@ internal sealed class ProductionLoop
             // it is charged against the whole history rather than the month —
             // a record is what a lender has watched, and one bad month should
             // no more re-price a facility than one good month should clear it.
+            // WHAT WENT DOWN THE DISPOSAL WELL. Captured here because stage 6
+            // puts it back into the rock it came from (SDD-002 §9), and the
+            // solve is the only place that knows how much the injector actually
+            // took after its own injectivity limited it.
+            if (solution.Element == _disposal.Id)
+                _disposedThisTick +=
+                    converged.Disposed.Discharged.Total.KgPerSecond * seconds
+                    / PhysicalConstants.WaterDensityKgPerM3;
+
             CumulativeFlared = new Mass(
                 CumulativeFlared.Kilograms
                 + (converged.Disposed.Flared.Total.KgPerSecond * seconds));
@@ -512,6 +527,16 @@ internal sealed class ProductionLoop
         IReadOnlyList<Completion> completions = _wells.Completions;
         var seen = new HashSet<EntityId<IReservoirCompartmentEntity>>();
 
+        // TWO PASSES, because injection is shared out in proportion to the water
+        // each compartment made and that total is not known until every
+        // compartment has been asked. One pass would have to put the water
+        // somewhere arbitrary — into the first compartment, or evenly — and
+        // either would be putting water back where it did not come from.
+        var producing = new List<(EntityId<IReservoirCompartmentEntity> Compartment,
+                                  double ReservoirVolume, double WaterCut, Pressure At)>();
+
+        double waterMade = 0.0;
+
         for (int i = 0; i < completions.Count; i++)
         {
             EntityId<IReservoirCompartmentEntity> compartment =
@@ -520,12 +545,23 @@ internal sealed class ProductionLoop
             if (!seen.Add(compartment)) continue;
             if (!_byCompartment.TryGetValue(compartment, out double reservoirVolume)) continue;
 
-            // Each compartment's OWN Bo, at its own pressure. The field-average
-            // this replaced was a stated simplification with a task against it
-            // (R20c.11); solving per element made the honest form free, because
-            // the compartment is already in hand.
-            Pressure pressure = _subsurface.TruePressureOf(compartment);
-            double waterCut = _subsurface.TrueWaterCutOf(compartment, WaterViscosity, _fluid.MuOil(pressure));
+            Pressure at = _subsurface.TruePressureOf(compartment);
+            double cut = _subsurface.TrueWaterCutOf(compartment, WaterViscosity, _fluid.MuOil(at));
+
+            producing.Add((compartment, reservoirVolume, cut, at));
+            waterMade += reservoirVolume * cut;
+        }
+
+        double disposed = _disposedThisTick;
+        _disposedThisTick = 0.0;
+
+        for (int i = 0; i < producing.Count; i++)
+        {
+            (EntityId<IReservoirCompartmentEntity> compartment,
+             double reservoirVolume, double waterCut, Pressure pressure) = producing[i];
+
+            // Each compartment's OWN Bo, at its own pressure (R20c.11) — read
+            // in the pass above, because the water total needed it first.
 
             // SDD-003 §6.1b splits the RATE: the Darcy form gives the total
             // liquid, and fw says how much of it is water. No singularity at
@@ -545,14 +581,36 @@ internal sealed class ProductionLoop
             // held a single shared one until finding 164.
             ReservoirVolume influx = _subsurface.InfluxFor(compartment, Duration.FromTicks(1.0));
 
+            // WATER BACK INTO THE ROCK IT CAME OUT OF (SDD-002 §9, SDD-003
+            // §3.1d). Produced water was going down a disposal well and out of
+            // the game; injected instead, it replaces some of the voidage the
+            // oil left behind, so the pressure falls more slowly and the field
+            // lasts longer. That is a waterflood, and it is the oldest decision
+            // in reservoir management.
+            //
+            // PRO RATA BY THE WATER EACH COMPARTMENT MADE, which is provenance
+            // by another route: water is put back where it came from rather than
+            // into whichever compartment happens to be first, and a compartment
+            // that produces no water receives none.
+            var injected = new ReservoirVolume(
+                waterMade <= 0.0
+                    ? 0.0
+                    : disposed * (waterReservoir.CubicMetres / waterMade));
+
             withdrawals.Add(new CompartmentWithdrawal(
                 compartment,
                 oil,
                 new StandardGasVolume(oil.CubicMetres * _fluid.Rs(pressure)),
                 _fluid.Bw(pressure).Shrink(waterReservoir),
                 Influx: influx,
-                Injected: new ReservoirVolume(0.0),
+                Injected: injected,
                 ReservoirVolume: new ReservoirVolume(reservoirVolume)));
+
+            // The injector wears out as it works (R10-V4): every cubic metre
+            // plugs it a little further, its injectivity falls, and remediation
+            // is a decision a player eventually has to price. Nothing committed
+            // to it before this, so it never aged.
+            _disposal.Commit(injected);
         }
 
         _production.Set(withdrawals);

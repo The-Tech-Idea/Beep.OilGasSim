@@ -661,6 +661,7 @@ internal sealed class FieldModule() : EngineModule(Declare(
             obligations,
             composition.Require<ReservesBook>(),
             chain.GasPlant,
+            chain.Disposal,
             Defaults.GasPricePerTonne,
             Defaults.LiquidOrdinals,
             () => field.IsAbandoned,

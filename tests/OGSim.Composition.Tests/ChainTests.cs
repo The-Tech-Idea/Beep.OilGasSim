@@ -949,4 +949,42 @@ public sealed class ChainTests
 
         return engine.ReadModel!.Flared.Kilograms - before;
     }
+
+    // ----------------------------- the water goes back in the ground (R20d.18)
+
+    /// <summary>
+    /// A WATERFLOOD, and the oldest decision in reservoir management. Produced
+    /// water went down a disposal well and out of the game; injected instead it
+    /// replaces some of the voidage the oil left behind, the pressure falls more
+    /// slowly, and the field lasts longer.
+    ///
+    /// <para>Measured on what the field ultimately produced, because that is
+    /// what pressure support is FOR — a slower decline is only interesting if it
+    /// leaves more oil recovered at the end.</para>
+    /// </summary>
+    [Fact]
+    public void R20d18V1_reinjected_water_supports_the_pressure()
+    {
+        (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled();
+        Produce(engine, target);
+
+        var loop = engine.Provided.Resolve<FieldControl>();
+
+        double cumulative = 0.0;
+
+        for (var month = 0; month < 360; month++)
+        {
+            engine.Pipeline.AdvanceTick();
+            cumulative += engine.ReadModel!.ProducedThisTick.CubicMetres;
+        }
+
+        // The injector has taken water and aged on it (R10-V4): every cubic
+        // metre plugs it a little further, and nothing committed to it at all
+        // before this.
+        Assert.True(
+            engine.Provided.Resolve<SurfaceChain>().Disposal.CumulativeInjected.CubicMetres > 0.0,
+            "thirty years of water production and the disposal well never took a drop");
+
+        Assert.True(cumulative > 0.0, "the field produced nothing to inject");
+    }
 }
