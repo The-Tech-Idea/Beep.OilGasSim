@@ -1421,4 +1421,60 @@ public sealed class NewGameTests
 
         Assert.Fail("sixty basins produced no discovery that could be shut in and watched");
     }
+
+    // -------------------------------------------- one seed is one game (PV7)
+
+    /// <summary>
+    /// PV7 AT THE ENGINE, not at the generator. Two engines from one seed, given
+    /// the same orders, must agree on EVERYTHING a host can see after a decade:
+    /// the same wells, the same cash, the same price, the same cost index, the
+    /// same reserves, the same debt, the same gas burned, the same record, the
+    /// same odds on every prospect.
+    ///
+    /// <para>The determinism test that existed asserted wells and cash over six
+    /// months on a hand-built field, and it predates the market, reserves, the
+    /// ESG record, the gas plant and injection — every one of which draws or
+    /// accumulates. A save that reloaded into a different game would break the
+    /// one promise the whole design rests on, and nothing was checking most of
+    /// what could break it.</para>
+    ///
+    /// <para>Compared as WHOLE READ MODELS rather than field by field. A
+    /// hand-listed set of assertions is a list of the things somebody thought of,
+    /// and the next number added to the surface would not be on it.</para>
+    /// </summary>
+    [Fact]
+    public void PV7_one_seed_is_one_game_all_the_way_through()
+    {
+        Engine first = NewGame(seed: 20260811UL);
+        Engine second = NewGame(seed: 20260811UL);
+
+        var playFirst = new Explorer(first, drillAbove: 0.0, wellTarget: 3,
+                                     buildBelow: 1.05, borrows: true);
+
+        var playSecond = new Explorer(second, drillAbove: 0.0, wellTarget: 3,
+                                      buildBelow: 1.05, borrows: true);
+
+        playFirst.Play(months: 120);
+        playSecond.Play(months: 120);
+
+        Assert.Equal(first.ReadModel, second.ReadModel);
+    }
+
+    /// <summary>
+    /// AND A DIFFERENT SEED IS A DIFFERENT GAME. Stated separately because an
+    /// engine that ignored its seed entirely would satisfy the test above
+    /// perfectly — identical runs are only interesting if they were not
+    /// inevitable.
+    /// </summary>
+    [Fact]
+    public void PV7_a_different_seed_is_a_different_game()
+    {
+        Engine one = NewGame(seed: 11UL);
+        Engine other = NewGame(seed: 12UL);
+
+        new Explorer(one, 0.0, 3, 1.05, borrows: true).Play(months: 120);
+        new Explorer(other, 0.0, 3, 1.05, borrows: true).Play(months: 120);
+
+        Assert.NotEqual(one.ReadModel, other.ReadModel);
+    }
 }
