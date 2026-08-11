@@ -224,7 +224,20 @@ public sealed record FieldReadModel(
     CovenantStatus Covenant,
 
     /// <summary>How much is drawn.</summary>
-    Money Debt)
+    Money Debt,
+
+    /// <summary>
+    /// Everything this company has ever burned, and its record (SDD-012 §4).
+    ///
+    /// <para>Both, because one without the other cannot be acted on. The mass
+    /// says what is happening; the standing says what it is costing, and a
+    /// player charged a spread they could not trace to a cause would be paying a
+    /// penalty they had no way to answer — which is the whole of finding
+    /// 172.</para>
+    /// </summary>
+    Mass Flared,
+
+    double EsgStanding)
 {
     /// <summary>Where the chain is jammed, if anywhere — the elements that
     /// refused production this tick.</summary>
@@ -292,7 +305,9 @@ internal sealed class FieldProjection(
             progress, Project(beliefs), loop.Chain(), field.Wells(), Prospects(),
             loop.Market.OilPrice, loop.Market.CostIndex,
             reserves.Remaining(loop.CumulativeProduced),
-            bank.Terms, bank.Covenant, bank.Drawn);
+            bank.Terms, bank.Covenant, bank.Drawn,
+            loop.CumulativeFlared,
+            Defaults.Record.Standing(loop.CumulativeFlared, loop.CumulativeProduced));
 
     /// <summary>
     /// The undrilled structures, in the order the world placed them (D-5).

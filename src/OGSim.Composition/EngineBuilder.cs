@@ -152,6 +152,30 @@ internal static class Defaults
             * SurfaceOilDensity.KgPerCubicMetre / 1000.0);
 
     /// <summary>
+    /// The gas plant a company can buy (SDD-006 §3b, finding 172).
+    ///
+    /// <para>The first rung is NOTHING — a field ships with no gas handling and
+    /// flares everything, which is how a development actually starts and what
+    /// makes the first plant a decision rather than a formality. The rungs above
+    /// take 3 and 8 kg/s, against a shipped field's roughly 2 kg/s of associated
+    /// gas at plateau: enough that one plant covers a field and a second is
+    /// needed only by a company that has grown past it.</para>
+    /// </summary>
+    public static IReadOnlyList<Facilities.GasPlantTier> GasPlantLadder { get; } =
+    [
+        new(new ContentId("gas-plant-none"), new MassRate(0.0)),
+        new(new ContentId("gas-plant-e1"), new MassRate(3.0)),
+        new(new ContentId("gas-plant-e2"), new MassRate(8.0)),
+    ];
+
+    /// <summary>
+    /// What a tonne of sales gas fetches. Well below oil on an energy basis,
+    /// which is the whole reason associated gas gets flared: it is worth
+    /// something, and often not enough to build for.
+    /// </summary>
+    public static Money GasPricePerTonne { get; } = Money.FromMillions(120.0 / 1_000_000.0);
+
+    /// <summary>
     /// What a well-run field flares, and what a badly-run one does
     /// (SDD-012 §4), in kilograms of gas per cubic metre of oil.
     ///
@@ -649,6 +673,8 @@ internal static class Defaults
 
     public static EntityId<IFlowElement> TheTank { get; } = new(1_000_007);
 
+    public static EntityId<IFlowElement> TheGasPlant { get; } = new(1_000_008);
+
     /// <summary>
     /// Where per-well gathering lines start numbering (SDD-006 §1c). Above the
     /// fixed chain elements by a clear margin, so a line laid for the
@@ -884,6 +910,18 @@ internal static class Defaults
             : throw new ContentFault("SDD-007 §6", null,
                 $"no abandonment template '{template.Value}' is priced; an obligation " +
                 "nobody can cost is a liability nobody can plan for");
+
+    /// <summary>
+    /// What a gas plant costs and how long it takes. DEARER THAN A SEPARATOR:
+    /// compression, dehydration and a tie-in to somewhere that will take the
+    /// gas, which is most of a small facility.
+    /// </summary>
+    public static ActivityTerms InstallGasPlantTerms { get; } = new(
+        Template: new ContentId("install-gas-plant"),
+        Cost: Money.FromMillions(18.0),
+        DurationTicks: 5,
+        Rig: null,
+        Outcomes: SurveyOutcomes);
 
     public static ActivityTerms InstallSeparatorTerms { get; } = new(
         Template: new ContentId("install-separator"),

@@ -96,3 +96,60 @@ internal sealed class InstallSeparatorActivity(
         return null;
     }
 }
+
+/// <summary>
+/// Fit the next gas plant up (SDD-006 §3b, finding 172).
+///
+/// <para>THE ANSWER TO A PENALTY. Flaring prices itself into the cost of debt
+/// (SDD-012 §4), and until there was a plant to buy that was a tax rather than a
+/// decision — a company could be charged for flaring and could do nothing about
+/// it but produce less oil.</para>
+/// </summary>
+public sealed record InstallGasPlantCommand() : Command(Subject: null);
+
+internal sealed class InstallGasPlantActivity(
+    ActivityTerms terms,
+    OGSim.Facilities.GasCapture plant,
+    IReadOnlyList<OGSim.Facilities.GasPlantTier> ladder) : Activity<InstallGasPlantCommand>(terms)
+{
+    /// <summary>A plant is PP&amp;E (SDD-009 §1) — and it now depreciates by the
+    /// barrel like everything else the company owns.</summary>
+    public override bool LeavesAnAsset => true;
+
+    public override bool OnePerTarget => true;
+
+    public override (EntityRef Target, Length Depth) Aim(InstallGasPlantCommand command) =>
+        (new EntityRef(EntityKind.FlowElement, plant.Id.Value), NoDepth);
+
+    public override IReadOnlyList<RejectionReason> OwnRefusals(InstallGasPlantCommand command)
+    {
+        if (NextRung() is not null) return [];
+
+        return
+        [
+            new RejectionReason(
+                "$loc:reject.top-of-the-ladder",
+                $"'{plant.Tier.Id.Value}' is the largest gas plant in the catalogue; the " +
+                "field cannot handle more gas than it already does"),
+        ];
+    }
+
+    public override void Complete(CompletedActivity done, Tick tick)
+    {
+        ArgumentNullException.ThrowIfNull(done);
+
+        if (!done.Succeeded) return;
+
+        if (NextRung() is OGSim.Facilities.GasPlantTier next) plant.Fit(next);
+    }
+
+    /// <summary>The rung above what is fitted, in the ladder's declared order
+    /// (D-5).</summary>
+    private OGSim.Facilities.GasPlantTier? NextRung()
+    {
+        for (int i = 0; i < ladder.Count - 1; i++)
+            if (ladder[i].Id == plant.Tier.Id) return ladder[i + 1];
+
+        return null;
+    }
+}

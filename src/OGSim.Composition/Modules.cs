@@ -245,6 +245,9 @@ internal sealed class FacilitiesModule() : EngineModule(Declare(
         // What it is NOT is an unconnected port: mass leaving the network at one
         // would vanish from the tick's conservation terms silently, and a flare
         // accounts for it — combusted and unburnt, both reported as Disposed.
+        var gasPlant = new OGSim.Facilities.GasCapture(
+            Defaults.TheGasPlant, Defaults.GasPlantLadder[0], Defaults.MaterialCount);
+
         var flare = new OGSim.Facilities.Flare(
             Defaults.TheFlare, Defaults.FlareCapacity, Defaults.FlareCombustionEfficiency,
             Defaults.MaterialCount);
@@ -274,6 +277,7 @@ internal sealed class FacilitiesModule() : EngineModule(Declare(
         network.Add(flowline);
         network.Add(separator);
         network.Add(custody);
+        network.Add(gasPlant);
         network.Add(flare);
         // Set once, not refreshed: a DISPOSAL well injects into a disposal
         // formation, not into the producing compartment. Its acceptance
@@ -317,8 +321,17 @@ internal sealed class FacilitiesModule() : EngineModule(Declare(
             separator.Id, OGSim.Facilities.Separator.LiquidOutlet,
             custody.Id, OGSim.Facilities.CustodyTransferPoint.Inlet));
 
+        // THE GAS LEG NOW HAS A CHOICE (finding 172). It ran straight to the
+        // flare, so a company charged for flaring could do nothing about it but
+        // produce less oil — a tax rather than a decision. The plant ships at
+        // capacity ZERO, which is a field with no gas handling: everything still
+        // burns until somebody buys one.
         network.Connect(new FlowConnection(
             separator.Id, OGSim.Facilities.Separator.GasOutlet,
+            gasPlant.Id, OGSim.Facilities.GasCapture.Inlet));
+
+        network.Connect(new FlowConnection(
+            gasPlant.Id, OGSim.Facilities.GasCapture.RejectOutlet,
             flare.Id, OGSim.Facilities.Flare.Inlet));
 
         network.Connect(new FlowConnection(
@@ -330,7 +343,7 @@ internal sealed class FacilitiesModule() : EngineModule(Declare(
             tank.Id, OGSim.Facilities.Tank.Inlet));
 
         composition.Provide(
-            new SurfaceChain(manifold, flowline, separator, custody, flare, disposal, tank));
+            new SurfaceChain(manifold, flowline, separator, custody, gasPlant, flare, disposal, tank));
     }
 }
 
@@ -348,6 +361,7 @@ internal sealed record SurfaceChain(
     OGSim.Facilities.Pipeline Flowline,
     OGSim.Facilities.Separator Separator,
     OGSim.Facilities.CustodyTransferPoint Custody,
+    OGSim.Facilities.GasCapture GasPlant,
     OGSim.Facilities.Flare Flare,
     OGSim.Wells.Injector Disposal,
     OGSim.Facilities.Tank Tank)
@@ -374,6 +388,7 @@ internal sealed record SurfaceChain(
         if (element == Flowline.Id) return "flowline";
         if (element == Separator.Id) return "separator";
         if (element == Custody.Id) return "custody-meter";
+        if (element == GasPlant.Id) return "gas-plant";
         if (element == Flare.Id) return "flare";
         if (element == Disposal.Id) return "water-disposal";
         if (element == Tank.Id) return "tank";
@@ -565,6 +580,7 @@ internal sealed class FieldModule() : EngineModule(Declare(
         typeof(SeismicSurveyCommand),
         typeof(InstallSeparatorCommand),
         typeof(ExpandExportCommand),
+        typeof(InstallGasPlantCommand),
         typeof(BorrowCommand),
         typeof(RepayCommand),
         typeof(SetWellChokeCommand),
@@ -644,6 +660,8 @@ internal sealed class FieldModule() : EngineModule(Declare(
             composition.Require<OGSim.Company.MarketState>(),
             obligations,
             composition.Require<ReservesBook>(),
+            chain.GasPlant,
+            Defaults.GasPricePerTonne,
             Defaults.LiquidOrdinals,
             () => field.IsAbandoned,
             Defaults.Economics,
@@ -738,6 +756,12 @@ internal sealed class FieldModule() : EngineModule(Declare(
             // why, until this, ten times the oil earned the same money.
             new ExpandExportActivity(
                 Defaults.ExpandExportTerms, terminal, Defaults.ExportLadder),
+
+            // THE ANSWER TO THE FLARING PENALTY (finding 172). Without it a
+            // company charged for flaring could only respond by producing less
+            // oil, which is a tax rather than a decision.
+            new InstallGasPlantActivity(
+                Defaults.InstallGasPlantTerms, chain.GasPlant, Defaults.GasPlantLadder),
 
             // The ENDING (R12b.10). Finding 153's other reason is gone too: opex
             // scales with the liquid lifted, so a watered-out well genuinely

@@ -194,6 +194,8 @@ internal sealed class ProductionLoop
     private readonly IPriceModel _prices;
     private readonly IObligationRegistry _obligations;
     private readonly ReservesBook _reserves;
+    private readonly OGSim.Facilities.GasCapture _chainGasPlant;
+    private readonly Money _gasPrice;
     private readonly OGSim.Company.MarketState _market;
     private readonly IRandomStream _priceStream;
     private readonly IReadOnlyList<int> _liquidOrdinals;
@@ -218,6 +220,8 @@ internal sealed class ProductionLoop
         OGSim.Company.MarketState market,
         IObligationRegistry obligations,
         ReservesBook reserves,
+        OGSim.Facilities.GasCapture gasPlant,
+        Money gasPrice,
         IReadOnlyList<int> liquidOrdinals,
         Func<bool> isAbandoned,
         FieldEconomics economics,
@@ -260,6 +264,8 @@ internal sealed class ProductionLoop
         _market = market;
         _obligations = obligations;
         _reserves = reserves;
+        _chainGasPlant = gasPlant;
+        _gasPrice = gasPrice;
         _liquidOrdinals = liquidOrdinals;
         _isAbandoned = isAbandoned;
         _economics = economics;
@@ -784,6 +790,35 @@ internal sealed class ProductionLoop
 
         AccrueAbandonment(tick);
         Depreciate(tick);
+
+        // SALES GAS. Gas the plant took is gas the company sold, and pricing it
+        // here — not at the custody meter — is the honest simple model this
+        // composition ships: the plant IS the sales point, and gas leaves the
+        // field the moment it is processed (SDD-006 §3b).
+        //
+        // Its own audit cause rather than the oil sale's: a month that sold gas
+        // and metered no oil is a real month, and revenue caused by a custody
+        // transfer that did not happen would be a fiction the ledger's own rule
+        // exists to refuse.
+        double gasSold =
+            _chainGasPlant.Captured.Total.KgPerSecond * Duration.FromTicks(1.0).Seconds;
+
+        if (gasSold > 0.0)
+        {
+            Money gas = Scale(_gasPrice, gasSold / KilogramsPerTonne);
+
+            if (gas > Money.Zero)
+                _company.Ledger.Post(new Movement(
+                    tick, Account.Cash, Account.Revenue, gas,
+                    MovementCategory.Production, Asset: null,
+                    Cause: _audit.Record(
+                        AuditCategory.CustodyTransfer, subject: null, cause: null,
+                        new Dictionary<string, AuditValue>(StringComparer.Ordinal)
+                        {
+                            ["sales-gas-kg"] = new(gasSold.ToString(
+                                System.Globalization.CultureInfo.InvariantCulture)),
+                        })));
+        }
 
         if (_sale is AuditId sale)
         {

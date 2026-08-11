@@ -214,8 +214,11 @@ public sealed class ChainTests
             // (SDD-006 §1c) — one per well, as long as that well's field is from
             // the header. It was missing entirely: every well tied straight into
             // the header at zero distance.
-            ["well-1", "gathering-1", "manifold", "flowline", "separator",
-             "custody-meter", "flare", "water-disposal", "tank"],
+            // The gas plant sits between the separator and the flare (finding
+             // 172): gas has somewhere to go other than to be burned, and what
+             // the plant cannot take overflows to the flare behind it.
+             ["well-1", "gathering-1", "manifold", "flowline", "separator",
+             "custody-meter", "water-disposal", "tank", "gas-plant", "flare"],
             engine.ReadModel!.Chain.Select(element => element.DisplayId));
     }
 
@@ -865,4 +868,85 @@ public sealed class ChainTests
     //
     // The accrual is tested in NewGameTests against a DISCOVERED field, which is
     // the path that produces the belief.
+
+    // ------------------------------ the flare has an alternative (R20d.17)
+
+    /// <summary>
+    /// FINDING 172, CLOSED. Flaring prices itself into the cost of debt, and
+    /// until there was a plant to buy that was a tax rather than a decision — a
+    /// company could be charged for flaring and could do nothing about it but
+    /// produce less oil.
+    ///
+    /// <para>Buying the plant is the answer: the gas it takes is gas that stops
+    /// being burned, and what it cannot take overflows to the flare behind it,
+    /// which is what a flare is for.</para>
+    /// </summary>
+    [Fact]
+    public void R20d17V1_a_gas_plant_stops_the_gas_being_burned()
+    {
+        (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled();
+        Produce(engine, target);
+
+        engine.Pipeline.AdvanceTick();
+
+        // A RATE, not a total. Cumulative flaring only ever rises — what a plant
+        // changes is how fast, which is what the record measures.
+        double before = FlaredThisMonth(engine);
+
+        Assert.True(before > 0.0,
+            "a field with no gas handling burned nothing; there is no penalty to answer");
+
+        Assert.IsType<Accepted>(engine.Commands.Submit(new InstallGasPlantCommand()));
+
+        for (var month = 0; month < 12; month++) engine.Pipeline.AdvanceTick();
+
+        Assert.True(FlaredThisMonth(engine) < before,
+            "the plant was built and the field is flaring exactly as fast as before");
+    }
+
+    /// <summary>
+    /// AND THE GAS IS WORTH SOMETHING. Captured gas is sold, which is why a
+    /// plant is an investment rather than a fine — though at what associated gas
+    /// fetches, often not enough to build for on revenue alone. The record is
+    /// the other half of the case.
+    /// </summary>
+    [Fact]
+    public void R20d17V1_captured_gas_is_sold()
+    {
+        (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled();
+        Produce(engine, target);
+
+        CompanyState company = engine.Provided.Resolve<CompanyState>();
+
+        engine.Commands.Submit(new InstallGasPlantCommand());
+
+        for (var month = 0; month < 12; month++) engine.Pipeline.AdvanceTick();
+
+        Money withGas = -company.Ledger.BalanceOf(Account.Revenue);
+
+        (Engine without, EntityId<IReservoirCompartmentEntity> flaring) = Undrilled();
+        Produce(without, flaring);
+
+        for (var month = 0; month < 12; month++) without.Pipeline.AdvanceTick();
+
+        Money withoutGas =
+            -without.Provided.Resolve<CompanyState>().Ledger.BalanceOf(Account.Revenue);
+
+        Assert.True(withGas > withoutGas,
+            $"a field selling its gas earned {withGas} against {withoutGas} for burning it");
+    }
+
+    /// <summary>
+    /// What the flare burns in a month, from the cumulative figure the surface
+    /// reports — because that is where a company charged for it has to be able
+    /// to see it (SDD-012 §4).
+    /// </summary>
+    private static double FlaredThisMonth(Engine engine)
+    {
+        double before = engine.ReadModel!.Flared.Kilograms;
+
+        engine.Pipeline.AdvanceTick();
+
+        return engine.ReadModel!.Flared.Kilograms - before;
+    }
 }
