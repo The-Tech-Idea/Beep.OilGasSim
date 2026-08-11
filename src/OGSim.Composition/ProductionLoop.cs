@@ -65,16 +65,25 @@ public sealed record ChainElementView(
     EntityRef Element,
     string DisplayId,
     Mass Throughput,
-    IReadOnlyList<(ConstraintKind Kind, Mass Deferred)> Deferred)
+    IReadOnlyList<(ConstraintKind Kind, Mass Deferred)> Deferred,
+
+    /// <summary>What condition it is in, 0..1 (SDD-012 §1).</summary>
+    double Condition,
+
+    /// <summary>Whether it is out of service — the reason a row that used to
+    /// carry the whole field's oil is suddenly carrying none.</summary>
+    bool Failed)
 {
     // Finding 131.
     public bool Equals(ChainElementView? other) =>
         other is not null && Element == other.Element && DisplayId == other.DisplayId
         && Throughput == other.Throughput
+        && Condition == other.Condition && Failed == other.Failed
         && Structural.Equal(Deferred, other.Deferred);
 
     public override int GetHashCode() =>
-        HashCode.Combine(Element, DisplayId, Throughput, Structural.HashOf(Deferred));
+        HashCode.Combine(Element, DisplayId, Throughput, Condition, Failed,
+                         Structural.HashOf(Deferred));
 
     /// <summary>Whether this element refused anything this tick — what a host
     /// highlights, and what "the chain is jammed here" means.</summary>
@@ -112,11 +121,14 @@ internal sealed class ChainElement(EntityId<IFlowElement> element)
         _deferred.Add((kind, deferred));
     }
 
-    public ChainElementView Published(Func<EntityId<IFlowElement>, string> nameOf) =>
+    public ChainElementView Published(
+        Func<EntityId<IFlowElement>, string> nameOf, double condition, bool failed) =>
         new(new EntityRef(EntityKind.FlowElement, Element.Value),
             nameOf(Element),
             new Mass(Throughput),
-            [.. _deferred]);
+            [.. _deferred],
+            condition,
+            failed);
 }
 
 /// <summary>
@@ -179,6 +191,7 @@ internal sealed class ProductionLoop
     private readonly List<ChainElement> _chain = [];
 
     private readonly Func<EntityId<IFlowElement>, string> _names;
+    private readonly OGSim.Integrity.AssetIntegrity _integrity;
 
     private readonly OGSim.Facilities.Tank _tank;
     private readonly OGSim.Facilities.ExportTerminal _terminal;
@@ -216,6 +229,12 @@ internal sealed class ProductionLoop
         IFlowElementRegistry network,
         IReadOnlyList<EntityId<IFlowElement>> meteredPoints,
         Func<EntityId<IFlowElement>, string> names,
+
+        // READ, never written: the chain view reports condition and stage 4 is
+        // what changes it (law L5). The loop asks a question it does not own the
+        // answer to, which is the whole reason this is a dependency rather than
+        // a field.
+        OGSim.Integrity.AssetIntegrity integrity,
         OGSim.Facilities.Tank tank,
         OGSim.Facilities.ExportTerminal terminal,
         IFiscalRegime regime,
@@ -261,6 +280,7 @@ internal sealed class ProductionLoop
         _solver = solver;
         _network = network;
         _names = names;
+        _integrity = integrity;
         _tank = tank;
         _terminal = terminal;
         _regime = regime;
@@ -304,6 +324,31 @@ internal sealed class ProductionLoop
     public OGSim.Kernel.Composition Delivered { get; private set; }
 
     /// <summary>
+    /// The field's water cut, from what the chain delivered last tick
+    /// (SDD-012 §1's k_w term).
+    ///
+    /// <para>DERIVED, never stored (law L5): it is a ratio of two numbers this
+    /// object already owns, and a second copy updated beside them would be one
+    /// more thing to forget. Stage 4 reads it a tick behind, which is design
+    /// 03 §6.1's declared lag and the right way round — equipment corrodes in
+    /// the service it has HAD, not the service it is about to get.</para>
+    /// </summary>
+    public double WaterCut
+    {
+        get
+        {
+            double water = Delivered[Defaults.WaterOrdinal].KgPerSecond;
+            double oil = Delivered[Defaults.OilOrdinal].KgPerSecond;
+            double liquid = water + oil;
+
+            // A field that has produced nothing has no cut, rather than an
+            // undefined one. Said here because the division below is the only
+            // place it could go wrong.
+            return liquid <= 0.0 ? 0.0 : water / liquid;
+        }
+    }
+
+    /// <summary>
     /// Stage 5. Refresh every well with the pressure its compartment is at NOW,
     /// then solve the NETWORK — once per segment, over the elements that segment
     /// has available (SDD-002 §9).
@@ -341,6 +386,7 @@ internal sealed class ProductionLoop
         _byCompartment.Clear();
         _chain.Clear();
         _stored = OGSim.Kernel.Composition.Zero(_materialCount);
+        _tank.ForgetPromises();
         Array.Clear(_handled);
         double[] delivered = new double[_materialCount];
 
@@ -466,11 +512,30 @@ internal sealed class ProductionLoop
             for (int m = 0; m < _materialCount; m++)
                 delivered[m] += onSpec[new MaterialId(m)].KgPerSecond * seconds;
 
+            // NOTHING PASSED, NOTHING TO RECORD — and the provenance is left
+            // ALONE rather than overwritten. A shut-in field still has a custody
+            // meter: the route law removes what feeds an element, not what it
+            // feeds, so the meter solves with no inlet and returns a stream
+            // whose allocation was never constructed. Storing that would hand
+            // stage 6 an empty provenance for mass an earlier segment really did
+            // deliver.
+            if (onSpec.Total.KgPerSecond <= 0.0) continue;
+
             // What the tank receives is exactly what the meter passed, with the
             // provenance it carries — so a lifting out of storage allocates back
             // to the compartments that filled it (SDD-002 §3, design 04 §2.2).
-            _stored = onSpec;
+            //
+            // ACCUMULATED AND DURATION-WEIGHTED, not assigned. `_stored` is a
+            // RATE that stage 6 multiplies by a whole tick, so keeping only the
+            // last segment's rate applied a shut-in field's flow — or a flowing
+            // one's — to the entire month. Weighting each segment by its share
+            // of the tick makes the product exact rather than nearly.
+            _stored = _stored.Plus(onSpec.Scaled(seconds / TickSeconds));
             _tankProvenance = passed.Provenance;
+
+            // And the tank is told, so the NEXT segment sees the room this one
+            // just took rather than the room the tick opened with.
+            _tank.Promise(new Mass(onSpec.Total.KgPerSecond * seconds));
         }
     }
 
@@ -489,14 +554,75 @@ internal sealed class ProductionLoop
         return row;
     }
 
-    /// <summary>The tick's chain, as SDD-017 §2's <c>ChainElementView</c>.</summary>
+    /// <summary>
+    /// The tick's chain, as SDD-017 §2's <c>ChainElementView</c>.
+    ///
+    /// <para>EVERY REGISTERED ELEMENT, not only the ones that solved. A failed
+    /// element is absent from the network by design (design 04 §4), so building
+    /// this from the solve alone made the broken thing VANISH from the one view
+    /// a player watches the chain through — the row that carried the field's oil
+    /// last month simply stopped existing, and nothing on the surface said what
+    /// to repair. An element that did not solve reports no throughput, which is
+    /// true, and its condition, which is why.</para>
+    /// </summary>
     public IReadOnlyList<ChainElementView> Chain()
     {
-        var rows = new List<ChainElementView>(_chain.Count);
+        IReadOnlyList<IFlowElement> ordered = FlowOrder();
+        var rows = new List<ChainElementView>(ordered.Count);
 
-        for (int i = 0; i < _chain.Count; i++) rows.Add(_chain[i].Published(_names));
+        for (int i = 0; i < ordered.Count; i++)
+        {
+            EntityId<IFlowElement> element = ordered[i].Id;
+
+            rows.Add(SolvedRow(element).Published(
+                _names, _integrity.ConditionOf(element), _integrity.HasFailed(element)));
+        }
 
         return rows;
+    }
+
+    /// <summary>
+    /// Every registered element in the order material crosses it — the WHOLE
+    /// field's order, not this tick's.
+    ///
+    /// <para>Built from the network with everything present, which is the only
+    /// thing that knows: registration order is the order modules composed
+    /// (facilities before wells), and the solve's order omits whatever was
+    /// unavailable — precisely the element a player is looking for. Asking the
+    /// full topology gives the failed row its own place in the chain instead of
+    /// appending it somewhere after the things it feeds.</para>
+    ///
+    /// <para>A read-model path rather than a per-tick simulation one, and it
+    /// sorts on the order of a dozen elements. If a field ever grows large
+    /// enough for that to matter, the order is a property of the topology and
+    /// can be cached against the registration count that produced it.</para>
+    /// </summary>
+    private IReadOnlyList<IFlowElement> FlowOrder()
+    {
+        IReadOnlyList<IFlowElement> registered = _network.Registered;
+
+        var everything = new List<EntityRef>(registered.Count);
+        for (int i = 0; i < registered.Count; i++)
+            everything.Add(FlowElementRegistry.ReferenceTo(registered[i]));
+
+        // A field mid-composition can hold a topology that does not yet build —
+        // a well registered before its tie-in, say. Registration order is a
+        // worse answer than flow order and a much better one than throwing at a
+        // host that only asked what its chain looked like.
+        return OGSim.Flow.FlowNetwork.Build(_network.ViewFor(everything))
+            is OGSim.Flow.NetworkBuilt built
+                ? built.Network.Ordered
+                : registered;
+    }
+
+    /// <summary>What the solve said about an element, or an empty row if it was
+    /// not in the network to be asked.</summary>
+    private ChainElement SolvedRow(EntityId<IFlowElement> element)
+    {
+        for (int i = 0; i < _chain.Count; i++)
+            if (_chain[i].Element == element) return _chain[i];
+
+        return new ChainElement(element);
     }
 
     /// <summary>
@@ -510,6 +636,10 @@ internal sealed class ProductionLoop
     private const int OnSpecLeg = 0;
 
     private const double SecondsPerDay = 86_400.0;
+
+    /// <summary>A whole tick in seconds — 30/360, so every month is the same
+    /// length and a segment's share of one is exact (SDD-001 §3).</summary>
+    private const double TickSeconds = Duration.DaysPerTick * SecondsPerDay;
 
     /// <summary>
     /// Hands stage 5's answer to stage 6 in the shape the compartments consume:
@@ -1321,17 +1451,31 @@ public sealed class FieldControl
 /// <summary>
 /// Stage 4. Says which elements are available this tick, and for how long.
 ///
-/// <para>ONE segment covering the whole month, because nothing yet takes an
-/// element away mid-tick: integrity owns no state and runs no stage (R20d.11)
-/// and weather is unbuilt (R22). The plan is REAL rather than skipped — stage 5
-/// iterates segments, and a stage 5 that solved "the tick" instead would have
-/// nowhere to put the second segment on the day one arrives.</para>
+/// <para>THE HAZARD PASS RUNS HERE (SDD-012 §2). Everything registered ages,
+/// everything rolls, and what fails is subtracted from the availability list —
+/// which is the whole of what a failure IS in this engine: an unavailable
+/// element is ABSENT from the network rather than present at zero rate (design
+/// 04 §4). There is no broken flag for the solver to consult and no code path
+/// where a failed element takes part and is then ignored.</para>
 ///
-/// <para>Availability is every REGISTERED element, because a failed element is
-/// ABSENT from the network rather than present at zero rate (design 04 §4). The
-/// day hazards land they subtract from this list and nothing else changes.</para>
+/// <para>THEN THE ROUTE LAW (SDD-002 §5). Subtracting an element is not enough
+/// on its own: `ViewFor` drops the connections touching it, and whatever fed it
+/// would go on flowing into a pipe that now ends nowhere — the solver accepts
+/// that, and the mass leaves the network by the back door while stage 6 still
+/// publishes the withdrawal against the reservoir. `Routed` propagates the
+/// shut-in upstream until it stops, so a broken separator stops the wells
+/// instead of losing their oil.</para>
+///
+/// <para>AND THE MONTH SPLITS AT THE FAILURE DAY. The day is drawn as an
+/// integer in {0..29} precisely so the boundary lands on the /30ths grid
+/// exactly (SDD-012 §2), and the two segments are the reason stage 5 iterates a
+/// plan rather than solving "the tick": a non-linear solve does not average, so
+/// half a month at full rate and half at nothing is not a month at half rate.</para>
 /// </summary>
-internal sealed class SegmentationStage(IFlowElementRegistry network) : ITickStage
+internal sealed class SegmentationStage(
+    IFlowElementRegistry network,
+    OGSim.Integrity.AssetIntegrity integrity,
+    ProductionLoop loop) : ITickStage
 {
     public StageId Id => StageId.Availability;
 
@@ -1340,18 +1484,78 @@ internal sealed class SegmentationStage(IFlowElementRegistry network) : ITickSta
         ArgumentNullException.ThrowIfNull(context);
 
         IReadOnlyList<IFlowElement> registered = network.Registered;
-        var available = new List<EntityRef>(registered.Count);
 
+        IReadOnlyList<OGSim.Integrity.FailureOutcome> failures =
+            integrity.Advance(registered, loop.WaterCut, Duration.FromTicks(1.0));
+
+        // WHAT IS UP AT THE END OF THE MONTH. Built first because it is the
+        // state that persists; the earlier segment is this plus whatever failed
+        // partway through, which is the cheaper of the two to describe.
+        var standing = new List<EntityRef>(registered.Count);
         for (int i = 0; i < registered.Count; i++)
-            available.Add(FlowElementRegistry.ReferenceTo(registered[i]));
+            if (!integrity.HasFailed(registered[i].Id))
+                standing.Add(FlowElementRegistry.ReferenceTo(registered[i]));
 
-        // Set exactly once, by this stage: a later stage reading it before now
-        // is a stage-isolation violation (I-V5), and one writing it would be a
-        // second owner of the tick's shape.
+        IReadOnlyList<EntityRef> after = network.Routed(standing);
+
+        int day = failures.Count == 0
+            ? (int)Duration.DaysPerTick
+            : EarliestDay(failures);
+
+        // ONE SEGMENT, either because nothing broke or because what broke did so
+        // on day zero and the month was never anything else. A zero-day segment
+        // would be a legal plan the solver spent a whole iteration on to weight
+        // by nothing.
+        if (day == 0 || failures.Count == 0)
+        {
+            context.Segments = new SegmentPlan(
+            [
+                new Segment(StartDay: 0, DurationDays: (int)Duration.DaysPerTick, after),
+            ]);
+
+            return;
+        }
+
+        // THE EARLIEST FAILURE OWNS THE BOUNDARY. Two failures on different days
+        // would want three segments; taking the earliest is a deliberate
+        // simplification and a conservative one — the field is down from the
+        // first break either way, and the second cannot un-break it.
+        var before = new List<EntityRef>(registered.Count);
+        for (int i = 0; i < registered.Count; i++)
+        {
+            EntityId<IFlowElement> element = registered[i].Id;
+
+            // UP BEFORE THE BREAK means: not already down when the month began.
+            // A component that failed in an earlier tick is absent from both
+            // segments; one that failed today was working until it did.
+            if (!integrity.HasFailed(element) || FailedToday(failures, element))
+                before.Add(FlowElementRegistry.ReferenceTo(registered[i]));
+        }
+
         context.Segments = new SegmentPlan(
         [
-            new Segment(StartDay: 0, DurationDays: (int)Duration.DaysPerTick, available),
+            new Segment(StartDay: 0, DurationDays: day, network.Routed(before)),
+            new Segment(StartDay: day, DurationDays: (int)Duration.DaysPerTick - day, after),
         ]);
+    }
+
+    private static int EarliestDay(IReadOnlyList<OGSim.Integrity.FailureOutcome> failures)
+    {
+        int day = (int)Duration.DaysPerTick;
+
+        for (int i = 0; i < failures.Count; i++)
+            if (failures[i].FailureDay < day) day = failures[i].FailureDay;
+
+        return day;
+    }
+
+    private static bool FailedToday(
+        IReadOnlyList<OGSim.Integrity.FailureOutcome> failures, EntityId<IFlowElement> element)
+    {
+        for (int i = 0; i < failures.Count; i++)
+            if (failures[i].Component == element) return true;
+
+        return false;
     }
 }
 

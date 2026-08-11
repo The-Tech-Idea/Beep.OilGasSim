@@ -48,6 +48,27 @@ public interface IFlowElementRegistry
     /// tick has nothing to undo (SDD-002 §9).
     /// </summary>
     FlowTopology ViewFor(IReadOnlyCollection<EntityRef> available);
+
+    /// <summary>
+    /// The available set with everything that has lost its route removed
+    /// (SDD-002 §5, R20d.22).
+    ///
+    /// <para><b>An element is available only if everything it feeds is.</b>
+    /// <see cref="ViewFor"/> drops the connections touching an absent element,
+    /// which leaves whatever fed it flowing into a pipe that now ends nowhere —
+    /// and the solver accepts that: the source still sources, and the mass
+    /// leaves the network by the back door. In this composition that is the
+    /// reservoir being drained for nothing, because stage 6 publishes the
+    /// withdrawal whether or not a barrel reached custody.</para>
+    ///
+    /// <para>So the shut-in propagates upstream until it stops, and every
+    /// element becomes a single point of failure for everything behind it. That
+    /// is the gain rather than the cost: the tank goes and the field shuts in
+    /// because there is nowhere to put oil; the disposal well goes and it shuts
+    /// in because there is nowhere to put water. Redundancy is something a
+    /// player buys.</para>
+    /// </summary>
+    IReadOnlyList<EntityRef> Routed(IReadOnlyCollection<EntityRef> available);
 }
 
 /// <summary>The shipped registry. Concrete because there is nothing to vary:
@@ -122,6 +143,64 @@ public sealed class FlowElementRegistry : IFlowElementRegistry
         }
 
         return new FlowTopology(elements, connections);
+    }
+
+    /// <summary>
+    /// SDD-002 §5's fixed point, by removal: drop every element that feeds
+    /// something absent, and keep dropping until a pass removes nothing.
+    ///
+    /// <para>CLOSURE AND NOT REACHABILITY, which sound like the same rule.
+    /// "Can this element reach a sink?" cannot tell a genuine terminal element
+    /// from one left dangling — in the view neither has an outgoing connection.
+    /// This asks about each element's OWN declared connections, which the
+    /// registry holds whether or not a segment uses them, so the flare stays a
+    /// sink and the orphaned flowline does not become one.</para>
+    ///
+    /// <para>Bounded by the element count: each pass removes at least one
+    /// element or is the last, so a chain of n shuts in within n passes. Written
+    /// as repeated passes rather than a reverse walk because the connection list
+    /// is the only index there is and this needs no second one (law L5).</para>
+    /// </summary>
+    public IReadOnlyList<EntityRef> Routed(IReadOnlyCollection<EntityRef> available)
+    {
+        ArgumentNullException.ThrowIfNull(available);
+
+        var present = new HashSet<EntityId<IFlowElement>>();
+        foreach (EntityRef reference in available)
+            if (reference.Kind == EntityKind.FlowElement)
+                present.Add(new EntityId<IFlowElement>(reference.Value));
+
+        bool removedSomething = true;
+
+        while (removedSomething)
+        {
+            removedSomething = false;
+
+            for (int i = 0; i < _connections.Count; i++)
+            {
+                FlowConnection connection = _connections[i];
+
+                // The upstream end goes when the downstream end is gone. Not the
+                // other way round: an element with an unfed inlet is a normal
+                // thing — a gas plant with no gas arriving takes none — and
+                // shutting it in would spread an outage forwards through a chain
+                // that is merely idle.
+                if (present.Contains(connection.From) && !present.Contains(connection.To))
+                {
+                    present.Remove(connection.From);
+                    removedSomething = true;
+                }
+            }
+        }
+
+        // Rebuilt from the REGISTRATION order rather than filtered from the
+        // caller's list, so the result's order is the field's order and does not
+        // inherit whatever order the hazard pass happened to hand over (D-5).
+        var routed = new List<EntityRef>(_elements.Count);
+        for (int i = 0; i < _elements.Count; i++)
+            if (present.Contains(_elements[i].Id)) routed.Add(ReferenceTo(_elements[i]));
+
+        return routed;
     }
 
     public IReadOnlyList<IFlowElement> Registered => _elements;

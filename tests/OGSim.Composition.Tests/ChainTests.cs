@@ -1214,6 +1214,7 @@ public sealed class ChainTests
 
         for (var month = 0; month < 480; month++)
         {
+            Fixture.Repair(engine);
             engine.Pipeline.AdvanceTick();
 
             double water = Throughput(engine, "water-disposal");
@@ -1277,6 +1278,7 @@ public sealed class ChainTests
 
         for (var month = 0; month < 480; month++)
         {
+            Fixture.Repair(engine);
             engine.Pipeline.AdvanceTick();
 
             Money now = company.Ledger.Cash;
@@ -1336,9 +1338,88 @@ public sealed class ChainTests
 
         if (treated) engine.Commands.Submit(new InstallTreaterCommand());
 
-        for (var month = 0; month < 480; month++) engine.Pipeline.AdvanceTick();
+        Fixture.Run(engine, months: 480);
 
         // Revenue is credited, so what was earned is the negation of the balance.
         return -engine.Provided.Resolve<CompanyState>().Ledger.BalanceOf(Account.Revenue);
+    }
+
+    // ------------------------------------ equipment that wears out (R20d.22)
+
+    /// <summary>
+    /// EQUIPMENT AGES. Until R20d.22 the integrity module composed two correct
+    /// models, declared no state and ran in no stage, so nothing in a running
+    /// game could reach them — a separator was as good after forty years as on
+    /// the day it was installed.
+    /// </summary>
+    [Fact]
+    public void R20d22V2_equipment_wears_out_as_the_field_runs()
+    {
+        (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled();
+        Produce(engine, target);
+
+        FieldControl field = engine.Provided.Resolve<FieldControl>();
+        field.Drill(target, new Length(2000.0));
+
+        Fixture.Run(engine, months: 120);
+
+        double worst = 1.0;
+
+        foreach (ChainElementView element in engine.ReadModel!.Chain)
+            if (element.Condition < worst) worst = element.Condition;
+
+        Assert.True(worst < 1.0,
+            "ten years of service and nothing in the chain had aged at all");
+    }
+
+    /// <summary>
+    /// AND WHEN IT BREAKS, THE FIELD STOPS — then starts again when it is fixed.
+    ///
+    /// <para>Two runs of the same field on the same seed, differing only in
+    /// whether anybody maintains it. The one nobody maintains dies at its first
+    /// unlucky draw and never earns another dollar, because a failed element is
+    /// absent from the network and the route law shuts in everything behind it.
+    /// The one that is maintained pays for repairs and keeps producing.</para>
+    ///
+    /// <para>This is the test that says the mechanic is a DECISION rather than a
+    /// tax: the difference between the two numbers is what maintenance is
+    /// worth, and it is worth more than it costs.</para>
+    /// </summary>
+    [Fact]
+    public void R20d22V3_a_field_nobody_maintains_stops_and_a_maintained_one_does_not()
+    {
+        Money neglected = Lifetime(maintained: false);
+        Money maintained = Lifetime(maintained: true);
+
+        // MEASURED at $7.46bn against $0.56bn — thirteen times, because the
+        // neglected field does not merely earn less, it STOPS: the first failure
+        // it does not answer shuts the chain in permanently. The gap is the
+        // mechanic, and it is far too large to be a rounding effect dressed up
+        // as a decision (finding 178).
+        Assert.True(maintained > neglected,
+            $"a maintained field earned {maintained} against {neglected} for a neglected one; " +
+            "either nothing ever breaks or repairing it is not worth the money");
+    }
+
+    private static Money Lifetime(bool maintained)
+    {
+        (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled();
+        Produce(engine, target);
+
+        FieldControl field = engine.Provided.Resolve<FieldControl>();
+
+        for (var well = 0; well < 5; well++) field.Drill(target, new Length(2000.0));
+
+        for (var month = 0; month < 480; month++)
+        {
+            if (maintained) Fixture.Repair(engine);
+            engine.Pipeline.AdvanceTick();
+        }
+
+        // Revenue LESS what the repairs cost, which is the only comparison that
+        // makes this a decision: a test that measured revenue alone would say
+        // maintenance is free and always right.
+        return -engine.Provided.Resolve<CompanyState>().Ledger.BalanceOf(Account.Revenue)
+             + engine.Provided.Resolve<CompanyState>().Ledger.BalanceOf(Account.Opex);
     }
 }

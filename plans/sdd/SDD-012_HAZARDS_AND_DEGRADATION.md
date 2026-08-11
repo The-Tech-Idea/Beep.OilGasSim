@@ -80,6 +80,38 @@ higher λ_base (07 §4b.3), which is the whole proven-vs-new trade.
 Exponential-in-(1−c), not a threshold: the player who "sits just above the
 line" is not rewarded, deferral cost grows smoothly (R18 §2.2 rationale).
 
+> **R20d.22 amendment (finding 180) — WHAT degrades, in the shipped composition.**
+>
+> §1 says "per component instance" and the R20d contract pass typed
+> `ComponentState.Id` as `EntityId<IWellComponent>`, which is narrower than the
+> rest of the section: the severity terms are stated per *equipment class*, the
+> environmental terms come from a *location* profile, and neither is a property
+> of downhole equipment in particular. A separator in marine air corrodes.
+>
+> **The subject is the registered flow element** — `EntityId<IFlowElement>`, the
+> set stage 4 already walks to build the availability list. That is the whole
+> surface chain and every completion: the things that can be absent from a
+> network are exactly the things whose absence the segment plan can express, and
+> a degradation model whose failures could not be expressed as absence would
+> have nowhere to put its outcome.
+>
+> Well components in the §1 sense are not lost by this. A completion IS a flow
+> element; a lift method installed in one is reached through it, and when the
+> lift-method tiers become separately failable they enter this same set through
+> their own registration rather than through a second parallel mechanism.
+>
+> **Integrity owns the conditions and stage 4 runs the pass.** Before this
+> amendment the module composed two models, declared `ownsState: nothing` and
+> `stages: none`, and was reachable from no tick — equipment in a running game
+> never aged and never failed. The models were correct and joined to nothing.
+>
+> **A failure must be answerable in the same phase that introduces it.** A
+> repair is an ordinary SDD-007 operation (§3's own rule: "all three produce
+> ordinary operations — no special execution path"), costing money and a month,
+> and it is not optional scope: an unrepairable failure is a field that dies of
+> its first unlucky draw, which is the "cost with no response" shape findings
+> 172 and 177 already cost this project twice.
+
 ## 3. Maintenance strategies
 
 ```text

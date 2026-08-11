@@ -563,6 +563,7 @@ internal sealed class FieldModule() : EngineModule(Declare(
         typeof(SurfaceChain),
         typeof(WorldState),
         typeof(OGSim.Information.ProspectRisks),
+        typeof(OGSim.Integrity.AssetIntegrity),
     ],
     // Provided here because the field is where an asset is CREATED, and
     // registration is unconditional at creation (SDD-007 §6).
@@ -597,6 +598,7 @@ internal sealed class FieldModule() : EngineModule(Declare(
         typeof(ExpandExportCommand),
         typeof(InstallGasPlantCommand),
         typeof(RemediateInjectorCommand),
+        typeof(RepairEquipmentCommand),
         typeof(InstallManifoldCommand),
         typeof(InstallTankCommand),
         typeof(InstallTreaterCommand),
@@ -667,6 +669,7 @@ internal sealed class FieldModule() : EngineModule(Declare(
             network,
             chain.MeteredPoints,
             chain.NameOf,
+            composition.Require<OGSim.Integrity.AssetIntegrity>(),
             chain.Tank,
             terminal,
             composition.Require<IFiscalRegime>(),
@@ -703,7 +706,8 @@ internal sealed class FieldModule() : EngineModule(Declare(
             () => loop.CumulativeProduced);
 
         composition.Provide(bank);
-        composition.Contribute(order: 0, new SegmentationStage(network));
+        composition.Contribute(order: 0, new SegmentationStage(
+            network, composition.Require<OGSim.Integrity.AssetIntegrity>(), loop));
         composition.Contribute(order: 0, new SolveFlowStage(loop));
         composition.Contribute(order: 0, new CustodyStage(loop));
         composition.Contribute(order: 0, new EconomicsStage(loop, bank));
@@ -782,6 +786,15 @@ internal sealed class FieldModule() : EngineModule(Declare(
             // oil, which is a tax rather than a decision.
             new InstallGasPlantActivity(
                 Defaults.InstallGasPlantTerms, chain.GasPlant, Defaults.GasPlantLadder),
+
+            // THE ANSWER TO A BROKEN ANYTHING (SDD-012 §3). Stage 4 now takes
+            // equipment out of the network and the route law shuts in whatever
+            // was behind it, so without this the first unlucky draw would end
+            // the game — a cost with no response, for the third time.
+            new RepairEquipmentActivity(
+                Defaults.RepairEquipmentTerms,
+                composition.Require<OGSim.Integrity.AssetIntegrity>(),
+                composition.Require<IFlowElementRegistry>()),
 
             // THE ANSWER TO A PLUGGED INJECTOR (R10-V4). R20d.18 made the
             // plugging real and left no way to clear it, which is a decline the
@@ -990,19 +1003,51 @@ internal sealed class CapabilitiesModule() : EngineModule(Declare(
 
 internal sealed class IntegrityModule() : EngineModule(Declare(
     "integrity",
-    provides: [typeof(IDegradationModel), typeof(IHazardModel)],
-    requires: [typeof(IAuditTrail)],
-    ownsState: NothingOwnedYet,
+    provides:
+    [
+        typeof(IDegradationModel),
+        typeof(IHazardModel),
+        typeof(OGSim.Integrity.AssetIntegrity),
+    ],
+    requires: [typeof(IAuditTrail), typeof(IRandomSource), typeof(SurfaceChain)],
+
+    // THE CONDITIONS, and this module is the only writer of them. Declared now
+    // because until R20d.22 it owned nothing and ran nowhere: two correct models
+    // composed and reachable from no tick, so equipment never aged and never
+    // failed. The stage is not declared here — stage 4 belongs to the module
+    // that builds the segment plan, and integrity contributes the state it
+    // reads rather than a second participant in the same slot.
+    ownsState: ["integrity.conditions"],
     stages: NoStagesYet))
 {
     public override void Compose(IModuleComposition composition)
     {
         ArgumentNullException.ThrowIfNull(composition);
 
-        composition.Provide<IDegradationModel>(new OGSim.Integrity.SeverityWeightedDegradation(
-            new ContentId("standard"), Defaults.Decay));
-        composition.Provide<IHazardModel>(new OGSim.Integrity.ExponentialHazardModel(
-            new ContentId("standard"), baseRatePerYear: 0.05, conditionExponent: 4.0));
+        var degradation = new OGSim.Integrity.SeverityWeightedDegradation(
+            new ContentId("standard"), Defaults.Decay);
+        var hazard = new OGSim.Integrity.ExponentialHazardModel(
+            new ContentId("standard"), baseRatePerYear: 0.05, conditionExponent: 4.0);
+
+        composition.Provide<IDegradationModel>(degradation);
+        composition.Provide<IHazardModel>(hazard);
+
+        OGSim.Composition.SurfaceChain chain = composition.Require<SurfaceChain>();
+
+        var integrity = new OGSim.Integrity.AssetIntegrity(
+            new OGSim.Integrity.IntegrityPass(
+                degradation, hazard,
+                composition.Require<IRandomSource>().Stream(StreamId.Hazard),
+                composition.Require<IAuditTrail>()),
+
+            // THE CHAIN NAMES ITS OWN EQUIPMENT (design 04 §1). An audit row
+            // reading "separator" instead of "element 1000002" costs one
+            // function, and asking the element what it IS would be the thing
+            // that rule exists to forbid.
+            element => new ContentId(chain.NameOf(element.Id)));
+
+        composition.Provide(integrity);
+        composition.Own(integrity);
     }
 }
 

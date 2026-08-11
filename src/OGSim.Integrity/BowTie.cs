@@ -31,7 +31,7 @@ namespace OGSim.Integrity;
 /// </summary>
 public sealed record Barrier(
     ContentId Id,
-    IReadOnlyList<EntityId<IWellComponent>> Elements,
+    IReadOnlyList<EntityId<IFlowElement>> Elements,
     bool IsPreventive)
 {
     // Finding 131.
@@ -43,7 +43,7 @@ public sealed record Barrier(
         HashCode.Combine(Id, IsPreventive, Structural.HashOf(Elements));
 
     public double StrengthGiven(
-        Func<EntityId<IWellComponent>, double> conditionOf,
+        Func<EntityId<IFlowElement>, double> conditionOf,
         double crewCompetency,
         double procedureCompliance)
     {

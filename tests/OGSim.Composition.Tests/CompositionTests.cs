@@ -31,6 +31,46 @@ internal sealed class TestModule(
 internal static class Fixture
 {
     /// <summary>
+    /// Run months the way a company runs them: fixing what breaks.
+    ///
+    /// <para>Since R20d.22 equipment ages and fails, and the route law shuts in
+    /// everything behind whatever went — so a bare loop of <c>AdvanceTick</c>
+    /// measures a field that died of its first unlucky draw rather than the
+    /// thing the test came to measure. Every test that runs a field for years
+    /// and asks about water, money or decline goes through here.</para>
+    ///
+    /// <para>RUN-TO-FAILURE, deliberately the least attentive strategy SDD-012
+    /// §3 offers: repair what has broken, never what is merely worn. A test
+    /// fixture that maintained better than a player could would be measuring a
+    /// field nobody can have.</para>
+    /// </summary>
+    public static void Run(Engine engine, int months)
+    {
+        ArgumentNullException.ThrowIfNull(engine);
+
+        for (var month = 0; month < months; month++)
+        {
+            Repair(engine);
+            engine.Pipeline.AdvanceTick();
+        }
+    }
+
+    /// <summary>One month's maintenance: order a repair for anything the chain
+    /// view reports as down. The refusals sort out what is already under
+    /// way.</summary>
+    public static void Repair(Engine engine)
+    {
+        ArgumentNullException.ThrowIfNull(engine);
+
+        FieldReadModel? seen = engine.ReadModel;
+        if (seen is null) return;
+
+        for (var i = 0; i < seen.Chain.Count; i++)
+            if (seen.Chain[i].Failed)
+                engine.Commands.Submit(new RepairEquipmentCommand(seen.Chain[i].Element));
+    }
+
+    /// <summary>
     /// The default fixture plays at SIMULATION fidelity — the full models — so a
     /// test that does not say otherwise is testing the physics the design
     /// specifies rather than the simplified one (design 18 §5b).

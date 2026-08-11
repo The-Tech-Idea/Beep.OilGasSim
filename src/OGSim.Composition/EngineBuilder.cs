@@ -1042,6 +1042,22 @@ internal static class Defaults
         Rig: null,
         Outcomes: SurveyOutcomes);
 
+    /// <summary>
+    /// AN OVERHAUL (SDD-012 §3). A month and rather less than a new vessel,
+    /// because it is the same vessel: what is bought is the years of hazard the
+    /// decay curve was about to charge, not a capability the field did not have.
+    ///
+    /// <para>Priced under every install in this catalogue on purpose. If keeping
+    /// equipment cost what replacing it costs, maintenance would never be the
+    /// answer to anything and §3's three strategies would collapse to one.</para>
+    /// </summary>
+    public static ActivityTerms RepairEquipmentTerms { get; } = new(
+        Template: new ContentId("repair-equipment"),
+        Cost: Money.FromMillions(0.8),
+        DurationTicks: 1,
+        Rig: null,
+        Outcomes: SurveyOutcomes);
+
     public static ActivityTerms InstallSeparatorTerms { get; } = new(
         Template: new ContentId("install-separator"),
         Cost: Money.FromMillions(6.0),

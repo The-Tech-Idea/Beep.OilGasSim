@@ -587,6 +587,7 @@ public sealed class GameplayTests
             if (debottleneck && !upgraded && engine.ReadModel?.Wells >= 2)
                 upgraded = engine.Commands.Submit(new InstallSeparatorCommand()) is Accepted;
 
+            Fixture.Repair(engine);
             engine.Pipeline.AdvanceTick();
 
             if (engine.ReadModel!.Outcome != ObjectiveState.Pending) break;

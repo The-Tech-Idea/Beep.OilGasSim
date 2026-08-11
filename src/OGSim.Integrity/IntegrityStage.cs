@@ -19,16 +19,32 @@ using OGSim.Kernel;
 
 namespace OGSim.Integrity;
 
-/// <summary>A component instance under the integrity pass.</summary>
+/// <summary>
+/// One piece of equipment under the integrity pass.
+///
+/// <para>A FLOW ELEMENT, per SDD-012 §2's R20d.22 amendment: the things that can
+/// be absent from a network are exactly the things whose absence the segment
+/// plan can express, and a failure this pass could not express as absence would
+/// have nowhere to go. §1's severity terms were always stated per equipment
+/// class rather than per downhole component — a separator in marine air
+/// corrodes — and a completion is a flow element too, so nothing narrows.</para>
+/// </summary>
 public sealed record ComponentState(
-    EntityId<IWellComponent> Id,
+    EntityId<IFlowElement> Id,
     ContentId Tier,
     double Condition,
-    bool Failed);
+    bool Failed,
+
+    // ON THE STATE because it IS state: §1's k_i term reads how long this
+    // particular item has gone unserviced, which is a fact about the item and
+    // not about the field it sits in. Severity is computed FROM this rather
+    // than handed in beside it, which is what stops two callers disagreeing
+    // about a component's own history (law L5).
+    int TicksSinceService);
 
 /// <summary>What stage 4 decided about one component.</summary>
 public sealed record FailureOutcome(
-    EntityId<IWellComponent> Component,
+    EntityId<IFlowElement> Component,
     double Condition,
     double RatePerYear,
     double Probability,
@@ -73,12 +89,12 @@ public sealed class IntegrityPass
     /// </summary>
     public IReadOnlyList<FailureOutcome> Advance(
         IReadOnlyList<ComponentState> components,
-        ServiceSeverity severity,
+        Func<ComponentState, ServiceSeverity> severityOf,
         Duration dt,
         out IReadOnlyList<ComponentState> aged)
     {
         ArgumentNullException.ThrowIfNull(components);
-        ArgumentNullException.ThrowIfNull(severity);
+        ArgumentNullException.ThrowIfNull(severityOf);
 
         var ordered = new List<ComponentState>(components);
         ordered.Sort((a, b) => a.Id.Value.CompareTo(b.Id.Value));
@@ -96,11 +112,12 @@ public sealed class IntegrityPass
             // different mechanic nobody specified.
             if (component.Failed)
             {
-                next.Add(component);
+                next.Add(component with { TicksSinceService = component.TicksSinceService + 1 });
                 continue;
             }
 
-            double condition = _degradation.NextCondition(component.Condition, severity, dt);
+            double condition = _degradation.NextCondition(
+                component.Condition, severityOf(component), dt);
             double rate = _hazard.RateAt(condition);
             double probability = _hazard.FailureProbability(condition, dt);
 
@@ -112,7 +129,16 @@ public sealed class IntegrityPass
             // position is predictable.
             int day = failed ? _hazardStream.NextInt(30) : -1;
 
-            next.Add(component with { Condition = condition, Failed = failed });
+            // The service clock runs whether or not the item failed: a
+            // component that broke has still not been serviced, and stopping the
+            // count would make a neglected item look freshly maintained the
+            // moment it gave out.
+            next.Add(component with
+            {
+                Condition = condition,
+                Failed = failed,
+                TicksSinceService = component.TicksSinceService + 1,
+            });
 
             if (!failed) continue;
 

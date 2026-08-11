@@ -15,7 +15,7 @@ public class BarrierTests
 {
     private static Barrier Preventive(params ulong[] elements) =>
         new(new ContentId("well-control"),
-            [.. elements.Select(e => new EntityId<IWellComponent>(e))],
+            [.. elements.Select(e => new EntityId<IFlowElement>(e))],
             IsPreventive: true);
 
     [Fact] // R23.1: strength is WEAKEST-LINK, not an average

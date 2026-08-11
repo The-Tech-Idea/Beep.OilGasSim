@@ -40,7 +40,7 @@ public static class Fx
     }
 
     public static ComponentState Component(ulong id, double condition = 1.0) =>
-        new(new EntityId<IWellComponent>(id), new ContentId("pump-tier-b"), condition, false);
+        new(new EntityId<IFlowElement>(id), new ContentId("pump-tier-b"), condition, false, 0);
 }
 
 public class DegradationTests
@@ -203,7 +203,7 @@ public class IntegrityPassTests
             for (int tick = 0; tick < 24; tick++)
             {
                 IReadOnlyList<FailureOutcome> outcomes =
-                    pass.Advance(components, Fx.Harsh, Fx.OneTick, out IReadOnlyList<ComponentState> aged);
+                    pass.Advance(components, _ => Fx.Harsh, Fx.OneTick, out IReadOnlyList<ComponentState> aged);
 
                 components = [.. aged];
                 foreach (FailureOutcome outcome in outcomes) failed.Add(outcome.Component.Value);
@@ -224,7 +224,7 @@ public class IntegrityPassTests
             (IntegrityPass pass, _) = Fx.NewPass(7UL);
 
             IReadOnlyList<FailureOutcome> outcomes =
-                pass.Advance(components, Fx.Harsh, Fx.OneYear, out _);
+                pass.Advance(components, _ => Fx.Harsh, Fx.OneYear, out _);
 
             return [.. outcomes.Select(o => o.Component.Value)];
         }
@@ -249,7 +249,7 @@ public class IntegrityPassTests
 
         // Badly degraded over a long interval: failure is near-certain.
         IReadOnlyList<FailureOutcome> outcomes = pass.Advance(
-            [Fx.Component(1, condition: 0.05)], Fx.Harsh, Duration.FromTicks(60.0), out _);
+            [Fx.Component(1, condition: 0.05)], _ => Fx.Harsh, Duration.FromTicks(60.0), out _);
 
         FailureOutcome outcome = Assert.Single(outcomes);
 
@@ -278,7 +278,7 @@ public class IntegrityPassTests
         for (ulong i = 1; i <= 40; i++) components.Add(Fx.Component(i, condition: 0.02));
 
         IReadOnlyList<FailureOutcome> outcomes =
-            pass.Advance(components, Fx.Harsh, Duration.FromTicks(60.0), out _);
+            pass.Advance(components, _ => Fx.Harsh, Duration.FromTicks(60.0), out _);
 
         Assert.NotEmpty(outcomes);
 
@@ -294,9 +294,10 @@ public class IntegrityPassTests
         (IntegrityPass pass, _) = Fx.NewPass();
 
         var failed = new ComponentState(
-            new EntityId<IWellComponent>(1), new ContentId("pump-tier-b"), 0.3, Failed: true);
+            new EntityId<IFlowElement>(1), new ContentId("pump-tier-b"), 0.3, Failed: true,
+            TicksSinceService: 0);
 
-        pass.Advance([failed], Fx.Harsh, Fx.OneYear, out IReadOnlyList<ComponentState> aged);
+        pass.Advance([failed], _ => Fx.Harsh, Fx.OneYear, out IReadOnlyList<ComponentState> aged);
 
         // It is already out of service; continuing to age it would make the
         // repair arbitrarily worse the longer it was left, which is a different
@@ -315,7 +316,7 @@ public class IntegrityPassTests
 
         // Base rate zero: no failure is possible, so no day is drawn.
         IReadOnlyList<FailureOutcome> outcomes = pass.Advance(
-            [Fx.Component(1), Fx.Component(2), Fx.Component(3)], Fx.Mild, Fx.OneTick, out _);
+            [Fx.Component(1), Fx.Component(2), Fx.Component(3)], _ => Fx.Mild, Fx.OneTick, out _);
 
         Assert.Empty(outcomes);
 

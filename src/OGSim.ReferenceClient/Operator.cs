@@ -84,6 +84,13 @@ public sealed class Operator
 
             if (seen is not null)
             {
+                // BEFORE ANYTHING ELSE. A field with a broken separator makes
+                // nothing at all — the route law shuts in everything behind it
+                // — so there is no development decision worth taking while the
+                // chain is down, and a month spent drilling instead is a month
+                // the field earned zero.
+                RepairWhatIsBroken(seen);
+
                 debottlenecked |= Develop(seen);
                 abandoned += CloseWhatIsFinished(seen);
             }
@@ -98,6 +105,38 @@ public sealed class Operator
         return new Session(
             final.Outcome, final.Tick, final.Cash,
             final.Wellbores.Count, abandoned, debottlenecked);
+    }
+
+    /// <summary>
+    /// Fix what has broken (SDD-012 §2–§3).
+    ///
+    /// <para>THE CLIENT CAN SEE THIS AT ALL because the chain view carries every
+    /// registered element with its condition, including the ones that did not
+    /// flow. A failed element is absent from the network by design, so a view
+    /// built from the solve alone would have shown the broken row simply
+    /// vanishing — the field stops earning and nothing on the surface says
+    /// why.</para>
+    ///
+    /// <para>RUN-TO-FAILURE, which is one of SDD-012 §3's three strategies and
+    /// the cheapest to write: this operator repairs what is broken and never
+    /// what is merely worn. A client that overhauled at condition 0.5 would
+    /// spend more and lose fewer months, and the engine is what makes that a
+    /// real question rather than a setting.</para>
+    /// </summary>
+    private void RepairWhatIsBroken(FieldReadModel seen)
+    {
+        IReadOnlyList<ChainElementView> chain = seen.Chain;
+
+        for (var i = 0; i < chain.Count; i++)
+        {
+            if (!chain[i].Failed) continue;
+
+            // ONE AT A TIME, and the refusals do the rest: the scheduler allows
+            // one job per target, so submitting for every broken element is
+            // either accepted or told why. Nothing here needs to track what is
+            // already under way.
+            _engine.Commands.Submit(new RepairEquipmentCommand(chain[i].Element));
+        }
     }
 
     /// <summary>

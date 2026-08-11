@@ -317,6 +317,45 @@ elements; an unavailable element is absent from the network
 ([04](../design/04_MATERIAL_AND_FLOW.md) §4). `Transform` being pure is what
 makes per-segment solving and whole-tick abandonment cheap.
 
+> **R20d.22 amendment (finding 180) — the available set is DOWNSTREAM-CLOSED.**
+>
+> Removing an element removes the connections touching it, and that is all
+> `ViewFor` does. What it leaves behind, if the element sat mid-chain, is a
+> source still flowing into a pipe that now ends nowhere — and **the solver
+> accepts it**. Measured, not argued: a source of 50 kg/s feeding a restrictor
+> whose sink was withdrawn solves in two elements, sources its 50 kg/s, and
+> delivers it to no one. Mass leaves the network by the back door.
+>
+> Downstream in this composition, that is the reservoir being drained for
+> nothing: the wells produce, stage 6 publishes the withdrawal against the
+> compartment, and no barrel reaches custody. A field whose separator broke
+> would lose its oil rather than stop producing it.
+>
+> **The law.** An element is available only if everything it feeds is available:
+>
+> ```text
+> available' = { e ∈ available : ∀ c ∈ connections, c.From = e ⇒ c.To ∈ available' }
+> ```
+>
+> the greatest fixed point, computed by removing upstream elements until nothing
+> more can be removed. `IFlowElementRegistry.Routed(available)` returns it, and
+> stage 4 applies it to whatever the hazard pass left standing.
+>
+> **This is what a bottleneck IS**, and it is worth stating as a gain rather than
+> as a safety property. Every element in the chain becomes a single point of
+> failure for everything behind it: the tank goes and the field shuts in, because
+> there is nowhere to put oil; the disposal well goes and the field shuts in,
+> because there is nowhere to put water. A player who wants a field that survives
+> its equipment has to buy the redundancy, which is the decision this engine is
+> made of.
+>
+> **Closure and not reachability**, which reads like the same rule and is not.
+> "Can this element reach a sink?" cannot tell a genuine terminal element from
+> one left dangling — both have no outgoing connection in the view. Closure asks
+> about each element's own declared connections, which the registry holds
+> whether or not the segment uses them, so the flare stays a sink and the
+> orphaned flowline does not become one.
+
 ## 6. Network
 
 ```csharp

@@ -96,6 +96,27 @@ public sealed class Tank : IFlowElement
 
     public Mass Ullage => new(Math.Max(0.0, _tier.Capacity.Kilograms - _held.Total.Kilograms));
 
+    // What earlier segments of THIS tick have already been allowed to send.
+    // Commit happens once, after every segment has solved (SDD-002 §9), so
+    // between them the tank holds no more mass than it did at the open — and
+    // without this each segment would be offered the same empty space twice.
+    private double _promisedKilograms;
+
+    /// <summary>
+    /// What a segment's solve was allowed to send here, told to the tank before
+    /// the next segment solves.
+    ///
+    /// <para>NOT A RECEIPT. Nothing enters the inventory until stage 6, and
+    /// provenance is not blended here: this is the room reserved against a
+    /// commit that has not happened yet, which is the difference between a tank
+    /// that is full and a tank that is about to be.</para>
+    /// </summary>
+    public void Promise(Mass mass) => _promisedKilograms += mass.Kilograms;
+
+    /// <summary>Start of a tick: last tick's promises were either committed or
+    /// abandoned with it, and either way they are not this tick's.</summary>
+    public void ForgetPromises() => _promisedKilograms = 0.0;
+
     /// <summary>The ports by name, so a caller wiring the chain never writes a
     /// bare index.</summary>
     public static PortId Inlet { get; } = new(0);
@@ -160,7 +181,13 @@ public sealed class Tank : IFlowElement
         double seconds = input.Segment.DurationDays * SecondsPerDay;
         if (seconds <= 0.0) return [];
 
-        double acceptable = Ullage.Kilograms / seconds;
+        // The room LEFT, not the room at the tick's open. A month that splits
+        // into two segments solves this twice, and a tank that offered its whole
+        // ullage to each would let the pair commit twice what it can hold —
+        // which stage 6's own invariant then refused, correctly, by halting the
+        // engine.
+        double room = Math.Max(0.0, Ullage.Kilograms - _promisedKilograms);
+        double acceptable = room / seconds;
         double arriving = input.Inlets.Count > 0
             ? input.Inlets[0].MassRates.Total.KgPerSecond
             : 0.0;
