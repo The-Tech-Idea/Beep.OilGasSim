@@ -781,7 +781,7 @@ public sealed class NewGameTests
     {
         Engine engine = BasinWithSeveralProspects();
 
-        DrillingSeason campaign = new Explorer(engine, drillAbove: 0.16, wellTarget: 3, buildBelow: double.MaxValue)
+        DrillingSeason campaign = new Explorer(engine, drillAbove: 0.16, wellTarget: 3, buildBelow: double.MaxValue, borrows: false)
             .Play(months: 360);
 
         Assert.True(campaign.Drilled > 0, "the client never put a hole down");
@@ -825,7 +825,7 @@ public sealed class NewGameTests
         // every best-odds prospect held oil would be a genuine surprise.
         for (ulong seed = 1UL; seed < 7UL; seed++)
         {
-            DrillingSeason season = new Explorer(NewGame(seed), drillAbove: 0.0, wellTarget: 2, buildBelow: double.MaxValue)
+            DrillingSeason season = new Explorer(NewGame(seed), drillAbove: 0.0, wellTarget: 2, buildBelow: double.MaxValue, borrows: false)
                 .Play(months: 60);
 
             dry += season.DryHoles;
@@ -878,8 +878,8 @@ public sealed class NewGameTests
             "sight; the cost index is not actionable through the read model");
     }
 
-    private static Money Earned(ulong seed, double buildBelow) =>
-        new Explorer(NewGame(seed), drillAbove: 0.0, wellTarget: 2, buildBelow)
+    private static Money Earned(ulong seed, double buildBelow, bool borrows = false) =>
+        new Explorer(NewGame(seed), drillAbove: 0.0, wellTarget: 2, buildBelow, borrows)
             .Play(months: 84)
             .Cash;
 
@@ -1134,5 +1134,40 @@ public sealed class NewGameTests
         }
 
         Assert.Fail("sixty basins produced no discovery to borrow against");
+    }
+
+    /// <summary>
+    /// A COMPANY THAT USES ITS FACILITY DEVELOPS FASTER (SDD-009 §5). A field
+    /// pays for itself only once it is built, so a company waiting to afford the
+    /// next well out of revenue is waiting on the very thing that well would
+    /// provide — and on a declining asset, later is less.
+    ///
+    /// <para>This is the test that says the borrowing base is ACTIONABLE. A
+    /// facility a host can see and cannot use would be a number on a screen; if
+    /// these two companies ended level, the whole of R20d.15 would be
+    /// decoration.</para>
+    ///
+    /// <para>Compared across basins and totalled, because leverage is an edge in
+    /// expectation and not a guarantee: interest is charged whether or not the
+    /// month goes well, and a company that borrowed into a bad market pays for
+    /// it. A client that won every single time would mean debt was free.</para>
+    /// </summary>
+    [Fact]
+    public void R20d15V3_a_company_that_borrows_develops_faster_than_one_that_waits()
+    {
+        Money funded = Money.Zero;
+        Money unfunded = Money.Zero;
+
+        for (ulong seed = 1UL; seed < 5UL; seed++)
+        {
+            // The SAME world and the same market for both, so what is left
+            // between them is whether they used the facility.
+            funded += Earned(seed, buildBelow: double.MaxValue, borrows: true);
+            unfunded += Earned(seed, buildBelow: double.MaxValue, borrows: false);
+        }
+
+        Assert.True(funded > unfunded,
+            $"borrowing against reserves earned {funded} against {unfunded} for waiting; " +
+            "the borrowing base is not actionable through the read model");
     }
 }

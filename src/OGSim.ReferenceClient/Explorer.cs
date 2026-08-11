@@ -75,7 +75,14 @@ public sealed class Explorer
     /// <para>`double.MaxValue` is a company that never looks at the market,
     /// which is the comparison this exists to lose to.</para>
     /// </summary>
-    public Explorer(Engine engine, double drillAbove, int wellTarget, double buildBelow)
+    /// <summary>
+    /// <paramref name="borrows"/> is whether this company will fund development
+    /// with debt (SDD-009 §5). A field pays for itself only after it is built,
+    /// so a company that will not borrow develops at the speed its cash allows —
+    /// which is slower, and on a declining asset slower is less.
+    /// </summary>
+    public Explorer(
+        Engine engine, double drillAbove, int wellTarget, double buildBelow, bool borrows)
     {
         ArgumentNullException.ThrowIfNull(engine);
 
@@ -83,7 +90,10 @@ public sealed class Explorer
         _drillAbove = drillAbove;
         _wellTarget = wellTarget;
         _buildBelow = buildBelow;
+        _borrows = borrows;
     }
+
+    private readonly bool _borrows;
 
     private readonly double _buildBelow;
 
@@ -198,6 +208,22 @@ public sealed class Explorer
             }
         }
 
+        // DRAW ON THE FACILITY BEFORE THE CASH RUNS OUT. A field pays for
+        // itself only once it is built, so a company waiting to afford the next
+        // well out of revenue is waiting on the very thing the well would
+        // provide. The bank has already booked the reserves; the headroom is
+        // there to be used.
+        //
+        // Against a FLOOR rather than at zero: a company that draws only when it
+        // is broke has no margin for the month the market turns, and interest is
+        // charged whether or not it does.
+        if (_borrows && seen.Cash < WorkingCash)
+        {
+            Money headroom = seen.Borrowing.BorrowingBase - seen.Debt;
+
+            if (headroom > Money.Zero) _engine.Commands.Submit(new BorrowCommand(headroom));
+        }
+
         // WAIT FOR THE YARD TO BE QUIET. Plant bought in a boom costs what the
         // boom says it costs, and the read model carries the index that says so
         // — which is the whole reason it is on the surface. A field that is
@@ -246,4 +272,8 @@ public sealed class Explorer
     private static Length WellDepth { get; } = new(2000.0);
 
     private static Money ExportLineWorthBuildingAt { get; } = Money.FromMillions(100.0);
+
+    /// <summary>The cash a company keeps in front of it. Below this it draws on
+    /// the facility rather than waiting for revenue it has not earned yet.</summary>
+    private static Money WorkingCash { get; } = Money.FromMillions(30.0);
 }
