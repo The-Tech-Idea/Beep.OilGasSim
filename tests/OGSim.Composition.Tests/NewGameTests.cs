@@ -881,4 +881,56 @@ public sealed class NewGameTests
         new Explorer(NewGame(seed), drillAbove: 0.0, wellTarget: 2, buildBelow)
             .Play(months: 84)
             .Cash;
+
+    /// <summary>
+    /// A DISCOVERY TELLS YOU HOW MUCH, not just that there is some. The company
+    /// knew the trap's size before it drilled — seismic maps a closure — and
+    /// knew nothing at all about what was in it. One hole answers the second
+    /// question, which is the one a development decision is taken on.
+    ///
+    /// <para>Wide, and it should be: a single penetration has seen one point of
+    /// a field and the rest is inference. That gap is what appraisal wells are
+    /// for, and a strike that produced a certain number would leave them nothing
+    /// to do.</para>
+    /// </summary>
+    [Fact]
+    public void R20d7V6_a_discovery_well_says_how_much_it_found()
+    {
+        for (ulong seed = 1UL; seed < 60UL; seed++)
+        {
+            Engine engine = NewGame(seed);
+            WorldState world = WorldOf(engine);
+            IBeliefStore beliefs = engine.Provided.Resolve<IBeliefStore>();
+
+            var charged = -1;
+
+            for (int i = 0; i < world.Prospects.Count; i++)
+                if (world.Beneath(world.Prospects[i]) is not null) { charged = i; break; }
+
+            if (charged < 0) continue;
+
+            EntityId<IProspect> target = world.Prospects[charged];
+
+            engine.Commands.Submit(new DrillWellCommand(target, new Length(2000.0)));
+
+            for (var month = 0; month < 12; month++) engine.Pipeline.AdvanceTick();
+
+            if (engine.ReadModel!.Wells == 0) continue;      // the job was lost
+
+            var field = new EntityRef(
+                EntityKind.Compartment, world.Beneath(target)!.Value.Value);
+
+            Belief? inPlace = beliefs.Get(field, new ContentId("oil-in-place"));
+
+            Assert.NotNull(inPlace);
+
+            Assert.True(inPlace.Value.Sigma > 0.0,
+                "a discovery well returned a certain number; one hole has seen one point " +
+                "of a field and appraisal would have nothing left to do");
+
+            return;
+        }
+
+        Assert.Fail("sixty basins produced no discovery");
+    }
 }

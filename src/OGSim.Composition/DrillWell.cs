@@ -47,7 +47,9 @@ internal sealed class DrillWellActivity(
     FieldControl field,
     OGSim.Information.ProspectRisks risks,
     WorldState world,
-    IBeliefStore beliefs) : Activity<DrillWellCommand>(terms)
+    IBeliefStore beliefs,
+    OGSim.Subsurface.SubsurfaceState subsurface,
+    ObservationDoor door) : Activity<DrillWellCommand>(terms)
 {
     /// <summary>A well is PP&amp;E: the money buys something the company still
     /// owns next month (SDD-009 §1).</summary>
@@ -144,6 +146,22 @@ internal sealed class DrillWellActivity(
         EntityId<IReservoirCompartmentEntity> reservoir = found.Value;
 
         field.Drill(reservoir, done.Depth);
+
+        // AND THE HOLE ITSELF TELLS THE COMPANY WHAT IT FOUND. A discovery
+        // well penetrates the column, logs it and samples the rock, so a company
+        // walks away from a strike knowing roughly how much is down there —
+        // which is a different and far sharper question than how big the trap
+        // was, and the one a development decision is actually taken on.
+        //
+        // Through the observation door like everything else (SDD-008 §3), so it
+        // carries a sigma and a provenance and can be argued with. Wide, because
+        // one hole has seen one point of a field and the other kilometre of it
+        // is inference.
+        door.Deliver(
+            Defaults.DiscoverySource, Defaults.OilInPlaceKind,
+            new EntityRef(EntityKind.Compartment, reservoir.Value),
+            subsurface.TrueOilInPlaceOf(reservoir).CubicMetres,
+            Provenance.WellTest);
 
         // THE PROSPECT BECOMES A FIELD, and the company keeps what it paid for
         // (SDD-008 §4). Seismic bought a belief about this structure's size;

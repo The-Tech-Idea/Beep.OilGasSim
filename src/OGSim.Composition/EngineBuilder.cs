@@ -284,6 +284,14 @@ internal static class Defaults
     public static ContentId SeismicSource { get; } = new("seismic-3d");
 
     /// <summary>
+    /// THE HOLE ITSELF. A discovery well penetrates the column, logs it and
+    /// tests it, and a company walks away from a strike knowing roughly how much
+    /// is down there — which is a different and much sharper question than how
+    /// big the trap was.
+    /// </summary>
+    public static ContentId DiscoverySource { get; } = new("discovery-well");
+
+    /// <summary>
     /// Which space a kind's belief lives in (SDD-008 §2, content's
     /// <c>space</c> field).
     ///
@@ -1045,6 +1053,14 @@ internal sealed class RegionalObservationModel : IObservationModel
             // sits in it is not.
             ("seismic-2d", "structure-capacity") => 0.45,
             ("seismic-3d", "structure-capacity") => 0.25,
+
+            // A DISCOVERY WELL sees the oil itself — the column, the contacts,
+            // a sample of the rock — so it answers the question no surface
+            // survey can: how much is actually in there. Sharper than anything
+            // shot from above and still nowhere near certain, because one hole
+            // has seen one point of a field and the other kilometre of it is
+            // inference.
+            ("discovery-well", "oil-in-place") => 0.30,
 
             // A log reads porosity well and permeability only through a
             // transform, which is why 0.5 in log units — a factor of 1.65 — is
