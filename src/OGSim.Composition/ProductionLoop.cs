@@ -1274,8 +1274,18 @@ internal sealed class CustodyStage(ProductionLoop loop) : ITickStage
     }
 }
 
-internal sealed class EconomicsStage(ProductionLoop loop) : ITickStage
+internal sealed class EconomicsStage(ProductionLoop loop, Bank bank) : ITickStage
 {
+    /// <summary>
+    /// A clean record, until there is something to blacken it with. ESG standing
+    /// scales the lending spread (SDD-009 §5), and the events that would move it
+    /// — spills, flaring above a limit, a fatality — are R18's and HSE's. Held at
+    /// the best value rather than at a middle one, because a company that had
+    /// done nothing wrong and was charged for it anyway would be paying a
+    /// penalty nobody could explain.
+    /// </summary>
+    private const double SpotlessStanding = 1.0;
+
     public StageId Id => StageId.Economics;
 
     public void Execute(TickContext context)
@@ -1285,5 +1295,10 @@ internal sealed class EconomicsStage(ProductionLoop loop) : ITickStage
         // crosses at one price (SDD-009 §6).
         loop.AdvancePrices();
         loop.PostEconomics(context.Tick);
+
+        // The facility is re-priced and its interest charged after the month's
+        // revenue is in, so a company is judged on the cash it actually has
+        // (SDD-009 §5).
+        bank.Settle(context.Tick, SpotlessStanding);
     }
 }

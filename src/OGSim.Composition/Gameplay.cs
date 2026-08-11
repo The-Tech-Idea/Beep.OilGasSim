@@ -206,7 +206,25 @@ public sealed record FieldReadModel(
     /// the tail of the decline falls below it, and the barrels beyond stop being
     /// reserves without having gone anywhere.</para>
     /// </summary>
-    ReservesEstimate Reserves)
+    ReservesEstimate Reserves,
+
+    /// <summary>
+    /// What the bank will lend and at what price (SDD-009 §5). A company that
+    /// could not see its own borrowing base could not tell whether a development
+    /// was fundable, which is the decision the facility exists to enable.
+    /// </summary>
+    BorrowingTerms Borrowing,
+
+    /// <summary>
+    /// Where the company stands against its covenant. The CURE WINDOW is the
+    /// point: a breach starts a clock rather than calling the loan, and a player
+    /// who could not see the clock would experience the amortisation as an
+    /// ambush rather than as the consequence of ignoring a warning.
+    /// </summary>
+    CovenantStatus Covenant,
+
+    /// <summary>How much is drawn.</summary>
+    Money Debt)
 {
     /// <summary>Where the chain is jammed, if anywhere — the elements that
     /// refused production this tick.</summary>
@@ -261,7 +279,8 @@ internal sealed class FieldProjection(
     IBeliefStore beliefs,
     WorldState world,
     OGSim.Information.ProspectRisks risks,
-    ReservesBook reserves)
+    ReservesBook reserves,
+    Bank bank)
 {
     public FieldPosition Take(Tick tick, GameDate date, bool insolvent) =>
         new(tick, date, company.Ledger.Cash, field.WellCount, activities.InProgress,
@@ -272,7 +291,8 @@ internal sealed class FieldProjection(
             position.ActivitiesRunning, position.ProducedThisTick, position.Insolvent,
             progress, Project(beliefs), loop.Chain(), field.Wells(), Prospects(),
             loop.Market.OilPrice, loop.Market.CostIndex,
-            reserves.Remaining(loop.CumulativeProduced));
+            reserves.Remaining(loop.CumulativeProduced),
+            bank.Terms, bank.Covenant, bank.Drawn);
 
     /// <summary>
     /// The undrilled structures, in the order the world placed them (D-5).

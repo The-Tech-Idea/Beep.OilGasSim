@@ -1053,4 +1053,86 @@ public sealed class NewGameTests
 
         Assert.Fail("sixty basins produced no discovery to depreciate");
     }
+
+    // ------------------------------- borrowing against the ground (R20d.15)
+
+    /// <summary>
+    /// A COMPANY CAN FUND A DEVELOPMENT OUT OF WHAT IT FOUND. A field pays for
+    /// itself and not before it is built, so a company that could only spend
+    /// what it had would develop at the speed of its smallest discovery.
+    ///
+    /// <para>And it is not free money: the base is a limit the bank refuses
+    /// past, and the interest is charged whether or not the field produces.</para>
+    /// </summary>
+    [Fact]
+    public void R20d15V2_a_discovery_can_be_borrowed_against()
+    {
+        for (ulong seed = 1UL; seed < 60UL; seed++)
+        {
+            Engine engine = NewGame(seed);
+            WorldState world = WorldOf(engine);
+
+            var charged = -1;
+
+            for (int i = 0; i < world.Prospects.Count; i++)
+                if (world.Beneath(world.Prospects[i]) is not null) { charged = i; break; }
+
+            if (charged < 0) continue;
+
+            engine.Pipeline.AdvanceTick();
+
+            // NOTHING FOUND, NOTHING TO LEND AGAINST. A bank secures on reserves,
+            // and an undrilled basin has none however promising it looks.
+            Assert.Equal(Money.Zero, engine.ReadModel!.Borrowing.BorrowingBase);
+            Assert.IsType<Rejected>(
+                engine.Commands.Submit(new BorrowCommand(Money.FromMillions(1.0))));
+
+            engine.Commands.Submit(
+                new DrillWellCommand(world.Prospects[charged], new Length(2000.0)));
+
+            for (var month = 0; month < 12; month++) engine.Pipeline.AdvanceTick();
+
+            if (engine.ReadModel!.Wells == 0) continue;      // the hole was lost
+
+            Money available = engine.ReadModel!.Borrowing.BorrowingBase;
+
+            Assert.True(available > Money.Zero,
+                "a discovery with reserves supported no borrowing at all");
+
+            // PAST THE BASE IS REFUSED. A facility a company could overdraw
+            // would make the covenant meaningless, because the breach would be
+            // the bank's doing rather than the player's.
+            Assert.IsType<Rejected>(
+                engine.Commands.Submit(new BorrowCommand(available + Money.FromMillions(1.0))));
+
+            Money before = engine.ReadModel!.Cash;
+
+            Assert.IsType<Accepted>(engine.Commands.Submit(new BorrowCommand(available)));
+
+            engine.Pipeline.AdvanceTick();
+
+            Assert.True(engine.ReadModel!.Cash > before, "the drawdown never reached the cash");
+            Assert.Equal(available, engine.ReadModel!.Debt);
+
+            // AND IT COSTS. Interest is charged on what is drawn, every month,
+            // whether or not the field has a good one.
+            Money owed = engine.ReadModel!.Debt;
+            Money cash = engine.ReadModel!.Cash;
+
+            engine.Pipeline.AdvanceTick();
+
+            Assert.Equal(owed, engine.ReadModel!.Debt);      // interest is not capitalised
+
+            Assert.IsType<Accepted>(
+                engine.Commands.Submit(new RepayCommand(Money.FromMillions(1.0))));
+
+            engine.Pipeline.AdvanceTick();
+
+            Assert.True(engine.ReadModel!.Debt < owed, "a repayment did not reduce the debt");
+
+            return;
+        }
+
+        Assert.Fail("sixty basins produced no discovery to borrow against");
+    }
 }

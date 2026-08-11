@@ -123,6 +123,35 @@ internal static class Defaults
         new(declinePerYear: 0.18, exponent: 0.5, recoveryFactor: 0.35);
 
     /// <summary>
+    /// The facility this composition ships (SDD-009 §5).
+    ///
+    /// <para>Sixty per cent advance against the PV of proved reserves at a 10%
+    /// discount over fifteen years — a conventional borrowing base. The advance
+    /// rate is the bank's margin for the reserves being wrong, and reserves are
+    /// an estimate by construction.</para>
+    ///
+    /// <para>8% base, and up to 4% more for a company nobody wants to lend to.
+    /// Carried separately so a player can see WHY their debt got dearer.</para>
+    /// </summary>
+    public static OGSim.Company.ReserveBasedLending Lender { get; } = new(
+        advanceRate: 0.60,
+        discountPerYear: 0.10,
+        years: 15,
+        baseRate: 0.08,
+        esgSpreadAtWorst: 0.04,
+        TypeCurve,
+        () => Netback);
+
+    /// <summary>
+    /// What a cubic metre is worth to a lender after lifting it — the margin the
+    /// loan is actually secured on, not the headline price.
+    /// </summary>
+    private static Money Netback =>
+        Money.RoundHalfEven(
+            (Economics.OilPricePerTonne.Cents - Economics.LiftingCostPerTonne.Cents)
+            * SurfaceOilDensity.KgPerCubicMetre / 1000.0);
+
+    /// <summary>
     /// How hard service costs follow the oil price (SDD-009 §6's ED4). At 0.35,
     /// a doubling of oil over a year lifts the cost of everything by about a
     /// third — enough that building into a boom hurts, short of making it

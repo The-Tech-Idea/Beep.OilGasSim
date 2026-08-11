@@ -125,6 +125,36 @@ public sealed class ArpsReserves
     }
 
     /// <summary>
+    /// What a field gives in one year of its life, from the decline curve
+    /// (SDD-009 §4). The difference of the cumulative at each end of the year.
+    ///
+    /// <para>Used by the lender to discount a volume over the shape it arrives
+    /// in (SDD-009 §5): reserves that come over twenty years are worth
+    /// materially less than the same volume over five, which is the difference
+    /// between a shallow decline and a steep one.</para>
+    ///
+    /// <para><paramref name="ultimate"/> is the volume the profile integrates
+    /// to. A lender passes its BOOKABLE volume rather than the untruncated
+    /// recovery — the shape is the field's, the quantity is the one the bank
+    /// will actually count.</para>
+    /// </summary>
+    public double ProducedInYear(double ultimate, int year) =>
+        Cumulative(ultimate, year) - Cumulative(ultimate, year - 1);
+
+    private double Cumulative(double ultimate, int year)
+    {
+        if (year <= 0 || ultimate <= 0.0) return 0.0;
+
+        // The exponential case has its own closed form: the hyperbolic one
+        // divides by b, which is zero here.
+        if (_exponent == 0.0)
+            return ultimate * (1.0 - DetMath.Exp(-_decline * year));
+
+        return ultimate * (1.0 - DetMath.Pow(
+            1.0 + (_exponent * _decline * year), 1.0 - (1.0 / _exponent)));
+    }
+
+    /// <summary>
     /// The rate below which a month costs more than it earns (SDD-009 §4 step
     /// 3). Fixed costs divided by the margin on a tonne — and if there is no
     /// margin, no rate is high enough and the field is uneconomic at any size.

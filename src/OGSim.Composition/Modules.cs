@@ -416,7 +416,7 @@ internal sealed class CompanyModule() : EngineModule(Declare(
     [
         typeof(IFiscalRegime), typeof(IPriceModel),
         typeof(OGSim.Company.MarketState), typeof(OGSim.Company.CompanyState),
-        typeof(ReservesBook),
+        typeof(ReservesBook), typeof(IReserveBasedLending),
     ],
 
     // The belief store, because reserves are worked out from what the company
@@ -455,6 +455,11 @@ internal sealed class CompanyModule() : EngineModule(Declare(
         // against what the field will ultimately give — and a month where those
         // two disagreed about the size of the field would post a provision
         // against a number nobody was shown.
+        // THE FACILITY (SDD-009 §5). `IReserveBasedLending` was declared at
+        // finding 147 and implemented by nobody, which had a good reason until
+        // R20d.13: there were no reserves to lend against.
+        composition.Provide<IReserveBasedLending>(Defaults.Lender);
+
         composition.Provide(new ReservesBook(
             composition.Require<IBeliefStore>(),
             composition.Require<OGSim.Company.MarketState>(),
@@ -503,7 +508,11 @@ internal sealed class CompanyModule() : EngineModule(Declare(
 /// </summary>
 internal sealed class FieldModule() : EngineModule(Declare(
     "field",
-    provides: [typeof(FieldControl), typeof(CloseStage), typeof(IObligationRegistry)],
+    provides:
+    [
+        typeof(FieldControl), typeof(CloseStage), typeof(IObligationRegistry),
+        typeof(Bank),
+    ],
     requires:
     [
         typeof(OGSim.Subsurface.SubsurfaceState),
@@ -556,6 +565,8 @@ internal sealed class FieldModule() : EngineModule(Declare(
         typeof(SeismicSurveyCommand),
         typeof(InstallSeparatorCommand),
         typeof(ExpandExportCommand),
+        typeof(BorrowCommand),
+        typeof(RepayCommand),
         typeof(SetWellChokeCommand),
         typeof(AbandonWellCommand),
     ]))
@@ -644,10 +655,20 @@ internal sealed class FieldModule() : EngineModule(Declare(
         // Stage 4 before stage 5 before stage 7: the plan, the solve, the meter.
         // Three slots in design 03 §6's order rather than one function, so a
         // failed solve commits nothing and an unmetered barrel earns nothing.
+        // THE FACILITY, built where the loop is: it needs what the company has
+        // produced, and the loop is what knows.
+        var bank = new Bank(
+            composition.Require<IReserveBasedLending>(),
+            composition.Require<ReservesBook>(),
+            composition.Require<OGSim.Company.CompanyState>(),
+            composition.Require<IAuditTrail>(),
+            () => loop.CumulativeProduced);
+
+        composition.Provide(bank);
         composition.Contribute(order: 0, new SegmentationStage(network));
         composition.Contribute(order: 0, new SolveFlowStage(loop));
         composition.Contribute(order: 0, new CustodyStage(loop));
-        composition.Contribute(order: 0, new EconomicsStage(loop));
+        composition.Contribute(order: 0, new EconomicsStage(loop, bank));
 
         // The scenario's door onto the field. Provided rather than reachable, so
         // building a field is something composition hands out deliberately.
@@ -733,7 +754,8 @@ internal sealed class FieldModule() : EngineModule(Declare(
             loop, company, field, activities, composition.Require<IBeliefStore>(),
             composition.Require<WorldState>(),
             composition.Require<OGSim.Information.ProspectRisks>(),
-            composition.Require<ReservesBook>());
+            composition.Require<ReservesBook>(),
+            bank);
 
         // The scenario is CONTENT (design 03 §3.3): the win condition is an
         // objective over a read-model path, not a comparison compiled into a
@@ -772,6 +794,17 @@ internal sealed class FieldModule() : EngineModule(Declare(
         // on the scheduled-activity engine.
         composition.HandleCommand(
             new SetWellChokeValidator(field), new SetWellChokeApplier(field, audit));
+
+        // NOR IS A DRAWDOWN (SDD-009 §5). A well is a project; a phone call to
+        // the bank is not, and putting it on the activity engine would make a
+        // company wait a quarter for money it already had a facility for.
+        var borrower = composition.Require<OGSim.Company.CompanyState>();
+
+        composition.HandleCommand(
+            new BorrowValidator(borrower, bank), new BorrowApplier(borrower, audit));
+
+        composition.HandleCommand(
+            new RepayValidator(borrower), new RepayApplier(borrower, audit));
     }
 }
 
