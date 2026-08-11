@@ -1128,4 +1128,41 @@ public sealed class ChainTests
         // player is told so rather than charged for a month of nothing.
         Assert.IsType<Rejected>(engine.Commands.Submit(new InstallManifoldCommand()));
     }
+
+    /// <summary>
+    /// THE THIRD ANSWER TO A FULL TANK. Stage 6's own comment offers "more
+    /// storage, more export and less production" as what a player does when the
+    /// ullage constraint reaches back down the chain and shuts wells in. Two of
+    /// those shipped; storage was the one nothing could buy.
+    ///
+    /// <para>It buys TIME rather than throughput, which is what makes it a
+    /// different decision from a bigger export line — storage carries a field
+    /// through a gap, a pipeline carries it faster for ever.</para>
+    /// </summary>
+    [Fact]
+    public void R8V5_more_storage_is_something_a_company_can_buy()
+    {
+        (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled();
+        Produce(engine, target);
+
+        OGSim.Facilities.Tank tank = engine.Provided.Resolve<SurfaceChain>().Tank;
+
+        Mass before = tank.Tier.Capacity;
+
+        Assert.IsType<Accepted>(engine.Commands.Submit(new InstallTankCommand()));
+
+        for (var month = 0; month < 12; month++) engine.Pipeline.AdvanceTick();
+
+        Assert.True(tank.Tier.Capacity.Kilograms > before.Kilograms,
+            $"the tank farm was built and still holds {tank.Tier.Capacity.Kilograms} kg");
+
+        // AND WHAT WAS ALREADY IN IT IS STILL IN IT. A socket keeps its contents
+        // when a bigger one is fitted around it; a refit that emptied the tank
+        // would destroy owned mass the conservation check would never see,
+        // because it left through no port at all.
+        Assert.True(engine.ReadModel!.ProducedThisTick.CubicMetres > 0.0,
+            "the tank grew and the field stopped producing");
+
+        Assert.IsType<Rejected>(engine.Commands.Submit(new InstallTankCommand()));
+    }
 }

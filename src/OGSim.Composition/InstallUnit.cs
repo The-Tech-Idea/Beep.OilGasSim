@@ -210,3 +210,64 @@ internal sealed class InstallManifoldActivity(
         return null;
     }
 }
+
+/// <summary>
+/// Build more storage (SDD-006 §5).
+///
+/// <para>THE THIRD ANSWER TO A FULL TANK. Stage 6's own comment offers "more
+/// storage, more export and less production" as the choices a player has when
+/// the ullage constraint reaches back down the chain, and storage was the one
+/// nothing could buy — the other two shipped and this did not.</para>
+///
+/// <para>It buys TIME rather than throughput, which is what makes it a
+/// different decision from a bigger export line: storage carries a field
+/// through a gap, and a pipeline carries it faster for ever.</para>
+/// </summary>
+public sealed record InstallTankCommand() : Command(Subject: null);
+
+internal sealed class InstallTankActivity(
+    ActivityTerms terms,
+    OGSim.Facilities.Tank tank,
+    IReadOnlyList<OGSim.Facilities.TankTier> ladder) : Activity<InstallTankCommand>(terms)
+{
+    /// <summary>Civil work a company still owns next month: PP&amp;E
+    /// (SDD-009 §1).</summary>
+    public override bool LeavesAnAsset => true;
+
+    public override bool OnePerTarget => true;
+
+    public override (EntityRef Target, Length Depth) Aim(InstallTankCommand command) =>
+        (new EntityRef(EntityKind.FlowElement, tank.Id.Value), NoDepth);
+
+    public override IReadOnlyList<RejectionReason> OwnRefusals(InstallTankCommand command)
+    {
+        if (NextRung() is not null) return [];
+
+        return
+        [
+            new RejectionReason(
+                "$loc:reject.top-of-the-ladder",
+                $"'{tank.Tier.Id.Value}' is the largest tank farm in the catalogue; the field " +
+                "cannot hold more than it already can"),
+        ];
+    }
+
+    public override void Complete(CompletedActivity done, Tick tick)
+    {
+        ArgumentNullException.ThrowIfNull(done);
+
+        if (!done.Succeeded) return;
+
+        if (NextRung() is OGSim.Facilities.TankTier next) tank.Fit(next);
+    }
+
+    /// <summary>The rung above what is fitted, in the ladder's declared order
+    /// (D-5).</summary>
+    private OGSim.Facilities.TankTier? NextRung()
+    {
+        for (int i = 0; i < ladder.Count - 1; i++)
+            if (ladder[i].Id == tank.Tier.Id) return ladder[i + 1];
+
+        return null;
+    }
+}

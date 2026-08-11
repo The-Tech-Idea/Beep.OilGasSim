@@ -583,6 +583,7 @@ internal sealed class FieldModule() : EngineModule(Declare(
         typeof(InstallGasPlantCommand),
         typeof(RemediateInjectorCommand),
         typeof(InstallManifoldCommand),
+        typeof(InstallTankCommand),
         typeof(BorrowCommand),
         typeof(RepayCommand),
         typeof(SetWellChokeCommand),
@@ -777,6 +778,12 @@ internal sealed class FieldModule() : EngineModule(Declare(
             // away since R12b, and nothing could install one.
             new InstallManifoldActivity(
                 Defaults.InstallManifoldTerms, chain.Manifold, Defaults.ManifoldLadder),
+
+            // THE THIRD ANSWER TO A FULL TANK. Stage 6 offers "more storage,
+            // more export and less production"; the other two shipped and this
+            // did not.
+            new InstallTankActivity(
+                Defaults.InstallTankTerms, chain.Tank, Defaults.TankLadder),
 
             // The ENDING (R12b.10). Finding 153's other reason is gone too: opex
             // scales with the liquid lifted, so a watered-out well genuinely

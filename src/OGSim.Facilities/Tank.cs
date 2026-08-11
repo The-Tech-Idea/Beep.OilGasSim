@@ -29,7 +29,7 @@ public sealed record TankTier(
 /// </summary>
 public sealed class Tank : IFlowElement
 {
-    private readonly TankTier _tier;
+    private TankTier _tier;
     private readonly int _materialCount;
 
     private MaterialInventory _held;
@@ -69,6 +69,31 @@ public sealed class Tank : IFlowElement
     public Allocation Provenance => _provenance;
 
     /// <summary>Remaining capacity, kg. Zero is <c>tank.full</c>.</summary>
+    /// <summary>What is fitted now.</summary>
+    public TankTier Tier => _tier;
+
+    /// <summary>
+    /// Build more storage (SDD-006 §0c, §5). The socket keeps its identity and
+    /// what is already in it; the tank farm around it got bigger.
+    ///
+    /// <para>Only ever upward. Shrinking below what is HELD would leave a tank
+    /// containing more than it can contain, and the ullage that reaches back
+    /// down the chain would be negative — a constraint that pushes production
+    /// rather than limiting it.</para>
+    /// </summary>
+    public void Fit(TankTier tier)
+    {
+        ArgumentNullException.ThrowIfNull(tier);
+
+        if (tier.Capacity.Kilograms < _held.Total.Kilograms)
+            throw new ContentFault("SDD-006 §5", null,
+                $"tank tier '{tier.Id.Value}' holds {tier.Capacity.Kilograms} kg and the " +
+                $"tank already contains {_held.Total.Kilograms}; storage is never made " +
+                "smaller than what is in it");
+
+        _tier = tier;
+    }
+
     public Mass Ullage => new(Math.Max(0.0, _tier.Capacity.Kilograms - _held.Total.Kilograms));
 
     /// <summary>The ports by name, so a caller wiring the chain never writes a

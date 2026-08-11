@@ -930,6 +930,40 @@ internal static class Defaults
         Outcomes: SurveyOutcomes);
 
     /// <summary>
+    /// The storage ladder (catalogue C09). Stage 6 names three answers to a full
+    /// tank — "more storage, more export and less production" — and storage was
+    /// the one nothing could buy.
+    ///
+    /// <para>Doubling, like the export line and for the same reason: a rung that
+    /// added a tenth would be an obvious yes at every field size and therefore
+    /// not a decision. Storage buys TIME rather than throughput — it is what
+    /// keeps a field producing through a shipping gap, and what a company
+    /// chooses instead of a bigger pipeline when the constraint is lumpy rather
+    /// than steady.</para>
+    /// </summary>
+    public static IReadOnlyList<Facilities.TankTier> TankLadder { get; } =
+    [
+        TankTier,
+        TankTier with
+        {
+            Id = new ContentId("tank-farm-e2"),
+            Capacity = new Mass(TankTier.Capacity.Kilograms * 2.0),
+        },
+    ];
+
+    /// <summary>
+    /// What more storage costs and how long it takes. Cheap per tonne against a
+    /// pipeline, and slow — a tank is civil work, and the field goes on
+    /// producing around it.
+    /// </summary>
+    public static ActivityTerms InstallTankTerms { get; } = new(
+        Template: new ContentId("install-tank"),
+        Cost: Money.FromMillions(7.0),
+        DurationTicks: 6,
+        Rig: null,
+        Outcomes: SurveyOutcomes);
+
+    /// <summary>
     /// The header ladder (catalogue C06). Eight slots, then sixteen.
     ///
     /// <para>The drilling command has refused a well with "a bigger header has
