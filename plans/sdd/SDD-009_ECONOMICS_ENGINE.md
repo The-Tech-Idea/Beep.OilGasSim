@@ -48,6 +48,36 @@ tested).
   simplification: mark-to-market inventory would inject price volatility into
   the balance sheet for no decision value.
 
+> **R20d.14 amendment. The provision accrues per FIELD until a company can have
+> two.** The formula above is per asset — `EstimatedCost(asset) · produced(tick)
+> / EUR_2P(asset)` — and it is right, because over a life the sum telescopes to
+> exactly the asset's cost. What it needs is `EUR_2P(asset)`: the ultimate
+> recovery attributable to one well.
+>
+> Nothing computes that and nothing honestly can yet. §4 forecasts a FIELD's
+> decline from a type-curve; splitting it between the wells on that field would
+> need an allocation nobody has specified, and dividing by well count would be a
+> number invented at the call site (rule F-2's spirit — a figure with no
+> derivation behind it).
+>
+> So the accrual is taken against the company's total outstanding obligation and
+> its 2P reserves:
+>
+> ```text
+> provision(tick) = TotalOutstanding · produced(tick) / reserves2P
+> ```
+>
+> The telescoping property survives — a field that produces its reserves accrues
+> its whole abandonment cost — and the per-asset split becomes meaningful at the
+> same moment as the rest of it: when a company can hold two fields with separate
+> gathering systems, which is SDD-006 §7c's remaining half.
+>
+> **Depreciation waits for the same reason and one more.** Units of production
+> needs `PPE_remaining(asset)`, and the ledger tracks capital by ACCOUNT rather
+> than by asset — `Capex_PPE` is one balance, not a balance per well. That is a
+> ledger question, not an economics one, and it is recorded here so the next
+> reader does not mistake the absence for an oversight.
+
 ## 3. Fiscal regimes — the exact algorithms
 
 Evaluated per licence per tick, in this order, all integer.
