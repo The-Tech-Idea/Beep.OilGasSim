@@ -581,6 +581,7 @@ internal sealed class FieldModule() : EngineModule(Declare(
         typeof(InstallSeparatorCommand),
         typeof(ExpandExportCommand),
         typeof(InstallGasPlantCommand),
+        typeof(RemediateInjectorCommand),
         typeof(BorrowCommand),
         typeof(RepayCommand),
         typeof(SetWellChokeCommand),
@@ -763,6 +764,12 @@ internal sealed class FieldModule() : EngineModule(Declare(
             // oil, which is a tax rather than a decision.
             new InstallGasPlantActivity(
                 Defaults.InstallGasPlantTerms, chain.GasPlant, Defaults.GasPlantLadder),
+
+            // THE ANSWER TO A PLUGGED INJECTOR (R10-V4). R20d.18 made the
+            // plugging real and left no way to clear it, which is a decline the
+            // player watches rather than a decision they take.
+            new RemediateInjectorActivity(
+                Defaults.RemediateInjectorTerms, chain.Disposal),
 
             // The ENDING (R12b.10). Finding 153's other reason is gone too: opex
             // scales with the liquid lifted, so a watered-out well genuinely

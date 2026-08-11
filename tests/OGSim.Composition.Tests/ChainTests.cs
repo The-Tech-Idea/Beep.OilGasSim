@@ -1049,4 +1049,43 @@ public sealed class ChainTests
         for (int i = 0; i < engine.ReadModel!.Chain.Count; i++) { }
         return total;
     }
+
+    /// <summary>
+    /// A PLUGGED INJECTOR CAN BE CLEARED (R10-V4). Every cubic metre of water
+    /// put down a disposal well adds skin, the skin lowers what it will accept,
+    /// and the injector constrains the field exactly as a separator does — so
+    /// without this a company that waterfloods for twenty years is throttled by
+    /// a well it cannot unplug.
+    ///
+    /// <para>R20d.18 made the plugging real and left no way to recover from it,
+    /// which is a decline a player watches rather than a decision they take.
+    /// This is the same gap as finding 172's flaring penalty, made by the same
+    /// hand and caught before it shipped as a mechanic.</para>
+    /// </summary>
+    [Fact]
+    public void R10V4_an_acid_job_clears_what_the_water_left_behind()
+    {
+        (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled();
+        Produce(engine, target);
+
+        OGSim.Wells.Injector disposal = engine.Provided.Resolve<SurfaceChain>().Disposal;
+
+        // A clean well has nothing to clear, and is told so rather than invoiced.
+        Assert.IsType<Rejected>(engine.Commands.Submit(new RemediateInjectorCommand()));
+
+        for (var month = 0; month < 240; month++) engine.Pipeline.AdvanceTick();
+
+        double plugged = disposal.CurrentSkin;
+
+        Assert.True(disposal.CumulativeInjected.CubicMetres > 0.0,
+            "twenty years of water production and the disposal well took nothing");
+
+        Assert.IsType<Accepted>(engine.Commands.Submit(new RemediateInjectorCommand()));
+
+        for (var month = 0; month < 6; month++) engine.Pipeline.AdvanceTick();
+
+        Assert.True(disposal.CurrentSkin < plugged,
+            $"the well was acidised and its skin is still {disposal.CurrentSkin} against " +
+            $"{plugged} before");
+    }
 }

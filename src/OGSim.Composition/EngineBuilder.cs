@@ -929,6 +929,19 @@ internal static class Defaults
         Rig: null,
         Outcomes: SurveyOutcomes);
 
+    /// <summary>
+    /// What an acid job costs and how long it takes (R10-V4). Cheap against a
+    /// vessel and quick against a well — which is the point: it is the sort of
+    /// maintenance a company defers because it always looks affordable later,
+    /// and the plugging goes on either way.
+    /// </summary>
+    public static ActivityTerms RemediateInjectorTerms { get; } = new(
+        Template: new ContentId("remediate-injector"),
+        Cost: Money.FromMillions(1.2),
+        DurationTicks: 1,
+        Rig: null,
+        Outcomes: SurveyOutcomes);
+
     public static ActivityTerms InstallSeparatorTerms { get; } = new(
         Template: new ContentId("install-separator"),
         Cost: Money.FromMillions(6.0),
