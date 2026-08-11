@@ -1166,4 +1166,69 @@ public sealed class ChainTests
         Assert.IsType<Rejected>(engine.Commands.Submit(new InstallTankCommand()));
     }
 
+
+    // ------------------------------- the late-life arc, pinned (finding 179)
+
+    /// <summary>
+    /// A FIELD MAKES MORE WATER AS IT AGES, and the ending is built on it:
+    /// watering out is what makes opex outrun revenue, which is what makes
+    /// shutting in and plugging a decision rather than a formality.
+    ///
+    /// <para>NOTHING ASSERTED THIS, and it regressed. R20.4 measured this
+    /// composition drowning — water climbing to 47,529 t a month against 27,371
+    /// m³ of oil — and it now reaches two per cent of the liquid by mass after
+    /// forty years. Three correct changes touched it (the per-compartment
+    /// aquifer, inflow read from the rock, produced water re-injected) and every
+    /// suite stayed green because none of them was about water.</para>
+    ///
+    /// <para>DIRECTIONAL, not a pin on today's number. It asserts the cut rises
+    /// and clears a floor below where it currently sits — so a fix that restores
+    /// the arc passes, and a change that takes more of the water away fails.
+    /// Pinning 0.019 exactly would enshrine a value finding 179 says is wrong,
+    /// and the next person to fix it would meet a red test telling them not
+    /// to.</para>
+    /// </summary>
+    [Fact]
+    public void R20d4V2_a_field_makes_more_water_as_it_ages()
+    {
+        (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled();
+        Produce(engine, target);
+
+        double early = 0.0, late = 0.0;
+
+        for (var month = 0; month < 480; month++)
+        {
+            engine.Pipeline.AdvanceTick();
+
+            double water = Throughput(engine, "water-disposal");
+            double oil = Throughput(engine, "custody-meter");
+
+            if (oil <= 0.0) continue;
+
+            if (month == 240) early = water / oil;
+            if (month == 479) late = water / oil;
+        }
+
+        Assert.True(early > 0.0, "a field twenty years old was making no water at all");
+
+        Assert.True(late > early * 2.0,
+            $"the water cut went from {early:0.0000} to {late:0.0000} in twenty years; a " +
+            "field that does not water out has no late life to survive");
+
+        // The floor sits below where it stands today (0.019) so a restored arc
+        // passes, and below it means water has gone missing again.
+        Assert.True(late > 0.015,
+            $"water is down to {late:0.0000} of the liquid after forty years; finding 179's " +
+            "regression has gone further");
+    }
+
+    /// <summary>What crossed a named element this tick, read off the surface.</summary>
+    private static double Throughput(Engine engine, string named)
+    {
+        for (int i = 0; i < engine.ReadModel!.Chain.Count; i++)
+            if (engine.ReadModel!.Chain[i].DisplayId == named)
+                return engine.ReadModel!.Chain[i].Throughput.Kilograms;
+
+        return 0.0;
+    }
 }
