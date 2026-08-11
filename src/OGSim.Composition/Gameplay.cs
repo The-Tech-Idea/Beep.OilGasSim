@@ -260,7 +260,8 @@ internal sealed class FieldProjection(
     ActivityState activities,
     IBeliefStore beliefs,
     WorldState world,
-    OGSim.Information.ProspectRisks risks)
+    OGSim.Information.ProspectRisks risks,
+    ReservesBook reserves)
 {
     public FieldPosition Take(Tick tick, GameDate date, bool insolvent) =>
         new(tick, date, company.Ledger.Cash, field.WellCount, activities.InProgress,
@@ -270,7 +271,8 @@ internal sealed class FieldProjection(
         new(position.Tick, position.Date, position.Cash, position.Wells,
             position.ActivitiesRunning, position.ProducedThisTick, position.Insolvent,
             progress, Project(beliefs), loop.Chain(), field.Wells(), Prospects(),
-            loop.Market.OilPrice, loop.Market.CostIndex, Booked());
+            loop.Market.OilPrice, loop.Market.CostIndex,
+            reserves.Remaining(loop.CumulativeProduced));
 
     /// <summary>
     /// The undrilled structures, in the order the world placed them (D-5).
@@ -280,50 +282,6 @@ internal sealed class FieldProjection(
     /// list would be choosing against a number the company no longer
     /// believes.</para>
     /// </summary>
-    /// <summary>
-    /// The company's reserves, re-stated from what it believes and what the
-    /// market is doing (SDD-009 §4).
-    ///
-    /// <para>Computed, never stored (law L5). A reserves figure kept as state
-    /// would be a second owner of a fact that follows entirely from beliefs,
-    /// prices and costs — and it would go stale exactly when it mattered, which
-    /// is the month the price moved.</para>
-    /// </summary>
-    private ReservesEstimate Booked()
-    {
-        MassRate limit = OGSim.Company.ArpsReserves.EconomicLimit(
-            loop.Market.OilPrice,
-            Defaults.Economics.LiftingCostPerTonne,
-            Defaults.Economics.FixedOperatingCostPerTick);
-
-        SurfaceVolume proved = default, probable = default, possible = default;
-
-        // Every field the company has a volume belief about — walked in learning
-        // order (D-5), because two runs of one save must book the same reserves.
-        IReadOnlyList<HeldBelief> held = beliefs.Held;
-
-        for (int i = 0; i < held.Count; i++)
-        {
-            HeldBelief entry = held[i];
-
-            if (entry.Subject.Kind != EntityKind.Compartment) continue;
-            if (entry.PropertyKind != Defaults.OilInPlaceKind) continue;
-
-            ReservesEstimate field = Defaults.TypeCurve.From(
-                OGSim.Information.Quantiles.P90(entry.Belief),
-                OGSim.Information.Quantiles.P50(entry.Belief),
-                OGSim.Information.Quantiles.P10(entry.Belief),
-                limit,
-                Defaults.SurfaceOilDensity);
-
-            proved = new SurfaceVolume(proved.CubicMetres + field.Proved.CubicMetres);
-            probable = new SurfaceVolume(probable.CubicMetres + field.Probable.CubicMetres);
-            possible = new SurfaceVolume(possible.CubicMetres + field.Possible.CubicMetres);
-        }
-
-        return new ReservesEstimate(proved, probable, possible);
-    }
-
     private IReadOnlyList<ProspectView> Prospects()
     {
         var seen = new List<ProspectView>();

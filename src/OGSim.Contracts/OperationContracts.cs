@@ -127,5 +127,17 @@ public interface IObligationRegistry
 {
     void Register(EntityRef asset, ContentId abandonmentTemplate);
     Money EstimatedCost(EntityRef asset);
+
+    /// <summary>
+    /// Everything still owed, at today's estimate — what a company owes the
+    /// future (SDD-007 §6).
+    ///
+    /// <para>On the CONTRACT because two things outside the registry need it:
+    /// stage 8 accrues the abandonment provision against it (SDD-009 §2), and a
+    /// player deciding whether they can afford to stop is deciding against this
+    /// number. It existed on the implementation and nowhere a consumer could
+    /// reach.</para>
+    /// </summary>
+    Money TotalOutstanding { get; }
     void Discharge(EntityRef asset, EntityId<IOperation> completedAbandonment);
 }

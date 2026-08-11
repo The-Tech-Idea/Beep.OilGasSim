@@ -7,6 +7,7 @@
 
 using OGSim.Composition;
 using OGSim.Contracts;
+using OGSim.Company;
 using OGSim.Kernel;
 using OGSim.ReferenceClient;
 
@@ -932,5 +933,67 @@ public sealed class NewGameTests
         }
 
         Assert.Fail("sixty basins produced no discovery");
+    }
+
+    // ------------------------------- the plugging bill is earned (R20d.14)
+
+    /// <summary>
+    /// A WELL EARNS ITS OWN PLUGGING BILL, barrel by barrel (SDD-009 §2). The
+    /// cost is real from the day the hole is drilled, and a company that met it
+    /// only at the end would look profitable for thirty years and insolvent in
+    /// one — which is not a harder game, it is a game that lies until the last
+    /// month.
+    ///
+    /// <para>AND IT DOES NOT OVERSHOOT. Accrued against what the field will
+    /// ULTIMATELY give rather than against what is left, so the sum telescopes:
+    /// produce everything and the provision equals the bill. Against remaining
+    /// reserves it would accelerate as the field emptied and book a liability
+    /// larger than the one that exists.</para>
+    /// </summary>
+    [Fact]
+    public void R20d14V1_production_accrues_the_plugging_bill_without_overshooting()
+    {
+        for (ulong seed = 1UL; seed < 60UL; seed++)
+        {
+            Engine engine = NewGame(seed);
+            WorldState world = WorldOf(engine);
+
+            var charged = -1;
+
+            for (int i = 0; i < world.Prospects.Count; i++)
+                if (world.Beneath(world.Prospects[i]) is not null) { charged = i; break; }
+
+            if (charged < 0) continue;
+
+            engine.Commands.Submit(
+                new DrillWellCommand(world.Prospects[charged], new Length(2000.0)));
+
+            var company = engine.Provided.Resolve<CompanyState>();
+            var obligations = engine.Provided.Resolve<IObligationRegistry>();
+
+            for (var month = 0; month < 120; month++)
+            {
+                engine.Pipeline.AdvanceTick();
+
+                // A PROVISION, NOT A PAYMENT: what the company owes the future,
+                // recognised as it is earned and never more than it is.
+                // Credits are negative in this ledger, so what is HELD against
+                // the future is the negation of the balance.
+                Assert.True(
+                    -company.Ledger.BalanceOf(Account.AbandonmentProvision)
+                    <= obligations.TotalOutstanding,
+                    $"month {month}: the provision has passed the bill it provisions for");
+            }
+
+            if (engine.ReadModel!.Wells == 0) continue;      // the hole was lost
+
+            Assert.True(
+                -company.Ledger.BalanceOf(Account.AbandonmentProvision) > Money.Zero,
+                "ten years of production accrued nothing towards plugging the well");
+
+            return;
+        }
+
+        Assert.Fail("sixty basins produced no discovery to accrue against");
     }
 }

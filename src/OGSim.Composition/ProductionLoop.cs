@@ -192,6 +192,8 @@ internal sealed class ProductionLoop
 
     private readonly IFiscalRegime _regime;
     private readonly IPriceModel _prices;
+    private readonly IObligationRegistry _obligations;
+    private readonly ReservesBook _reserves;
     private readonly OGSim.Company.MarketState _market;
     private readonly IRandomStream _priceStream;
     private readonly IReadOnlyList<int> _liquidOrdinals;
@@ -214,6 +216,8 @@ internal sealed class ProductionLoop
         IPriceModel prices,
         IRandomStream priceStream,
         OGSim.Company.MarketState market,
+        IObligationRegistry obligations,
+        ReservesBook reserves,
         IReadOnlyList<int> liquidOrdinals,
         Func<bool> isAbandoned,
         FieldEconomics economics,
@@ -254,6 +258,8 @@ internal sealed class ProductionLoop
         _prices = prices;
         _priceStream = priceStream;
         _market = market;
+        _obligations = obligations;
+        _reserves = reserves;
         _liquidOrdinals = liquidOrdinals;
         _isAbandoned = isAbandoned;
         _economics = economics;
@@ -273,6 +279,13 @@ internal sealed class ProductionLoop
     /// <summary>Stock-tank oil produced in the tick just solved — what the read
     /// model reports and what a test asserts on.</summary>
     public SurfaceVolume ProducedThisTick { get; private set; } = new(0.0);
+
+    /// <summary>
+    /// Everything this company has ever lifted. What reserves are measured
+    /// against — a field's remaining barrels are what it will ultimately give
+    /// less what has already come up.
+    /// </summary>
+    public SurfaceVolume CumulativeProduced { get; private set; } = new(0.0);
 
     /// <summary>What crossed the custody meter this tick — the ONLY mass stage 8
     /// is allowed to price (SDD-009 §1).</summary>
@@ -618,6 +631,80 @@ internal sealed class ProductionLoop
     /// and by the scheduler (law L5).</summary>
     public OGSim.Company.MarketState Market => _market;
 
+    /// <summary>
+    /// SDD-009 §2's abandonment provision, accrued PER BARREL from first
+    /// production.
+    ///
+    /// <para>A well that is drilled will one day be plugged, and the bill is
+    /// earned by the oil that made the hole worth drilling — so it is charged
+    /// against the barrels rather than landing whole in the month somebody
+    /// finally decides to stop. A company that met the cost only at the end
+    /// would look profitable for thirty years and insolvent in one.</para>
+    ///
+    /// <para>Against ULTIMATE recovery, not remaining (SDD-009 §2's R20d.14
+    /// amendment): a field that produces everything it will ever give accrues
+    /// exactly its abandonment cost, which is the property that makes this
+    /// telescope rather than drift. Against REMAINING it would accelerate as the
+    /// field emptied and overshoot.</para>
+    ///
+    /// <para>NON-CASH. The money has not moved — the provision is what the
+    /// company owes the future, and stage 8 posts it as an expense against a
+    /// liability so the balance sheet carries it (SDD-009 §1).</para>
+    /// </summary>
+    private void AccrueAbandonment(Tick tick)
+    {
+        if (ProducedThisTick.CubicMetres <= 0.0) return;
+
+        Money owed = _obligations.TotalOutstanding;
+
+        if (owed == Money.Zero) return;
+
+        double ultimate = _reserves.Ultimate().Probable.CubicMetres;
+
+        // NOTHING TO ACCRUE AGAINST. A field with no bookable reserves is
+        // producing oil the market will not pay to lift, and dividing by its
+        // reserves would be dividing by zero — the accrual waits for the price
+        // to make the field economic again, which is when the barrels start
+        // earning the plugging bill.
+        if (ultimate <= 0.0) return;
+
+        Money provision = Scale(owed, ProducedThisTick.CubicMetres / ultimate);
+
+        // NEVER MORE THAN THE BILL. The telescoping in SDD-009 §2 assumes the
+        // ultimate recovery is a fixed estimate; it is not, because reserves
+        // move with the market (§4). A field whose estimate falls part-way
+        // through its life accrues at a higher rate against the barrels that
+        // remain, and the sum overshoots — measured at $8.4M against a $3M
+        // obligation before this cap.
+        //
+        // Capping is what the accrual MEANS rather than a fudge for it: a
+        // provision is held against a known liability, and one larger than the
+        // liability is a misstatement in the other direction. Real accounting
+        // revises the rate when the estimate changes; this is the conservative
+        // form of the same correction.
+        //
+        // Credits are negative in this ledger, so what is already held is the
+        // negation of the balance.
+        Money held = -_company.Ledger.BalanceOf(Account.AbandonmentProvision);
+        Money room = owed - held;
+
+        if (room <= Money.Zero) return;
+        if (provision > room) provision = room;
+
+        if (provision == Money.Zero) return;
+
+        _company.Ledger.Post(new Movement(
+            tick, Account.Depreciation, Account.AbandonmentProvision, provision,
+            MovementCategory.Abandonment, Asset: null, Cause: _audit.Record(
+                AuditCategory.Financial, subject: null, cause: null,
+                new Dictionary<string, AuditValue>(StringComparer.Ordinal)
+                {
+                    ["accrual"] = new("abandonment-provision"),
+                    ["against-2p"] = new(ultimate.ToString(
+                        System.Globalization.CultureInfo.InvariantCulture)),
+                })));
+    }
+
     public void PostEconomics(Tick tick)
     {
         // PRICED OFF THE METER (SDD-009 §1) — not off what the wells produced.
@@ -626,6 +713,11 @@ internal sealed class ProductionLoop
         // sell.
         // The month's OPEX first, because the fiscal assessment deducts it.
         Money opex = OperatingCost();
+
+        CumulativeProduced = new SurfaceVolume(
+            CumulativeProduced.CubicMetres + ProducedThisTick.CubicMetres);
+
+        AccrueAbandonment(tick);
 
         if (_sale is AuditId sale)
         {

@@ -846,4 +846,23 @@ public sealed class ChainTests
         Assert.Contains(rejected.Reasons,
             reason => reason.LocId == "$loc:reject.no-manifold-slot");
     }
+
+    // NO ABANDONMENT-PROVISION TEST HERE, and the reason is worth reading.
+    //
+    // These fixtures DECLARE their field (SDD-010 §4b) rather than discovering
+    // it, and a declared field arrives with no belief about how much oil is in
+    // it — `DeclareKnownField` places the structure and finds the compartment
+    // and says nothing about volume. So the company has no 2P reserves, and
+    // SDD-009 §2 accrues per barrel AGAINST reserves: no denominator, no
+    // accrual.
+    //
+    // That is honest for the engine and a gap in the scenario door: "here is
+    // your field, develop it" should come with what the company knows about it,
+    // or a scenario hands a player an asset they own and cannot value. Recorded
+    // rather than worked around, because the fix is a parameter on that door and
+    // a belief delivered through the observation gate — R21f's, when scenarios
+    // are content.
+    //
+    // The accrual is tested in NewGameTests against a DISCOVERED field, which is
+    // the path that produces the belief.
 }

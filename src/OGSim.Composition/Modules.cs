@@ -416,8 +416,15 @@ internal sealed class CompanyModule() : EngineModule(Declare(
     [
         typeof(IFiscalRegime), typeof(IPriceModel),
         typeof(OGSim.Company.MarketState), typeof(OGSim.Company.CompanyState),
+        typeof(ReservesBook),
     ],
-    requires: [typeof(IAuditTrail)],
+
+    // The belief store, because reserves are worked out from what the company
+    // BELIEVES is down there rather than from what is (SDD-009 §4). Declaring it
+    // is also what puts this module after the one that owns beliefs — the
+    // composer refused outright until it was said, which is the ordering rule
+    // doing its job rather than a coincidence of registration order.
+    requires: [typeof(IAuditTrail), typeof(IBeliefStore)],
     ownsState: ["company.ledger"],
     stages: NoStagesYet))
 {
@@ -442,6 +449,16 @@ internal sealed class CompanyModule() : EngineModule(Declare(
             Defaults.Economics.OilPricePerTonne,
             Defaults.CostElasticity,
             Defaults.CostDrift));
+
+        // ONE OWNER FOR THE RESERVES CALCULATION (law L5). The read model
+        // reports what is left and stage 8 accrues the abandonment provision
+        // against what the field will ultimately give — and a month where those
+        // two disagreed about the size of the field would post a provision
+        // against a number nobody was shown.
+        composition.Provide(new ReservesBook(
+            composition.Require<IBeliefStore>(),
+            composition.Require<OGSim.Company.MarketState>(),
+            Defaults.TypeCurve));
 
         IAuditTrail audit = composition.Require<IAuditTrail>();
 
@@ -614,6 +631,8 @@ internal sealed class FieldModule() : EngineModule(Declare(
             composition.Require<IPriceModel>(),
             composition.Require<IRandomSource>().Stream(StreamId.Price),
             composition.Require<OGSim.Company.MarketState>(),
+            obligations,
+            composition.Require<ReservesBook>(),
             Defaults.LiquidOrdinals,
             () => field.IsAbandoned,
             Defaults.Economics,
@@ -713,7 +732,8 @@ internal sealed class FieldModule() : EngineModule(Declare(
         var projection = new FieldProjection(
             loop, company, field, activities, composition.Require<IBeliefStore>(),
             composition.Require<WorldState>(),
-            composition.Require<OGSim.Information.ProspectRisks>());
+            composition.Require<OGSim.Information.ProspectRisks>(),
+            composition.Require<ReservesBook>());
 
         // The scenario is CONTENT (design 03 §3.3): the win condition is an
         // objective over a read-model path, not a comparison compiled into a
