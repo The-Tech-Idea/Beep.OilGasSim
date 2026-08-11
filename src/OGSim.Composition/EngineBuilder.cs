@@ -152,6 +152,20 @@ internal static class Defaults
             * SurfaceOilDensity.KgPerCubicMetre / 1000.0);
 
     /// <summary>
+    /// What a well-run field flares, and what a badly-run one does
+    /// (SDD-012 §4), in kilograms of gas per cubic metre of oil.
+    ///
+    /// <para>The shipped completion produces about 0.09 kg of gas per cubic
+    /// metre of oil at its solution ratio, so a field with NO gas handling — the
+    /// composition as it ships — sits at the clean edge and a field flaring
+    /// three times that has a record a lender charges for. Some flaring is
+    /// unavoidable, and a scale on which perfection was the only clean score
+    /// would be unreachable and therefore ignorable.</para>
+    /// </summary>
+    public static OGSim.Company.EsgRecord Record { get; } =
+        new(cleanIntensity: 0.10, worstIntensity: 0.30);
+
+    /// <summary>
     /// How hard service costs follow the oil price (SDD-009 §6's ED4). At 0.35,
     /// a doubling of oil over a year lifts the cost of everything by about a
     /// third — enough that building into a boom hurts, short of making it

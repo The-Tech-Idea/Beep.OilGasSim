@@ -382,6 +382,15 @@ internal sealed class ProductionLoop
             // outlet ports, so a chain that measured only outlets would show the
             // flare passing nothing while it burned the field's entire gas
             // production.
+            // EVERYTHING THIS COMPANY HAS EVER BURNED. Flaring is the one
+            // term of SDD-012 §4's ESG standing that has a subject today, and
+            // it is charged against the whole history rather than the month —
+            // a record is what a lender has watched, and one bad month should
+            // no more re-price a facility than one good month should clear it.
+            CumulativeFlared = new Mass(
+                CumulativeFlared.Kilograms
+                + (converged.Disposed.Flared.Total.KgPerSecond * seconds));
+
             double throughput =
                 converged.FuelConsumed.Total.KgPerSecond
                 + converged.Disposed.Flared.Total.KgPerSecond
@@ -592,6 +601,9 @@ internal sealed class ProductionLoop
 
         Exported = lifted.Total;
     }
+
+    /// <summary>Everything this company has ever flared (SDD-012 §4).</summary>
+    public Mass CumulativeFlared { get; private set; }
 
     /// <summary>What left for market this tick. What the tank could not hold
     /// stays in it, and what it could not take never left the field.</summary>
@@ -1276,15 +1288,6 @@ internal sealed class CustodyStage(ProductionLoop loop) : ITickStage
 
 internal sealed class EconomicsStage(ProductionLoop loop, Bank bank) : ITickStage
 {
-    /// <summary>
-    /// A clean record, until there is something to blacken it with. ESG standing
-    /// scales the lending spread (SDD-009 §5), and the events that would move it
-    /// — spills, flaring above a limit, a fatality — are R18's and HSE's. Held at
-    /// the best value rather than at a middle one, because a company that had
-    /// done nothing wrong and was charged for it anyway would be paying a
-    /// penalty nobody could explain.
-    /// </summary>
-    private const double SpotlessStanding = 1.0;
 
     public StageId Id => StageId.Economics;
 
@@ -1299,6 +1302,11 @@ internal sealed class EconomicsStage(ProductionLoop loop, Bank bank) : ITickStag
         // The facility is re-priced and its interest charged after the month's
         // revenue is in, so a company is judged on the cash it actually has
         // (SDD-009 §5).
-        bank.Settle(context.Tick, SpotlessStanding);
+        // The record a lender prices against (SDD-012 §4). Not a constant
+        // any more: a company that flares its gas pays for it in the rate it
+        // borrows at, for years, which is design 08 §5's slowest loop.
+        bank.Settle(
+            context.Tick,
+            Defaults.Record.Standing(loop.CumulativeFlared, loop.CumulativeProduced));
     }
 }
