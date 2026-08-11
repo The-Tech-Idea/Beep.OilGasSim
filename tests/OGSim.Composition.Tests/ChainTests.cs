@@ -1245,4 +1245,50 @@ public sealed class ChainTests
         return 0.0;
     }
 
+
+    /// <summary>
+    /// THE ENDING, ASSERTED. A developed field's monthly cash flow decays as it
+    /// waters out — opex is charged on the LIQUID lifted and water is liquid, so
+    /// a field making four barrels of water for one of oil pays to lift all five
+    /// and is paid for one.
+    ///
+    /// <para>That decay is what makes shutting in and plugging a decision rather
+    /// than a formality, and it is the whole of the late game. R20.4 measured it
+    /// and nothing asserted it — which is how finding 179 came to be a wrong
+    /// claim about the arc that stood for four commits.</para>
+    /// </summary>
+    [Fact]
+    public void R20d4V3_a_developed_field_ends_by_earning_less_every_year()
+    {
+        (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled();
+        Produce(engine, target);
+
+        FieldControl field = engine.Provided.Resolve<FieldControl>();
+
+        for (var well = 0; well < 5; well++) field.Drill(target, new Length(2000.0));
+
+        CompanyState company = engine.Provided.Resolve<CompanyState>();
+
+        Money atFive = Money.Zero, atForty = Money.Zero;
+        Money previous = company.Ledger.Cash;
+
+        for (var month = 0; month < 480; month++)
+        {
+            engine.Pipeline.AdvanceTick();
+
+            Money now = company.Ledger.Cash;
+            Money flow = now - previous;
+            previous = now;
+
+            if (month == 60) atFive = flow;
+            if (month == 479) atForty = flow;
+        }
+
+        Assert.True(atFive > Money.Zero,
+            $"a five-year-old developed field was losing {atFive} a month");
+
+        Assert.True(atForty < atFive,
+            $"the field earned {atForty} a month at forty years against {atFive} at five; " +
+            "a field that never gets worse has no ending and nothing to decide about");
+    }
 }
