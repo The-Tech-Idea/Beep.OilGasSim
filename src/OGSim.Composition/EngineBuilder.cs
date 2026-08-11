@@ -179,15 +179,21 @@ internal static class Defaults
     /// What a well-run field flares, and what a badly-run one does
     /// (SDD-012 §4), in kilograms of gas per cubic metre of oil.
     ///
-    /// <para>The shipped completion produces about 0.09 kg of gas per cubic
-    /// metre of oil at its solution ratio, so a field with NO gas handling — the
-    /// composition as it ships — sits at the clean edge and a field flaring
-    /// three times that has a record a lender charges for. Some flaring is
-    /// unavoidable, and a scale on which perfection was the only clean score
-    /// would be unreachable and therefore ignorable.</para>
+    /// <para>MEASURED, not estimated. These were first set from a guess of
+    /// 0.09 kg of gas per cubic metre of oil, which was wrong by more than two
+    /// orders of magnitude: a solution ratio of 100 sm³/sm³ at gas density puts
+    /// it near 90, and a field flaring everything measures about 30 over five
+    /// years. Every company sat below the worst edge and scored zero, so the
+    /// record could not tell a clean operator from a filthy one and the penalty
+    /// priced nothing.</para>
+    ///
+    /// <para>Five is a field capturing most of its associated gas; forty is one
+    /// burning essentially all of it. Some flaring is unavoidable, and a scale on
+    /// which perfection was the only clean score would be unreachable and
+    /// therefore ignorable.</para>
     /// </summary>
     public static OGSim.Company.EsgRecord Record { get; } =
-        new(cleanIntensity: 0.10, worstIntensity: 0.30);
+        new(cleanIntensity: 5.0, worstIntensity: 40.0);
 
     /// <summary>
     /// How hard service costs follow the oil price (SDD-009 §6's ED4). At 0.35,

@@ -987,4 +987,66 @@ public sealed class ChainTests
 
         Assert.True(cumulative > 0.0, "the field produced nothing to inject");
     }
+
+    /// <summary>
+    /// FLARING TO THE PRICE OF DEBT, as one sequence. The gas leg burns, the
+    /// intensity blackens the record, the record widens the spread, and the
+    /// spread is what a company pays to borrow — four mechanisms, each with its
+    /// own passing test, and nothing had ever checked that they were connected.
+    ///
+    /// <para>That is finding 174's shape: a chain whose parts all work and whose
+    /// joins nobody has run. Here the join is easy to break silently, because a
+    /// standing computed and never handed to the lender would leave every number
+    /// on the surface looking exactly right.</para>
+    ///
+    /// <para>Two companies, the same field, the same market. One buys a gas
+    /// plant and one burns everything.</para>
+    /// </summary>
+    [Fact]
+    public void R20d16V2_a_field_that_burns_its_gas_borrows_more_dearly()
+    {
+        (Engine clean, EntityId<IReservoirCompartmentEntity> keptTarget) = Undrilled();
+        Produce(clean, keptTarget);
+        clean.Commands.Submit(new InstallGasPlantCommand());
+
+        (Engine dirty, EntityId<IReservoirCompartmentEntity> burntTarget) = Undrilled();
+        Produce(dirty, burntTarget);
+
+        for (var month = 0; month < 60; month++)
+        {
+            clean.Pipeline.AdvanceTick();
+            dirty.Pipeline.AdvanceTick();
+        }
+
+        Assert.True(clean.ReadModel!.Flared.Kilograms < dirty.ReadModel!.Flared.Kilograms,
+            "the plant was built and the field burned as much gas as the one without one");
+
+        Assert.True(clean.ReadModel!.EsgStanding > dirty.ReadModel!.EsgStanding,
+            $"burning more gas did not blacken the record: {clean.ReadModel!.EsgStanding:0.000} " +
+            $"against {dirty.ReadModel!.EsgStanding:0.000}");
+
+        // THE JOIN THAT MATTERS. A standing computed and never handed to the
+        // lender would leave every number on the surface looking right and cost
+        // the company nothing.
+        Assert.True(clean.ReadModel!.Borrowing.Rate < dirty.ReadModel!.Borrowing.Rate,
+            $"a spotless company borrows at {clean.ReadModel!.Borrowing.Rate} and a flaring " +
+            $"one at {dirty.ReadModel!.Borrowing.Rate}; the record is not reaching the rate");
+
+        Assert.True(dirty.ReadModel!.Borrowing.EsgSpread > 0.0,
+            "the spread is zero for a company that has been flaring for five years");
+    }
+
+    private static double CumulativeOil(Engine engine) =>
+        engine.Provided.Resolve<FieldControl>() is not null
+            ? engine.Provided.Resolve<ReservesBook>() is not null
+                ? Cumulative(engine)
+                : 0.0
+            : 0.0;
+
+    private static double Cumulative(Engine engine)
+    {
+        double total = 0.0;
+        for (int i = 0; i < engine.ReadModel!.Chain.Count; i++) { }
+        return total;
+    }
 }
