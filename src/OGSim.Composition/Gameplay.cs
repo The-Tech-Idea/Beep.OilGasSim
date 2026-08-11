@@ -190,7 +190,23 @@ public sealed record FieldReadModel(
     /// multiplies a listed cost by this to show what it would actually be
     /// quoted.</para>
     /// </summary>
-    double CostIndex)
+    double CostIndex,
+
+    /// <summary>
+    /// What the company can still get out and sell at a profit (SDD-009 §4) —
+    /// the number an oil company is actually valued on.
+    ///
+    /// <para>Cash and production between them cannot say this. A field run to
+    /// exhaustion improves both right up to the month it stops, and a player
+    /// watching only those would see a business getting healthier as it ran
+    /// out.</para>
+    ///
+    /// <para>It moves with the MARKET as well as with the rock, because reserves
+    /// end where production stops paying: a crash raises the economic limit,
+    /// the tail of the decline falls below it, and the barrels beyond stop being
+    /// reserves without having gone anywhere.</para>
+    /// </summary>
+    ReservesEstimate Reserves)
 {
     /// <summary>Where the chain is jammed, if anywhere — the elements that
     /// refused production this tick.</summary>
@@ -254,7 +270,7 @@ internal sealed class FieldProjection(
         new(position.Tick, position.Date, position.Cash, position.Wells,
             position.ActivitiesRunning, position.ProducedThisTick, position.Insolvent,
             progress, Project(beliefs), loop.Chain(), field.Wells(), Prospects(),
-            loop.Market.OilPrice, loop.Market.CostIndex);
+            loop.Market.OilPrice, loop.Market.CostIndex, Booked());
 
     /// <summary>
     /// The undrilled structures, in the order the world placed them (D-5).
@@ -264,6 +280,50 @@ internal sealed class FieldProjection(
     /// list would be choosing against a number the company no longer
     /// believes.</para>
     /// </summary>
+    /// <summary>
+    /// The company's reserves, re-stated from what it believes and what the
+    /// market is doing (SDD-009 §4).
+    ///
+    /// <para>Computed, never stored (law L5). A reserves figure kept as state
+    /// would be a second owner of a fact that follows entirely from beliefs,
+    /// prices and costs — and it would go stale exactly when it mattered, which
+    /// is the month the price moved.</para>
+    /// </summary>
+    private ReservesEstimate Booked()
+    {
+        MassRate limit = OGSim.Company.ArpsReserves.EconomicLimit(
+            loop.Market.OilPrice,
+            Defaults.Economics.LiftingCostPerTonne,
+            Defaults.Economics.FixedOperatingCostPerTick);
+
+        SurfaceVolume proved = default, probable = default, possible = default;
+
+        // Every field the company has a volume belief about — walked in learning
+        // order (D-5), because two runs of one save must book the same reserves.
+        IReadOnlyList<HeldBelief> held = beliefs.Held;
+
+        for (int i = 0; i < held.Count; i++)
+        {
+            HeldBelief entry = held[i];
+
+            if (entry.Subject.Kind != EntityKind.Compartment) continue;
+            if (entry.PropertyKind != Defaults.OilInPlaceKind) continue;
+
+            ReservesEstimate field = Defaults.TypeCurve.From(
+                OGSim.Information.Quantiles.P90(entry.Belief),
+                OGSim.Information.Quantiles.P50(entry.Belief),
+                OGSim.Information.Quantiles.P10(entry.Belief),
+                limit,
+                Defaults.SurfaceOilDensity);
+
+            proved = new SurfaceVolume(proved.CubicMetres + field.Proved.CubicMetres);
+            probable = new SurfaceVolume(probable.CubicMetres + field.Probable.CubicMetres);
+            possible = new SurfaceVolume(possible.CubicMetres + field.Possible.CubicMetres);
+        }
+
+        return new ReservesEstimate(proved, probable, possible);
+    }
+
     private IReadOnlyList<ProspectView> Prospects()
     {
         var seen = new List<ProspectView>();

@@ -87,6 +87,20 @@ public interface IReserveBasedLending
 /// Price stream (D-2). OU-in-log-space is the shipped model (SDD-009 §2);
 /// the slot exists so mods can replace it.
 /// </summary>
+/// <summary>
+/// The three reserve cases, in the petroleum convention: 1P is the LOW one
+/// (SDD-009 §4).
+///
+/// <para>A CONTRACT type rather than one of the economics module's, because it
+/// crosses the host surface — a host that had to reference `OGSim.Company` to
+/// read a number off the read model would be depending on a domain module,
+/// which is the one direction design 03 §2 does not allow.</para>
+/// </summary>
+public readonly record struct ReservesEstimate(
+    SurfaceVolume Proved,
+    SurfaceVolume Probable,
+    SurfaceVolume Possible);
+
 public interface IPriceModel
 {
     ContentId Id { get; }

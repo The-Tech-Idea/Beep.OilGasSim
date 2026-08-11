@@ -106,6 +106,23 @@ internal static class Defaults
         jumpScale: 0.27);
 
     /// <summary>
+    /// The development type-curve this composition ships (SDD-009 §4). Content
+    /// in a finished game, like every other catalogue entry here.
+    ///
+    /// <para>18% a year with a hyperbolic exponent of 0.5 is an ordinary
+    /// onshore waterflood: steep at first and long-tailed, which is the shape
+    /// that makes a field's last decade produce a fifth of what its first did
+    /// and still be worth running.</para>
+    ///
+    /// <para>A recovery factor of 0.35 — a third of the oil, which is what a
+    /// supported reservoir actually gives up. The other two thirds staying in
+    /// the ground is not a rounding error, it is the single largest fact about
+    /// this industry.</para>
+    /// </summary>
+    public static OGSim.Company.ArpsReserves TypeCurve { get; } =
+        new(declinePerYear: 0.18, exponent: 0.5, recoveryFactor: 0.35);
+
+    /// <summary>
     /// How hard service costs follow the oil price (SDD-009 §6's ED4). At 0.35,
     /// a doubling of oil over a year lifts the cost of everything by about a
     /// third — enough that building into a boom hurts, short of making it
