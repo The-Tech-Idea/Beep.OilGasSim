@@ -209,6 +209,41 @@ pressures — no special multi-stage code; recovery gain emerges (R8-V4).
 > raises manifold pressure and can shut in weaker wells however far away they
 > are.
 
+> **R20d.19 amendment (finding 173). The separation model cannot express wet
+> oil, so BS&W is structurally zero and the sales spec can never fail on it.**
+>
+> `SeparationEfficiency` carries three terms and all three move liquid and gas
+> across the gas/liquid boundary or knock water OUT of the liquid leg:
+>
+> ```text
+> LiquidFromGas    gas carried under, into the liquid
+> GasFromLiquid    liquid carried over, into the gas
+> WaterFromLiquid  water knocked OUT of the liquid, into the aqueous leg
+> ```
+>
+> There is no term for the direction that matters to a custody spec: water
+> carried INTO the oil. The fluid model's split puts produced water in the
+> aqueous phase and this model can only move more of it out, so the oil leaving a
+> vessel is dry by construction — at any efficiency, at any load, on any tier.
+>
+> **BS&W is therefore not a content number waiting to be set.** It is a quantity
+> the model has no way to produce, which is why `Defaults.SalesSpec` is empty and
+> why the custody point's reject leg has never fired. A treater installed against
+> it would have nothing to treat, which is this session's recurring finding in
+> advance rather than after the fact.
+>
+> The missing term is `WaterIntoLiquid` — a carry-under of the aqueous phase, and
+> the one that should rise with LOAD rather than sit at a rated constant, because
+> the mechanic worth having is "push the vessel past its design rate and the oil
+> goes off-spec". That is a change to this section and to `ISeparationModel`, and
+> it belongs to whoever builds treating rather than being smuggled in beside it.
+>
+> **Souring is the path that is NOT blocked.** SDD-012 §5's H2S curve reads
+> cumulative injected water over pore volume, which R20d.18 made real, and H2S
+> can enter as a MATERIAL — content, which this composition already parameterises
+> — rather than as a model term that does not exist. A sales spec that fails on
+> sourness needs no change here at all.
+
 ## 1b. Manifold / header — the commingling element
 
 > **R20d.1 declaration (finding 159).** [01](../design/01_CONCEPT_MATRIX.md) §C5
