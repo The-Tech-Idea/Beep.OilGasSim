@@ -72,11 +72,18 @@ tested).
 > same moment as the rest of it: when a company can hold two fields with separate
 > gathering systems, which is SDD-006 §7c's remaining half.
 >
-> **Depreciation waits for the same reason and one more.** Units of production
-> needs `PPE_remaining(asset)`, and the ledger tracks capital by ACCOUNT rather
-> than by asset — `Capex_PPE` is one balance, not a balance per well. That is a
-> ledger question, not an economics one, and it is recorded here so the next
-> reader does not mistake the absence for an oversight.
+> **Depreciation reads the same way, and for the same reason.** Units of
+> production needs `PPE_remaining(asset)` and the ledger tracks capital by
+> ACCOUNT — `Capex_PPE` is one balance, not a balance per well — so the charge is
+> taken against the company's capital and its remaining 2P. Per-asset splitting
+> arrives with the same change as the provision's.
+>
+> **Against REMAINING reserves, where the provision is against ULTIMATE, and
+> that is not an inconsistency.** A provision is charged against what a field
+> will ever give because the bill is fixed and the sum has to telescope to it.
+> Depreciation is charged against what is LEFT because the value being written
+> off is also what is left — both sides of the fraction shrink together, which is
+> what stops a nearly-spent field carrying its plant at cost.
 
 ## 3. Fiscal regimes — the exact algorithms
 

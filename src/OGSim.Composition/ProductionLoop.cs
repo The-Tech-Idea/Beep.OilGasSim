@@ -705,6 +705,59 @@ internal sealed class ProductionLoop
                 })));
     }
 
+    /// <summary>
+    /// SDD-009 §2's depreciation, UNITS OF PRODUCTION — the industry method, and
+    /// the one that says what a wearing asset actually is.
+    ///
+    /// <para>A platform does not get a year older every year; it gets a barrel
+    /// older every barrel. Straight-line would write a field's plant off on a
+    /// calendar that has nothing to do with what it did, so a shut-in field
+    /// would depreciate exactly as fast as a producing one — which is the
+    /// opposite of true.</para>
+    ///
+    /// <para>Against REMAINING reserves, unlike the abandonment provision, and
+    /// the difference is not an inconsistency. A provision is charged against
+    /// what a field will EVER give, because the bill is fixed and has to
+    /// telescope to it. Depreciation is charged against what is LEFT, because
+    /// the value being written off is also what is left — both sides of the
+    /// fraction shrink together, which is what keeps a nearly-spent field from
+    /// carrying its plant at cost.</para>
+    /// </summary>
+    private void Depreciate(Tick tick)
+    {
+        if (ProducedThisTick.CubicMetres <= 0.0) return;
+
+        Money capital = _company.Ledger.BalanceOf(Account.Capex_PPE);
+
+        if (capital <= Money.Zero) return;
+
+        double remaining = _reserves.Remaining(CumulativeProduced).Probable.CubicMetres;
+
+        // NOTHING LEFT TO PRODUCE AGAINST. A field past its bookable reserves is
+        // still lifting oil the market pays for, and dividing by what is left
+        // would write the whole plant off in one month. The carrying value stays
+        // where it is until a reserves revision gives it a denominator again —
+        // which is what a revision is FOR.
+        if (remaining <= 0.0) return;
+
+        Money charge = Scale(capital, ProducedThisTick.CubicMetres / remaining);
+
+        // Never below nothing: an asset cannot be worth less than written off.
+        if (charge > capital) charge = capital;
+        if (charge == Money.Zero) return;
+
+        _company.Ledger.Post(new Movement(
+            tick, Account.Depreciation, Account.Capex_PPE, charge,
+            MovementCategory.Operating, Asset: null, Cause: _audit.Record(
+                AuditCategory.Financial, subject: null, cause: null,
+                new Dictionary<string, AuditValue>(StringComparer.Ordinal)
+                {
+                    ["accrual"] = new("units-of-production-depreciation"),
+                    ["against-remaining-2p"] = new(remaining.ToString(
+                        System.Globalization.CultureInfo.InvariantCulture)),
+                })));
+    }
+
     public void PostEconomics(Tick tick)
     {
         // PRICED OFF THE METER (SDD-009 §1) — not off what the wells produced.
@@ -718,6 +771,7 @@ internal sealed class ProductionLoop
             CumulativeProduced.CubicMetres + ProducedThisTick.CubicMetres);
 
         AccrueAbandonment(tick);
+        Depreciate(tick);
 
         if (_sale is AuditId sale)
         {

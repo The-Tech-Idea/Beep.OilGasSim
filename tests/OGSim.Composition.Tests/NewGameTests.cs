@@ -996,4 +996,61 @@ public sealed class NewGameTests
 
         Assert.Fail("sixty basins produced no discovery to accrue against");
     }
+
+    /// <summary>
+    /// PLANT WEARS OUT BY THE BARREL, not by the calendar (SDD-009 §2). A
+    /// platform does not get a year older every year; it gets a barrel older
+    /// every barrel — so a shut-in field depreciates nothing and a producing one
+    /// writes its capital down as it empties.
+    ///
+    /// <para>The carrying value can never go below nothing, and never below what
+    /// was actually spent: an asset cannot be worth less than written off.</para>
+    /// </summary>
+    [Fact]
+    public void R20d14V2_capital_is_written_down_by_what_it_produces()
+    {
+        for (ulong seed = 1UL; seed < 60UL; seed++)
+        {
+            Engine engine = NewGame(seed);
+            WorldState world = WorldOf(engine);
+
+            var charged = -1;
+
+            for (int i = 0; i < world.Prospects.Count; i++)
+                if (world.Beneath(world.Prospects[i]) is not null) { charged = i; break; }
+
+            if (charged < 0) continue;
+
+            engine.Commands.Submit(
+                new DrillWellCommand(world.Prospects[charged], new Length(2000.0)));
+
+            var company = engine.Provided.Resolve<CompanyState>();
+
+            Money peak = Money.Zero;
+
+            for (var month = 0; month < 120; month++)
+            {
+                engine.Pipeline.AdvanceTick();
+
+                Money carrying = company.Ledger.BalanceOf(Account.Capex_PPE);
+
+                if (carrying > peak) peak = carrying;
+
+                Assert.True(carrying >= Money.Zero,
+                    $"month {month}: the plant is carried at {carrying}, which is less than " +
+                    "written off");
+            }
+
+            if (engine.ReadModel!.Wells == 0) continue;      // the hole was lost
+
+            Assert.True(peak > Money.Zero, "a well was drilled and nothing was capitalised");
+
+            Assert.True(company.Ledger.BalanceOf(Account.Capex_PPE) < peak,
+                "ten years of production wrote nothing off the plant that produced it");
+
+            return;
+        }
+
+        Assert.Fail("sixty basins produced no discovery to depreciate");
+    }
 }
