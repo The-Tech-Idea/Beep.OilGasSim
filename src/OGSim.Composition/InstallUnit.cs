@@ -271,3 +271,56 @@ internal sealed class InstallTankActivity(
         return null;
     }
 }
+
+/// <summary>
+/// Fit a treater (SDD-006 §2, finding 173).
+///
+/// <para>THE ANSWER TO WET OIL. A field that waters out sells a stream the meter
+/// turns away, and until there was a treater to buy that was a tax on getting
+/// old rather than a decision. The oil is there and it is worth money; it just
+/// cannot be sold with the water still in it.</para>
+/// </summary>
+public sealed record InstallTreaterCommand() : Command(Subject: null);
+
+internal sealed class InstallTreaterActivity(
+    ActivityTerms terms,
+    OGSim.Facilities.Treater treater,
+    IReadOnlyList<OGSim.Facilities.TreaterTier> ladder) : Activity<InstallTreaterCommand>(terms)
+{
+    public override bool LeavesAnAsset => true;
+
+    public override bool OnePerTarget => true;
+
+    public override (EntityRef Target, Length Depth) Aim(InstallTreaterCommand command) =>
+        (new EntityRef(EntityKind.FlowElement, treater.Id.Value), NoDepth);
+
+    public override IReadOnlyList<RejectionReason> OwnRefusals(InstallTreaterCommand command)
+    {
+        if (NextRung() is not null) return [];
+
+        return
+        [
+            new RejectionReason(
+                "$loc:reject.top-of-the-ladder",
+                $"'{treater.Tier.Id.Value}' is the best treating in the catalogue; the field " +
+                "cannot dry its oil further than it already does"),
+        ];
+    }
+
+    public override void Complete(CompletedActivity done, Tick tick)
+    {
+        ArgumentNullException.ThrowIfNull(done);
+
+        if (!done.Succeeded) return;
+
+        if (NextRung() is OGSim.Facilities.TreaterTier next) treater.Fit(next);
+    }
+
+    private OGSim.Facilities.TreaterTier? NextRung()
+    {
+        for (int i = 0; i < ladder.Count - 1; i++)
+            if (ladder[i].Id == treater.Tier.Id) return ladder[i + 1];
+
+        return null;
+    }
+}

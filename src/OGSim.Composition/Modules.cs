@@ -245,6 +245,10 @@ internal sealed class FacilitiesModule() : EngineModule(Declare(
         // What it is NOT is an unconnected port: mass leaving the network at one
         // would vanish from the tick's conservation terms silently, and a flare
         // accounts for it — combusted and unburnt, both reported as Disposed.
+        var treater = new OGSim.Facilities.Treater(
+            Defaults.TheTreater, Defaults.TreaterLadder[0],
+            Defaults.WaterOrdinal, Defaults.MaterialCount);
+
         var gasPlant = new OGSim.Facilities.GasCapture(
             Defaults.TheGasPlant, Defaults.GasPlantLadder[0], Defaults.MaterialCount);
 
@@ -277,6 +281,7 @@ internal sealed class FacilitiesModule() : EngineModule(Declare(
         network.Add(flowline);
         network.Add(separator);
         network.Add(custody);
+        network.Add(treater);
         network.Add(gasPlant);
         network.Add(flare);
         // Set once, not refreshed: a DISPOSAL well injects into a disposal
@@ -317,8 +322,15 @@ internal sealed class FacilitiesModule() : EngineModule(Declare(
         // so the split puts nothing in it (R20d.4). It is piped the day there is
         // water to put down it, rather than now to an element that would receive
         // zero for a decade.
+        // THE OIL LEG GOES THROUGH TREATING (SDD-006 §2). The treater ships
+        // taking nothing out, so a young field is unaffected; it earns its place
+        // when the water cut rises far enough to put the stream off spec.
         network.Connect(new FlowConnection(
             separator.Id, OGSim.Facilities.Separator.LiquidOutlet,
+            treater.Id, OGSim.Facilities.Treater.Inlet));
+
+        network.Connect(new FlowConnection(
+            treater.Id, OGSim.Facilities.Treater.Outlet,
             custody.Id, OGSim.Facilities.CustodyTransferPoint.Inlet));
 
         // THE GAS LEG NOW HAS A CHOICE (finding 172). It ran straight to the
@@ -343,7 +355,8 @@ internal sealed class FacilitiesModule() : EngineModule(Declare(
             tank.Id, OGSim.Facilities.Tank.Inlet));
 
         composition.Provide(
-            new SurfaceChain(manifold, flowline, separator, custody, gasPlant, flare, disposal, tank));
+            new SurfaceChain(
+                manifold, flowline, separator, custody, treater, gasPlant, flare, disposal, tank));
     }
 }
 
@@ -361,6 +374,7 @@ internal sealed record SurfaceChain(
     OGSim.Facilities.Pipeline Flowline,
     OGSim.Facilities.Separator Separator,
     OGSim.Facilities.CustodyTransferPoint Custody,
+    OGSim.Facilities.Treater Treater,
     OGSim.Facilities.GasCapture GasPlant,
     OGSim.Facilities.Flare Flare,
     OGSim.Wells.Injector Disposal,
@@ -388,6 +402,7 @@ internal sealed record SurfaceChain(
         if (element == Flowline.Id) return "flowline";
         if (element == Separator.Id) return "separator";
         if (element == Custody.Id) return "custody-meter";
+        if (element == Treater.Id) return "treater";
         if (element == GasPlant.Id) return "gas-plant";
         if (element == Flare.Id) return "flare";
         if (element == Disposal.Id) return "water-disposal";
@@ -584,6 +599,7 @@ internal sealed class FieldModule() : EngineModule(Declare(
         typeof(RemediateInjectorCommand),
         typeof(InstallManifoldCommand),
         typeof(InstallTankCommand),
+        typeof(InstallTreaterCommand),
         typeof(BorrowCommand),
         typeof(RepayCommand),
         typeof(SetWellChokeCommand),
@@ -784,6 +800,12 @@ internal sealed class FieldModule() : EngineModule(Declare(
             // did not.
             new InstallTankActivity(
                 Defaults.InstallTankTerms, chain.Tank, Defaults.TankLadder),
+
+            // THE ANSWER TO WET OIL (finding 173). A field that waters out sells
+            // a stream the meter turns away, and without this that is a tax on
+            // getting old rather than a decision.
+            new InstallTreaterActivity(
+                Defaults.InstallTreaterTerms, chain.Treater, Defaults.TreaterLadder),
 
             // The ENDING (R12b.10). Finding 153's other reason is gone too: opex
             // scales with the liquid lifted, so a watered-out well genuinely

@@ -217,8 +217,11 @@ public sealed class ChainTests
             // The gas plant sits between the separator and the flare (finding
              // 172): gas has somewhere to go other than to be burned, and what
              // the plant cannot take overflows to the flare behind it.
+             // The treater sits on the OIL leg between the separator and the
+             // meter: a field that waters out sells a stream the meter would
+             // turn away, and this is what dries it (finding 173).
              ["well-1", "gathering-1", "manifold", "flowline", "separator",
-             "custody-meter", "water-disposal", "tank", "gas-plant", "flare"],
+             "water-disposal", "gas-plant", "flare", "treater", "custody-meter", "tank"],
             engine.ReadModel!.Chain.Select(element => element.DisplayId));
     }
 
@@ -1290,5 +1293,52 @@ public sealed class ChainTests
         Assert.True(atForty < atFive,
             $"the field earned {atForty} a month at forty years against {atFive} at five; " +
             "a field that never gets worse has no ending and nothing to decide about");
+    }
+
+    // ------------------------------------- wet oil, and drying it (R20d.21)
+
+    /// <summary>
+    /// A DEVELOPED FIELD THAT WATERS OUT SELLS WET OIL, and the meter turns it
+    /// away. The separator carries some water into the liquid leg, and late in
+    /// life a field makes a fifth of a barrel of water for every barrel of oil —
+    /// so BS&amp;W at the meter passes the half-per-cent sales limit and the
+    /// stream routes to the reject leg.
+    ///
+    /// <para>AND A TREATER IS THE ANSWER, which is what makes this a decision
+    /// rather than a tax on getting old: the oil is there and it is worth money,
+    /// it just cannot be sold with the water in it.</para>
+    ///
+    /// <para>A DEVELOPED field, and that is the whole reason this test exists in
+    /// this shape. The first attempt measured a single well, whose cut never
+    /// leaves 2%, found a treater that removed 0.0003 kg/s, and was reverted
+    /// (finding 178). The carry-over is now solved against a measured cut rather
+    /// than taken from a plausible sentence.</para>
+    /// </summary>
+    [Fact]
+    public void R20d21V1_a_watered_out_field_sells_wet_oil_until_it_is_treated()
+    {
+        Money soldWet = Earned(treated: false);
+        Money soldDry = Earned(treated: true);
+
+        Assert.True(soldDry > soldWet,
+            $"a field that dried its oil earned {soldDry} against {soldWet} for selling it " +
+            "wet; either the spec never bites or the treater does not fix it");
+    }
+
+    private static Money Earned(bool treated)
+    {
+        (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled();
+        Produce(engine, target);
+
+        FieldControl field = engine.Provided.Resolve<FieldControl>();
+
+        for (var well = 0; well < 5; well++) field.Drill(target, new Length(2000.0));
+
+        if (treated) engine.Commands.Submit(new InstallTreaterCommand());
+
+        for (var month = 0; month < 480; month++) engine.Pipeline.AdvanceTick();
+
+        // Revenue is credited, so what was earned is the negation of the balance.
+        return -engine.Provided.Resolve<CompanyState>().Ledger.BalanceOf(Account.Revenue);
     }
 }

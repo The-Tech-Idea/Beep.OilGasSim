@@ -61,10 +61,16 @@ public sealed class FixedEfficiencySeparationModel : ISeparationModel
             // fluid model put it.
             double knockedOut = achievedLiquid * efficiency.WaterFromLiquid;
 
+            // AND WATER THE OTHER WAY: aqueous that leaves with the oil because
+            // the vessel did not give it time to fall out. This is what a
+            // custody spec measures as BS&W, and without it the oil leg is dry
+            // however hard the vessel is pushed (finding 173).
+            double carriedIntoOil = aqueous * efficiency.WaterIntoLiquid;
+
             achieved.Add((material,
                           achievedGas,
-                          achievedLiquid - knockedOut,
-                          aqueous + knockedOut));
+                          achievedLiquid - knockedOut + carriedIntoOil,
+                          aqueous + knockedOut - carriedIntoOil));
         }
 
         return new PhaseSplit(achieved);
@@ -75,6 +81,7 @@ public sealed class FixedEfficiencySeparationModel : ISeparationModel
         Check(efficiency.LiquidFromGas, nameof(efficiency.LiquidFromGas));
         Check(efficiency.GasFromLiquid, nameof(efficiency.GasFromLiquid));
         Check(efficiency.WaterFromLiquid, nameof(efficiency.WaterFromLiquid));
+        Check(efficiency.WaterIntoLiquid, nameof(efficiency.WaterIntoLiquid));
 
         static void Check(double value, string name)
         {
@@ -295,7 +302,14 @@ public sealed class Separator : IPressureController
         return new SeparationEfficiency(
             LiquidFromGas: Math.Min(1.0, _tier.RatedEfficiency.LiquidFromGas * overload),
             GasFromLiquid: Math.Min(1.0, _tier.RatedEfficiency.GasFromLiquid * overload),
-            WaterFromLiquid: _tier.RatedEfficiency.WaterFromLiquid / overload);
+            WaterFromLiquid: _tier.RatedEfficiency.WaterFromLiquid / overload,
+
+            // MORE OVERLOAD, MORE WATER IN THE OIL. Residence time is what
+            // separates them, and a vessel at twice its design rate gives the
+            // water half as long to fall out — so what leaves with the oil rises
+            // with the rate, and the sales spec is what notices.
+            WaterIntoLiquid: Math.Min(
+                1.0, _tier.RatedEfficiency.WaterIntoLiquid * overload));
     }
 
     /// <summary>

@@ -681,6 +681,8 @@ internal static class Defaults
 
     public static EntityId<IFlowElement> TheGasPlant { get; } = new(1_000_008);
 
+    public static EntityId<IFlowElement> TheTreater { get; } = new(1_000_009);
+
     /// <summary>
     /// Where per-well gathering lines start numbering (SDD-006 §1c). Above the
     /// fixed chain elements by a clear margin, so a line laid for the
@@ -857,7 +859,19 @@ internal static class Defaults
         LiquidCapacity: new MassRate(12.0),
         Volume: new ReservoirVolume(30.0),
         RatedEfficiency: new SeparationEfficiency(
-            LiquidFromGas: 0.0, GasFromLiquid: 0.0, WaterFromLiquid: 0.0),
+            LiquidFromGas: 0.0, GasFromLiquid: 0.0, WaterFromLiquid: 0.0,
+
+            // SOLVED, not guessed. BS&W = c·(W/O)/(1 + c·(W/O)), and a developed
+            // field on this composition reaches W/O ≈ 0.203 by year forty
+            // (finding 179's retraction measured it). At c = 0.03 that is a
+            // BS&W of 0.006 — just over the half-per-cent sales limit — while an
+            // undeveloped field at W/O ≈ 0.019 sits an order of magnitude under.
+            //
+            // So a field sells on spec while it is young and starts failing as
+            // it drowns, which is the point. The first attempt at this used 0.005
+            // from a plausible sentence and produced a treater that removed
+            // 0.0003 kg/s (finding 178).
+            WaterIntoLiquid: 0.03),
         DesignRate: new ReservoirRate(0.05),
         OperatingPressure: Pressure.FromBar(15.0));
 
@@ -930,6 +944,23 @@ internal static class Defaults
         Outcomes: SurveyOutcomes);
 
     /// <summary>
+    /// The treating ladder (catalogue C08). The first rung takes NOTHING out — a
+    /// field ships without a treater, sells dry oil while it is young, and only
+    /// needs one when the water arrives.
+    ///
+    /// <para>Ninety per cent is what a heater-treater does and a desalter behind
+    /// it does more. Neither is perfect, which matters: a field far enough into
+    /// its water cut eventually sells wet oil whatever it buys, and that is the
+    /// end of a field rather than a failure to shop.</para>
+    /// </summary>
+    public static IReadOnlyList<Facilities.TreaterTier> TreaterLadder { get; } =
+    [
+        new(new ContentId("treater-none"), WaterRemoved: 0.0),
+        new(new ContentId("heater-treater"), WaterRemoved: 0.90),
+        new(new ContentId("heater-treater-desalter"), WaterRemoved: 0.98),
+    ];
+
+    /// <summary>
     /// The storage ladder (catalogue C09). Stage 6 names three answers to a full
     /// tank — "more storage, more export and less production" — and storage was
     /// the one nothing could buy.
@@ -990,6 +1021,14 @@ internal static class Defaults
         Rig: null,
         Outcomes: SurveyOutcomes);
 
+    /// <summary>What a treater costs and how long it takes.</summary>
+    public static ActivityTerms InstallTreaterTerms { get; } = new(
+        Template: new ContentId("install-treater"),
+        Cost: Money.FromMillions(5.0),
+        DurationTicks: 3,
+        Rig: null,
+        Outcomes: SurveyOutcomes);
+
     /// <summary>
     /// What an acid job costs and how long it takes (R10-V4). Cheap against a
     /// vessel and quick against a well — which is the point: it is the sort of
@@ -1021,16 +1060,39 @@ internal static class Defaults
     /// (R20d.3). An empty spec passing everything is the correct answer for a
     /// stream that cannot be off-spec, not a disabled check.</para>
     /// </summary>
-    public static Specification SalesSpec { get; } = new([]);
+    public static Specification SalesSpec { get; } = new(
+    [
+        // HALF A PER CENT OF WATER, the ordinary crude sales limit. The spec was
+        // EMPTY and honestly so: until a separator could carry water into the
+        // oil, every limit that could have been written would have bounded a
+        // fraction that was structurally zero (finding 173).
+        new SpecLimit(SpecProperty.BasicSedimentAndWater, 0.005),
+    ]);
 
-    /// <summary>What the meter reads off a stream. Every fraction is zero because
-    /// the one material is oil: no water to be basic sediment, no H2S, no CO2, no
-    /// light ends. It becomes a measurement when there is a stream to measure
-    /// (R20d.3, R20d.4).</summary>
-    public static Facilities.StreamProperties MeasureStream(MaterialStream stream) =>
-        new(BasicSedimentAndWater: 0.0, H2SFraction: 0.0, Co2Fraction: 0.0,
+    /// <summary>
+    /// What the meter reads off a stream.
+    ///
+    /// <para>BS&amp;W IS MEASURED NOW — water mass over liquid mass, both of
+    /// which the catalogue carries. It read a hard zero with a comment promising
+    /// "it becomes a measurement when there is a stream to measure", and there
+    /// was one as soon as a separator could carry water into the oil.</para>
+    ///
+    /// <para>The rest stay zero because they remain structurally zero: no H2S
+    /// until souring makes some, no CO2, no light ends. That is the right answer
+    /// for a stream that cannot carry them, not a disabled check.</para>
+    /// </summary>
+    public static Facilities.StreamProperties MeasureStream(MaterialStream stream)
+    {
+        double water = stream.MassRates[WaterOrdinal].KgPerSecond;
+        double oil = stream.MassRates[OilOrdinal].KgPerSecond;
+        double liquid = water + oil;
+
+        return new Facilities.StreamProperties(
+            BasicSedimentAndWater: liquid <= 0.0 ? 0.0 : water / liquid,
+            H2SFraction: 0.0, Co2Fraction: 0.0,
             WaterInGasFraction: 0.0, LightEndsFraction: 0.0,
             Heating: new HeatingValue(0.0));
+    }
 
     /// <summary>
     /// Surface ambient, for the segment context. A stated value until R22 builds

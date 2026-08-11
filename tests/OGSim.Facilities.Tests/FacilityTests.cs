@@ -91,11 +91,12 @@ public class SeparationTests
         double carryOver = 0.0,
         double carryUnder = 0.0,
         double waterKnockout = 0.0,
+        double waterIntoOil = 0.0,
         double operatingBar = 15.0) =>
         new(new ContentId("sep-tier-a"),
             new MassRate(gasCapacity), new MassRate(liquidCapacity),
             new ReservoirVolume(10.0),
-            new SeparationEfficiency(carryUnder, carryOver, waterKnockout),
+            new SeparationEfficiency(carryUnder, carryOver, waterKnockout, waterIntoOil),
             new ReservoirRate(designRate),
             Pressure.FromBar(operatingBar));
 
@@ -271,7 +272,7 @@ public class SeparationTests
         var fault = Assert.Throws<ModelFault>(() =>
             new FixedEfficiencySeparationModel().SeparateAt(
                 Fx.Stream(1.0, 1.0, 0.0),
-                new SeparationEfficiency(1.5, 0.0, 0.0),
+                new SeparationEfficiency(1.5, 0.0, 0.0, 0.0),
                 new Fx.IdealSplitFluid()));
 
         Assert.Contains("not a fraction", fault.Fault.Detail);
