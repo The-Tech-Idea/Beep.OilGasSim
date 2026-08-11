@@ -66,14 +66,26 @@ public sealed class Explorer
     /// company will commit a rig. Below it, the prospect is worth a survey and
     /// not a hole — which is the decision the five factors exist to inform.
     /// </summary>
-    public Explorer(Engine engine, double drillAbove, int wellTarget)
+    /// <summary>
+    /// <paramref name="buildBelow"/> is the cost index above which this company
+    /// will not commit capital (SDD-009 §6's ED4). A boom is a good time to
+    /// PRODUCE and a bad time to BUILD, and those are different verbs — a client
+    /// that cannot tell them apart pays cycle prices for everything it puts up.
+    ///
+    /// <para>`double.MaxValue` is a company that never looks at the market,
+    /// which is the comparison this exists to lose to.</para>
+    /// </summary>
+    public Explorer(Engine engine, double drillAbove, int wellTarget, double buildBelow)
     {
         ArgumentNullException.ThrowIfNull(engine);
 
         _engine = engine;
         _drillAbove = drillAbove;
         _wellTarget = wellTarget;
+        _buildBelow = buildBelow;
     }
+
+    private readonly double _buildBelow;
 
     public DrillingSeason Play(int months)
     {
@@ -185,6 +197,13 @@ public sealed class Explorer
                 return;
             }
         }
+
+        // WAIT FOR THE YARD TO BE QUIET. Plant bought in a boom costs what the
+        // boom says it costs, and the read model carries the index that says so
+        // — which is the whole reason it is on the surface. A field that is
+        // producing loses very little by deferring a vessel a few months, and a
+        // company that never defers pays a premium on everything it ever builds.
+        if (seen.CostIndex > _buildBelow) return;
 
         _engine.Commands.Submit(new InstallSeparatorCommand());
 

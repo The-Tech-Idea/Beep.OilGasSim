@@ -780,7 +780,7 @@ public sealed class NewGameTests
     {
         Engine engine = BasinWithSeveralProspects();
 
-        DrillingSeason campaign = new Explorer(engine, drillAbove: 0.16, wellTarget: 3)
+        DrillingSeason campaign = new Explorer(engine, drillAbove: 0.16, wellTarget: 3, buildBelow: double.MaxValue)
             .Play(months: 360);
 
         Assert.True(campaign.Drilled > 0, "the client never put a hole down");
@@ -824,7 +824,7 @@ public sealed class NewGameTests
         // every best-odds prospect held oil would be a genuine surprise.
         for (ulong seed = 1UL; seed < 7UL; seed++)
         {
-            DrillingSeason season = new Explorer(NewGame(seed), drillAbove: 0.0, wellTarget: 2)
+            DrillingSeason season = new Explorer(NewGame(seed), drillAbove: 0.0, wellTarget: 2, buildBelow: double.MaxValue)
                 .Play(months: 60);
 
             dry += season.DryHoles;
@@ -837,4 +837,48 @@ public sealed class NewGameTests
             $"six campaigns drilled the best prospect on the board and never once " +
             $"missed ({found} discoveries, {dry} dry); presence is not being read from truth");
     }
+
+    // ----------------------------- the market is actionable (R20d.12 / R21.5)
+
+    /// <summary>
+    /// A COMPANY THAT WATCHES THE CYCLE BUILDS CHEAPER. Plant bought in a boom
+    /// costs what the boom says it costs, and the read model carries the index
+    /// that says so — which is the whole reason it is on the surface.
+    ///
+    /// <para>This is the test that says the cost index is ACTIONABLE. A market
+    /// a host can see and cannot act on would be scenery; if these two companies
+    /// ended level, the index would be a number with no decision behind it.</para>
+    ///
+    /// <para>Compared across basins and totalled, because one campaign is one
+    /// draw: patience is an edge in expectation, not a guarantee, and a client
+    /// that beat the market every single time would mean the market had stopped
+    /// being uncertain.</para>
+    /// </summary>
+    [Fact]
+    public void R20d12V1_a_client_that_waits_for_a_quiet_yard_keeps_more_of_what_it_earns()
+    {
+        Money patient = Money.Zero;
+        Money eager = Money.Zero;
+
+        // Four basins over seven years. Each month solves a network across
+        // every compartment a basin generated, so this and the campaign test are
+        // the two expensive ones in the suite — and a suite nobody runs catches
+        // nothing.
+        for (ulong seed = 1UL; seed < 5UL; seed++)
+        {
+            // The SAME world and the same market for both, so what is left
+            // between them is when they chose to spend.
+            patient += Earned(seed, buildBelow: 1.0);
+            eager += Earned(seed, buildBelow: double.MaxValue);
+        }
+
+        Assert.True(patient > eager,
+            $"waiting for a quiet yard earned {patient} against {eager} for building on " +
+            "sight; the cost index is not actionable through the read model");
+    }
+
+    private static Money Earned(ulong seed, double buildBelow) =>
+        new Explorer(NewGame(seed), drillAbove: 0.0, wellTarget: 2, buildBelow)
+            .Play(months: 84)
+            .Cash;
 }
