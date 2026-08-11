@@ -153,3 +153,60 @@ internal sealed class InstallGasPlantActivity(
         return null;
     }
 }
+
+/// <summary>
+/// Fit a bigger header (SDD-006 §1b, §0c).
+///
+/// <para>THE ANSWER THE DRILLING REFUSAL ALREADY PROMISED. A well with nowhere
+/// to tie in is refused with "a bigger header has to be installed first", and
+/// until now nothing could install one — the engine named a remedy it did not
+/// have. Eight slots is a long way into a field's life, which is why nobody
+/// reached it.</para>
+/// </summary>
+public sealed record InstallManifoldCommand() : Command(Subject: null);
+
+internal sealed class InstallManifoldActivity(
+    ActivityTerms terms,
+    OGSim.Facilities.Manifold header,
+    IReadOnlyList<OGSim.Facilities.ManifoldTier> ladder) : Activity<InstallManifoldCommand>(terms)
+{
+    /// <summary>Steel on a site: PP&amp;E (SDD-009 §1).</summary>
+    public override bool LeavesAnAsset => true;
+
+    public override bool OnePerTarget => true;
+
+    public override (EntityRef Target, Length Depth) Aim(InstallManifoldCommand command) =>
+        (new EntityRef(EntityKind.FlowElement, header.Id.Value), NoDepth);
+
+    public override IReadOnlyList<RejectionReason> OwnRefusals(InstallManifoldCommand command)
+    {
+        if (NextRung() is not null) return [];
+
+        return
+        [
+            new RejectionReason(
+                "$loc:reject.top-of-the-ladder",
+                $"'{header.Tier.Id.Value}' is the largest header in the catalogue; the field " +
+                "cannot take more wells than it already can"),
+        ];
+    }
+
+    public override void Complete(CompletedActivity done, Tick tick)
+    {
+        ArgumentNullException.ThrowIfNull(done);
+
+        if (!done.Succeeded) return;
+
+        if (NextRung() is OGSim.Facilities.ManifoldTier next) header.Fit(next);
+    }
+
+    /// <summary>The rung above what is fitted, in the ladder's declared order
+    /// (D-5).</summary>
+    private OGSim.Facilities.ManifoldTier? NextRung()
+    {
+        for (int i = 0; i < ladder.Count - 1; i++)
+            if (ladder[i].Id == header.Tier.Id) return ladder[i + 1];
+
+        return null;
+    }
+}

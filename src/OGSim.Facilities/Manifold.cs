@@ -38,7 +38,7 @@ public sealed record ManifoldTier(ContentId Id, int Slots);
 /// </summary>
 public sealed class Manifold : IFlowElement
 {
-    private readonly ManifoldTier _tier;
+    private ManifoldTier _tier;
     private readonly int _materialCount;
     private readonly List<PortSpec> _ports = [];
 
@@ -58,7 +58,36 @@ public sealed class Manifold : IFlowElement
         for (int slot = 0; slot < tier.Slots; slot++)
             _ports.Add(new PortSpec(new PortId(slot), PortDirection.Inlet, PortRole.Main));
 
-        _ports.Add(new PortSpec(new PortId(tier.Slots), PortDirection.Outlet, PortRole.Main));
+        _ports.Add(new PortSpec(Outlet, PortDirection.Outlet, PortRole.Main));
+    }
+
+    /// <summary>
+    /// Fit a bigger header (SDD-006 §0c). The socket keeps its identity, its
+    /// tie-ins and its outlet; what changes is how many wells can come into it.
+    ///
+    /// <para>Called only by a COMPLETED install, and only ever upward: shrinking
+    /// a header would strand wells already tied into the slots that
+    /// disappeared, and the flow registry has no way to disconnect them.</para>
+    /// </summary>
+    public void Fit(ManifoldTier tier)
+    {
+        ArgumentNullException.ThrowIfNull(tier);
+
+        if (tier.Slots < _tier.Slots)
+            throw new ContentFault("SDD-006 §1b", null,
+                $"manifold tier '{tier.Id.Value}' has {tier.Slots} slots against the " +
+                $"{_tier.Slots} already fitted; wells tied into the slots that would " +
+                "disappear have nowhere to go, and a header is never made smaller");
+
+        // The outlet is a FIXED id and not one past the last slot, which is what
+        // makes this possible at all: an outlet whose number depended on how many
+        // inlets there were would move every time the header grew, and the
+        // flowline connected to it — write-once, in a registry with no removal —
+        // would be pointing at a port that had become a slot.
+        for (int slot = _tier.Slots; slot < tier.Slots; slot++)
+            _ports.Insert(slot, new PortSpec(new PortId(slot), PortDirection.Inlet, PortRole.Main));
+
+        _tier = tier;
     }
 
     public EntityId<IFlowElement> Id { get; }
@@ -80,7 +109,16 @@ public sealed class Manifold : IFlowElement
         return new PortId(slot);
     }
 
-    public PortId Outlet => new(_tier.Slots);
+    /// <summary>
+    /// The one outlet, at a FIXED id well clear of any slot number. It used to
+    /// be one past the last slot, which made the outlet's identity depend on how
+    /// many wells the header could take — so growing the header would have moved
+    /// it out from under the flowline already connected to it.
+    /// </summary>
+    public static PortId Outlet { get; } = new(1_000);
+
+    /// <summary>What is fitted now.</summary>
+    public ManifoldTier Tier => _tier;
 
     /// <summary>
     /// Sum the inlets, blend the provenance (SDD-006 §1b).

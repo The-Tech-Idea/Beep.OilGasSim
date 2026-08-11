@@ -930,6 +930,33 @@ internal static class Defaults
         Outcomes: SurveyOutcomes);
 
     /// <summary>
+    /// The header ladder (catalogue C06). Eight slots, then sixteen.
+    ///
+    /// <para>The drilling command has refused a well with "a bigger header has
+    /// to be installed first" since R12b, and until now nothing could install
+    /// one — a refusal that named an answer the engine did not have. Eight wells
+    /// is a long way into a field's life, which is exactly why it went
+    /// unnoticed.</para>
+    /// </summary>
+    public static IReadOnlyList<Facilities.ManifoldTier> ManifoldLadder { get; } =
+    [
+        ManifoldTier,
+        ManifoldTier with { Id = new ContentId("manifold-16slot"), Slots = 16 },
+    ];
+
+    /// <summary>
+    /// What a bigger header costs and how long it takes. A header is steel and
+    /// tie-ins on a site that is already producing, so the work is done around a
+    /// live field — dearer than a vessel for its size, and slower.
+    /// </summary>
+    public static ActivityTerms InstallManifoldTerms { get; } = new(
+        Template: new ContentId("install-manifold"),
+        Cost: Money.FromMillions(9.0),
+        DurationTicks: 4,
+        Rig: null,
+        Outcomes: SurveyOutcomes);
+
+    /// <summary>
     /// What an acid job costs and how long it takes (R10-V4). Cheap against a
     /// vessel and quick against a well — which is the point: it is the sort of
     /// maintenance a company defers because it always looks affordable later,

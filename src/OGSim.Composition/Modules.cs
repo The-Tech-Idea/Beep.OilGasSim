@@ -305,7 +305,7 @@ internal sealed class FacilitiesModule() : EngineModule(Declare(
         network.Add(tank);
 
         network.Connect(new FlowConnection(
-            manifold.Id, manifold.Outlet,
+            manifold.Id, OGSim.Facilities.Manifold.Outlet,
             flowline.Id, OGSim.Facilities.Pipeline.Inlet));
 
         network.Connect(new FlowConnection(
@@ -582,6 +582,7 @@ internal sealed class FieldModule() : EngineModule(Declare(
         typeof(ExpandExportCommand),
         typeof(InstallGasPlantCommand),
         typeof(RemediateInjectorCommand),
+        typeof(InstallManifoldCommand),
         typeof(BorrowCommand),
         typeof(RepayCommand),
         typeof(SetWellChokeCommand),
@@ -770,6 +771,12 @@ internal sealed class FieldModule() : EngineModule(Declare(
             // player watches rather than a decision they take.
             new RemediateInjectorActivity(
                 Defaults.RemediateInjectorTerms, chain.Disposal),
+
+            // THE ANSWER THE DRILLING REFUSAL ALREADY NAMED. "A bigger header
+            // has to be installed first" has been the reason a well is turned
+            // away since R12b, and nothing could install one.
+            new InstallManifoldActivity(
+                Defaults.InstallManifoldTerms, chain.Manifold, Defaults.ManifoldLadder),
 
             // The ENDING (R12b.10). Finding 153's other reason is gone too: opex
             // scales with the liquid lifted, so a watered-out well genuinely

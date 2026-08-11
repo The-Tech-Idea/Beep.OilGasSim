@@ -1088,4 +1088,44 @@ public sealed class ChainTests
             $"the well was acidised and its skin is still {disposal.CurrentSkin} against " +
             $"{plugged} before");
     }
+
+    /// <summary>
+    /// THE HEADER CAN BE MADE BIGGER, which the drilling refusal has promised
+    /// since R12b. "A well with nowhere to tie in cannot flow, and a bigger
+    /// header has to be installed first" was the reason a well was turned away,
+    /// and nothing in the engine could install one — a remedy named and never
+    /// built.
+    ///
+    /// <para>Eight slots is a long way into a field's life, which is why nobody
+    /// ever reached the wall and found the promise empty.</para>
+    /// </summary>
+    [Fact]
+    public void R12bV2_the_header_a_full_field_needs_can_be_installed()
+    {
+        (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled();
+        Produce(engine, target);
+
+        OGSim.Facilities.Manifold header = engine.Provided.Resolve<SurfaceChain>().Manifold;
+
+        int before = header.Slots;
+
+        Assert.IsType<Accepted>(engine.Commands.Submit(new InstallManifoldCommand()));
+
+        for (var month = 0; month < 12; month++) engine.Pipeline.AdvanceTick();
+
+        Assert.True(header.Slots > before,
+            $"the header was installed and still takes {header.Slots} wells");
+
+        // AND THE FIELD STILL FLOWS. Growing a header must not move the outlet
+        // the flowline is already connected to — the registry is write-once and
+        // has no removal, so a moved outlet would leave the trunk pointing at
+        // what had become a slot.
+        Assert.True(engine.ReadModel!.ProducedThisTick.CubicMetres > 0.0,
+            "the header grew and the field stopped producing; the outlet moved out from " +
+            "under the trunk");
+
+        // At the top of the ladder there is nothing further to fit, and the
+        // player is told so rather than charged for a month of nothing.
+        Assert.IsType<Rejected>(engine.Commands.Submit(new InstallManifoldCommand()));
+    }
 }
