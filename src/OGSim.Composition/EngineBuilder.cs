@@ -106,6 +106,21 @@ internal static class Defaults
         jumpScale: 0.27);
 
     /// <summary>
+    /// How hard service costs follow the oil price (SDD-009 §6's ED4). At 0.35,
+    /// a doubling of oil over a year lifts the cost of everything by about a
+    /// third — enough that building into a boom hurts, short of making it
+    /// impossible.
+    /// </summary>
+    public const double CostElasticity = 0.35;
+
+    /// <summary>
+    /// The slow upward creep underneath it, per month. Small, and the reason a
+    /// field left undeveloped for twenty years is dearer to develop than it
+    /// looked.
+    /// </summary>
+    public const double CostDrift = 0.0008;
+
+    /// <summary>
     /// The catalogue, as content would carry it. ONE material, because the chain
     /// this composition ships has one thing to move; the nine of
     /// `content/materials/` arrive with R20c.9.

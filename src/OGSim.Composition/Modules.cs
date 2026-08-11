@@ -412,7 +412,11 @@ internal sealed class OperationsModule() : EngineModule(Declare(
 /// </summary>
 internal sealed class CompanyModule() : EngineModule(Declare(
     "company",
-    provides: [typeof(IFiscalRegime), typeof(IPriceModel), typeof(OGSim.Company.CompanyState)],
+    provides:
+    [
+        typeof(IFiscalRegime), typeof(IPriceModel),
+        typeof(OGSim.Company.MarketState), typeof(OGSim.Company.CompanyState),
+    ],
     requires: [typeof(IAuditTrail)],
     ownsState: ["company.ledger"],
     stages: NoStagesYet))
@@ -429,6 +433,15 @@ internal sealed class CompanyModule() : EngineModule(Declare(
         // two of the kernel's eight named streams existed for a market that
         // never moved.
         composition.Provide(Defaults.Market);
+
+        // ONE OWNER FOR THE MARKET (law L5). The ledger prices barrels through
+        // it and the scheduler prices work through it, and a month in which
+        // those two disagreed about what oil was worth is a month whose
+        // accounts do not close.
+        composition.Provide(new OGSim.Company.MarketState(
+            Defaults.Economics.OilPricePerTonne,
+            Defaults.CostElasticity,
+            Defaults.CostDrift));
 
         IAuditTrail audit = composition.Require<IAuditTrail>();
 
@@ -489,6 +502,7 @@ internal sealed class FieldModule() : EngineModule(Declare(
         typeof(IFlowSolver),
         typeof(IFiscalRegime),
         typeof(IPriceModel),
+        typeof(OGSim.Company.MarketState),
         typeof(IFlowElementRegistry),
         typeof(SurfaceChain),
         typeof(WorldState),
@@ -599,6 +613,7 @@ internal sealed class FieldModule() : EngineModule(Declare(
             // that wanted to draw from the weather could not.
             composition.Require<IPriceModel>(),
             composition.Require<IRandomSource>().Stream(StreamId.Price),
+            composition.Require<OGSim.Company.MarketState>(),
             Defaults.LiquidOrdinals,
             () => field.IsAbandoned,
             Defaults.Economics,
@@ -689,7 +704,9 @@ internal sealed class FieldModule() : EngineModule(Declare(
             new AbandonWellActivity(Defaults.AbandonWellTerms, field, obligations),
         ];
 
-        var activities = new ActivityState(scheduler, company, catalogue);
+        var activities = new ActivityState(
+            scheduler, company, catalogue,
+            composition.Require<OGSim.Company.MarketState>());
         composition.Own(activities);
 
         var projection = new FieldProjection(
@@ -723,7 +740,8 @@ internal sealed class FieldModule() : EngineModule(Declare(
         // a template added to the catalogue and forgotten in the manifest refuses
         // to compose rather than shipping an order nothing listens to.
         var orders = new ActivityOrders(
-            company, field, activities, composition.Require<SimulationClock>());
+            company, composition.Require<OGSim.Company.MarketState>(), field, activities,
+            composition.Require<SimulationClock>());
 
         for (int i = 0; i < activities.Catalogue.Count; i++)
             activities.Catalogue[i].Register(composition, orders);

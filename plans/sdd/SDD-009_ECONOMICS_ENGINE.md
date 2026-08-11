@@ -214,9 +214,31 @@ Realised = benchmark + qualityDiff(API, sulphur bands) + locationDiff(network
   distance to the sales point — the generated transport graph prices this)
 Gas/NGL: separate benchmarks, same machinery; gas adds a seasonal sine term
   (amplitude content) — the winter premium.
-Cost index (ED4): costIndex(t+1) = costIndex(t) · (1 + η·priceYoY(t) + drift)
+Cost index (ED4): costIndex(t+1) = costIndex(t) · (1 + η·priceYoY(t)/12 + drift)
   applied to day rates, capex classes and service prices; η, drift content.
 ```
+
+> **R20d.12 amendment (F-4). The cost index divides the year-on-year move by
+> twelve, and the version without it was wrong.** Written as
+> `costIndex · (1 + η·priceYoY + drift)` and stepped MONTHLY, a year-on-year
+> signal is applied twelve times over: a market sitting 50% above where it was a
+> year ago lifts costs 17.5% in the first month, then again on the new figure,
+> and again — sevenfold across the year rather than 17.5%.
+>
+> Measured before it was believed. A decade of the shipped market produced an
+> index of 1.78 and a company that earned $76M against a $600M target, which
+> reads as a punishing market and is an arithmetic error. `η·yoy` is an ANNUAL
+> adjustment, so a monthly tick applies a twelfth of it; the same decade now
+> gives 1.18.
+>
+> The recurrence is otherwise unchanged and η keeps its meaning: the fraction of
+> a year's price move that ends up in the price of a rig.
+>
+> **A FLOOR belongs with it**, and it is not a tuning fudge. Costs are sticky
+> downwards — rigs are stacked rather than scrapped and crews are kept on — so
+> without one a long enough slump drives the index towards zero and makes
+> everything free, turning the worst market in the game into the best time to
+> build anything.
 
 ## 7. Contracts, hedges, insurance
 

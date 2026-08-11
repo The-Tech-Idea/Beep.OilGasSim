@@ -62,6 +62,12 @@ public sealed class GameplayTests
         Engine engine, EntityId<IReservoirCompartmentEntity> field) =>
         engine.Provided.Resolve<WorldState>().ProspectFor(field);
 
+    /// <summary>What a well costs today — the catalogue price at the cost index
+    /// the read model is reporting (SDD-009 §6's ED4).</summary>
+    private static Money Quoted(Engine engine) =>
+        Money.RoundHalfEven(
+            Defaults.DrillWellTerms.Cost.Cents * engine.ReadModel!.CostIndex);
+
     private static DrillWellCommand Drill(
         Engine engine, EntityId<IReservoirCompartmentEntity> target, double depth = 2000.0) =>
         new(Structure(engine, target), new Length(depth));
@@ -262,9 +268,21 @@ public sealed class GameplayTests
     {
         (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled();
 
-        for (var month = 0; month < 145; month++) engine.Pipeline.AdvanceTick();
+        // RUN UNTIL THE COMPANY GENUINELY CANNOT AFFORD ONE, rather than for a
+        // fixed number of months. Since R20d.12 a quoted price moves with the
+        // cost index, so a burn calibrated against the catalogue price was
+        // asserting something the engine no longer claims — and a long enough
+        // slump makes a well CHEAPER, which is how this test started passing a
+        // drilling command it was written to see refused.
+        var months = 0;
 
-        Assert.True(engine.ReadModel!.Cash < Money.FromMillions(8.0));
+        while (engine.ReadModel is null || engine.ReadModel.Cash >= Quoted(engine))
+        {
+            engine.Pipeline.AdvanceTick();
+
+            Assert.True(++months < 600,
+                "fifty years of standing charges and the company can still afford a well");
+        }
 
         Rejected rejected = Assert.IsType<Rejected>(engine.Commands.Submit(Drill(engine, target)));
 

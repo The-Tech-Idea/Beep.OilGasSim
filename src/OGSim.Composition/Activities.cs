@@ -193,17 +193,22 @@ internal sealed class ActivityState : IStateOwner
     private readonly OperationScheduler _scheduler;
     private readonly CompanyState _company;
 
+    private readonly OGSim.Company.MarketState _market;
+
     public ActivityState(
         OperationScheduler scheduler,
         CompanyState company,
-        IReadOnlyList<IActivity> catalogue)
+        IReadOnlyList<IActivity> catalogue,
+        OGSim.Company.MarketState market)
     {
         ArgumentNullException.ThrowIfNull(scheduler);
         ArgumentNullException.ThrowIfNull(company);
         ArgumentNullException.ThrowIfNull(catalogue);
+        ArgumentNullException.ThrowIfNull(market);
 
         _scheduler = scheduler;
         _company = company;
+        _market = market;
 
         for (int i = 0; i < catalogue.Count; i++)
         {
@@ -256,6 +261,18 @@ internal sealed class ActivityState : IStateOwner
         ActivityTerms terms = Of(template).Terms;
         double days = terms.DurationTicks * Duration.DaysPerTick;
 
+        // QUOTED AT TODAY'S RATES (SDD-009 §6's ED4). A catalogue price is a
+        // price in the opening year's money; what a rig actually costs depends
+        // on how many other companies want one, which is what the oil price has
+        // been doing for the last year.
+        //
+        // Fixed HERE, when the work is scheduled, and not re-priced afterwards:
+        // a company contracts at the rate it was quoted, and a boom that arrives
+        // mid-well is the contractor's problem rather than the operator's. That
+        // is also what makes committing early a real advantage rather than an
+        // accounting detail.
+        Money cost = _market.Quoted(terms.Cost);
+
         return new OperationSpec(
             Template: template,
             Target: target,
@@ -263,10 +280,10 @@ internal sealed class ActivityState : IStateOwner
             Costs: new CostProfile(
                 // Split so the money follows the work: an activity abandoned
                 // halfway has cost most of one, not all and not none (§3).
-                Mobilisation: Money.RoundHalfEven(terms.Cost.Cents * 0.15),
-                PerActiveDay: Money.RoundHalfEven(terms.Cost.Cents * 0.75 / days),
-                PerStandbyDay: Money.RoundHalfEven(terms.Cost.Cents * 0.20 / days),
-                Completion: Money.RoundHalfEven(terms.Cost.Cents * 0.10)),
+                Mobilisation: Money.RoundHalfEven(cost.Cents * 0.15),
+                PerActiveDay: Money.RoundHalfEven(cost.Cents * 0.75 / days),
+                PerStandbyDay: Money.RoundHalfEven(cost.Cents * 0.20 / days),
+                Completion: Money.RoundHalfEven(cost.Cents * 0.10)),
             Resources: new ResourceNeeds(terms.Rig, []),
             Requirements: new Requirements([], MinDetectClass: null, []),
             Rentals: [],
@@ -421,6 +438,7 @@ internal sealed class ActivityState : IStateOwner
 /// </summary>
 internal sealed class ActivityOrders(
     CompanyState company,
+    OGSim.Company.MarketState market,
     FieldControl field,
     ActivityState activities,
     SimulationClock clock)
@@ -435,7 +453,7 @@ internal sealed class ActivityOrders(
         IActivity activity = activities.Of(template);
         var reasons = new List<RejectionReason>();
 
-        if (company.Ledger.Cash < activity.Terms.Cost)
+        if (company.Ledger.Cash < market.Quoted(activity.Terms.Cost))
             reasons.Add(new RejectionReason(
                 "$loc:reject.insufficient-cash",
                 $"{template.Value} costs {activity.Terms.Cost.Cents} cents and the company " +

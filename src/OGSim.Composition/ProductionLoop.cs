@@ -192,6 +192,7 @@ internal sealed class ProductionLoop
 
     private readonly IFiscalRegime _regime;
     private readonly IPriceModel _prices;
+    private readonly OGSim.Company.MarketState _market;
     private readonly IRandomStream _priceStream;
     private readonly IReadOnlyList<int> _liquidOrdinals;
     private readonly Func<bool> _isAbandoned;
@@ -212,6 +213,7 @@ internal sealed class ProductionLoop
         IFiscalRegime regime,
         IPriceModel prices,
         IRandomStream priceStream,
+        OGSim.Company.MarketState market,
         IReadOnlyList<int> liquidOrdinals,
         Func<bool> isAbandoned,
         FieldEconomics economics,
@@ -251,6 +253,7 @@ internal sealed class ProductionLoop
         _regime = regime;
         _prices = prices;
         _priceStream = priceStream;
+        _market = market;
         _liquidOrdinals = liquidOrdinals;
         _isAbandoned = isAbandoned;
         _economics = economics;
@@ -603,30 +606,17 @@ internal sealed class ProductionLoop
         value.ToString("R", System.Globalization.CultureInfo.InvariantCulture);
 
     /// <summary>
-    /// TODAY'S BENCHMARK, and it moves (SDD-009 §6). It was
-    /// <c>FieldEconomics.OilPricePerTonne</c> — a constant, which made every
-    /// economic decision in the game deterministic: whether a marginal field is
-    /// worth developing, whether to abandon now or run one more year, whether to
-    /// build a bigger line. All of them had one right answer computable in
-    /// advance, which is another way of saying they were not decisions.
-    /// </summary>
-    public Money OilPrice { get; private set; } = Money.Zero;
-
-    /// <summary>
-    /// Stage 8's first act: advance the market, then price the month against it.
+    /// Stage 8's first act: move the market, then price the month against it.
     ///
     /// <para>Advanced ONCE per tick and before anything is sold, so every barrel
     /// in a month crosses at one price — a market that moved between two sales in
     /// the same month would make the order they were posted in matter.</para>
     /// </summary>
-    public void AdvancePrices()
-    {
-        // The opening benchmark is content's, and it is only ever read once: from
-        // the second month on, the price is whatever the market made of it.
-        if (OilPrice == Money.Zero) OilPrice = _economics.OilPricePerTonne;
+    public void AdvancePrices() => _market.Advance(_prices, _priceStream);
 
-        OilPrice = _prices.Advance(OilPrice, _priceStream);
-    }
+    /// <summary>The market this field sells into — one owner, read by the ledger
+    /// and by the scheduler (law L5).</summary>
+    public OGSim.Company.MarketState Market => _market;
 
     public void PostEconomics(Tick tick)
     {
@@ -640,7 +630,7 @@ internal sealed class ProductionLoop
         if (_sale is AuditId sale)
         {
             Money gross = Scale(
-                OilPrice, Delivered.Total.KgPerSecond / KilogramsPerTonne);
+                _market.OilPrice, Delivered.Total.KgPerSecond / KilogramsPerTonne);
 
             _company.Ledger.Post(new Movement(
                 tick, Account.Cash, Account.Revenue, gross,

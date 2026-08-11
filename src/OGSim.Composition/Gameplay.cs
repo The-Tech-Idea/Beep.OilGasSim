@@ -179,7 +179,18 @@ public sealed record FieldReadModel(
     /// declining field from a falling market — which are the same number and
     /// opposite decisions: one says build, the other says wait.</para>
     /// </summary>
-    Money OilPrice)
+    Money OilPrice,
+
+    /// <summary>
+    /// What a day of work costs, against the opening year (SDD-009 §6's ED4).
+    ///
+    /// <para>Carried because with a moving index the CATALOGUE price is no
+    /// longer the price: a player told a well costs eight million and charged
+    /// eleven has been misled by the surface, not by the market. A host
+    /// multiplies a listed cost by this to show what it would actually be
+    /// quoted.</para>
+    /// </summary>
+    double CostIndex)
 {
     /// <summary>Where the chain is jammed, if anywhere — the elements that
     /// refused production this tick.</summary>
@@ -243,7 +254,7 @@ internal sealed class FieldProjection(
         new(position.Tick, position.Date, position.Cash, position.Wells,
             position.ActivitiesRunning, position.ProducedThisTick, position.Insolvent,
             progress, Project(beliefs), loop.Chain(), field.Wells(), Prospects(),
-            loop.OilPrice);
+            loop.Market.OilPrice, loop.Market.CostIndex);
 
     /// <summary>
     /// The undrilled structures, in the order the world placed them (D-5).
