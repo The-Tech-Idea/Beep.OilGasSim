@@ -130,6 +130,25 @@ content band tables, and incidentPoints decay with a content half-life —
 so a clean decade genuinely rehabilitates. The lender spread table (SDD-009
 §5) reads this number.
 
+> **R20d.16 amendment. The scale, reconciled, and what is computable today.**
+> This section states standing on 0–100 and `IReserveBasedLending.Redetermine`
+> takes a FRACTION. They are the same number: 0–100 is the presentation scale a
+> host renders and 0–1 is what crosses a contract, like every other fraction in
+> the engine. Stated so the next reader does not implement a spread against 40.
+>
+> **Of the three terms, one has a subject.** Flaring intensity is computable now
+> — the separator's gas leg goes to the flare and stage 6 already accounts what
+> it burned — and it is the term that dominates a producing field's record.
+> Emissions and methane need equipment that vents rather than a flare that burns,
+> and `incidentPoints` needs incidents, which is R18's. The formula is not
+> truncated: the missing terms contribute nothing because nothing has happened
+> yet, which is the correct answer rather than a placeholder for one.
+>
+> **Intensity is per unit PRODUCED, which is what makes it a record rather than a
+> tally.** A big field that flares more gas than a small one in absolute terms
+> may be the better-run of the two, and a lender charging it more for that would
+> be pricing size instead of behaviour.
+
 **Social licence** (0–100): `SL += Σ driver deltas` per tick, clamped;
 driver deltas are content per event class (visible flaring near settlements,
 spills scaled by sensitivity, local employment, community investment).
