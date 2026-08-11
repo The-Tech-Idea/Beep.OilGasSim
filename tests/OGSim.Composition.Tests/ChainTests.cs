@@ -1165,4 +1165,5 @@ public sealed class ChainTests
 
         Assert.IsType<Rejected>(engine.Commands.Submit(new InstallTankCommand()));
     }
+
 }
