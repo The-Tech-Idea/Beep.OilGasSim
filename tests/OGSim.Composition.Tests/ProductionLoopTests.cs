@@ -268,4 +268,5 @@ public sealed class ProductionLoopTests
 
         Assert.Contains(transfers, entry => entry.Id == revenue!.Cause);
     }
+
 }

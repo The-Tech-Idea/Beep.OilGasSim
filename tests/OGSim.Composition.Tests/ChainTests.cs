@@ -1194,6 +1194,19 @@ public sealed class ChainTests
         (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled();
         Produce(engine, target);
 
+        // A DEVELOPED FIELD, not a single well. How much water a field makes
+        // depends on how hard it is produced — one well drains 13% of the oil in
+        // forty years and leaves the reservoir near its opening pressure, so the
+        // aquifer has nothing to push into and the cut stays near connate.
+        //
+        // Measured: one well gives 20,000 m³ a month and a 2% cut; the same
+        // field on better rock gives 36,000 and 20%. Watering out is a
+        // consequence of OFFTAKE, and a test that drilled once was measuring a
+        // field nobody had developed (finding 179's retraction).
+        FieldControl field = engine.Provided.Resolve<FieldControl>();
+
+        for (var well = 0; well < 5; well++) field.Drill(target, new Length(2000.0));
+
         double early = 0.0, late = 0.0;
 
         for (var month = 0; month < 480; month++)
@@ -1231,4 +1244,5 @@ public sealed class ChainTests
 
         return 0.0;
     }
+
 }
