@@ -1284,4 +1284,67 @@ public sealed class NewGameTests
 
         Assert.Equal(CovenantState.Clear, engine.ReadModel!.Covenant.State);
     }
+
+    /// <summary>
+    /// THE PROVISION IS RELEASED WHEN THE BILL IS PAID (SDD-009 §2). A company
+    /// accrues towards plugging a well for as long as it produces; when the well
+    /// is finally plugged, the money it set aside is what pays for it.
+    ///
+    /// <para>Held and never released, the liability sits on the balance sheet
+    /// after the obligation it was held against has gone — and the cost hits the
+    /// accounts TWICE, once as it was accrued and again as it was spent. A
+    /// company would report a loss it had already reported.</para>
+    ///
+    /// <para>Another chain nobody had run: accrual, obligation, abandonment and
+    /// discharge each had a passing test, and the join between the last two was
+    /// never made at all.</para>
+    /// </summary>
+    [Fact]
+    public void R20d14V3_abandoning_a_well_releases_the_provision_held_for_it()
+    {
+        for (ulong seed = 1UL; seed < 60UL; seed++)
+        {
+            Engine engine = NewGame(seed);
+            WorldState world = WorldOf(engine);
+
+            var charged = -1;
+
+            for (int i = 0; i < world.Prospects.Count; i++)
+                if (world.Beneath(world.Prospects[i]) is not null) { charged = i; break; }
+
+            if (charged < 0) continue;
+
+            engine.Commands.Submit(
+                new DrillWellCommand(world.Prospects[charged], new Length(2000.0)));
+
+            for (var month = 0; month < 60; month++) engine.Pipeline.AdvanceTick();
+
+            if (engine.ReadModel!.Wells == 0) continue;      // the hole was lost
+
+            var company = engine.Provided.Resolve<CompanyState>();
+            var obligations = engine.Provided.Resolve<IObligationRegistry>();
+
+            Money accrued = -company.Ledger.BalanceOf(Account.AbandonmentProvision);
+
+            Assert.True(accrued > Money.Zero, "five years of production accrued nothing");
+
+            // Plug it. Nothing else the company owns changes.
+            EntityRef well = engine.ReadModel!.Wellbores[0].Well;
+
+            Assert.IsType<Accepted>(engine.Commands.Submit(
+                new AbandonWellCommand(new EntityId<ICompletion>(well.Value))));
+
+            for (var month = 0; month < 24; month++) engine.Pipeline.AdvanceTick();
+
+            if (obligations.TotalOutstanding > Money.Zero) continue;     // the job failed
+
+            // The obligation is gone. What was held against it must be gone too.
+            Assert.Equal(
+                Money.Zero, -company.Ledger.BalanceOf(Account.AbandonmentProvision));
+
+            return;
+        }
+
+        Assert.Fail("sixty basins produced no well that could be drilled and plugged");
+    }
 }

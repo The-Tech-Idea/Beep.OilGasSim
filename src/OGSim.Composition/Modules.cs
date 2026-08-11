@@ -767,7 +767,9 @@ internal sealed class FieldModule() : EngineModule(Declare(
             // The ENDING (R12b.10). Finding 153's other reason is gone too: opex
             // scales with the liquid lifted, so a watered-out well genuinely
             // costs more than it earns and stopping it is a real decision.
-            new AbandonWellActivity(Defaults.AbandonWellTerms, field, obligations),
+            new AbandonWellActivity(
+                Defaults.AbandonWellTerms, field, obligations,
+                composition.Require<OGSim.Company.CompanyState>()),
         ];
 
         var activities = new ActivityState(
