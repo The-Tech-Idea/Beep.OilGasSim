@@ -335,6 +335,71 @@ field is throttled by disposal capacity and by nothing upstream at all.
 > voidage replacement that makes water drive a decision rather than weather —
 > is its own task and needs the double-count settled in §9's terms first.
 
+> **R20d.24 — pressure support, specified (finding 182). The double-count, settled.**
+>
+> **What shipped in between.** Produced water no longer leaves the game: it is
+> shared out pro rata by the water each compartment made and committed as
+> `CompartmentWithdrawal.Injected`, so the rock gets back what came out of it.
+> The tick balance holds because the two statements are about DIFFERENT
+> inventories — mass leaves the surface network (`DisposedMass`) by entering the
+> reservoir (a receipt), which is where water down a hole actually goes. That is
+> the double-count this note asked to be settled, and it is settled by observing
+> that it was never one: the fault would be an injector reporting both against
+> the SAME inventory.
+>
+> **And it is not a waterflood, which is the finding.** Measured on the shipped
+> field over forty years on five wells: **327,320 m³ into a 100 Mm³ pore volume,
+> 0.0033 pore volumes**, against 0.1–1 for a real flood. A field can only put
+> back the water it makes, and early in life it makes almost none — exactly when
+> pressure support is worth most. Reinjecting produced water is disposal that
+> happens to help; it is not a decision, because there is no alternative to it
+> and no quantity to choose.
+>
+> **The decision is IMPORTED water, and it needs a source element.**
+>
+> ```csharp
+> // A source: no inlets, one outlet, water in at a commanded rate. The mirror
+> // of a completion, and deliberately the same shape — sourcing water from the
+> // sea is not a special case of anything, it is an element that makes mass.
+> public sealed class WaterIntake : IFlowElement
+> {
+>     public ReservoirRate Commanded { get; }     // the player's lever
+> }
+> ```
+>
+> **Conservation is why it is an element rather than a number.** Imported water
+> enters the compartment without leaving the surface network, so adding it to
+> `Injected` directly would create mass at stage 6 and INV1 would halt the tick
+> — correctly. Sourced at an intake and disposed at the injector, it crosses the
+> network the same way produced oil does, and the balance closes for the same
+> reason. The injector therefore needs a second inlet, and the tree-toward-sink
+> rule (§6, one edge per port) is what makes that a declared port rather than an
+> emergent commingle.
+>
+> **The lever is a voidage replacement ratio**, which is what a reservoir
+> engineer actually sets:
+>
+> ```text
+> target   = VRR · (reservoir volume produced this tick)
+> imported = max(0, target − produced water at reservoir conditions)
+> ```
+>
+> clamped by the injector's injectivity, which already constrains and already
+> plugs. VRR = 0 is today's engine; VRR = 1 replaces every barrel of voidage.
+>
+> **It costs money and it is a genuine trade.** Imported water is lifted,
+> filtered, deaerated and pumped, priced per cubic metre — so a company can
+> spend its way to a flatter decline. What it buys is recovery and what it pays
+> is an earlier water breakthrough: flood hard and the field waters out sooner
+> at a higher recovery factor, flood little and the oil stays in the ground.
+> That is the oldest decision in reservoir management, and this engine has every
+> part of it except the water.
+>
+> **And it is what souring is waiting on** (SDD-012 §5). Injection rises by
+> about two orders of magnitude, which puts the throughput ratio where a souring
+> curve at honest content actually bites — so the H2S arrives twenty years after
+> the decision that bought it, rather than never.
+
 ### 3.2 Contacts
 
 ```text
