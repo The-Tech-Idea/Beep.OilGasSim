@@ -1422,4 +1422,64 @@ public sealed class ChainTests
         return -engine.Provided.Resolve<CompanyState>().Ledger.BalanceOf(Account.Revenue)
              + engine.Provided.Resolve<CompanyState>().Ledger.BalanceOf(Account.Opex);
     }
+
+    /// <summary>
+    /// MAINTENANCE HAS A WRONG END AS WELL AS A RIGHT ONE, which is what makes
+    /// SDD-012 §3's three strategies a decision rather than a difficulty
+    /// setting.
+    ///
+    /// <para>A company that overhauls everything the moment it is less than new
+    /// never has a failure and never has any money either: an overhaul is a
+    /// month of that element's life and a bill, and buying back condition the
+    /// hazard curve was barely charging for is the most expensive way to run a
+    /// field. Measured across four triggers on one field — run-to-failure
+    /// $1,776M, at 0.4 $1,842M, at 0.7 $1,771M, at 0.9 $1,374M — so the good
+    /// answer is INTERIOR, and both ends are worse than the middle.</para>
+    ///
+    /// <para>Only the outer comparison is pinned. The interior peak is a 4%
+    /// edge on one seed and asserting it would be fitting a test to a run;
+    /// over-maintaining costing a quarter of the company is a margin that means
+    /// something. R20d.22 is not a chore a player has to remember — it is a
+    /// number they can get wrong in both directions.</para>
+    /// </summary>
+    [Fact]
+    public void R20d22V4_over_maintaining_costs_more_than_letting_things_break()
+    {
+        Money always = Strategy(repairBelow: 0.9);
+        Money onFailure = Strategy(repairBelow: 0.0);
+
+        Assert.True(onFailure > always,
+            $"repairing everything constantly earned {always} against {onFailure} for waiting " +
+            "until things broke; if maintenance is never wasteful it is not a decision");
+    }
+
+    /// <summary>
+    /// Forty years on a developed field, repairing anything broken and anything
+    /// worn past <paramref name="repairBelow"/>. A trigger of zero is
+    /// run-to-failure — the condition test can never fire, so only failures are
+    /// answered.
+    /// </summary>
+    private static Money Strategy(double repairBelow)
+    {
+        (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled();
+        Produce(engine, target);
+
+        FieldControl field = engine.Provided.Resolve<FieldControl>();
+
+        for (var well = 0; well < 5; well++) field.Drill(target, new Length(2000.0));
+
+        for (var month = 0; month < 480; month++)
+        {
+            FieldReadModel? seen = engine.ReadModel;
+
+            if (seen is not null)
+                for (var i = 0; i < seen.Chain.Count; i++)
+                    if (seen.Chain[i].Failed || seen.Chain[i].Condition < repairBelow)
+                        engine.Commands.Submit(new RepairEquipmentCommand(seen.Chain[i].Element));
+
+            engine.Pipeline.AdvanceTick();
+        }
+
+        return engine.Provided.Resolve<CompanyState>().Ledger.Cash;
+    }
 }
