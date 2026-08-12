@@ -122,6 +122,48 @@ Per asset class (inherited, overridable per asset — R18 risk note):
 All three produce ordinary SDD-007 operations — no special execution path.
 ```
 
+> **R20d.26 amendment (finding 185) — planned work and emergency work are two
+> operations, and until they were, §3 offered one strategy.**
+>
+> This composition shipped a single `repair-equipment` template: $0.8M and one
+> tick, whether the equipment had failed or was merely worn. Measured across
+> four seeds, cash at forty years falls **monotonically** with the repair
+> threshold — 1465/1424/1301/886, 2220/2151/1998/1490, 3511/3546/3494/2961,
+> 1550/1549/1313/791 — so run-to-failure wins outright and the other two
+> strategies are ways of paying more for the same field. A choice where one
+> option dominates on every seed is not a choice.
+>
+> **The missing fact is the asymmetry every maintenance organisation is built
+> around: unplanned work is slower and dearer than planned work.** Parts are not
+> on site, a crew has to be mobilised, the fault has to be diagnosed before it
+> can be fixed, and the plant is down for all of it. Pricing the two the same
+> makes waiting free, so of course waiting wins.
+>
+> ```text
+> service-equipment  planned    on equipment that still works    cheap, one tick
+> repair-equipment   emergency  on equipment that has FAILED     dear, several ticks
+> ```
+>
+> Two ordinary SDD-007 operations, as §3 already requires — no special execution
+> path, and the validators make them mutually exclusive so a player cannot buy
+> the planned price for a broken thing.
+>
+> **DURATION is the lever that matters, not cost.** A planned service takes the
+> element's condition back with the field still producing; an emergency repair
+> is served while the route law has the whole chain shut in behind the failure
+> (SDD-002 §5), so its duration is production the company does not get. That is
+> what gives preventive work something to buy, and it is why the two templates
+> differ in months as well as in money.
+>
+> **Calibrated as physics first and measured second.** The asymmetry is real
+> before it is convenient — emergency industrial work genuinely runs several
+> times the cost and several times the duration of planned work — so setting it
+> is not bending a constant until a feature fires (finding 175). Whether an
+> interior optimum then exists is a question for the measurement, and whatever
+> the measurement says is what gets written down: a mechanic that still has one
+> dominant strategy after an honest asymmetry is a finding, not a reason to tune
+> further.
+
 ## 4. Non-equipment hazards
 
 Hydrate/wax/erosion/blowout/spill triggers evaluate their condition margins
