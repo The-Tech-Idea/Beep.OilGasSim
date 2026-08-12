@@ -87,6 +87,26 @@ internal sealed class ReservoirCompartment : IReservoirCompartment
     /// all of its movable water, and a saturation of 1.0000000001 would make the
     /// Corey normalisation report a negative oil permeability.</para>
     /// </summary>
+    /// <summary>
+    /// How much sea water this compartment has taken, as a fraction of its pore
+    /// volume — SDD-012 §5's throughput ratio.
+    ///
+    /// <para>The IMPORTED share and not the injected one. A compartment that
+    /// only ever reinjected the water it produced has been circulating a fluid
+    /// already stripped of sulphate, and does not sour however long it runs
+    /// (finding 182). This number is what separates a waterflood from a disposal
+    /// well.</para>
+    /// </summary>
+    public double ImportedPoreVolumes
+    {
+        get
+        {
+            double pore = Initial.PoreVolume.CubicMetres;
+
+            return pore <= 0.0 ? 0.0 : Cumulative.Imported.CubicMetres / pore;
+        }
+    }
+
     public double WaterSaturation
     {
         get
@@ -137,14 +157,26 @@ internal sealed class ReservoirCompartment : IReservoirCompartment
         SurfaceVolume water,
         ReservoirVolume influx,
         ReservoirVolume injected,
+
+        // PART OF `injected`, not extra to it (SDD-012 §5's R20d.25 amendment).
+        // The balance counts every cubic metre of water that arrives whatever
+        // its provenance; this says how much of it was sea water, which is the
+        // only water that sours the rock.
+        ReservoirVolume imported,
         ReservoirVolume withdrawnThisTick,
         IFluidPropertyModel fluid,
         double maxTickPressureDropFraction)
     {
         ArgumentNullException.ThrowIfNull(fluid);
 
+        if (imported.CubicMetres > injected.CubicMetres)
+            throw new InvariantFault("SDD-012 §5", null,
+                $"compartment {Id.Value} was committed {Format(imported.CubicMetres)} m³ of " +
+                $"bought water inside {Format(injected.CubicMetres)} m³ of injection; the " +
+                "imported share is part of the injected volume, never additional to it");
+
         Pressure startOfTick = Pr;
-        CumulativeProduction next = Cumulative.Plus(oil, gas, water, influx, injected);
+        CumulativeProduction next = Cumulative.Plus(oil, gas, water, influx, injected, imported);
 
         var input = new MaterialBalanceInput(
             InitialPressure: Initial.Pressure,
@@ -184,6 +216,9 @@ internal sealed class ReservoirCompartment : IReservoirCompartment
     /// compartment that has produced nothing has no room, which is not a
     /// negative amount of room.</para>
     /// </summary>
+    private static string Format(double value) =>
+        value.ToString("R", System.Globalization.CultureInfo.InvariantCulture);
+
     public ReservoirVolume VoidageRoom(IFluidPropertyModel fluid)
     {
         ArgumentNullException.ThrowIfNull(fluid);

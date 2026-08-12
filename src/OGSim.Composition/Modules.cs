@@ -116,6 +116,14 @@ internal sealed class SubsurfaceModule() : EngineModule(Declare(
 
         var state = new OGSim.Subsurface.SubsurfaceState(
             composition.Require<IFluidPropertyModel>(), drive,
+
+            // THE LONG ARC (SDD-012 §5). Sea water bought for a flood sours the
+            // rock over decades, and the H2S eats the plant — which is why the
+            // curve lives with the reservoir that makes it rather than with the
+            // equipment that suffers it.
+            Defaults.SourCurve,
+            Defaults.TheRock,
+            Defaults.SouringReferencePpm,
             Defaults.MaxTickPressureDropFraction);
 
         composition.Own(state);

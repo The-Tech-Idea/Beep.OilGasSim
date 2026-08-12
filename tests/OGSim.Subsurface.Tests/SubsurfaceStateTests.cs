@@ -27,7 +27,8 @@ public sealed class SubsurfaceStateTests
                 Temperature.FromCelsius(10.0), Temperature.FromCelsius(180.0)));
 
     private static SubsurfaceState Fresh() =>
-        new(Fluid(), new SolutionGasDrive(), maxTickPressureDropFraction: 0.2);
+        new(Fluid(), new SolutionGasDrive(), Souring.SweetRock, Souring.TheRock,
+            Souring.SouringReference, maxTickPressureDropFraction: 0.2);
 
     /// <summary>A million cubic metres of pore volume at 30 MPa — a small field
     /// that depletes visibly over a handful of years.</summary>
@@ -70,6 +71,7 @@ public sealed class SubsurfaceStateTests
             Water: new SurfaceVolume(0.0),
             Influx: new ReservoirVolume(0.0),
             Injected: new ReservoirVolume(0.0),
+            Imported: new ReservoirVolume(0.0),
             ReservoirVolume: new ReservoirVolume(stockTankOil * 1.2));
 
     [Fact]

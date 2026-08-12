@@ -141,7 +141,23 @@ public sealed record FieldPosition(
 public sealed record WaterFloodView(
     double Target,
     ReservoirVolume Imported,
-    ReservoirVolume Headroom);
+    ReservoirVolume Headroom,
+
+    /// <summary>
+    /// How sour the field has become, 0..1 against the souring reference
+    /// (SDD-012 §5).
+    ///
+    /// <para>ON THE FLOOD VIEW, because that is what caused it. Sea water
+    /// carries the sulphate the bacteria eat, so souring is the delayed half of
+    /// the price of a flood — and a player who saw only "equipment is failing
+    /// more" would be watching a symptom with no cause on the screen beside
+    /// it.</para>
+    ///
+    /// <para>A BELIEF-SIDE number in the making. It is truth today, like the
+    /// rest of this view, and becomes a produced-fluid sample the day
+    /// observations carry composition (SDD-012 §5).</para>
+    /// </summary>
+    double Sourness);
 
 public sealed record FieldReadModel(
     Tick Tick,
@@ -334,7 +350,8 @@ internal sealed class FieldProjection(
             loop.CumulativeFlared,
             Defaults.Record.Standing(loop.CumulativeFlared, loop.CumulativeProduced),
             new WaterFloodView(
-                loop.VoidageReplacement, loop.ImportedThisTick, loop.InjectionHeadroom));
+                loop.VoidageReplacement, loop.ImportedThisTick, loop.InjectionHeadroom,
+                loop.SourFraction));
 
     /// <summary>
     /// The undrilled structures, in the order the world placed them (D-5).

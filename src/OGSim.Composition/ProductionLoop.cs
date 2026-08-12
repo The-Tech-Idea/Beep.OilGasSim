@@ -909,13 +909,14 @@ internal sealed class ProductionLoop
             // metre of it nowhere, in the one case the mechanic exists for, and
             // leave a discharge with no matching receipt. Voidage is what the
             // flood is replacing, so voidage is what it follows.
+            var boughtHere = new ReservoirVolume(
+                voidage <= 0.0 ? 0.0 : imported * (reservoirVolume / voidage));
+
             var injected = new ReservoirVolume(
                 (waterMade <= 0.0
                     ? 0.0
                     : producedBack * (waterReservoir.CubicMetres / waterMade))
-                + (voidage <= 0.0
-                    ? 0.0
-                    : imported * (reservoirVolume / voidage)));
+                + boughtHere.CubicMetres);
 
             withdrawals.Add(new CompartmentWithdrawal(
                 compartment,
@@ -924,6 +925,13 @@ internal sealed class ProductionLoop
                 _fluid.Bw(pressure).Shrink(waterReservoir),
                 Influx: influx,
                 Injected: injected,
+
+                // WHICH OF IT WAS BOUGHT (SDD-012 §5's R20d.25 amendment). The
+                // compartment needs the provenance and not just the volume:
+                // produced water put back has already been through the rock and
+                // sours it least, so a field that only ever reinjects its own
+                // water stays sweet however long it runs.
+                Imported: boughtHere,
                 ReservoirVolume: new ReservoirVolume(reservoirVolume)));
 
             // The injector wears out as it works (R10-V4): every cubic metre
@@ -991,6 +999,23 @@ internal sealed class ProductionLoop
     /// what proportion — last month's voidage, refreshed at every commit.</summary>
     private readonly List<(EntityId<IReservoirCompartmentEntity> Compartment, double Share)>
         _floodShares = [];
+
+    /// <summary>
+    /// How sour the field's fluid is, 0..1 (SDD-012 §5) — what stage 4 charges
+    /// the corrosion term on.
+    ///
+    /// <para>ASKED OF THE ROCK, not of what produced. The first version walked
+    /// the flood's own share list — the compartments that produced last month —
+    /// and so read ZERO for any month the chain was down, which is a soured
+    /// reservoir healing itself every time a separator broke. Sourness is a
+    /// property of the compartment and survives a shut-in, an abandonment and a
+    /// save.</para>
+    ///
+    /// <para>DERIVED, never stored (law L5): it is a question the subsurface can
+    /// answer at any moment, and a copy kept beside it would be one more thing
+    /// to forget to update.</para>
+    /// </summary>
+    public double SourFraction => _subsurface.TrueWorstSourFraction();
 
     /// <summary>
     /// Stage 8. The oil is sold and the field is paid for.
@@ -1737,7 +1762,8 @@ internal sealed class SegmentationStage(
         IReadOnlyList<IFlowElement> registered = network.Registered;
 
         IReadOnlyList<OGSim.Integrity.FailureOutcome> failures =
-            integrity.Advance(registered, loop.WaterCut, Duration.FromTicks(1.0));
+            integrity.Advance(
+                registered, loop.WaterCut, loop.SourFraction, Duration.FromTicks(1.0));
 
         // WHAT IS UP AT THE END OF THE MONTH. Built first because it is the
         // state that persists; the earlier segment is this plus whatever failed

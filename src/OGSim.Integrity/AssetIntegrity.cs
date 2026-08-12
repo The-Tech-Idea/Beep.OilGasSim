@@ -37,6 +37,11 @@ public sealed class AssetIntegrity : IStateOwner
     // is both cheaper and the only way they are guaranteed to agree.
     private double _waterCut;
 
+    // The reservoir's own H2S, normalised (SDD-012 §5). Held the same way and
+    // for the same reason: one number, read once, so every component in a pass
+    // is charged the same service.
+    private double _sourFraction;
+
     // Enrolment order, and never a Dictionary walk (D-5). The index answers
     // "which one is this?" and the list answers "in what order?" — the same
     // split the flow network makes, for the same reason.
@@ -96,7 +101,7 @@ public sealed class AssetIntegrity : IStateOwner
     /// so it does not inherit the field's wear.</para>
     /// </summary>
     public IReadOnlyList<FailureOutcome> Advance(
-        IReadOnlyList<IFlowElement> registered, double waterCut, Duration dt)
+        IReadOnlyList<IFlowElement> registered, double waterCut, double sourFraction, Duration dt)
     {
         ArgumentNullException.ThrowIfNull(registered);
 
@@ -104,7 +109,13 @@ public sealed class AssetIntegrity : IStateOwner
             throw new ModelFault("SDD-012 §1", null,
                 "a water cut is a fraction of the liquid produced");
 
+        if (sourFraction is < 0.0 or > 1.0 || double.IsNaN(sourFraction))
+            throw new ModelFault("SDD-012 §5", null,
+                "a sour fraction is normalised against the souring reference and clamped, " +
+                "so it is a fraction of one like every other term in the severity sum");
+
         _waterCut = waterCut;
+        _sourFraction = sourFraction;
 
         for (int i = 0; i < registered.Count; i++)
         {
@@ -141,21 +152,24 @@ public sealed class AssetIntegrity : IStateOwner
     /// <summary>
     /// SDD-012 §1's severity terms, at what this composition can actually say.
     ///
-    /// <para>TWO OF THE FIVE HAVE A SUBJECT TODAY, and the other three are zero
+    /// <para>THREE OF THE FIVE HAVE A SUBJECT TODAY, and the other two are zero
     /// because nothing has happened rather than because a number is missing —
     /// the same honesty SDD-012 §4 applies to the ESG record's unbuilt terms.
     /// Water cut is the field's, measured at what the chain delivered, and it is
     /// the dominant corrosion driver on a watering-out field. Time since service
-    /// is each item's own.</para>
+    /// is each item's own. SOURING joined them at R20d.25, and it needed a
+    /// waterflood first: the H2S is a consequence of sea water a company bought
+    /// twenty years earlier, and until there was a flood there was no sea
+    /// water.</para>
     ///
-    /// <para>Souring has no model yet (§5), nothing in this composition vents or
-    /// runs hot against a rated temperature, and duty needs a rated throughput
-    /// per element that the tier datasheets do not carry. Each becomes a term
-    /// the day it has something to read.</para>
+    /// <para>Nothing in this composition vents or runs hot against a rated
+    /// temperature, and duty needs a rated throughput per element that the tier
+    /// datasheets do not carry. Each becomes a term the day it has something to
+    /// read.</para>
     /// </summary>
     private ServiceSeverity SeverityOf(ComponentState component) =>
         new(WaterCut: _waterCut,
-            SourFraction: 0.0,
+            SourFraction: _sourFraction,
             DutyFraction: 0.0,
             OverTemperature: 0.0,
             TicksSinceService: component.TicksSinceService);

@@ -39,13 +39,45 @@ internal sealed class SubsurfaceState : IStateOwner
 
     private ulong _nextId;
 
+    private readonly ISouringModel _souring;
+    private readonly ContentId _rockType;
+    private readonly double _souringReferencePpm;
+
     public SubsurfaceState(
         IFluidPropertyModel fluid,
         IDriveMechanism drive,
+
+        /// <summary>SDD-012 §5's curve. Required rather than optional: a
+        /// compartment that could not answer how sour it is would make the
+        /// severity term unaskable, and law L2 forbids a dependency with a
+        /// default.</summary>
+        ISouringModel souring,
+
+        /// <summary>
+        /// WHICH ROCK, and it is held here because there is one.
+        ///
+        /// <para>§5 says the curve is content per rock type and the contract
+        /// takes one, but `RockTruth` carries no type today — this composition
+        /// ships a single rock. Holding the id here rather than inventing a
+        /// field on the rock keeps the seam honest: the day a second rock type
+        /// exists, this becomes a per-compartment read and the signature above
+        /// does not change.</para>
+        /// </summary>
+        ContentId rockType,
+
+        /// <summary>The concentration this model treats as fully sour service —
+        /// what §1's severity term is measured against.</summary>
+        double souringReferencePpm,
         double maxTickPressureDropFraction)
     {
         ArgumentNullException.ThrowIfNull(fluid);
         ArgumentNullException.ThrowIfNull(drive);
+        ArgumentNullException.ThrowIfNull(souring);
+
+        if (souringReferencePpm <= 0.0 || !double.IsFinite(souringReferencePpm))
+            throw new ContentFault("SDD-012 §5", null,
+                "the souring reference must be a positive concentration; the severity term " +
+                "divides by it");
 
         if (maxTickPressureDropFraction is <= 0.0 or >= 1.0)
             throw new ModelFault("SDD-003 §3.1", null,
@@ -55,12 +87,19 @@ internal sealed class SubsurfaceState : IStateOwner
 
         _fluid = fluid;
         _defaultDrive = drive;
+        _souring = souring;
+        _rockType = rockType;
+        _souringReferencePpm = souringReferencePpm;
         _maxTickPressureDropFraction = maxTickPressureDropFraction;
     }
 
     public StateKey Key { get; } = new("subsurface.compartments");
 
-    public int SchemaVersion => 1;
+    // 2: the compartment carries how much of its injected water was BOUGHT
+    // (SDD-012 §5's R20d.25 amendment). Souring cares which water it was, and
+    // the balance cannot tell — so the provenance is written beside the volume
+    // rather than derived from it, which is not possible after the fact.
+    public int SchemaVersion => 2;
 
     public int Count => _compartments.Count;
 
@@ -218,6 +257,64 @@ internal sealed class SubsurfaceState : IStateOwner
     internal ReservoirVolume TrueVoidageRoomOf(EntityId<IReservoirCompartmentEntity> compartment) =>
         Find(compartment).VoidageRoom(_fluid);
 
+    /// <summary>
+    /// How sour this compartment's fluid is, 0..1 (SDD-012 §5's R20d.25
+    /// amendment).
+    ///
+    /// <para>NORMALISED against a souring reference and not a raw mass fraction,
+    /// because every other term in <c>ServiceSeverity</c> is a fraction of one —
+    /// §0 divides the temperature term by a span for the same reason. H2S at ppm
+    /// scale on a sum whose base term is 1 would need a coefficient of order a
+    /// thousand, and a coefficient whose only job is to undo a unit choice is a
+    /// number nobody can review.</para>
+    ///
+    /// <para>Clamped at one: past the reference the service is as severe as this
+    /// model describes, and a curve is not evidence about concentrations beyond
+    /// the band it was fitted in.</para>
+    /// </summary>
+    internal double TrueSourFractionOf(EntityId<IReservoirCompartmentEntity> compartment) =>
+        SournessOf(Find(compartment));
+
+    /// <summary>
+    /// The SOUREST compartment in the field, 0..1.
+    ///
+    /// <para>Asked of every compartment rather than of the ones that produced,
+    /// and that is not a convenience. Sourness is a property of the ROCK: a
+    /// field whose wells were all shut in for a month is exactly as sour at the
+    /// end of it as at the start, and deriving it from a production list made it
+    /// read zero for any month the chain happened to be down — a soured
+    /// reservoir that healed itself every time a separator broke.</para>
+    ///
+    /// <para>The WORST and not an average, because the plant is one chain and
+    /// every compartment's fluid crosses it: what the metal sees is the sourest
+    /// thing arriving, and averaging would let a large sweet compartment hide a
+    /// small vicious one.</para>
+    ///
+    /// <para>Walked over the compartment LIST in issue order, never the
+    /// dictionary (rule D-5).</para>
+    /// </summary>
+    internal double TrueWorstSourFraction()
+    {
+        var worst = 0.0;
+
+        for (int i = 0; i < _compartments.Count; i++)
+        {
+            double here = SournessOf(_compartments[i]);
+            if (here > worst) worst = here;
+        }
+
+        return worst;
+    }
+
+    private double SournessOf(ReservoirCompartment compartment)
+    {
+        double ppm = _souring.HydrogenSulphidePpm(_rockType, compartment.ImportedPoreVolumes);
+
+        double fraction = ppm / _souringReferencePpm;
+
+        return fraction > 1.0 ? 1.0 : fraction;
+    }
+
     // Null MEANS no aquifer, and every compartment has an entry: a missing key
     // is a compartment that does not exist, which is a defect worth telling
     // apart from a field that simply has no water leg.
@@ -254,7 +351,8 @@ internal sealed class SubsurfaceState : IStateOwner
 
             compartment.CommitWithdrawal(
                 withdrawal.Oil, withdrawal.Gas, withdrawal.Water,
-                withdrawal.Influx, withdrawal.Injected, withdrawal.ReservoirVolume,
+                withdrawal.Influx, withdrawal.Injected, withdrawal.Imported,
+                withdrawal.ReservoirVolume,
                 _fluid, _maxTickPressureDropFraction);
         }
     }
@@ -386,6 +484,7 @@ internal sealed class SubsurfaceState : IStateOwner
             writer.WriteDouble(at + "wp", compartment.Cumulative.Water.CubicMetres);
             writer.WriteDouble(at + "we", compartment.Cumulative.WaterInflux.CubicMetres);
             writer.WriteDouble(at + "vinj", compartment.Cumulative.Injected.CubicMetres);
+            writer.WriteDouble(at + "vimp", compartment.Cumulative.Imported.CubicMetres);
         }
     }
 
@@ -445,7 +544,8 @@ internal sealed class SubsurfaceState : IStateOwner
                     new StandardGasVolume(reader.ReadDouble(at + "gp")),
                     new SurfaceVolume(reader.ReadDouble(at + "wp")),
                     new ReservoirVolume(reader.ReadDouble(at + "we")),
-                    new ReservoirVolume(reader.ReadDouble(at + "vinj"))),
+                    new ReservoirVolume(reader.ReadDouble(at + "vinj")),
+                    new ReservoirVolume(reader.ReadDouble(at + "vimp"))),
                 contacts,
                 initial.Mass,
                 _fluid);
@@ -471,6 +571,10 @@ internal sealed record CompartmentWithdrawal(
     SurfaceVolume Water,
     ReservoirVolume Influx,
     ReservoirVolume Injected,
+
+    /// <summary>How much of <see cref="Injected"/> the company BOUGHT
+    /// (SDD-012 §5's R20d.25 amendment). Part of it, never added to it.</summary>
+    ReservoirVolume Imported,
     ReservoirVolume ReservoirVolume);
 
 /// <summary>

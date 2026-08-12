@@ -1282,6 +1282,42 @@ internal static class Defaults
             "fidelity nobody defined");
     }
 
+    /// <summary>
+    /// The one rock this composition ships (SDD-012 §5). Named rather than
+    /// implied, so the day there is a second one the curve is selected by an id
+    /// that already exists instead of by a field being invented.
+    /// </summary>
+    public static ContentId TheRock { get; } = new("sandstone-e1");
+
+    /// <summary>
+    /// SDD-012 §5's souring curve — <c>ppm = ultimate·r/(half + r)</c> against
+    /// the sea water a compartment has taken, in pore volumes.
+    ///
+    /// <para>2,000 ppm ultimate is a properly sour field: anything above about
+    /// 100 ppm needs sour-service metallurgy, and North Sea fields soured by
+    /// seawater flooding have reached thousands. A half-ratio of 0.25 pore
+    /// volumes puts the knee in the middle of a flood's life — R20d.24's own
+    /// measurement is 0.18 PV over forty years at VRR 1, so a flooded field
+    /// arrives at roughly 42% of the ultimate and an unflooded one at nothing.
+    /// That is the shape §5 asks for: the H2S turns up two decades after the
+    /// decision that bought it, and never on a field that never flooded.</para>
+    /// </summary>
+    public static ISouringModel SourCurve { get; } =
+        new Integrity.SaturatingSourCurve(
+            new ContentId("sour-curve-sandstone"), ultimatePpm: 2_000.0, halfRatio: 0.25);
+
+    /// <summary>
+    /// What this model calls fully sour service, in ppm (SDD-012 §5's R20d.25
+    /// amendment).
+    ///
+    /// <para>1,000 ppm — the concentration at which a wetted carbon-steel plant
+    /// is in genuinely aggressive service rather than merely sour. §1's
+    /// `SourFactor` is then a coefficient on a 0..1 fraction like every other
+    /// term, instead of a number of order a thousand whose only job would be to
+    /// undo the choice of ppm as a unit.</para>
+    /// </summary>
+    public const double SouringReferencePpm = 1_000.0;
+
     public static Integrity.DegradationCoefficients Decay { get; } =
         new(BaseRatePerYear: 0.05, WaterCutFactor: 1.0, SourFactor: 2.0,
             DutyFactor: 0.5, TemperatureFactor: 1.5, ServiceIntervalFactor: 0.2);

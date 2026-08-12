@@ -1605,6 +1605,116 @@ public sealed class ChainTests
         Assert.IsType<Accepted>(engine.Commands.Submit(new SetVoidageReplacementCommand(10.0)));
     }
 
+    // ------------------------------------------ the reservoir sours (R20d.25)
+
+    /// <summary>
+    /// A FLOOD SOURS THE RESERVOIR AND NOTHING ELSE DOES (SDD-012 §5).
+    ///
+    /// <para>This is the whole of finding 182's correction in one assertion.
+    /// Souring was built once against total injection, and could not fire: a
+    /// field that only reinjects what it produces puts 0.0033 pore volumes
+    /// through in forty years. But the volume was the smaller half of the error
+    /// — reinjected produced water has already been through the rock, and is
+    /// anoxic, reduced and stripped of the sulphate the bacteria eat. It is the
+    /// fluid that sours a reservoir LEAST. So a field with a disposal well and
+    /// no flood must stay EXACTLY sweet, for ever, and it does.</para>
+    ///
+    /// <para>MONOTONIC, which §5 pins: water already injected cannot un-sour a
+    /// reservoir. Asserted every month rather than at the ends, because the
+    /// first version of this read the sourness off the compartments that
+    /// PRODUCED and so reported zero for any month the chain was down — a
+    /// soured reservoir healing itself every time a separator broke.</para>
+    /// </summary>
+    [Fact]
+    public void R20d25V1_a_flood_sours_the_reservoir_and_a_disposal_well_never_does()
+    {
+        (double sweet, bool _) = Sourness(Supported, vrr: 0.0);
+        (double soured, bool climbed) = Sourness(Supported, vrr: 1.0);
+
+        Assert.True(sweet == 0.0,
+            $"a field that only put back the water it made reached a sourness of {sweet}; " +
+            "produced water is the fluid that sours a reservoir least and this must be zero");
+
+        Assert.True(soured > 0.5,
+            $"forty years of seawater flood left the reservoir at {soured}; the curve is not " +
+            "firing at the throughput a real flood puts through");
+
+        Assert.True(climbed,
+            "the sourness fell at least once — water already injected cannot un-sour a " +
+            "reservoir, so a reading that drops is a reading taken from the wrong thing");
+    }
+
+    /// <summary>
+    /// AND THE H2S ARRIVES IN THE MAINTENANCE BILL, twenty years after the
+    /// decision that bought it (SDD-012 §1's sour severity term).
+    ///
+    /// <para>Which is what makes this a consequence rather than a tax. The
+    /// response to a soured field is the flood decision itself, taken two
+    /// decades earlier: flood a reservoir that needed it and the recovery pays
+    /// for the corrosion many times over (R20d24V1); flood one the aquifer
+    /// already supported and there was nothing to win in the first place, so the
+    /// bill is all there is. This measures the second case, because it is the
+    /// one where souring is visible on its own.</para>
+    ///
+    /// <para>Both runs are the same seed with the same element set, and the
+    /// margin is a fifth rather than a percent (finding 184).</para>
+    /// </summary>
+    [Fact]
+    public void R20d25V2_souring_arrives_in_the_maintenance_bill()
+    {
+        int sweet = Overhauls(Supported, vrr: 0.0);
+        int soured = Overhauls(Supported, vrr: 1.0);
+
+        Assert.True(soured > sweet * 1.1,
+            $"a soured field needed {soured} overhauls against {sweet} for a sweet one; " +
+            "if H2S does not eat the plant then souring costs a company nothing");
+    }
+
+    /// <summary>Forty years: the sourness the field ends at, and whether it ever
+    /// fell on the way.</summary>
+    private static (double Final, bool NeverFell) Sourness(double aquifer, double vrr)
+    {
+        Engine engine = Flooding(aquifer, vrr);
+
+        var last = 0.0;
+        var neverFell = true;
+
+        for (var month = 0; month < 480; month++)
+        {
+            Fixture.Repair(engine);
+            engine.Pipeline.AdvanceTick();
+
+            double now = engine.ReadModel!.Flood.Sourness;
+            if (now < last) neverFell = false;
+            last = now;
+        }
+
+        return (last, neverFell);
+    }
+
+    /// <summary>Forty years: how many overhauls the company actually paid for.</summary>
+    private static int Overhauls(double aquifer, double vrr)
+    {
+        Engine engine = Flooding(aquifer, vrr);
+        var paid = 0;
+
+        for (var month = 0; month < 480; month++)
+        {
+            FieldReadModel? seen = engine.ReadModel;
+
+            if (seen is not null)
+                for (var i = 0; i < seen.Chain.Count; i++)
+                    if (seen.Chain[i].Failed
+                        && engine.Commands.Submit(
+                            new RepairEquipmentCommand(seen.Chain[i].Element)) is Accepted)
+                        paid++;
+
+            engine.Pipeline.AdvanceTick();
+        }
+
+        return paid;
+    }
+
     /// <summary>A compartment with no aquifer: everything it gives up, it gives
     /// up from its own expansion, which runs out fast.</summary>
     private const double Dead = 0.0;
@@ -1619,6 +1729,31 @@ public sealed class ChainTests
     /// </summary>
     private static (double Recovered, Money Cash, double Bought) Flooded(
         double aquifer, double vrr)
+    {
+        Engine engine = Flooding(aquifer, vrr);
+
+        var recovered = 0.0;
+        var bought = 0.0;
+
+        for (var month = 0; month < 480; month++)
+        {
+            Fixture.Repair(engine);
+            engine.Pipeline.AdvanceTick();
+
+            FieldReadModel seen = engine.ReadModel!;
+            recovered += seen.ProducedThisTick.CubicMetres;
+            bought += seen.Flood.Imported.CubicMetres;
+        }
+
+        return (recovered, engine.Provided.Resolve<CompanyState>().Ledger.Cash, bought);
+    }
+
+    /// <summary>
+    /// A six-well field on a reservoir with the stated aquifer, ordered to
+    /// replace the stated share of its voidage — the fixture both the flood and
+    /// the souring measurements are taken on.
+    /// </summary>
+    private static Engine Flooding(double aquifer, double vrr)
     {
         Built built = Assert.IsType<Built>(EngineBuilder.Build(Fixture.Settings()));
         Engine engine = built.Engine;
@@ -1656,19 +1791,6 @@ public sealed class ChainTests
 
         if (vrr > 0.0) engine.Commands.Submit(new SetVoidageReplacementCommand(vrr));
 
-        var recovered = 0.0;
-        var bought = 0.0;
-
-        for (var month = 0; month < 480; month++)
-        {
-            Fixture.Repair(engine);
-            engine.Pipeline.AdvanceTick();
-
-            FieldReadModel seen = engine.ReadModel!;
-            recovered += seen.ProducedThisTick.CubicMetres;
-            bought += seen.Flood.Imported.CubicMetres;
-        }
-
-        return (recovered, engine.Provided.Resolve<CompanyState>().Ledger.Cash, bought);
+        return engine;
     }
 }
