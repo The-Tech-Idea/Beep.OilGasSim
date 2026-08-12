@@ -193,6 +193,31 @@ internal sealed class SubsurfaceState : IStateOwner
             : aquifer.InfluxDuring(Find(compartment).Pr, over);
     }
 
+    /// <summary>
+    /// How much more water this compartment can be given before it is back at
+    /// the pressure it was discovered at (SDD-003 §3.1's R20d.24b amendment).
+    ///
+    /// <para>THE BALANCE'S OWN CEILING, said as a volume. §3.1's bisection
+    /// searches [floor, Pi] and faults when there is no root in it — a
+    /// compartment given more replacement than it has voidage has been pushed
+    /// above discovery pressure, which this model cannot represent and correctly
+    /// refuses to guess at. A flood that ignored the ceiling would not produce a
+    /// wrong number; it would halt the tick.</para>
+    ///
+    /// <para>Every expansion term is zero at Pi, so Φ(Pi) is exactly
+    /// <c>We + Vinj − F(Pi)</c> and the room is its negation. Derived from the
+    /// balance rather than restated beside it (law L5): a second formula for the
+    /// same ceiling is a second formula to get wrong.</para>
+    ///
+    /// <para>It nets the AQUIFER off for free, which is why the flood needs no
+    /// separate influx term. A compartment held up by a strong aquifer has
+    /// little room, so a company that orders a flood on one buys almost nothing
+    /// — and that is the right answer rather than a special case: the water is
+    /// already arriving and nobody has to pay for it.</para>
+    /// </summary>
+    internal ReservoirVolume TrueVoidageRoomOf(EntityId<IReservoirCompartmentEntity> compartment) =>
+        Find(compartment).VoidageRoom(_fluid);
+
     // Null MEANS no aquifer, and every compartment has an entry: a missing key
     // is a compartment that does not exist, which is a defect worth telling
     // apart from a field that simply has no water leg.

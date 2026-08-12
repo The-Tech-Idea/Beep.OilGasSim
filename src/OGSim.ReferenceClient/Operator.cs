@@ -173,8 +173,42 @@ public sealed class Operator
         if (seen.Cash > ExportLineWorthBuildingAt)
             moved |= _engine.Commands.Submit(new ExpandExportCommand()) is Accepted;
 
+        FloodIfItIsWorthIt(seen);
+
         return moved;
     }
+
+    /// <summary>
+    /// Replace the voidage once the field is developed (SDD-003 §3.1d).
+    ///
+    /// <para>THE SIMPLEST POLICY THAT IS NOT ALWAYS WRONG: order a full
+    /// replacement and let the engine's two ceilings decide what it actually
+    /// buys. A field the aquifer already supports has almost no room, so the
+    /// flood costs it almost nothing; a field with no drive of its own has all
+    /// the room there is, and the water is what makes it worth anything at all
+    /// — 2.1% of the oil unflooded against 22.1% flooded.</para>
+    ///
+    /// <para>It is still a POLICY rather than the right answer, and deliberately
+    /// a crude one: an operator that measured its own pressure decline first
+    /// would spend less on the fields that never needed it. What matters here is
+    /// that a headless client can reach the lever at all — the read model
+    /// carries the target, what was bought and what room is left, so the whole
+    /// decision is expressible through `ReadModel` and `Commands` alone.</para>
+    ///
+    /// <para>Ordered ONCE and then refused, which is what the validator is for:
+    /// a set point that is already where it was asked to be is a rejection
+    /// rather than a silent no-op.</para>
+    /// </summary>
+    private void FloodIfItIsWorthIt(FieldReadModel seen)
+    {
+        if (seen.Wellbores.Count < _wellTarget) return;
+
+        _engine.Commands.Submit(new SetVoidageReplacementCommand(FullReplacement));
+    }
+
+    /// <summary>Replace every reservoir cubic metre the field takes out — VRR 1,
+    /// which is what a waterflood IS.</summary>
+    private const double FullReplacement = 1.0;
 
     /// <summary>
     /// What a client wants in the bank before committing to a bigger line.

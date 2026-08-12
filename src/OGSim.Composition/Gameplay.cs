@@ -130,6 +130,19 @@ public sealed record FieldPosition(
 /// screen, and every entry in it was paid for by an activity that completed
 /// (R20d.7).</para>
 /// </summary>
+/// <summary>
+/// What the waterflood is doing (SDD-003 §3.1d, SDD-017 §2).
+///
+/// <para><c>Headroom</c> is the actionable one: it is what the injector will
+/// still take this month once the produced water has had its share, so a flood
+/// asking for more than that is being clamped and the answer is to unplug the
+/// well rather than to raise the target.</para>
+/// </summary>
+public sealed record WaterFloodView(
+    double Target,
+    ReservoirVolume Imported,
+    ReservoirVolume Headroom);
+
 public sealed record FieldReadModel(
     Tick Tick,
     GameDate Date,
@@ -237,7 +250,19 @@ public sealed record FieldReadModel(
     /// </summary>
     Mass Flared,
 
-    double EsgStanding)
+    double EsgStanding,
+
+    /// <summary>
+    /// The flood: what was asked for, what was bought, and what room is left
+    /// (SDD-003 §3.1d's R20d.24 amendment).
+    ///
+    /// <para>All three, because a target MET and a target CLAMPED are different
+    /// situations with opposite answers — the first says the flood is working
+    /// and the second says the injector is full, and what to do about the second
+    /// is an acid job rather than a bigger number. A player shown only the
+    /// target could not tell which they had.</para>
+    /// </summary>
+    WaterFloodView Flood)
 {
     /// <summary>Where the chain is jammed, if anywhere — the elements that
     /// refused production this tick.</summary>
@@ -307,7 +332,9 @@ internal sealed class FieldProjection(
             reserves.Remaining(loop.CumulativeProduced),
             bank.Terms, bank.Covenant, bank.Drawn,
             loop.CumulativeFlared,
-            Defaults.Record.Standing(loop.CumulativeFlared, loop.CumulativeProduced));
+            Defaults.Record.Standing(loop.CumulativeFlared, loop.CumulativeProduced),
+            new WaterFloodView(
+                loop.VoidageReplacement, loop.ImportedThisTick, loop.InjectionHeadroom));
 
     /// <summary>
     /// The undrilled structures, in the order the world placed them (D-5).

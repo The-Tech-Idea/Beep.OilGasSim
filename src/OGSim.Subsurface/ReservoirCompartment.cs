@@ -175,6 +175,44 @@ internal sealed class ReservoirCompartment : IReservoirCompartment
     }
 
     /// <summary>
+    /// How much more replacement volume this compartment can take before it is
+    /// back at discovery pressure (SDD-003 §3.1's R20d.24b amendment).
+    ///
+    /// <para><c>−Φ(Pi)</c>, and every expansion term is zero at Pi — so this is
+    /// the withdrawal the compartment has made, less the water that has already
+    /// come back to it from an aquifer or an injector. Floored at nothing: a
+    /// compartment that has produced nothing has no room, which is not a
+    /// negative amount of room.</para>
+    /// </summary>
+    public ReservoirVolume VoidageRoom(IFluidPropertyModel fluid)
+    {
+        ArgumentNullException.ThrowIfNull(fluid);
+
+        var input = new MaterialBalanceInput(
+            InitialPressure: Initial.Pressure,
+            OriginalOilInPlace: Initial.OilInPlace,
+            GasCapRatio: Initial.GasCapRatio,
+            ConnateWaterSaturation: Initial.ConnateWaterSaturation,
+            WaterCompressibility: Initial.WaterCompressibility,
+            RockCompressibility: Rock.RockCompressibility,
+            CumulativeOilProduced: Cumulative.Oil,
+            CumulativeGasProduced: Cumulative.Gas,
+            CumulativeWaterProduced: Cumulative.Water,
+            CumulativeWaterInflux: Cumulative.WaterInflux,
+            CumulativeInjected: Cumulative.Injected,
+
+            // Neither reaches Φ. Named rather than defaulted because the record
+            // has no defaults (law L2), and the honest values for "how much room
+            // is there right now" are the position this compartment is in.
+            StartPressure: Pr,
+            WithdrawnThisTick: new ReservoirVolume(0.0));
+
+        double room = -MaterialBalance.Residual(input, fluid, Initial.Pressure);
+
+        return new ReservoirVolume(room > 0.0 ? room : 0.0);
+    }
+
+    /// <summary>
     /// Restores the position a save recorded, then re-derives the pressure from
     /// it rather than reading a stored one — the loaded reservoir is the one the
     /// material balance says it must be, so a save cannot carry a pressure the

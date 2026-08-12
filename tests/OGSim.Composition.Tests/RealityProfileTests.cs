@@ -135,7 +135,7 @@ public sealed class RealityProfileTests
             engine.Pipeline.AdvanceTick();
 
             Assert.Equal(
-                ["well-1", "gathering-1", "manifold", "flowline", "separator",
+                ["well-1", "water-intake", "gathering-1", "manifold", "flowline", "separator",
                  "water-disposal", "gas-plant", "flare", "treater", "custody-meter", "tank"],
                 engine.ReadModel!.Chain.Select(element => element.DisplayId));
 

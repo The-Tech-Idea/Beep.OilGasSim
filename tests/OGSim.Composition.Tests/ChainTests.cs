@@ -220,7 +220,11 @@ public sealed class ChainTests
              // The treater sits on the OIL leg between the separator and the
              // meter: a field that waters out sells a stream the meter would
              // turn away, and this is what dries it (finding 173).
-             ["well-1", "gathering-1", "manifold", "flowline", "separator",
+             // The water intake is a SOURCE and sorts with the wells, which is
+             // what it is: an element that makes mass out of nothing, feeding
+             // the injector's second inlet (R20d.24). A flood's water crosses
+             // the network exactly as produced oil does.
+             ["well-1", "water-intake", "gathering-1", "manifold", "flowline", "separator",
              "water-disposal", "gas-plant", "flare", "treater", "custody-meter", "tank"],
             engine.ReadModel!.Chain.Select(element => element.DisplayId));
     }
@@ -229,11 +233,13 @@ public sealed class ChainTests
     /// Every element on the FLOWING legs reports what crossed it, so a host can
     /// draw the line rather than only its two ends.
     ///
-    /// <para>The water leg is deliberately excluded: a field at connate
-    /// saturation produces no water, so the disposal well is dry and reads zero.
-    /// That is SDD-003 §3.1c's breakthrough — an idle leg on a young field is a
-    /// true statement about it, and a chain that showed water moving before
-    /// breakthrough would be the wrong one.</para>
+    /// <para>The water leg is deliberately excluded, at both ends. A field at
+    /// connate saturation produces no water, so the disposal well is dry and
+    /// reads zero — that is SDD-003 §3.1c's breakthrough, and a chain that
+    /// showed water moving before it would be the wrong one. The intake is dry
+    /// for a different reason and the same kind of reason: nobody has ordered a
+    /// flood, so no water is bought (R20d.24). An idle leg on a young field is a
+    /// true statement about it.</para>
     /// </summary>
     [Fact]
     public void R20dV1_every_element_on_a_flowing_leg_reports_what_crossed_it()
@@ -245,7 +251,7 @@ public sealed class ChainTests
 
         foreach (ChainElementView element in engine.ReadModel!.Chain)
         {
-            if (element.DisplayId == "water-disposal") continue;
+            if (element.DisplayId is "water-disposal" or "water-intake") continue;
 
             Assert.True(element.Throughput.Kilograms > 0.0,
                 $"{element.DisplayId} shows no throughput, so a host cannot draw the flow");
@@ -1481,5 +1487,188 @@ public sealed class ChainTests
         }
 
         return engine.Provided.Resolve<CompanyState>().Ledger.Cash;
+    }
+
+    // ------------------------------------------ the waterflood (R20d.24)
+
+    /// <summary>
+    /// A FIELD ON A SOLUTION-GAS DRIVE HAS NO ENERGY OF ITS OWN, and a flood is
+    /// the answer — which is the oldest decision in reservoir management and the
+    /// one this engine had every part of except the water.
+    ///
+    /// <para>Produced water already went back down the hole, but a field can
+    /// only put back what it makes, and early in life it makes almost none —
+    /// exactly when support is worth most. Measured before this shipped: 0.0033
+    /// pore volumes in forty years, against 0.1–1 for a real flood (finding
+    /// 182). The decision is IMPORTED water.</para>
+    ///
+    /// <para>The margin is a MULTIPLE rather than a percentage, so it is not a
+    /// measurement that a different failure sequence could reverse: 2.1% of the
+    /// oil unflooded against 22.1% flooded, and the unflooded company ends the
+    /// run insolvent.</para>
+    /// </summary>
+    [Fact]
+    public void R20d24V1_a_field_with_no_drive_of_its_own_is_transformed_by_a_flood()
+    {
+        (double natural, Money broke, double boughtNothing) = Flooded(Dead, vrr: 0.0);
+        (double flooded, Money rich, double bought) = Flooded(Dead, vrr: 1.0);
+
+        Assert.True(boughtNothing == 0.0,
+            $"a field nobody ordered a flood on bought {boughtNothing} m³ of water");
+
+        Assert.True(bought > 0.0,
+            "a field ordered to replace its voidage bought no water at all");
+
+        Assert.True(flooded > natural * 3.0,
+            $"a flooded field recovered {flooded:F0} m³ against {natural:F0} unflooded; " +
+            "secondary recovery that does not multiply primary is not secondary recovery");
+
+        Assert.True(rich > broke,
+            $"the flood earned {rich} against {broke} for leaving the oil in the ground");
+    }
+
+    /// <summary>
+    /// AND ON A FIELD THE AQUIFER ALREADY SUPPORTS, THE SAME ORDER IS A LOSS.
+    ///
+    /// <para>This is the half that makes it a decision rather than a button. The
+    /// water is already arriving and nobody is paying for it, so buying more
+    /// costs money and brings the breakthrough forward for nothing — measured at
+    /// $71M on a $1.79bn company. A player therefore has to work out WHICH
+    /// RESERVOIR THEY ARE STANDING ON before pulling the lever, which is the
+    /// question the whole information game exists to make them answer.</para>
+    ///
+    /// <para>Both runs are the same seed and the same element set, so the
+    /// failure sequence is identical and the difference is the flood rather than
+    /// the dice.</para>
+    /// </summary>
+    [Fact]
+    public void R20d24V2_flooding_a_field_the_aquifer_already_supports_is_a_loss()
+    {
+        (double _, Money left, double _) = Flooded(Supported, vrr: 0.0);
+        (double _, Money spent, double bought) = Flooded(Supported, vrr: 1.0);
+
+        Assert.True(bought > 0.0,
+            "the field bought no water, so this measures nothing");
+
+        Assert.True(spent < left,
+            $"a company that flooded an aquifer-supported field ended with {spent} against " +
+            $"{left} for leaving it alone; the flood has no cost and is therefore no decision");
+    }
+
+    /// <summary>
+    /// A FLOOD CANNOT PUT BACK MORE THAN THE FIELD HAS TAKEN OUT (SDD-003
+    /// §3.1's R20d.24b amendment §0).
+    ///
+    /// <para>Not a balance choice — the balance's own ceiling. §3.1's bisection
+    /// searches up to the discovery pressure and FAULTS when there is no root in
+    /// range, so a compartment given more replacement than it has voidage does
+    /// not produce a wrong number, it halts the tick. That is exactly what VRR
+    /// 1.0 did on the shipped water-drive field before the cap existed.</para>
+    ///
+    /// <para>So VRR 2 is not twice the flood; it is "catch up as fast as the
+    /// well allows", and it stops where the rock does.</para>
+    /// </summary>
+    [Fact]
+    public void R20d24V3_a_flood_cannot_put_back_more_than_the_field_took_out()
+    {
+        (double _, Money _, double atOne) = Flooded(Dead, vrr: 1.0);
+        (double _, Money _, double atTwo) = Flooded(Dead, vrr: 2.0);
+
+        Assert.True(atOne > 0.0, "the field bought no water, so this measures nothing");
+
+        // Not "roughly equal": the ceiling is a hard one, so twice the target
+        // buys at most a rounding more than replacing the voidage exactly.
+        Assert.True(atTwo < atOne * 1.05,
+            $"VRR 2 bought {atTwo:F0} m³ against VRR 1's {atOne:F0}; the reservoir ceiling " +
+            "is not holding and the balance will fault the first time it is exceeded");
+    }
+
+    /// <summary>
+    /// The lever refuses what is meaningless and what would change nothing
+    /// (R1 §2.5) — and has no ceiling of its own, because the rock is the
+    /// ceiling and a second one could disagree with it.
+    /// </summary>
+    [Fact]
+    public void R20d24V4_the_flood_target_refuses_what_is_not_a_ratio()
+    {
+        (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled();
+        Produce(engine, target);
+
+        Assert.IsType<Rejected>(engine.Commands.Submit(new SetVoidageReplacementCommand(-1.0)));
+
+        // Already there: the field ships at zero, so ordering zero changes
+        // nothing and a player acting on a stale read model is told so.
+        Assert.IsType<Rejected>(engine.Commands.Submit(new SetVoidageReplacementCommand(0.0)));
+
+        // And no invented upper bound. An absurd ratio is accepted and then
+        // clamped by the injector and the rock, which are the real limits.
+        Assert.IsType<Accepted>(engine.Commands.Submit(new SetVoidageReplacementCommand(10.0)));
+    }
+
+    /// <summary>A compartment with no aquifer: everything it gives up, it gives
+    /// up from its own expansion, which runs out fast.</summary>
+    private const double Dead = 0.0;
+
+    /// <summary>The shipped field's aquifer — four pore volumes of water behind
+    /// it, arriving over decades.</summary>
+    private const double Supported = Defaults.AquiferStrength;
+
+    /// <summary>
+    /// Forty years of a six-well field, flooded or not: what it recovered, what
+    /// the company ended with, and how much water it bought.
+    /// </summary>
+    private static (double Recovered, Money Cash, double Bought) Flooded(
+        double aquifer, double vrr)
+    {
+        Built built = Assert.IsType<Built>(EngineBuilder.Build(Fixture.Settings()));
+        Engine engine = built.Engine;
+
+        FieldControl field = engine.Provided.Resolve<FieldControl>();
+
+        EntityId<IReservoirCompartmentEntity> target = field.AddCompartment(
+            new GeneratedCompartment(
+                PoreVolume: new ReservoirVolume(100.0e6),
+                Porosity: 0.22,
+                OilSaturation: 0.7,
+                InitialPressure: new Pressure(30.0e6),
+                Temperature: Temperature.FromCelsius(93.3),
+                Depth: new Length(2000.0)),
+            permeability: new Permeability(1.0e-13),
+            netThickness: new Length(20.0),
+            drainageArea: new Area(2.0e5),
+            rockCompressibility: 4.5e-10,
+            gasOilContact: new Length(1900.0),
+            oilWaterContact: new Length(2100.0),
+            Defaults.Wettability,
+
+            // A DRIVE THAT ADMITS INJECTION EITHER WAY. What separates the two
+            // fields here is the AQUIFER, not the drive's name: the balance
+            // cannot tell aquifer water from injected water and neither can the
+            // reservoir, which is why the waterflood drive admits both.
+            aquifer > 0.0 ? Defaults.Drive : new ContentId("solution-gas-drive"),
+            aquifer,
+            Defaults.AquiferResponseTime);
+
+        engine.Provided.Resolve<WorldState>()
+            .DeclareKnownField(target, new ReservoirVolume(100.0e6));
+
+        for (var well = 0; well < 6; well++) field.Drill(target, new Length(2000.0));
+
+        if (vrr > 0.0) engine.Commands.Submit(new SetVoidageReplacementCommand(vrr));
+
+        var recovered = 0.0;
+        var bought = 0.0;
+
+        for (var month = 0; month < 480; month++)
+        {
+            Fixture.Repair(engine);
+            engine.Pipeline.AdvanceTick();
+
+            FieldReadModel seen = engine.ReadModel!;
+            recovered += seen.ProducedThisTick.CubicMetres;
+            bought += seen.Flood.Imported.CubicMetres;
+        }
+
+        return (recovered, engine.Provided.Resolve<CompanyState>().Ledger.Cash, bought);
     }
 }

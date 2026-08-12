@@ -82,7 +82,16 @@ internal static class Defaults
         // charged on water as readily as on oil, because the pumps and the power
         // do not care which — and that is what eventually makes a watered-out
         // field uneconomic while it is still producing.
-        LiftingCostPerTonne: Money.FromMillions(15.0 * 6.29 / 0.85 / 1_000_000.0));
+        LiftingCostPerTonne: Money.FromMillions(15.0 * 6.29 / 0.85 / 1_000_000.0),
+
+        // ~$1/bbl of IMPORTED water — lift, filter, deaerate, pump. An ordinary
+        // figure, and a small one against a barrel of oil, which is honest: what
+        // makes a flood a decision in this engine is not mainly its bill. It is
+        // that the water raises the saturation and brings the water cut forward,
+        // that it shares one injectivity with the disposal duty and plugs the
+        // well faster, and that everything it buys arrives years after it is
+        // paid for.
+        InjectionWaterCostPerCubicMetre: Money.FromMillions(6.29 / 1_000_000.0));
 
     /// <summary>
     /// The market this game is played in (SDD-009 §6).
@@ -683,6 +692,8 @@ internal static class Defaults
 
     public static EntityId<IFlowElement> TheTreater { get; } = new(1_000_009);
 
+    public static EntityId<IFlowElement> TheWaterIntake { get; } = new(1_000_010);
+
     /// <summary>
     /// Where per-well gathering lines start numbering (SDD-006 §1c). Above the
     /// fixed chain elements by a clear margin, so a line laid for the
@@ -861,17 +872,26 @@ internal static class Defaults
         RatedEfficiency: new SeparationEfficiency(
             LiquidFromGas: 0.0, GasFromLiquid: 0.0, WaterFromLiquid: 0.0,
 
-            // SOLVED, not guessed. BS&W = c·(W/O)/(1 + c·(W/O)), and a developed
-            // field on this composition reaches W/O ≈ 0.203 by year forty
-            // (finding 179's retraction measured it). At c = 0.03 that is a
-            // BS&W of 0.006 — just over the half-per-cent sales limit — while an
-            // undeveloped field at W/O ≈ 0.019 sits an order of magnitude under.
+            // SOLVED AGAINST THE CHAIN, at the third attempt, and the first two
+            // are why this comment is long. BS&W = c·W/(O + c·W), so c is the
+            // fraction of produced water the vessel leaves in the oil leg.
             //
-            // So a field sells on spec while it is young and starts failing as
-            // it drowns, which is the point. The first attempt at this used 0.005
-            // from a plausible sentence and produced a treater that removed
-            // 0.0003 kg/s (finding 178).
-            WaterIntoLiquid: 0.03),
+            // 0.005 came from a plausible sentence and produced a treater that
+            // removed 0.0003 kg/s (finding 178). 0.03 was solved from a W/O of
+            // 0.203 — a number that was never what this chain delivers: METERED
+            // at the treater's own inlet over forty years on six wells, the
+            // developed field reaches W/O = 0.127, so BS&W peaked at 0.379%
+            // against a 0.5% limit and the gate could not fire in 460 flowing
+            // months (finding 183). A mechanism composed, connected, priced and
+            // unreachable — twice.
+            //
+            // 0.07 is measured rather than solved backwards: BS&W crosses the
+            // limit in year 34 and reaches 0.88% by year forty, so a field sells
+            // on spec for two thirds of its life and cannot sell at all in the
+            // last third without a treater. It is also the more honest number on
+            // its own terms — crude off a three-phase separator carries 5–15%
+            // water before dehydration, and 0.03 sat below that band.
+            WaterIntoLiquid: 0.07),
         DesignRate: new ReservoirRate(0.05),
         OperatingPressure: Pressure.FromBar(15.0));
 

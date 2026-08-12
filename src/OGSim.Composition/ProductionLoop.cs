@@ -44,7 +44,23 @@ public sealed record FieldEconomics(
     /// sells. A flat operating cost cannot express that, so watering out would
     /// be something a player watches rather than something they answer.</para>
     /// </summary>
-    Money LiftingCostPerTonne);
+    Money LiftingCostPerTonne,
+
+    /// <summary>
+    /// What a cubic metre of IMPORTED flood water costs to lift, filter,
+    /// deaerate and pump (SDD-003 §3.1d's R20d.24 amendment).
+    ///
+    /// <para>The price of the decision. A waterflood that was free would be a
+    /// slider every player pushed to its limit on the first month of production,
+    /// which is not a decision — what makes it one is that the money buys
+    /// recovery years from now and is spent today, against a well that plugs
+    /// faster the harder it is used.</para>
+    ///
+    /// <para>Produced water is NOT charged here: it is already paid for by the
+    /// lifting cost that brought it up the hole, and charging it twice would
+    /// make reinjecting cheaper to stop than to continue.</para>
+    /// </summary>
+    Money InjectionWaterCostPerCubicMetre);
 
 /// <summary>
 /// One element of the chain, as a player watches it (SDD-017 §2).
@@ -213,6 +229,23 @@ internal sealed class ProductionLoop
 
     // Reset each tick by the plan that consumes it.
     private double _disposedThisTick;
+
+    private readonly OGSim.Facilities.WaterIntake _intake;
+
+    // THE FLOOD, a tick behind (SDD-003 §3.1d's R20d.24b amendment). Both are
+    // stage 5's answers and the intake is commanded before stage 5 runs, so the
+    // target is built from last month's — design 03 §6.1's declared lag, used
+    // the way stage 4 uses it. It is the safety property rather than a
+    // compromise: a field that produced nothing has no voidage to replace and
+    // buys no water, so an idle field can never hand the solver a constraint it
+    // cannot relieve.
+    private double _voidageLastTick;
+    private double _producedWaterLastTick;
+
+    // AND THE ROCK'S OWN CEILING, which is the harder of the two limits and the
+    // one that halts a tick rather than merely disappointing a player. See
+    // ReservoirRoom.
+    private double _reservoirRoom;
     private readonly OGSim.Company.MarketState _market;
     private readonly IRandomStream _priceStream;
     private readonly IReadOnlyList<int> _liquidOrdinals;
@@ -245,6 +278,7 @@ internal sealed class ProductionLoop
         ReservesBook reserves,
         OGSim.Facilities.GasCapture gasPlant,
         OGSim.Wells.Injector disposal,
+        OGSim.Facilities.WaterIntake intake,
         Money gasPrice,
         IReadOnlyList<int> liquidOrdinals,
         Func<bool> isAbandoned,
@@ -266,6 +300,7 @@ internal sealed class ProductionLoop
         ArgumentNullException.ThrowIfNull(names);
         ArgumentNullException.ThrowIfNull(tank);
         ArgumentNullException.ThrowIfNull(terminal);
+        ArgumentNullException.ThrowIfNull(intake);
         ArgumentNullException.ThrowIfNull(regime);
         ArgumentNullException.ThrowIfNull(liquidOrdinals);
         ArgumentNullException.ThrowIfNull(isAbandoned);
@@ -291,6 +326,7 @@ internal sealed class ProductionLoop
         _reserves = reserves;
         _chainGasPlant = gasPlant;
         _disposal = disposal;
+        _intake = intake;
         _gasPrice = gasPrice;
         _liquidOrdinals = liquidOrdinals;
         _isAbandoned = isAbandoned;
@@ -348,6 +384,99 @@ internal sealed class ProductionLoop
         }
     }
 
+    // ------------------------------------------------------------ the flood
+
+    /// <summary>
+    /// How much of the voidage the company is trying to replace — the player's
+    /// lever (SDD-003 §3.1d's R20d.24 amendment).
+    ///
+    /// <para>Zero is today's engine: produced water goes back down the hole
+    /// because there is nowhere else for it, and nothing is bought. One replaces
+    /// every reservoir cubic metre the field takes out, which is what a
+    /// waterflood IS.</para>
+    /// </summary>
+    public double VoidageReplacement { get; private set; }
+
+    /// <summary>The set point, from the command that carries it. Not validated
+    /// here: the validator has already refused what is meaningless (R1 §2.5).</summary>
+    public void SetVoidageReplacement(double ratio) => VoidageReplacement = ratio;
+
+    /// <summary>What the flood actually bought this tick, in reservoir m³ — and
+    /// how much room the injector had left. Both, because a target met and a
+    /// target clamped are different situations with different answers, and a
+    /// player shown only the target could not tell them apart.</summary>
+    public ReservoirVolume ImportedThisTick => new(_importedThisTick);
+
+    /// <summary>How much more water the field can take this month, whichever
+    /// limit binds — the well's or the rock's.</summary>
+    public ReservoirVolume InjectionHeadroom
+    {
+        get
+        {
+            double well = Headroom();
+
+            return new ReservoirVolume(well < _reservoirRoom ? well : _reservoirRoom);
+        }
+    }
+
+    private double _importedThisTick;
+
+    /// <summary>
+    /// What the injector will still take this month once the produced water has
+    /// had its share.
+    ///
+    /// <para>THE HEADROOM FORM RATHER THAN THE ACCEPTANCE FORM, and the
+    /// difference is the whole stability of the mechanic. Clamping at the full
+    /// acceptance would let a flood take the injectivity the produced water
+    /// needs; S3 would throttle the producers to relieve it, which removes the
+    /// voidage that justified the flood, which stops the flood, which lets the
+    /// producers back — a field oscillating between drowning and dry. The flood
+    /// gets what the disposal duty leaves and no more.</para>
+    /// </summary>
+    private double Headroom()
+    {
+        double room =
+            (_disposal.Acceptance.CubicMetresPerSecond * TickSeconds) - _producedWaterLastTick;
+
+        return room > 0.0 ? room : 0.0;
+    }
+
+    /// <summary>
+    /// Stage 5's first act: tell the intake what to lift.
+    ///
+    /// <para><c>target = VRR · voidage</c>, less the water the field is already
+    /// putting back, clamped by the injector's headroom (SDD-003 §3.1d). Every
+    /// term is last tick's — see the note on the fields it reads.</para>
+    /// </summary>
+    private void CommandTheIntake()
+    {
+        _reservoirRoom = ReservoirRoom();
+
+        double target =
+            (VoidageReplacement * _voidageLastTick) - _producedWaterLastTick;
+
+        if (target < 0.0) target = 0.0;
+
+        double well = Headroom();
+        if (target > well) target = well;
+
+        // AND THE ROCK'S CEILING, which is not a disappointment but a halt.
+        // SDD-003 §3.1's bisection searches [floor, discovery pressure] and
+        // FAULTS when there is no root in it — so a compartment given more
+        // replacement than it has voidage does not produce a wrong number, it
+        // stops the tick. Measured: VRR 1.0 on the shipped water-drive field
+        // faulted in exactly that way, because the aquifer was already
+        // replacing most of the voidage and the flood replaced the rest twice.
+        //
+        // It nets the aquifer off for free, which is why there is no influx term
+        // here: a field held up by strong natural water has little room, so a
+        // company that orders a flood on one buys almost nothing. That is the
+        // right answer rather than a special case.
+        if (target > _reservoirRoom) target = _reservoirRoom;
+
+        _intake.Command(new ReservoirRate(target / TickSeconds));
+    }
+
     /// <summary>
     /// Stage 5. Refresh every well with the pressure its compartment is at NOW,
     /// then solve the NETWORK — once per segment, over the elements that segment
@@ -383,8 +512,15 @@ internal sealed class ProductionLoop
             throw new InvariantFault("SDD-002 §9", null,
                 "stage 5 ran with no segment plan; stage 4 builds it and must run first");
 
+        // BEFORE THE FIRST SEGMENT, because the commanded rate is what the
+        // intake sources and every segment must lift at the same one — a flood
+        // that changed rate at a failure boundary would be responding to a
+        // month it has not solved yet.
+        CommandTheIntake();
+
         _byCompartment.Clear();
         _chain.Clear();
+        _importedThisTick = 0.0;
         _stored = OGSim.Kernel.Composition.Zero(_materialCount);
         _tank.ForgetPromises();
         Array.Clear(_handled);
@@ -454,6 +590,17 @@ internal sealed class ProductionLoop
                     converged.Disposed.Discharged.Total.KgPerSecond * seconds
                     / PhysicalConstants.WaterDensityKgPerM3;
 
+            // AND HOW MUCH OF IT WAS BOUGHT (SDD-003 §3.1d's R20d.24b
+            // amendment). The two are allocated to compartments by different
+            // rules at stage 6, and the intake's own Sourced is what separates
+            // them: it is the only other thing feeding the injector, so what the
+            // injector discharged less what the intake made is what the field
+            // produced, by construction rather than by a second estimate.
+            if (solution.Element == _intake.Id)
+                _importedThisTick +=
+                    converged.Sourced.Total.KgPerSecond * seconds
+                    / PhysicalConstants.WaterDensityKgPerM3;
+
             CumulativeFlared = new Mass(
                 CumulativeFlared.Kilograms
                 + (converged.Disposed.Flared.Total.KgPerSecond * seconds));
@@ -480,6 +627,13 @@ internal sealed class ProductionLoop
         // of. That is what a lifting cost is charged on.
         for (int i = 0; i < report.Solutions.Count; i++)
         {
+            // NOT THE INTAKE, which also sources (R20d.24). Imported flood water
+            // never came up a hole, so charging the lifting cost on it would bill
+            // a company twice — once at the water's own price and once for
+            // producing something it bought — and would put sea water into the
+            // number that says what the FIELD made.
+            if (report.Solutions[i].Element == _intake.Id) continue;
+
             OGSim.Kernel.Composition sourced = report.Solutions[i].Converged.Sourced;
 
             for (int m = 0; m < _materialCount; m++)
@@ -667,6 +821,10 @@ internal sealed class ProductionLoop
 
         double waterMade = 0.0;
 
+        // THE VOIDAGE, which is what a flood replaces and therefore what the
+        // imported share is split by (SDD-003 §3.1d's R20d.24b amendment).
+        double voidage = 0.0;
+
         for (int i = 0; i < completions.Count; i++)
         {
             EntityId<IReservoirCompartmentEntity> compartment =
@@ -680,10 +838,31 @@ internal sealed class ProductionLoop
 
             producing.Add((compartment, reservoirVolume, cut, at));
             waterMade += reservoirVolume * cut;
+            voidage += reservoirVolume;
         }
 
         double disposed = _disposedThisTick;
         _disposedThisTick = 0.0;
+
+        // WHAT THE FIELD PUT BACK, as against what it BOUGHT. The injector's
+        // discharge is both, and the intake is the only other thing feeding it,
+        // so the subtraction is exact. Floored at nothing because two doubles
+        // that ought to be equal need not be, and a negative volume would be
+        // committed as one.
+        double imported = _importedThisTick;
+        double producedBack = disposed - imported;
+        if (producedBack < 0.0) producedBack = 0.0;
+
+        // NEXT MONTH'S TARGET IS BUILT FROM THESE. The produced-water figure is
+        // taken at the INJECTOR rather than at the wells: it is measured in the
+        // same units as the acceptance it will be subtracted from, and it is
+        // what actually went down the hole after the treater took its cut.
+        _voidageLastTick = voidage;
+        _producedWaterLastTick = producedBack;
+
+        _floodShares.Clear();
+        for (int i = 0; i < producing.Count; i++)
+            _floodShares.Add((producing[i].Compartment, producing[i].ReservoirVolume));
 
         for (int i = 0; i < producing.Count; i++)
         {
@@ -722,10 +901,21 @@ internal sealed class ProductionLoop
             // by another route: water is put back where it came from rather than
             // into whichever compartment happens to be first, and a compartment
             // that produces no water receives none.
+            //
+            // IMPORTED WATER IS SPLIT BY VOIDAGE INSTEAD, and the two rules have
+            // to differ (SDD-003 §3.1d's R20d.24b amendment). A young field
+            // makes almost no water — which is exactly when support is worth
+            // most — so sharing bought water by water made would put every cubic
+            // metre of it nowhere, in the one case the mechanic exists for, and
+            // leave a discharge with no matching receipt. Voidage is what the
+            // flood is replacing, so voidage is what it follows.
             var injected = new ReservoirVolume(
-                waterMade <= 0.0
+                (waterMade <= 0.0
                     ? 0.0
-                    : disposed * (waterReservoir.CubicMetres / waterMade));
+                    : producedBack * (waterReservoir.CubicMetres / waterMade))
+                + (voidage <= 0.0
+                    ? 0.0
+                    : imported * (reservoirVolume / voidage)));
 
             withdrawals.Add(new CompartmentWithdrawal(
                 compartment,
@@ -745,6 +935,62 @@ internal sealed class ProductionLoop
 
         _production.Set(withdrawals);
     }
+
+    /// <summary>
+    /// The most water the FIELD can buy without over-filling any one compartment
+    /// (SDD-003 §3.1d's R20d.24b amendment).
+    ///
+    /// <para>The intake is commanded one rate and stage 6 shares it out by
+    /// voidage, so a compartment takes <c>imported · voidage_i / voidage</c> —
+    /// and the field's cap is therefore the SMALLEST amount that keeps every
+    /// compartment inside its own room. Taking the sum of the rooms instead
+    /// would be right on average and wrong for the compartment that had least,
+    /// which is the one that halts the tick.</para>
+    /// </summary>
+    /// <para>ASKED FRESH, every tick, and that is not an optimisation detail.
+    /// The room is consumed by the AQUIFER as well as by the flood, so a figure
+    /// cached at the end of last month has already been spent by water arriving
+    /// this one — measured: a cached cap left 3,500 m³ of overfill on the
+    /// shipped field and halted the tick. The shares are last month's, which is
+    /// harmless because production does not jump; the room is now's, which is
+    /// the number that must not be stale.</para>
+    private double ReservoirRoom()
+    {
+        if (_voidageLastTick <= 0.0) return 0.0;
+
+        double cap = double.PositiveInfinity;
+
+        for (int i = 0; i < _floodShares.Count; i++)
+        {
+            (EntityId<IReservoirCompartmentEntity> compartment, double share) = _floodShares[i];
+
+            // A compartment that produced nothing receives nothing, so it
+            // constrains nothing. Said explicitly because the division below
+            // would otherwise be by zero.
+            if (share <= 0.0) continue;
+
+            // LESS THE WATER THAT IS COMING ANYWAY. The aquifer commits into the
+            // same room in the same stage 6 as the injection, so a flood that
+            // claimed all of it would over-fill the compartment by exactly one
+            // month's influx — which is what the tick that halted was.
+            double room =
+                _subsurface.TrueVoidageRoomOf(compartment).CubicMetres
+                - _subsurface.InfluxFor(compartment, Duration.FromTicks(1.0)).CubicMetres;
+
+            if (room <= 0.0) return 0.0;
+
+            double allowed = room * _voidageLastTick / share;
+
+            if (allowed < cap) cap = allowed;
+        }
+
+        return double.IsPositiveInfinity(cap) ? 0.0 : cap;
+    }
+
+    /// <summary>Which compartments the flood's water is shared between, and in
+    /// what proportion — last month's voidage, refreshed at every commit.</summary>
+    private readonly List<(EntityId<IReservoirCompartmentEntity> Compartment, double Share)>
+        _floodShares = [];
 
     /// <summary>
     /// Stage 8. The oil is sold and the field is paid for.
@@ -1094,8 +1340,13 @@ internal sealed class ProductionLoop
         for (int i = 0; i < _liquidOrdinals.Count; i++)
             liquid += _handled[_liquidOrdinals[i]];
 
+        // AND THE WATER THE COMPANY BOUGHT (SDD-003 §3.1d's R20d.24 amendment).
+        // Charged in the month it is lifted, against a recovery that arrives
+        // years later — which is what makes the flood a decision rather than a
+        // slider every player pushes to its limit on day one.
         return _economics.FixedOperatingCostPerTick
-             + Scale(_economics.LiftingCostPerTonne, liquid / KilogramsPerTonne);
+             + Scale(_economics.LiftingCostPerTonne, liquid / KilogramsPerTonne)
+             + Scale(_economics.InjectionWaterCostPerCubicMetre, _importedThisTick);
     }
 
     private const double KilogramsPerTonne = 1000.0;

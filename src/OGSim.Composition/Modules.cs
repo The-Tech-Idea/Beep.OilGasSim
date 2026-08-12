@@ -265,6 +265,22 @@ internal sealed class FacilitiesModule() : EngineModule(Declare(
             Defaults.TheDisposalWell, Defaults.Disposal,
             Defaults.WaterOrdinal.Ordinal, Defaults.MaterialCount);
 
+        // AND SOMEWHERE TO BUY WATER FROM (R20d.24, SDD-003 §3.1d). Reinjecting
+        // produced water is disposal that happens to help; a WATERFLOOD needs
+        // water the field did not make, and imported water has to cross the
+        // network like everything else or stage 6 would be creating mass. It
+        // ships commanded at nothing — a field floods when a player says so.
+        var intake = new OGSim.Facilities.WaterIntake(
+            Defaults.TheWaterIntake, Defaults.WaterOrdinal, Defaults.MaterialCount,
+
+            // Sea water is nobody's production. It never reaches a custody meter
+            // — the injector discharges every kilogram — but an allocation must
+            // name an owner, so it carries the field's, exactly as the empty
+            // tank's opening provenance does.
+            Allocation.FromSingle(new EntityRef(EntityKind.Compartment, 1)),
+            Defaults.DisposalPressure,
+            Defaults.SurfaceAmbient);
+
         // THE GATHERING LINE. Without it a header's downstream demand is the
         // vessel's set point and nothing else, so commingling has no
         // consequence: two wells on one header would not feel each other at all.
@@ -307,6 +323,7 @@ internal sealed class FacilitiesModule() : EngineModule(Declare(
             Allocation.FromSingle(new EntityRef(EntityKind.Compartment, 1)));
 
         network.Add(disposal);
+        network.Add(intake);
         network.Add(tank);
 
         network.Connect(new FlowConnection(
@@ -350,13 +367,22 @@ internal sealed class FacilitiesModule() : EngineModule(Declare(
             separator.Id, OGSim.Facilities.Separator.WaterOutlet,
             disposal.Id, OGSim.Wells.Injector.Inlet));
 
+        // THE FLOOD JOINS ON ITS OWN PORT. One edge per port is §6's rule, and
+        // it is what makes commingling declared here rather than emergent: the
+        // two streams meet inside the well, share one injectivity, and are told
+        // apart at stage 6 by which element made them.
+        network.Connect(new FlowConnection(
+            intake.Id, OGSim.Facilities.WaterIntake.Outlet,
+            disposal.Id, OGSim.Wells.Injector.ImportInlet));
+
         network.Connect(new FlowConnection(
             custody.Id, OGSim.Facilities.CustodyTransferPoint.OnSpecOutlet,
             tank.Id, OGSim.Facilities.Tank.Inlet));
 
         composition.Provide(
             new SurfaceChain(
-                manifold, flowline, separator, custody, treater, gasPlant, flare, disposal, tank));
+                manifold, flowline, separator, custody, treater, gasPlant, flare,
+                disposal, intake, tank));
     }
 }
 
@@ -378,6 +404,7 @@ internal sealed record SurfaceChain(
     OGSim.Facilities.GasCapture GasPlant,
     OGSim.Facilities.Flare Flare,
     OGSim.Wells.Injector Disposal,
+    OGSim.Facilities.WaterIntake Intake,
     OGSim.Facilities.Tank Tank)
 {
     /// <summary>Where a well ties in, and how many can. One list rather than a
@@ -406,6 +433,7 @@ internal sealed record SurfaceChain(
         if (element == GasPlant.Id) return "gas-plant";
         if (element == Flare.Id) return "flare";
         if (element == Disposal.Id) return "water-disposal";
+        if (element == Intake.Id) return "water-intake";
         if (element == Tank.Id) return "tank";
 
         // A gathering line, numbered by the well it serves (SDD-006 §1c). Named
@@ -605,6 +633,7 @@ internal sealed class FieldModule() : EngineModule(Declare(
         typeof(BorrowCommand),
         typeof(RepayCommand),
         typeof(SetWellChokeCommand),
+        typeof(SetVoidageReplacementCommand),
         typeof(AbandonWellCommand),
     ]))
 {
@@ -684,6 +713,7 @@ internal sealed class FieldModule() : EngineModule(Declare(
             composition.Require<ReservesBook>(),
             chain.GasPlant,
             chain.Disposal,
+            chain.Intake,
             Defaults.GasPricePerTonne,
             Defaults.LiquidOrdinals,
             () => field.IsAbandoned,
@@ -877,6 +907,14 @@ internal sealed class FieldModule() : EngineModule(Declare(
         // on the scheduled-activity engine.
         composition.HandleCommand(
             new SetWellChokeValidator(field), new SetWellChokeApplier(field, audit));
+
+        // NOR IS A FLOOD TARGET (SDD-003 §3.1d's R20d.24 amendment). The water
+        // costs money by the cubic metre in the month it is lifted; deciding how
+        // much to lift is a set point, and one a reservoir engineer moves far
+        // more often than a rig moves.
+        composition.HandleCommand(
+            new SetVoidageReplacementValidator(loop),
+            new SetVoidageReplacementApplier(loop, audit));
 
         // NOR IS A DRAWDOWN (SDD-009 §5). A well is a project; a phone call to
         // the bank is not, and putting it on the activity engine would make a
