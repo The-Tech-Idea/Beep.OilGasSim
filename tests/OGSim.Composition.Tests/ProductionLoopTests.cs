@@ -147,6 +147,7 @@ public sealed class ProductionLoopTests
     /// not work.</para>
     /// </summary>
     [Fact]
+    [Trait("Speed", "Slow")]
     public void Earnings_decline_as_the_reservoir_depletes()
     {
         (Engine engine, CompanyState company) = Field();
@@ -213,6 +214,7 @@ public sealed class ProductionLoopTests
     /// months and then faults on an accumulating history is not a game either.
     /// </summary>
     [Fact]
+    [Trait("Speed", "Slow")]
     public void The_field_runs_for_forty_years()
     {
         (Engine engine, CompanyState company) = Field();

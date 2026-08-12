@@ -972,6 +972,7 @@ public sealed class ChainTests
     /// leaves more oil recovered at the end.</para>
     /// </summary>
     [Fact]
+    [Trait("Speed", "Slow")]
     public void R20d18V1_reinjected_water_supports_the_pressure()
     {
         (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled();
@@ -1072,6 +1073,7 @@ public sealed class ChainTests
     /// hand and caught before it shipped as a mechanic.</para>
     /// </summary>
     [Fact]
+    [Trait("Speed", "Slow")]
     public void R10V4_an_acid_job_clears_what_the_water_left_behind()
     {
         (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled();
@@ -1198,6 +1200,7 @@ public sealed class ChainTests
     /// to.</para>
     /// </summary>
     [Fact]
+    [Trait("Speed", "Slow")]
     public void R20d4V2_a_field_makes_more_water_as_it_ages()
     {
         (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled();
@@ -1281,6 +1284,7 @@ public sealed class ChainTests
     /// negative on every seed, because a field this old is paying to lift water.</para>
     /// </summary>
     [Fact]
+    [Trait("Speed", "Slow")]
     public void R20d4V3_a_developed_field_ends_by_earning_less_every_year()
     {
         (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled();
@@ -1336,6 +1340,7 @@ public sealed class ChainTests
     /// than taken from a plausible sentence.</para>
     /// </summary>
     [Fact]
+    [Trait("Speed", "Slow")]
     public void R20d21V1_a_watered_out_field_sells_wet_oil_until_it_is_treated()
     {
         Money soldWet = Earned(treated: false);
@@ -1372,6 +1377,7 @@ public sealed class ChainTests
     /// the day it was installed.
     /// </summary>
     [Fact]
+    [Trait("Speed", "Slow")]
     public void R20d22V2_equipment_wears_out_as_the_field_runs()
     {
         (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled();
@@ -1405,6 +1411,7 @@ public sealed class ChainTests
     /// worth, and it is worth more than it costs.</para>
     /// </summary>
     [Fact]
+    [Trait("Speed", "Slow")]
     public void R20d22V3_a_field_nobody_maintains_stops_and_a_maintained_one_does_not()
     {
         Money neglected = Lifetime(maintained: false);
@@ -1462,6 +1469,7 @@ public sealed class ChainTests
     /// number they can get wrong in both directions.</para>
     /// </summary>
     [Fact]
+    [Trait("Speed", "Slow")]
     public void R20d22V4_over_maintaining_costs_more_than_letting_things_break()
     {
         Money always = Strategy(repairBelow: 0.9);
@@ -1521,6 +1529,7 @@ public sealed class ChainTests
     /// run insolvent.</para>
     /// </summary>
     [Fact]
+    [Trait("Speed", "Slow")]
     public void R20d24V1_a_field_with_no_drive_of_its_own_is_transformed_by_a_flood()
     {
         (double natural, Money broke, double boughtNothing) = Flooded(Dead, vrr: 0.0);
@@ -1555,6 +1564,7 @@ public sealed class ChainTests
     /// the dice.</para>
     /// </summary>
     [Fact]
+    [Trait("Speed", "Slow")]
     public void R20d24V2_flooding_a_field_the_aquifer_already_supports_is_a_loss()
     {
         (double _, Money left, double _) = Flooded(Supported, vrr: 0.0);
@@ -1582,6 +1592,7 @@ public sealed class ChainTests
     /// well allows", and it stops where the rock does.</para>
     /// </summary>
     [Fact]
+    [Trait("Speed", "Slow")]
     public void R20d24V3_a_flood_cannot_put_back_more_than_the_field_took_out()
     {
         (double _, Money _, double atOne) = Flooded(Dead, vrr: 1.0);
@@ -1639,6 +1650,7 @@ public sealed class ChainTests
     /// soured reservoir healing itself every time a separator broke.</para>
     /// </summary>
     [Fact]
+    [Trait("Speed", "Slow")]
     public void R20d25V1_a_flood_sours_the_reservoir_and_a_disposal_well_never_does()
     {
         (double sweet, bool _) = Sourness(Supported, vrr: 0.0);
@@ -1673,6 +1685,7 @@ public sealed class ChainTests
     /// margin is a fifth rather than a percent (finding 184).</para>
     /// </summary>
     [Fact]
+    [Trait("Speed", "Slow")]
     public void R20d25V2_souring_arrives_in_the_maintenance_bill()
     {
         int sweet = Overhauls(Supported, vrr: 0.0);

@@ -777,6 +777,7 @@ public sealed class NewGameTests
     /// by a host either, which is the only thing a reference client is for.</para>
     /// </summary>
     [Fact]
+    [Trait("Speed", "Slow")]
     public void R21V2_a_client_can_explore_a_basin_it_was_told_nothing_about()
     {
         Engine engine = BasinWithSeveralProspects();
@@ -1189,6 +1190,7 @@ public sealed class NewGameTests
     /// depleting field an ambush.</para>
     /// </summary>
     [Fact]
+    [Trait("Speed", "Slow")]
     public void R20d15V4_a_depleting_field_breaches_its_covenant_and_gets_a_window()
     {
         for (ulong seed = 1UL; seed < 60UL; seed++)
@@ -1274,6 +1276,7 @@ public sealed class NewGameTests
     /// they were reached from.</para>
     /// </summary>
     [Fact]
+    [Trait("Speed", "Slow")]
     public void R20d15V4_a_client_that_borrows_prudently_does_not_live_in_breach()
     {
         Engine engine = BasinWithSeveralProspects();
@@ -1443,6 +1446,7 @@ public sealed class NewGameTests
     /// and the next number added to the surface would not be on it.</para>
     /// </summary>
     [Fact]
+    [Trait("Speed", "Slow")]
     public void PV7_one_seed_is_one_game_all_the_way_through()
     {
         Engine first = NewGame(seed: 20260811UL);
@@ -1467,6 +1471,7 @@ public sealed class NewGameTests
     /// inevitable.
     /// </summary>
     [Fact]
+    [Trait("Speed", "Slow")]
     public void PV7_a_different_seed_is_a_different_game()
     {
         Engine one = NewGame(seed: 11UL);

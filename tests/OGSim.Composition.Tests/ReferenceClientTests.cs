@@ -60,6 +60,7 @@ public sealed class ReferenceClientTests
     /// than as an opinion.
     /// </summary>
     [Fact]
+    [Trait("Speed", "Slow")]
     public void R21V2_a_client_using_only_the_surface_can_play_and_win()
     {
         (Engine engine, EntityId<IProspect> prospect) = Field();
@@ -80,6 +81,7 @@ public sealed class ReferenceClientTests
     /// worth producing, rather than by issuing the command directly.</para>
     /// </summary>
     [Fact]
+    [Trait("Speed", "Slow")]
     public void R21V2_a_client_left_running_closes_the_field_when_it_is_finished()
     {
         (Engine engine, EntityId<IProspect> prospect) = Field();
@@ -172,6 +174,7 @@ public sealed class ReferenceClientTests
     /// what lifts it are now two different things.</para>
     /// </summary>
     [Fact]
+    [Trait("Speed", "Slow")]
     public void R20d8V1_a_bigger_reservoir_is_a_bigger_business()
     {
         Money big = Earned(500.0e6), small = Earned(50.0e6);

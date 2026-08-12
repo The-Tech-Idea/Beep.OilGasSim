@@ -27,9 +27,21 @@ The previous engine in this repo's history (`OGGame.Core`, `Game/`,
 
 ```bash
 dotnet build OGSim.slnx                 # must be 0 warnings — warnings are errors
-dotnet test  OGSim.slnx                 # xUnit
+dotnet test  OGSim.slnx                 # xUnit — the gate, and the only complete answer
 dotnet test  OGSim.slnx --no-build --filter "FullyQualifiedName~Money_rounds_half_even"
+
+# While iterating: skip the forty-year runs (16m23s -> 1m6s, 141 of 164)
+dotnet test tests/OGSim.Composition.Tests --no-build --filter "Speed!=Slow"
 ```
+
+**`Speed=Slow` is a convenience, never a gate.** Twenty-three tests in the
+composition suite play a whole field life — 480 ticks, sometimes twice — and
+they carry about fifteen of the suite's sixteen minutes. They are also where
+almost every finding in this project came from, because a mechanic that works
+in a unit test and not over forty years is the defect this codebase keeps
+producing. So the filter exists to make iteration bearable and **the unfiltered
+run is what a commit is judged on**: a test excluded by default is a test that
+quietly stops being evidence, which is the same failure in a new place.
 
 Requires the .NET 10 SDK (`.slnx` solution format).
 
