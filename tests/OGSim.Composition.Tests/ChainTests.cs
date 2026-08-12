@@ -1266,6 +1266,19 @@ public sealed class ChainTests
     /// than a formality, and it is the whole of the late game. R20.4 measured it
     /// and nothing asserted it — which is how finding 179 came to be a wrong
     /// claim about the arc that stood for four commits.</para>
+    ///
+    /// <para>MEASURED OVER DECADES, not at two anniversaries. This asked whether
+    /// month 60 in particular was profitable, and that month clears zero by
+    /// $17M on the shipped seed — about a tenth of a good year — while the same
+    /// year ranges from $17M to $135M across four seeds and the field is shut in
+    /// for 17% of its life whatever anybody does. So the old assertion was not
+    /// measuring whether a young field pays; it was measuring whether seed
+    /// 20260806 happened to have a quiet fifth year, and R20d.26 tipped it
+    /// negative by adding one month of outage to that year (finding 187).</para>
+    ///
+    /// <para>The first decade against the last is the same claim with a margin
+    /// that means something: roughly +$350M against a last decade that is
+    /// negative on every seed, because a field this old is paying to lift water.</para>
     /// </summary>
     [Fact]
     public void R20d4V3_a_developed_field_ends_by_earning_less_every_year()
@@ -1279,28 +1292,28 @@ public sealed class ChainTests
 
         CompanyState company = engine.Provided.Resolve<CompanyState>();
 
-        Money atFive = Money.Zero, atForty = Money.Zero;
-        Money previous = company.Ledger.Cash;
+        Money opened = company.Ledger.Cash;
+        Money atTen = Money.Zero, atThirty = Money.Zero;
 
         for (var month = 0; month < 480; month++)
         {
             Fixture.Repair(engine);
             engine.Pipeline.AdvanceTick();
 
-            Money now = company.Ledger.Cash;
-            Money flow = now - previous;
-            previous = now;
-
-            if (month == 60) atFive = flow;
-            if (month == 479) atForty = flow;
+            if (month == 119) atTen = company.Ledger.Cash;
+            if (month == 359) atThirty = company.Ledger.Cash;
         }
 
-        Assert.True(atFive > Money.Zero,
-            $"a five-year-old developed field was losing {atFive} a month");
+        Money firstDecade = atTen - opened;
+        Money lastDecade = company.Ledger.Cash - atThirty;
 
-        Assert.True(atForty < atFive,
-            $"the field earned {atForty} a month at forty years against {atFive} at five; " +
-            "a field that never gets worse has no ending and nothing to decide about");
+        Assert.True(firstDecade > Money.Zero,
+            $"a developed field's first decade lost {firstDecade}; if a field never pays " +
+            "there is nothing to decide about how long to keep it");
+
+        Assert.True(lastDecade < firstDecade,
+            $"the field earned {lastDecade} in its last decade against {firstDecade} in its " +
+            "first; a field that never gets worse has no ending and nothing to decide about");
     }
 
     // ------------------------------------- wet oil, and drying it (R20d.21)
