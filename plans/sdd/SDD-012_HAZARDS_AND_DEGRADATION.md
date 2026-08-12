@@ -211,6 +211,73 @@ metallurgy envelope check — the DHS3 decision arriving on schedule, years late
 > knows about souring arrives through produced-fluid samples, like everything
 > else.
 
+> **R20d.25 amendment (finding 182) — it is IMPORTED water, not injected water,
+> and the difference is the whole model.**
+>
+> The line above says `cumulativeInjectedWater / PoreVolume`. Building souring
+> against that produced a mechanic that could not fire, and the reason is not
+> that the number was small — it is that **produced water is the wrong fluid**.
+> Reinjected produced water has already been through the reservoir: it is
+> anoxic, reduced, and stripped of the sulphate the bacteria eat. It is the
+> fluid that sours a reservoir LEAST. Sea water carries roughly 2,700 ppm of
+> sulphate, and seawater flooding is what actually sours fields.
+>
+> The measurement said the same thing twice over. A field that only reinjects
+> what it makes puts **0.0033 pore volumes** through in forty years, against the
+> 0.1–1 PV of a real flood — three orders of magnitude short — and it makes
+> almost none of it early, which is when a flood would be doing its souring. So:
+>
+> ```text
+> H2S_ppm(compartment) = sourCurve( cumulativeIMPORTEDwater / PoreVolume )
+> ```
+>
+> R20d.24's waterflood is what supplies the numerator, and it supplies **0.18
+> PV** on a field flooded at VRR 1 — inside the real band, so the curve fires at
+> honest content instead of at a constant bent a hundredfold to make a feature
+> appear (which is finding 175's defect with the derivation written afterwards).
+>
+> **The compartment carries it, so `CompartmentWithdrawal` gains `Imported`.**
+> Souring is per compartment because the pore volume is, and stage 6 already
+> splits a tick's injection two ways — produced water pro rata by the water each
+> compartment made, imported water pro rata by voidage (SDD-003 §3.1d's R20d.24b
+> amendment §3). The second of those two numbers is exactly what this needs, and
+> it is already computed.
+>
+> **`SourFraction` is NORMALISED, like every other term in `ServiceSeverity`.**
+> `WaterCut` and `DutyFraction` are fractions of one; `OverTemperature` is
+> divided by a span in §0's own declaration. A raw H2S mass fraction would sit
+> at 1e-3 on a scale where the base term is 1, so `SourFactor: 2.0` would mean
+> nothing and only a coefficient of order 1,000 could rescue it — a number whose
+> only job is to undo a unit choice. It is therefore ppm against a **souring
+> reference**: the concentration at which this model treats the service as fully
+> sour, clamped at one.
+>
+> **What this phase delivers, and what it deliberately does not.** §5's list has
+> three destinations; this is the first. §1's `sourFraction` severity — sour
+> fluid eats the plant, so a company that floods hard pays for it in maintenance
+> twenty years later. The other two, the sales spec and the metallurgy envelope,
+> both need H2S as a MATERIAL and are their own task.
+>
+> That is not half a mechanic, and the test is lesson 2 — *a cost with no
+> response is a tax rather than a decision*. The response to a soured field is
+> the flood decision itself, taken twenty years earlier and now visible in the
+> maintenance bill: flood a field that needed it and the recovery pays for the
+> corrosion; flood one the aquifer already supported and there was never
+> anything to gain. Repair is the near-term answer and it already exists, priced
+> and strategic (R20d.22).
+>
+> **Members this adds** (rule F-1). `ISouringModel` moves from this document
+> into `OGSim.Contracts`, as every replaceable model does (03 §3.2).
+> `OGSim.Integrity.SaturatingSourCurve : ISouringModel` implements
+> `ppm = ultimate·r/(half + r)`, validating both parameters positive — a
+> half-ratio of zero is a step function and an ultimate of zero is a curve that
+> does nothing. `CompartmentWithdrawal` gains `Imported`;
+> `ReservoirCompartment` accumulates it and `SubsurfaceState` answers
+> `TrueSourFractionOf`. `AssetIntegrity.Advance` takes the field's sour fraction
+> beside its water cut, and `FieldReadModel` reports it — a player who could not
+> see their reservoir souring would experience it as equipment that inexplicably
+> started breaking.
+
 ## 6. Test mapping
 
 R18-V1 (decay law with declared factors) · V2 (exponential hazard shape — no
