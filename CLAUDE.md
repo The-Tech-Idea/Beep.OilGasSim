@@ -9,11 +9,16 @@ exploration → appraisal → development → production → processing → tran
 export. Turn-based engine (one tick = one month), real-time-with-pause game.
 The engine is headless; a host renders it.
 
-The repository is **design-first and mostly design**. `plans/` holds ~90
-documents settled before code; `src/` currently holds only the **contract
-layer** — `OGSim.Kernel` (primitives) and `OGSim.Contracts` (domain interfaces).
-No engine implementations exist yet. The next build phase is R1 (kernel
-implementations + the architecture test suite).
+The repository is **design-first**: `plans/` holds ~90 documents settled before
+code and is still authoritative. **The engine now runs.** Sixteen projects under
+`src/` compose into a playable field — a world is generated, prospects are
+drilled, a chain of surface equipment moves the fluid, a market moves under it, a
+bank lends against reserves, equipment wears out and breaks, and two headless
+clients play the whole arc through `ReadModel` + `Commands` alone. Around 965
+tests across fifteen suites, 0 warnings.
+
+`plans/MASTER_TRACKER.md` is the only reliable statement of what is built and
+what is next — it is updated with every task and this file is not.
 
 The previous engine in this repo's history (`OGGame.Core`, `Game/`,
 `Documentation/`) is **not an input**: not referenced, ported, or consulted.
@@ -56,10 +61,12 @@ kernel → simulation services → domain modules → composition → host (outs
 engine). Assembly boundaries *are* the enforcement: a layering violation is a
 missing project reference, not a review comment.
 
-Planned project set (03 §8) — only the first two exist:
-`OGSim.Kernel`, `OGSim.Contracts`, then `Environment`, `Subsurface`, `Wells`,
-`Facilities`, `Transport`, `Flow`, `Information`, `Company`, `Operations`,
-`Hse`, `Objectives`, `World`, `Composition`, `Advisor`. There is **no shared
+Projects that exist: `OGSim.Kernel`, `OGSim.Contracts`, `Subsurface`, `Wells`,
+`Facilities`, `Flow`, `Information`, `Company`, `Operations`, `World`,
+`Capabilities`, `Integrity`, `Objectives`, `Persistence`, `Composition`, and
+`ReferenceClient` (a headless client, outside the engine — it holds no module
+reference and an architecture test says so). Still unbuilt from 03 §8:
+`Environment`, `Transport`, `Hse`, `Advisor`. There is **no shared
 `Common`/`Utils` project, ever** — a type two modules need is either a kernel
 type or a design smell.
 
@@ -119,9 +126,16 @@ through `Observation` — the same door every in-game measurement uses.
 
 ## Rules that will trip you up
 
-These are not style preferences; each is a law with a planned architecture test
-behind it. **The test suite does not exist yet (task R1.12), so until it does
-they hold by hand.**
+These are not style preferences; each is a law. **`tests/OGSim.Architecture.Tests`
+enforces most of them by reflection and source scan** — 24 tests covering L1–L4,
+layering (both directions, including the read model), naming N3, determinism
+D2/D3/D5/D6/D7/D8, F2's citations, F6's identity rule, the subsurface truth
+boundary and the event bus's missing `Subscribe`. Breaking one of those fails the
+build, so read the failure rather than working around it.
+
+**What genuinely holds by hand is L5 (one owner per fact) and the F-1/F-3/F-4
+process rules** — no test can tell that a value was mirrored rather than derived,
+or that a formula reached the code before its SDD did.
 
 Architecture laws (03 §1): **L1** no concrete type is ever a dependency ·
 **L2** no dependency has a default — no optional params, no `?? new X()`, no
