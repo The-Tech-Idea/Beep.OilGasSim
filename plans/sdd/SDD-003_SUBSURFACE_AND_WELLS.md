@@ -400,6 +400,116 @@ field is throttled by disposal capacity and by nothing upstream at all.
 > curve at honest content actually bites — so the H2S arrives twenty years after
 > the decision that bought it, rather than never.
 
+> **R20d.24b — the five things building it settled.** The amendment above fixed
+> the shape; each of these is a question it did not have to answer and the
+> implementation could not avoid.
+>
+> **0. A FLOOD CANNOT PUT BACK MORE THAN THE FIELD HAS TAKEN OUT**, and this is
+> the load-bearing one. §3.1's bisection searches `[floor, Pi]` and FAULTS when
+> there is no root in it, so a compartment given more replacement volume than it
+> has voidage is not mis-priced — the tick halts. Measured: VRR 1.0 on the
+> shipped water-drive field faulted on exactly that, because the aquifer was
+> already replacing most of the voidage and the flood replaced the rest a second
+> time. The cap is the balance's own ceiling read as a volume:
+>
+> ```text
+> room(compartment) = −Φ(Pi) = F(Pi) − We − Vinj        every expansion term is 0 at Pi
+> ```
+>
+> exposed as `SubsurfaceState.TrueVoidageRoomOf` and derived from `Residual`
+> rather than restated beside it (law L5). Three consequences, all of them
+> wanted. It **nets the aquifer off for free**, so a field held up by strong
+> natural water has little room and a flood on one buys almost nothing — which
+> is why there is no separate influx term anywhere in the target. It makes
+> **VRR > 1 harmless**: "catch up as fast as the well allows", bounded by the
+> physics rather than by an invented ceiling in a validator. And it must be read
+> **fresh every tick** — the aquifer commits into the same room in the same
+> stage 6, so a cap cached at last month's close has already been spent, which
+> is a 3,500 m³ overfill and a halted tick.
+>
+> **1. The clamp is applied where the rate is COMMANDED, not by the solver.**
+> S3 throttles COMPLETIONS and nothing else — [SDD-002](SDD-002_STREAMS_AND_FLOW.md)
+> §7, and the solver faults by name when a violated constraint has no live
+> completion above it. An intake is a source and is not a completion, so a
+> constraint it alone violates cannot be relieved by any amount of iterating:
+> the ladder would shut in every well in the field and then report exhaustion,
+> blaming the wells for the water plant. So:
+>
+> ```text
+> headroom = max(0, injector acceptance − produced water at reservoir conditions)
+> imported = min( max(0, VRR·voidage − produced water), headroom )
+> ```
+>
+> The headroom form rather than the acceptance form deliberately: clamping at
+> the full acceptance would let a flood take the injectivity the produced water
+> needs, throttle the producers to nothing, and so remove the voidage that
+> justified the flood — a field that oscillates between drowning and dry. The
+> flood gets what the disposal duty leaves and no more.
+>
+> **2. It is commanded a tick behind, and that is what makes it safe.** Voidage
+> and produced water are both stage 5's answers and the intake is commanded
+> before stage 5 runs, so both come from last tick — design 03 §6.1's declared
+> lag, used exactly as stage 4 uses it. The lag is not a compromise here, it is
+> the safety property: **a field that produced nothing last month has no voidage
+> to replace and imports nothing**, so an idle field never buys water and the
+> solver is never handed a constraint it cannot relieve.
+>
+> **3. Produced water and imported water are allocated to compartments by
+> DIFFERENT rules, and they have to be.** Produced water goes back pro rata by
+> the water each compartment MADE — that is provenance, and it is unchanged.
+> Imported water goes pro rata by the RESERVOIR VOLUME each compartment
+> produced, because voidage is what it is replacing. Sharing imported water by
+> water made would put every cubic metre of it nowhere in exactly the case the
+> mechanic exists for: a young field makes almost no water and is where support
+> is worth most, and a receipt of zero against a discharge that happened is a
+> mass leak as well as a dead feature. What separates the two at stage 6 is the
+> intake's own `Sourced` — the injector's discharge less what the intake made is
+> what the field produced, by construction, because the intake is the only other
+> thing feeding it.
+>
+> **4. One injector takes both, so a flood competes with disposal for the same
+> injectivity — and plugs the well twice as fast.** That is not an artefact of
+> having one well in the composition; it is the trade, and it is what finally
+> gives the acid job (R20d.20) a second reason to exist. A company that floods
+> hard remediates often.
+>
+> **Members this adds** (rule F-1). `OGSim.Facilities.WaterIntake : IFlowElement`
+> — `Id`, `Ports` (no inlets, one outlet), `Commanded` (the rate, in reservoir
+> m³/s), `Command(ReservoirRate)`, `Transform`, `EvaluateConstraints` (none: an
+> intake's limit is its command). `Injector` gains `ImportInlet` (port 1),
+> `Acceptance` (what it will take at its stored conditions) and sums over every
+> inlet in both `Transform` and `EvaluateConstraints` rather than reading inlet
+> zero — the inlet list is compacted, so a missing upstream shifts the indices.
+> `SetVoidageReplacementCommand(double Ratio)` is a set point and not an
+> activity, for the same reason a choke is not (R20.4): committing a quarter's
+> rig time to a number a reservoir engineer changes on a Tuesday would make the
+> decision slower without making it harder. `FieldEconomics` gains
+> `InjectionWaterCostPerCubicMetre`; `SubsurfaceState` gains
+> `TrueVoidageRoomOf` and `ReservoirCompartment` the `VoidageRoom` behind it;
+> `FieldReadModel` gains `Flood`, carrying the target, what was bought and what
+> room is left.
+>
+> **What it measures, on the shipped field, 6 wells, 40 years** — and the point
+> is that the same lever gives opposite answers on two reservoirs:
+>
+> ```text
+> solution-gas drive, no aquifer      water drive, 4 PV aquifer
+>   VRR 0.0   RF  2.1%   −$50M          VRR 0.0   RF 22.1%   $1,792M
+>   VRR 0.5   RF  4.1%     $0M          VRR 0.5   RF 22.0%   $1,754M
+>   VRR 1.0   RF 22.1%  $1,729M         VRR 1.0   RF 22.0%   $1,721M
+>   VRR 2.0   RF 22.0%  $1,712M         VRR 2.0   RF 22.0%   $1,721M
+> ```
+>
+> A field with no natural drive recovers 2% and goes insolvent; flooded, it
+> recovers 22% and is worth $1.7bn — a tenfold recovery from the material
+> balance rather than from a table. On a field the aquifer already supports, the
+> same order is a straight loss of $71M: the water is arriving free, and buying
+> more only brings the breakthrough forward. **VRR 2.0 equals VRR 1.0 on both**,
+> because §0's ceiling is what stops it and not a number anybody chose. So the
+> decision is not "how much flood" in the abstract — it is *which reservoir am I
+> standing on*, which is the question the whole information game exists to make
+> a player answer.
+
 ### 3.2 Contacts
 
 ```text
