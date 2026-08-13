@@ -19,9 +19,17 @@ namespace OGSim.Composition.Tests;
 
 public sealed class ChainTests
 {
-    private static (Engine Engine, EntityId<IReservoirCompartmentEntity> Target) Undrilled()
+    /// <summary>
+    /// The hand-placed field these tests are taken on. The seed reaches the
+    /// price path and the hazard draws, never the reservoir — the compartment
+    /// below is stated, not generated — so walking it is walking the DICE while
+    /// the field stays the same one (finding 184).
+    /// </summary>
+    private static (Engine Engine, EntityId<IReservoirCompartmentEntity> Target) Undrilled(
+        ulong seed = 20260806UL)
     {
-        Built built = Assert.IsType<Built>(EngineBuilder.Build(Fixture.Settings()));
+        Built built = Assert.IsType<Built>(EngineBuilder.Build(
+            Fixture.Settings() with { WorldSeed = seed }));
 
         EntityId<IReservoirCompartmentEntity> target =
             built.Engine.Provided.Resolve<FieldControl>().AddCompartment(
@@ -1458,15 +1466,16 @@ public sealed class ChainTests
     /// never has a failure and never has any money either: an overhaul is a
     /// month of that element's life and a bill, and buying back condition the
     /// hazard curve was barely charging for is the most expensive way to run a
-    /// field. Measured across four triggers on one field — run-to-failure
-    /// $1,776M, at 0.4 $1,842M, at 0.7 $1,771M, at 0.9 $1,374M — so the good
-    /// answer is INTERIOR, and both ends are worse than the middle.</para>
+    /// field. Measured at a 0.9 trigger against run-to-failure on four seeds,
+    /// cash at forty years: 782 against 1,025 · 663 against 1,010 · −105
+    /// against −56 · 500 against 730. A quarter to a third of the company, on
+    /// every seed.</para>
     ///
-    /// <para>Only the outer comparison is pinned. The interior peak is a 4%
-    /// edge on one seed and asserting it would be fitting a test to a run;
-    /// over-maintaining costing a quarter of the company is a margin that means
-    /// something. R20d.22 is not a chore a player has to remember — it is a
-    /// number they can get wrong in both directions.</para>
+    /// <para>This end of the range is the one that holds whatever the emergency
+    /// price is: it held when both jobs cost $0.8M (finding 185's four seeds)
+    /// and it holds now that an emergency costs 3× a scheduled service. The
+    /// OTHER end — whether an interior trigger beats waiting — depends entirely
+    /// on that asymmetry and is <see cref="R20d26V1_the_asymmetry_makes_preventive_work_pay"/>.</para>
     /// </summary>
     [Fact]
     [Trait("Speed", "Slow")]
@@ -1481,14 +1490,61 @@ public sealed class ChainTests
     }
 
     /// <summary>
-    /// Forty years on a developed field, repairing anything broken and anything
-    /// worn past <paramref name="repairBelow"/>. A trigger of zero is
-    /// run-to-failure — the condition test can never fire, so only failures are
-    /// answered.
+    /// AND NOW THERE IS A RIGHT END TOO (SDD-012 §3, R20d.26.2). Waiting for
+    /// equipment to break is no longer free: an emergency repair costs three
+    /// times a scheduled service, which is what unplanned industrial work
+    /// genuinely runs, and preventive work finally has something to buy.
+    ///
+    /// <para>THE MEASUREMENT THIS REPLACED SAID THE OPPOSITE. Under a single
+    /// price, cash at forty years fell monotonically with the trigger on every
+    /// seed and run-to-failure won outright (finding 185) — re-measured on this
+    /// engine to be sure the old numbers had not been overtaken by the
+    /// waterflood and the souring, and they had not: 1,486 / 1,481 / 1,443 /
+    /// 1,344 / 959 across triggers 0.0–0.9 on the shipped seed, and the same
+    /// shape on three more.</para>
+    ///
+    /// <para>With the asymmetry the shape INVERTS on all four: 1,025 / 1,028 /
+    /// 1,090 / 1,103 / 782 · 1,010 / 1,051 / 1,066 / 1,082 / 663 · −56 / −30 /
+    /// −47 / −53 / −105 · 730 / 772 / 801 / 785 / 500. An interior peak every
+    /// time, and a 0.4 trigger beats waiting on every seed by 5.6–9.8% — or, on
+    /// the seed that ends insolvent whatever it does, by a sixth of the
+    /// loss.</para>
+    ///
+    /// <para>THREE SEEDS, because one is not evidence here. A whole-field
+    /// comparison earns belief from a margin that is a multiple or from two runs
+    /// sharing their draws (finding 184), and this has neither: 6% is not a
+    /// multiple, and the two strategies diverge in the hazard stream the moment
+    /// their failure histories differ — a failed component consumes no draw and
+    /// a failure consumes an extra one. What carries it instead is that the
+    /// treatment flipped the sign of the same comparison on four independent
+    /// seeds, against a control measured on this engine rather than remembered
+    /// from an older one (finding 179).</para>
     /// </summary>
-    private static Money Strategy(double repairBelow)
+    [Fact]
+    [Trait("Speed", "Slow")]
+    public void R20d26V1_the_asymmetry_makes_preventive_work_pay()
     {
-        (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled();
+        foreach (ulong seed in new ulong[] { 20260806UL, 20260807UL, 20260809UL })
+        {
+            Money waiting = Strategy(repairBelow: 0.0, seed);
+            Money planning = Strategy(repairBelow: 0.4, seed);
+
+            Assert.True(planning > waiting,
+                $"on seed {seed} a company servicing worn equipment ended with {planning} " +
+                $"against {waiting} for one that waited for it to break; if preventive work " +
+                "never pays, SDD-012 §3's three strategies are one strategy again");
+        }
+    }
+
+    /// <summary>
+    /// Forty years on a developed field: an emergency repair for anything
+    /// broken, a scheduled service for anything worn past
+    /// <paramref name="repairBelow"/>. A trigger of zero is run-to-failure — the
+    /// condition test can never fire, so only failures are answered.
+    /// </summary>
+    private static Money Strategy(double repairBelow, ulong seed = 20260806UL)
+    {
+        (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled(seed);
         Produce(engine, target);
 
         FieldControl field = engine.Provided.Resolve<FieldControl>();
@@ -1499,10 +1555,15 @@ public sealed class ChainTests
         {
             FieldReadModel? seen = engine.ReadModel;
 
+            // TWO OPERATIONS SINCE R20d.26.2: what has failed is an emergency
+            // repair at the emergency price, what is merely worn is a scheduled
+            // service — the validators refuse the wrong one on purpose.
             if (seen is not null)
                 for (var i = 0; i < seen.Chain.Count; i++)
-                    if (seen.Chain[i].Failed || seen.Chain[i].Condition < repairBelow)
+                    if (seen.Chain[i].Failed)
                         engine.Commands.Submit(new RepairEquipmentCommand(seen.Chain[i].Element));
+                    else if (seen.Chain[i].Condition < repairBelow)
+                        engine.Commands.Submit(new ServiceEquipmentCommand(seen.Chain[i].Element));
 
             engine.Pipeline.AdvanceTick();
         }

@@ -634,6 +634,7 @@ internal sealed class FieldModule() : EngineModule(Declare(
         typeof(ExpandExportCommand),
         typeof(InstallGasPlantCommand),
         typeof(RemediateInjectorCommand),
+        typeof(ServiceEquipmentCommand),
         typeof(RepairEquipmentCommand),
         typeof(InstallManifoldCommand),
         typeof(InstallTankCommand),
@@ -831,6 +832,15 @@ internal sealed class FieldModule() : EngineModule(Declare(
             // the game — a cost with no response, for the third time.
             new RepairEquipmentActivity(
                 Defaults.RepairEquipmentTerms,
+                composition.Require<OGSim.Integrity.AssetIntegrity>(),
+                composition.Require<IFlowElementRegistry>()),
+
+            // AND THE WAY TO NOT NEED IT (SDD-012 §3, R20d.26.2). Planned work
+            // on equipment that still runs, at the planned price — without this
+            // the two prices were one and waiting was free, so run-to-failure
+            // dominated on every seed (finding 185).
+            new ServiceEquipmentActivity(
+                Defaults.ServiceEquipmentTerms,
                 composition.Require<OGSim.Integrity.AssetIntegrity>(),
                 composition.Require<IFlowElementRegistry>()),
 

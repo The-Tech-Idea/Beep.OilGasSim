@@ -1063,17 +1063,38 @@ internal static class Defaults
         Outcomes: SurveyOutcomes);
 
     /// <summary>
-    /// AN OVERHAUL (SDD-012 §3). A month and rather less than a new vessel,
-    /// because it is the same vessel: what is bought is the years of hazard the
-    /// decay curve was about to charge, not a capability the field did not have.
+    /// A PLANNED OVERHAUL (SDD-012 §3). A month and rather less than a new
+    /// vessel, because it is the same vessel: what is bought is the years of
+    /// hazard the decay curve was about to charge, not a capability the field
+    /// did not have.
     ///
     /// <para>Priced under every install in this catalogue on purpose. If keeping
     /// equipment cost what replacing it costs, maintenance would never be the
     /// answer to anything and §3's three strategies would collapse to one.</para>
     /// </summary>
+    public static ActivityTerms ServiceEquipmentTerms { get; } = new(
+        Template: new ContentId("service-equipment"),
+        Cost: Money.FromMillions(0.8),
+        DurationTicks: 1,
+        Rig: null,
+        Outcomes: SurveyOutcomes);
+
+    /// <summary>
+    /// AN EMERGENCY REPAIR (SDD-012 §3, R20d.26.2 amendment). Three times the
+    /// planned job, which is inside the 2–5× that unplanned industrial work
+    /// genuinely runs — parts freighted rather than stocked, a crew mobilised
+    /// rather than scheduled — and the same multiple the duration experiment
+    /// used before finding 187 reverted it.
+    ///
+    /// <para>The same month as the planned job, deliberately: the duration half
+    /// of the asymmetry is the lever this field cannot afford — a month of
+    /// outage is ~$12M at plateau against a worst-seed fifth-year margin of
+    /// $17M — so the asymmetry ships in money alone, and the measurement decides
+    /// whether that is enough to make preventive work a strategy.</para>
+    /// </summary>
     public static ActivityTerms RepairEquipmentTerms { get; } = new(
         Template: new ContentId("repair-equipment"),
-        Cost: Money.FromMillions(0.8),
+        Cost: Money.FromMillions(2.4),
         DurationTicks: 1,
         Rig: null,
         Outcomes: SurveyOutcomes);

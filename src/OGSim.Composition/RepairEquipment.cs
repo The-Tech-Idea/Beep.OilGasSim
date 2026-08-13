@@ -17,19 +17,20 @@
 // separator and drill a well in the same month — they compete for money, not for
 // iron. The same call R20d.20 made for acidising, for the same reason.
 //
-// PREVENTIVE AS WELL AS CORRECTIVE, and that is the whole strategic content of
-// §3. Nothing requires an element to have FAILED: repairing at condition 0.4
-// costs the same month and the same money as repairing at 0.0, and buys back the
-// years of hazard the decay curve was about to charge. A player who only ever
-// repairs what is already broken is playing RunToFailure, which is a strategy
-// rather than a mistake — it is just the expensive one.
+// EMERGENCY WORK ONLY, since R20d.26.2. This template shipped preventive as
+// well as corrective, and priced them identically — so waiting was free and
+// run-to-failure dominated on every seed (finding 185). Unplanned work is
+// dearer than planned work everywhere maintenance is a profession: parts are
+// freighted rather than stocked, a crew is mobilised rather than scheduled.
+// Equipment that still works is the OTHER template, service-equipment, at the
+// planned price — and the validators make the two mutually exclusive.
 
 using OGSim.Contracts;
 using OGSim.Kernel;
 
 namespace OGSim.Composition;
 
-/// <summary>Overhaul a piece of equipment: condition back to new.</summary>
+/// <summary>Emergency repair of failed equipment: condition back to new.</summary>
 public sealed record RepairEquipmentCommand(EntityRef Equipment) : Command(Subject: Equipment);
 
 internal sealed class RepairEquipmentActivity(
@@ -76,15 +77,17 @@ internal sealed class RepairEquipmentActivity(
                     $"there is no element {command.Equipment.Value} in this field"),
             ];
 
-        // NOTHING WRONG WITH IT. Refused rather than run for the money: a crew
-        // sent to overhaul equipment that is already as new is a month and a
-        // bill for no change, and a player who ordered one deserves to be told.
-        if (!integrity.NeedsRepair(element))
+        // STILL WORKING. An emergency crew for equipment that has not failed is
+        // the planned job bought at the emergency price, and refusing it is what
+        // keeps SDD-012 §3's two operations two prices rather than one
+        // (R20d.26.2): worn-but-working equipment is service-equipment's
+        // subject, not this one's.
+        if (!integrity.HasFailed(element))
             return
             [
                 new RejectionReason(
-                    "$loc:reject.nothing-to-repair",
-                    "the equipment is in as-new condition and has nothing to overhaul"),
+                    "$loc:reject.not-failed",
+                    "the equipment is still working; order a scheduled service, not an emergency repair"),
             ];
 
         return [];
