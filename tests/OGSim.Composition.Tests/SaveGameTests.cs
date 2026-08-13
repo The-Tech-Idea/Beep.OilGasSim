@@ -69,6 +69,51 @@ public sealed class SaveGameTests
         return (engine, target);
     }
 
+    /// <summary>
+    /// Which read-model fields two engines disagree about.
+    ///
+    /// <para>Here because "the records are not equal" is true and useless: this
+    /// suite's whole history is defects that took minutes to find once something
+    /// printed the differing NAME and a long time when nothing did. A failure
+    /// that says <c>Flared</c> is a fix; one that says the projection differs is
+    /// an investigation.</para>
+    /// </summary>
+    private static string Fields(FieldReadModel a, FieldReadModel b)
+    {
+        var apart = new List<string>();
+
+        void Check(string name, bool same)
+        {
+            if (!same) apart.Add(name);
+        }
+
+        Check("Tick", a.Tick == b.Tick);
+        Check("Date", a.Date == b.Date);
+        Check("Cash", a.Cash == b.Cash);
+        Check("Wells", a.Wells == b.Wells);
+        Check("ActivitiesRunning", a.ActivitiesRunning == b.ActivitiesRunning);
+        Check("ProducedThisTick", a.ProducedThisTick == b.ProducedThisTick);
+        Check("Insolvent", a.Insolvent == b.Insolvent);
+        Check("Progress", a.Progress == b.Progress);
+        Check("Beliefs", Structural.Equal(a.Beliefs, b.Beliefs));
+        Check("Chain", Structural.Equal(a.Chain, b.Chain));
+        Check("Wellbores", Structural.Equal(a.Wellbores, b.Wellbores));
+        Check("Prospects", Structural.Equal(a.Prospects, b.Prospects));
+        Check("OilPrice", a.OilPrice == b.OilPrice);
+        Check("CostIndex", a.CostIndex.Equals(b.CostIndex));
+        Check("Reserves", a.Reserves == b.Reserves);
+        Check("Borrowing", a.Borrowing == b.Borrowing);
+        Check("Covenant", a.Covenant == b.Covenant);
+        Check("Debt", a.Debt == b.Debt);
+        Check("Flared", a.Flared == b.Flared);
+        Check("EsgStanding", a.EsgStanding.Equals(b.EsgStanding));
+        Check("Flood", a.Flood == b.Flood);
+
+        return apart.Count == 0
+            ? "no named field differs"
+            : "fields apart: " + string.Join(", ", apart);
+    }
+
     /// <summary>Which accounts two engines disagree about — what a divergence
     /// message needs to be actionable rather than merely true.</summary>
     private static string Accounts(Engine a, Engine b)
@@ -161,25 +206,20 @@ public sealed class SaveGameTests
             FieldReadModel a = original.ReadModel!;
             FieldReadModel b = reloaded.ReadModel!;
 
-            // THE PHYSICS AND THE MONEY, month after month, to the cubic metre
-            // and to the cent — and the accounts individually, so a divergence
-            // names the ledger line rather than a total.
-            Assert.True(
-                a.ProducedThisTick == b.ProducedThisTick && a.Cash == b.Cash,
-                $"a reloaded game diverged {month + 1} month(s) after the save: produced " +
-                $"{a.ProducedThisTick.CubicMetres:F3} m³ against " +
-                $"{b.ProducedThisTick.CubicMetres:F3}, cash {a.Cash} against {b.Cash}. " +
-                Accounts(original, reloaded));
+            // EVERY NAMED FIELD BUT THE CHAIN, month after month, for two years:
+            // production, cash, the wells, the beliefs, the reserves, the
+            // borrowing terms, the covenant, the flaring record, the ESG
+            // standing and the flood — each compared by name, so a regression
+            // says WHICH.
+            //
+            // `Chain` is excluded and it is the only exclusion (S013-9). The
+            // rows still part somewhere while every barrel and every cent
+            // agrees; it is not isolated, and asserting it here would fail on
+            // that alone and take the two years of exact agreement with it.
+            Assert.Equal("fields apart: Chain", Fields(a, b));
 
             Assert.Equal("every account balance agrees", Accounts(original, reloaded));
         }
-
-        // NOT THE WHOLE PROJECTION YET. `FieldReadModel` compares equal only if
-        // every collection on it does, and the two still part somewhere outside
-        // production, cash and the ledger — the chain rows are the likely half,
-        // and neither has been isolated. Asserting the whole record here would
-        // fail on that alone and hide the two years of exact agreement above,
-        // which is the claim worth keeping (S013-8's remainder).
     }
 
     /// <summary>

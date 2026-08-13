@@ -446,6 +446,15 @@ internal sealed class ProductionLoop : IStateOwner
         // reloaded field skip a month of injection: `ReservoirRoom` walks this
         // list, so an empty one leaves its cap at infinity and returns ZERO room
         // — a flood that stopped for a month and then caught up (S013-8).
+        // THE TWO RUNNING TOTALS. Neither is scratch and neither was saved: what
+        // a company has flared over its life is what the ESG record is scored on
+        // and what its debt is priced against, and what it has PRODUCED is what
+        // the bank lends against. A reload reset both to zero, so a
+        // forty-year field came back with the flaring record of a new one
+        // (S013-9).
+        writer.WriteDouble("cumulative-flared", CumulativeFlared.Kilograms);
+        writer.WriteDouble("cumulative-produced", CumulativeProduced.CubicMetres);
+
         writer.WriteInt64("flood-share-count", _floodShares.Count);
 
         for (int i = 0; i < _floodShares.Count; i++)
@@ -465,6 +474,9 @@ internal sealed class ProductionLoop : IStateOwner
         VoidageReplacement = reader.ReadDouble("voidage-replacement");
         _voidageLastTick = reader.ReadDouble("voidage-last-tick");
         _producedWaterLastTick = reader.ReadDouble("produced-water-last-tick");
+
+        CumulativeFlared = new Mass(reader.ReadDouble("cumulative-flared"));
+        CumulativeProduced = new SurfaceVolume(reader.ReadDouble("cumulative-produced"));
 
         _floodShares.Clear();
 
