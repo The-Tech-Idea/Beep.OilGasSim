@@ -148,12 +148,16 @@ All three produce ordinary SDD-007 operations — no special execution path.
 > path, and the validators make them mutually exclusive so a player cannot buy
 > the planned price for a broken thing.
 >
-> **DURATION is the lever that matters, not cost.** A planned service takes the
-> element's condition back with the field still producing; an emergency repair
-> is served while the route law has the whole chain shut in behind the failure
-> (SDD-002 §5), so its duration is production the company does not get. That is
-> what gives preventive work something to buy, and it is why the two templates
-> differ in months as well as in money.
+> **DURATION looked like the lever that mattered, and it is not the one that
+> shipped** — see the R20d.26.2 amendment below, which measured cost alone
+> producing the interior optimum this paragraph expected only from months. What
+> remains true is the physical asymmetry underneath: a planned service takes the
+> element's condition back with the field still producing, while an emergency
+> repair is served with the whole chain shut in behind the failure (SDD-002 §5),
+> so a failure's months are production the company does not get. **The engine
+> already charges that**, because availability keys off failure and not off work
+> in progress; what R20d.26 tried to add was MORE of it, and what finding 187
+> found is that this field's early years cannot pay for more.
 >
 > **Calibrated as physics first and measured second.** The asymmetry is real
 > before it is convenient — emergency industrial work genuinely runs several
@@ -163,6 +167,68 @@ All three produce ordinary SDD-007 operations — no special execution path.
 > the measurement says is what gets written down: a mechanic that still has one
 > dominant strategy after an honest asymmetry is a finding, not a reason to tune
 > further.
+>
+> **R20d.26.2 amendment (finding 187) — the duration lever works and this field
+> cannot afford it, so the cost lever ships alone first.**
+>
+> Built at 3× cost and 3 months against the planned job's 1, the split produced
+> exactly what finding 185 said was missing — an interior optimum on every seed,
+> margins 12–36% — and made the shipped field lose money in its fifth year,
+> because a month of outage costs ~$12M of revenue at plateau, the worst seed's
+> fifth year clears by $17M, and the field takes about one failure a year then.
+> One extra month per failure spends most of that margin. Arithmetic, not bad
+> luck, and dropping the duration toward it is a tuning loop this section
+> already forbids. Reverted at the calibration; the two-operation shape and the
+> measurement stand.
+>
+> **What ships instead, as the cheap experiment finding 187 names first:** the
+> same two operations with the asymmetry in MONEY only.
+>
+> ```text
+> service-equipment  planned    working equipment, worn     base cost, one tick
+> repair-equipment   emergency  FAILED equipment            3× cost,   one tick
+> ```
+>
+> The 3× is the same multiple the duration experiment used and sits inside the
+> 2–5× range industrial emergency work genuinely costs — parts freighted rather
+> than stocked, a crew mobilised rather than scheduled. It leaves the fifth year
+> alone by construction, because no failure is down for longer than before.
+>
+> **Measured, and the envelope was wrong.** Four seeds × five triggers, cash at
+> forty years, against a CONTROL taken on this same engine at the single price
+> rather than remembered from the engine finding 185 measured (finding 179):
+>
+> ```text
+> trigger        0.0     0.2     0.4     0.7     0.9
+> one price     1486    1481    1443    1344     959   monotone — waiting wins
+>               1519    1531    1478    1343     828
+>                142     128      92     -28     -37
+>               1127    1134    1140     966     628
+> 3x emergency  1025    1028    1090    1103     782   interior peak
+>               1010    1051    1066    1082     663
+>                -56     -30     -47     -53    -105
+>                730     772     801     785     500
+> ```
+>
+> The control reproduces finding 185 on the current engine — the waterflood and
+> the souring had not overtaken it — and the asymmetry inverts the shape on
+> **every seed**: a 0.4 trigger beats waiting by 5.6–9.8%, and 0.9 still costs a
+> quarter to a third of the company. §3 has three strategies again, and the
+> middle one is the answer.
+>
+> **The envelope's error was counting only the bill.** It priced avoided
+> failures at the $1.6M of extra parts and ignored that a company short of cash
+> repairs LATER — the run-to-failure field ends $461M behind on the shipped seed
+> having paid $270M of extra invoices, and the rest is production it did not
+> make while it could not afford the crew.
+>
+> **The fifth year survives, which is the gate finding 187 set.** Cost-only
+> leaves the outage budget untouched by construction and the measurement agrees:
+> 76–84 months down of 480 under both prices. Year five costs $5–9M and clears
+> zero on all four seeds — but the thinnest ends at **+$2.1M against $7.3M under
+> the single price**, so a young field with two more early failures than these
+> would go under. That is the number any further asymmetry is spent against, and
+> it is why the duration lever stays reverted.
 
 ## 4. Non-equipment hazards
 
