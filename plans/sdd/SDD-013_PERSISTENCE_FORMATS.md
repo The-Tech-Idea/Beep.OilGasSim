@@ -131,6 +131,46 @@ PV8 (digest sensitivity) · R19-V9..V15 as specified in the phase doc.
 > standing in for work (L3) — and a save that refused to name its versions would
 > be worse than one that names honest ones.
 
+> **R20d.12 review, second half (finding 194) — the read side needs two things
+> this engine does not have, and design 11 §2.1 already specifies both.**
+>
+> **1. A restore order that is not the capture order.** `StateRegistry.Owners`
+> returns owners in STATE-KEY order, and its own comment gives the reason:
+> composing modules differently must not change a byte of the save. That is
+> correct for capture and wrong for restore. Design 11 §2.1: *"Modules declare
+> their restore dependencies (facilities before the pipelines that connect them;
+> reservoirs before the perforations that drain them). The registry topologically
+> sorts them, and a cycle is a composition error caught at startup, not a
+> mysterious load failure."* **Two different orders over one registry**, and the
+> engine currently has one.
+>
+> **2. A loader that rebuilds the field.** `WellsState.Capture` records which
+> completions are open and what each drains, and says the completion's own
+> configuration — tubing, choke, lift — *"is CONTENT, restored by the loader
+> rather than copied into every save"*. **That loader is the missing piece.** The
+> save carries the decision (which wells, draining what); content carries the
+> design; and nothing yet puts the two together, so `Restore` treats the record
+> as a checksum against a rebuild nobody performs.
+>
+> **What a rebuild has to do, from `FieldControl.OpenWell`:** take a header slot,
+> route the trunk and place the manifold if it is the first tie-in, open the
+> completion, register the abandonment obligation, lay the gathering line at that
+> field's distance from the header, and connect both ends into the network. All
+> of it is already written — a rebuild wants that path with the SAVED id instead
+> of `NextWellId()`, not a second one beside it (L5).
+>
+> **Which fixes the ordering constraints in place:** world and subsurface must
+> restore BEFORE the wells are reopened, because the run's length is read from
+> where the field is; and the obligation registry must restore AFTER, because
+> reopening registers an obligation and the save's own record is the one that
+> should stand. Those are exactly the "declared restore dependencies" §2.1 asks
+> for, discovered by trying to write the load rather than by reasoning about it.
+>
+> **Not built ahead of need.** The topological restore order has no caller until
+> the rebuild exists, and shipping it first would be one more mechanism joined to
+> nothing — which is the defect this project has now recorded fourteen times.
+> They land together or not at all.
+
 ## 8. Open items
 
 | # | Item | Trigger |
@@ -139,3 +179,5 @@ PV8 (digest sensitivity) · R19-V9..V15 as specified in the phase doc.
 | S013-2 | Save-diff tool (R19-V15) — ships as a dev utility over the canonical form; scope | R19.5 |
 | S013-3 | `engineVersion` / `contentVersion` stamped from a release process rather than declared as constants | a build pipeline |
 | S013-4 | The audit sidecar (§1's `audit/`) — the container ships state and header first; the trail is its own task with its own retention policy | R19.4 |
+| S013-5 | **The rebuild + declared restore order** — reopen saved completions through `FieldControl` with their saved ids, and give `StateRegistry` design 11 §2.1's topologically sorted restore order beside its key-ordered capture. The two land together; neither is useful alone | R20d.12 |
+| S013-6 | The EPOCH is not in the header, so a save's dates depend on the `EngineSettings` it is loaded with. Harmless while one scenario ships; a relabelling bug the moment two do | a second scenario |
