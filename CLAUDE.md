@@ -101,11 +101,19 @@ Information → Company → Objectives → Close. `StageId` in `Modules.cs` pins
 numbering. Stage 4 deliberately reads the *previous* tick's solved values (a
 defined one-tick lag, not a circular dependency).
 
-**Commands in, read model out.** `IEngine` (`EngineSurface.cs`) is the entire
-public surface: `AdvanceTick`, `ReadModel`, `Commands`, `Events(tick)`, `Audit`,
-`World`, `WriteSave`. The read model is rebuilt each tick from **beliefs, never
-truth**. Events are outbound-only — there is deliberately no `Subscribe()`;
-engine code cannot react to events.
+**Commands in, read model out.** The read model is rebuilt each tick from
+**beliefs, never truth**. Events are outbound-only — there is deliberately no
+`Subscribe()`; engine code cannot react to events.
+
+`IEngine` (`EngineSurface.cs`) is the surface SDD-017 §1 **specifies**, and
+nothing implements it (finding 188). What a host actually holds is the
+`Engine` record from `EngineBuilder.cs` — `Pipeline`, `Commands`, `Audit`,
+`Events`, `State`, `Provided`, `ReadModel` — which is most of the same surface
+under different names and is what every test and both clients use. The members
+with no counterpart there are `World`, `Events(tick)` and **`WriteSave`, which
+is implemented nowhere**: no path in `src/` writes or reads a save, so every
+`IStateOwner.Capture`/`Restore` is exercised only by its own unit test. Do not
+assume a save round-trip is covered because a module has persistence code.
 
 **Truth vs belief is structural.** The subsurface truth model stays `internal`
 to `OGSim.Information`; nothing else can reach it. Initial world beliefs cross
