@@ -23,7 +23,7 @@ namespace OGSim.Company;
 /// <summary>
 /// This month's benchmark and this month's cost of doing business.
 /// </summary>
-public sealed class MarketState
+public sealed class MarketState : IStateOwner
 {
     private readonly Money _openingPrice;
 
@@ -68,6 +68,49 @@ public sealed class MarketState
     /// dearer than the same rig-month in a slump (SDD-009 §6's ED4).
     /// </summary>
     public double CostIndex { get; private set; } = 1.0;
+
+    // ------------------------------------------------------------- the save
+    //
+    // THE MARKET WAS NOT SAVED AT ALL, and it was invisible because nothing had
+    // ever reloaded a game (finding 188). Restoring the price STREAM's position
+    // without the price itself resumes a random walk from the right dice and the
+    // wrong place: production came back identical to the tick and the money did
+    // not, because the same barrels were sold at a different price.
+    //
+    // Three facts move and the rest are content: this month's price, the year of
+    // history the cost index is driven from, and how many months have gone by —
+    // the ring buffer means the last two are one array and one counter.
+
+    public StateKey Key { get; } = new("company.market");
+
+    public int SchemaVersion => 1;
+
+    public void Capture(IStateWriter writer)
+    {
+        ArgumentNullException.ThrowIfNull(writer);
+
+        writer.WriteInt64("price", OilPrice.Cents);
+        writer.WriteDouble("cost-index", CostIndex);
+        writer.WriteInt64("months", _months);
+
+        for (int i = 0; i < _lastYear.Length; i++)
+            writer.WriteInt64(
+                "m" + i.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                _lastYear[i].Cents);
+    }
+
+    public void Restore(IStateReader reader)
+    {
+        ArgumentNullException.ThrowIfNull(reader);
+
+        OilPrice = new Money(reader.ReadInt64("price"));
+        CostIndex = reader.ReadDouble("cost-index");
+        _months = (int)reader.ReadInt64("months");
+
+        for (int i = 0; i < _lastYear.Length; i++)
+            _lastYear[i] = new Money(reader.ReadInt64(
+                "m" + i.ToString(System.Globalization.CultureInfo.InvariantCulture)));
+    }
 
     /// <summary>
     /// One month. The market moves, and then the cost of working in it follows

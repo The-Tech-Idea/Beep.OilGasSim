@@ -491,7 +491,7 @@ internal sealed class CompanyModule() : EngineModule(Declare(
     // composer refused outright until it was said, which is the ordering rule
     // doing its job rather than a coincidence of registration order.
     requires: [typeof(IAuditTrail), typeof(IBeliefStore)],
-    ownsState: ["company.ledger"],
+    ownsState: ["company.ledger", "company.market"],
     stages: NoStagesYet))
 {
     public override void Compose(IModuleComposition composition)
@@ -511,10 +511,17 @@ internal sealed class CompanyModule() : EngineModule(Declare(
         // it and the scheduler prices work through it, and a month in which
         // those two disagreed about what oil was worth is a month whose
         // accounts do not close.
-        composition.Provide(new OGSim.Company.MarketState(
+        // OWNED as well as provided (R20d.12). The market carries this month's
+        // price and the year the cost index is driven from, and it was in no
+        // save at all — so a reloaded game resumed the price walk from the right
+        // dice at the wrong place, and sold the same barrels for different money.
+        var market = new OGSim.Company.MarketState(
             Defaults.Economics.OilPricePerTonne,
             Defaults.CostElasticity,
-            Defaults.CostDrift));
+            Defaults.CostDrift);
+
+        composition.Own(market);
+        composition.Provide(market);
 
         // ONE OWNER FOR THE RESERVES CALCULATION (law L5). The read model
         // reports what is left and stage 8 accrues the abandonment provision
@@ -604,7 +611,7 @@ internal sealed class FieldModule() : EngineModule(Declare(
     // Provided here because the field is where an asset is CREATED, and
     // registration is unconditional at creation (SDD-007 §6).
 
-    ownsState: ["field.activities", "company.obligations"],
+    ownsState: ["field.activities", "company.obligations", "field.flood"],
     stages:
     [
         new StageParticipation(StageId.Operations, Order: 0),
@@ -744,6 +751,11 @@ internal sealed class FieldModule() : EngineModule(Declare(
             composition.Require<OGSim.Company.CompanyState>(),
             composition.Require<IAuditTrail>(),
             () => loop.CumulativeProduced);
+
+        // The voidage set point is a standing decision, not a per-tick number,
+        // and it was in no save at all: a reloaded game kept the water already
+        // injected and quietly stopped buying more (R20d.12).
+        composition.Own(loop);
 
         composition.Provide(bank);
         composition.Contribute(order: 0, new SegmentationStage(

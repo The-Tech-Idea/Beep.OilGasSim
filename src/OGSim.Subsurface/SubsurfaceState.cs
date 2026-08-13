@@ -488,6 +488,23 @@ internal sealed class SubsurfaceState : IStateOwner
             // travel with it.
             writer.WriteString(at + "drive", compartment.Drive.Id.Value);
 
+            // AND THE WATER BEHIND IT. `_aquifers` was filled by Create and by
+            // nothing else, so a restored compartment had no aquifer at all and
+            // the first tick asking for its influx faulted. Its three terms and
+            // the volume it has already delivered, because that last number IS
+            // the mechanic: an aquifer restored at zero comes back at full
+            // strength however long the field has been draining it.
+            bool hasAquifer = _aquifers[compartment.Id] is FetkovichAquifer;
+            writer.WriteInt64(at + "has-aquifer", hasAquifer ? 1L : 0L);
+
+            if (_aquifers[compartment.Id] is FetkovichAquifer aquifer)
+            {
+                writer.WriteDouble(at + "aq-j", aquifer.ProductivityIndex);
+                writer.WriteDouble(at + "aq-p0", aquifer.InitialPressure.Pascals);
+                writer.WriteDouble(at + "aq-wei", aquifer.MaximumInflux.CubicMetres);
+                writer.WriteDouble(at + "aq-we", aquifer.CumulativeInflux.CubicMetres);
+            }
+
             writer.WriteDouble(at + "np", compartment.Cumulative.Oil.CubicMetres);
             writer.WriteDouble(at + "gp", compartment.Cumulative.Gas.CubicMetres);
             writer.WriteDouble(at + "wp", compartment.Cumulative.Water.CubicMetres);
@@ -503,6 +520,7 @@ internal sealed class SubsurfaceState : IStateOwner
 
         _compartments.Clear();
         _byId.Clear();
+        _aquifers.Clear();
 
         long count = reader.ReadInt64("count");
         if (count < 0)
@@ -568,6 +586,24 @@ internal sealed class SubsurfaceState : IStateOwner
 
             _compartments.Add(compartment);
             _byId.Add(id, compartment);
+
+            // The aquifer, rebuilt from its own terms and seeked to what it has
+            // already given up. Absent is a legitimate answer and the common one
+            // — only a water drive admits influx at all.
+            if (reader.ReadInt64(at + "has-aquifer") == 0L)
+            {
+                _aquifers.Add(id, null);
+                continue;
+            }
+
+            var restored = new FetkovichAquifer(
+                reader.ReadDouble(at + "aq-j"),
+                new Pressure(reader.ReadDouble(at + "aq-p0")),
+                new ReservoirVolume(reader.ReadDouble(at + "aq-wei")));
+
+            restored.RestoreTo(new ReservoirVolume(reader.ReadDouble(at + "aq-we")));
+
+            _aquifers.Add(id, restored);
         }
     }
 

@@ -192,7 +192,7 @@ internal sealed class TickProduction
 /// Stage 5 → 6 → 8, wired. Each stage is contributed separately so the tick runs
 /// them in design 03 §6's declared order; this holds the state they share.
 /// </summary>
-internal sealed class ProductionLoop
+internal sealed class ProductionLoop : IStateOwner
 {
     private readonly SubsurfaceState _subsurface;
     private readonly WellsState _wells;
@@ -414,6 +414,42 @@ internal sealed class ProductionLoop
     /// <summary>The set point, from the command that carries it. Not validated
     /// here: the validator has already refused what is meaningless (R1 §2.5).</summary>
     public void SetVoidageReplacement(double ratio) => VoidageReplacement = ratio;
+
+    // ---------------------------------------------------- the flood, saved
+    //
+    // ALMOST EVERYTHING ON THIS CLASS IS PER-TICK SCRATCH, rebuilt from the
+    // solve every month, and SDD-013 §4 is explicit that derived state must
+    // never be saved. THREE FIELDS ARE NOT: the voidage set point is a standing
+    // player DECISION that outlives any tick, and the two "last tick" numbers it
+    // is applied against are read at the start of the next one.
+    //
+    // Unsaved, a reloaded game silently stopped flooding — it kept the water
+    // already injected, so it produced identically for a month and simply
+    // stopped BUYING any, which showed up as an opex gap and nothing else
+    // (R20d.12). A lever a player set twenty years earlier, forgotten by a
+    // reload.
+
+    public StateKey Key { get; } = new("field.flood");
+
+    public int SchemaVersion => 1;
+
+    public void Capture(IStateWriter writer)
+    {
+        ArgumentNullException.ThrowIfNull(writer);
+
+        writer.WriteDouble("voidage-replacement", VoidageReplacement);
+        writer.WriteDouble("voidage-last-tick", _voidageLastTick);
+        writer.WriteDouble("produced-water-last-tick", _producedWaterLastTick);
+    }
+
+    public void Restore(IStateReader reader)
+    {
+        ArgumentNullException.ThrowIfNull(reader);
+
+        VoidageReplacement = reader.ReadDouble("voidage-replacement");
+        _voidageLastTick = reader.ReadDouble("voidage-last-tick");
+        _producedWaterLastTick = reader.ReadDouble("produced-water-last-tick");
+    }
 
     /// <summary>What the flood actually bought this tick, in reservoir m³ — and
     /// how much room the injector had left. Both, because a target met and a
@@ -1532,6 +1568,40 @@ public sealed class FieldControl
             });
 
         return OpenWell(completion, drains);
+    }
+
+    /// <summary>
+    /// Re-open a well a save recorded, through the very path that drilled it
+    /// (design 11 §2.1's loader, SDD-013's S013-5).
+    ///
+    /// <para>THE SAME `Drill`, and that is the whole point. Everything a well
+    /// brings with it — the header slot, the trunk route and the manifold on the
+    /// first tie-in, the abandonment obligation, the gathering line at that
+    /// field's own distance, both network connections — is written once, and a
+    /// rebuild that laid its own version beside it would be a second way to make
+    /// a well (L5), drifting the first time either changed.</para>
+    ///
+    /// <para>THE ID FALLS OUT RATHER THAN BEING ASSIGNED. `NextWellId` is
+    /// `_wells.Count + 1` — derived, not a counter — so replaying the drills in
+    /// the order the save lists them reproduces the same ids. This checks that
+    /// rather than trusting it: a mismatch means the save and this build
+    /// disagree about what a field is, and design 11 §2.1 is explicit that a
+    /// reference which fails to resolve on restore is a fault and never a silent
+    /// drop.</para>
+    /// </summary>
+    internal void Reopen(
+        EntityId<ICompletion> expected,
+        EntityId<IReservoirCompartmentEntity> drains,
+        Length totalDepth)
+    {
+        EntityId<ICompletion> opened = Drill(drains, totalDepth);
+
+        if (opened != expected)
+            throw new SaveDataFault("SDD-013 §2", null,
+                $"rebuilding the field gave completion {opened.Value} where the save holds " +
+                $"{expected.Value}; the wells were reopened in the order they were saved, so " +
+                "a different id means this build numbers wells differently from the one that " +
+                "wrote the save");
     }
 
     private EntityId<ICompletion> OpenWell(

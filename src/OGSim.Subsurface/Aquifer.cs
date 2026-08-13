@@ -56,6 +56,37 @@ internal sealed class FetkovichAquifer : IAquiferModel
     /// is a function of this and nothing else.</summary>
     public ReservoirVolume CumulativeInflux => new(_cumulativeInfluxM3);
 
+    // WHAT A SAVE HAS TO CARRY (R20d.12). An aquifer is three constants and one
+    // number that moves, and the one that moves is the whole mechanic: pressure
+    // falls with the fraction already delivered, so an aquifer restored at zero
+    // comes back at full strength however long the field has been draining it.
+    // Its terms are exposed rather than recomputed from the compartment, because
+    // this object owns them (L5).
+
+    internal double ProductivityIndex => _productivityIndex;
+
+    internal Pressure InitialPressure => new(_initialPressurePa);
+
+    internal ReservoirVolume MaximumInflux => new(_maximumInfluxM3);
+
+    /// <summary>
+    /// Puts a restored aquifer back to what it had already given up.
+    ///
+    /// <para>Separate from delivering it, exactly as <c>SimulationClock.RestoreTo</c>
+    /// is separate from <c>Advance</c>: restoring is allowed to jump, and only
+    /// before the engine ticks.</para>
+    /// </summary>
+    internal void RestoreTo(ReservoirVolume delivered)
+    {
+        if (delivered.CubicMetres < 0.0 || delivered.CubicMetres > _maximumInfluxM3)
+            throw new SaveDataFault("SDD-003 §3.3", null,
+                $"a save says this aquifer has delivered {Format(delivered.CubicMetres)} m³ of " +
+                $"a possible {Format(_maximumInfluxM3)}; an aquifer cannot have given up more " +
+                "than it holds, and a negative influx is water flowing backwards");
+
+        _cumulativeInfluxM3 = delivered.CubicMetres;
+    }
+
     /// <summary>
     /// The aquifer's current pressure: it falls linearly with the fraction of
     /// its total expansion already delivered. Exposed because the aquifer's

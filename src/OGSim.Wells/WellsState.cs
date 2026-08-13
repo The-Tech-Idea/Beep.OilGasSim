@@ -14,6 +14,20 @@ using OGSim.Kernel;
 
 namespace OGSim.Wells;
 
+/// <summary>
+/// One well as a save records it: the decision, not the design.
+///
+/// <para>Which compartment it drains and how deep it went are the player's;
+/// the tubing, the inflow model and the lift are content the loader supplies
+/// again (SDD-013 §4). The choke is here because it is neither — it is a
+/// setting the player changed after the well was built.</para>
+/// </summary>
+public readonly record struct SavedWell(
+    EntityId<ICompletion> Id,
+    EntityId<IReservoirCompartmentEntity> Drains,
+    Length TotalDepth,
+    bool ShutIn);
+
 /// <summary>Owner of <c>wells.completions</c>.</summary>
 public sealed class WellsState : IStateOwner
 {
@@ -38,7 +52,7 @@ public sealed class WellsState : IStateOwner
 
     public StateKey Key { get; } = new("wells.completions");
 
-    public int SchemaVersion => 1;
+    public int SchemaVersion => 2;
 
     public int Count => _completions.Count;
 
@@ -152,7 +166,58 @@ public sealed class WellsState : IStateOwner
 
             writer.WriteInt64(at + "id", (long)completion.CompletionId.Value);
             writer.WriteInt64(at + "drains", (long)_drains[completion.CompletionId].Value);
+
+            // HOW DEEP THE PLAYER DRILLED, which the loader needs and content
+            // cannot supply: the design is a catalogue entry but the depth is a
+            // decision, and it sets the tubing length the well lifts through.
+            // Read back off the perforation it produced (R20d.12, S013-5).
+            writer.WriteDouble(at + "depth", completion.Perforations[0].TopMd.Metres);
+
+            // AND WHETHER IT IS OPEN. The choke lives on the completion object,
+            // so before this a shut-in well came back wide open — a save that
+            // silently re-opened wells a player had closed.
+            //
+            // THE FACT, NOT THE SETTING. `ChokeSetting.Open` is an UNLIMITED
+            // critical rate, and the canonical form refuses a non-finite number
+            // outright (SDD-013 §3) — correctly, since infinity in a save is a
+            // fault that happened earlier. What a player can set here is open or
+            // shut (`SetWellChokeCommand` takes a bool), so that is what a save
+            // carries; the day a real choke position exists it is a fraction and
+            // saves as one.
+            writer.WriteInt64(at + "shut-in", completion.IsShutIn ? 1L : 0L);
         }
+    }
+
+    /// <summary>
+    /// What the save says a field is made of, WITHOUT applying it — the list a
+    /// loader rebuilds from before this owner can check its work (design 11
+    /// §2.1, SDD-013 §4's "restored by the loader").
+    ///
+    /// <para>Here rather than in the loader so the key spelling has one owner
+    /// (L5): a rebuild that read <c>"w3.drains"</c> for itself would be a second
+    /// place for this block's format to be written down, and the two would drift
+    /// the first time either changed.</para>
+    /// </summary>
+    public static IReadOnlyList<SavedWell> Saved(IStateReader reader)
+    {
+        ArgumentNullException.ThrowIfNull(reader);
+
+        long count = reader.ReadInt64("count");
+        var wells = new List<SavedWell>((int)count);
+
+        for (long i = 0; i < count; i++)
+        {
+            string at = Prefix(i);
+
+            wells.Add(new SavedWell(
+                new EntityId<ICompletion>((ulong)reader.ReadInt64(at + "id")),
+                new EntityId<IReservoirCompartmentEntity>(
+                    (ulong)reader.ReadInt64(at + "drains")),
+                new Length(reader.ReadDouble(at + "depth")),
+                ShutIn: reader.ReadInt64(at + "shut-in") != 0L));
+        }
+
+        return wells;
     }
 
     /// <summary>
@@ -165,26 +230,27 @@ public sealed class WellsState : IStateOwner
     {
         ArgumentNullException.ThrowIfNull(reader);
 
-        long count = reader.ReadInt64("count");
+        IReadOnlyList<SavedWell> saved = Saved(reader);
 
-        if (count != _completions.Count)
+        if (saved.Count != _completions.Count)
             throw new SaveDataFault("SDD-013 §2", null,
-                $"the save holds {count} open completions and the rebuilt field has " +
+                $"the save holds {saved.Count} open completions and the rebuilt field has " +
                 $"{_completions.Count}; a field with wells missing is not the field " +
                 "that was saved");
 
-        for (long i = 0; i < count; i++)
+        for (int i = 0; i < saved.Count; i++)
         {
-            string at = Prefix(i);
-            var id = new EntityId<ICompletion>((ulong)reader.ReadInt64(at + "id"));
-
-            if (!_byId.ContainsKey(id))
+            if (!_byId.TryGetValue(saved[i].Id, out Completion? completion))
                 throw new SaveDataFault("SDD-013 §2", null,
-                    $"the save names completion {id.Value}, which the rebuilt field " +
+                    $"the save names completion {saved[i].Id.Value}, which the rebuilt field " +
                     "does not contain");
 
-            _drains[id] = new EntityId<IReservoirCompartmentEntity>(
-                (ulong)reader.ReadInt64(at + "drains"));
+            _drains[saved[i].Id] = saved[i].Drains;
+
+            // The choke is the well's own, and the loader rebuilt it wide open
+            // because that is what a new completion is.
+            completion.SetChoke(
+                saved[i].ShutIn ? ChokeSetting.Closed : ChokeSetting.Open);
         }
     }
 
