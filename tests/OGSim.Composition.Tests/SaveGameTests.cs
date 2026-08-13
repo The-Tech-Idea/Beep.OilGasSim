@@ -114,6 +114,40 @@ public sealed class SaveGameTests
             : "fields apart: " + string.Join(", ", apart);
     }
 
+    /// <summary>Which chain ROWS differ, and in which of their parts — the same
+    /// reasoning as <see cref="Fields"/>, one level down.</summary>
+    private static string Rows(FieldReadModel a, FieldReadModel b)
+    {
+        if (a.Chain.Count != b.Chain.Count)
+            return $"row count {a.Chain.Count} vs {b.Chain.Count}";
+
+        var apart = new List<string>();
+
+        for (var i = 0; i < a.Chain.Count; i++)
+        {
+            ChainElementView x = a.Chain[i];
+            ChainElementView y = b.Chain[i];
+
+            if (x == y) continue;
+
+            var parts = new List<string>();
+
+            if (x.Element != y.Element) parts.Add($"element {x.Element.Value}/{y.Element.Value}");
+            if (!string.Equals(x.DisplayId, y.DisplayId, StringComparison.Ordinal))
+                parts.Add($"id {x.DisplayId}/{y.DisplayId}");
+            if (x.Throughput != y.Throughput)
+                parts.Add($"throughput {x.Throughput.Kilograms:F3}/{y.Throughput.Kilograms:F3}");
+            if (x.Condition != y.Condition) parts.Add($"condition {x.Condition}/{y.Condition}");
+            if (x.Failed != y.Failed) parts.Add($"failed {x.Failed}/{y.Failed}");
+            if (!Structural.Equal(x.Deferred, y.Deferred))
+                parts.Add($"deferred {x.Deferred.Count}/{y.Deferred.Count}");
+
+            apart.Add($"[{i} {x.DisplayId}] " + string.Join(" ", parts));
+        }
+
+        return apart.Count == 0 ? "every chain row agrees" : string.Join("; ", apart);
+    }
+
     /// <summary>Which accounts two engines disagree about — what a divergence
     /// message needs to be actionable rather than merely true.</summary>
     private static string Accounts(Engine a, Engine b)
@@ -217,6 +251,16 @@ public sealed class SaveGameTests
             // agrees; it is not isolated, and asserting it here would fail on
             // that alone and take the two years of exact agreement with it.
             Assert.Equal("fields apart: Chain", Fields(a, b));
+
+            // THE CHAIN IS THE SAME NETWORK — same rows, same order, same
+            // identities, nothing failed differently. What parts is two of the
+            // six parts of a row, and `Rows` names them: `condition` on the
+            // wells, and `throughput` on `water-disposal`. Every barrel of OIL
+            // and every cent still agree, which is why the difference is on the
+            // water side (S013-9).
+            Assert.DoesNotContain("row count", Rows(a, b), StringComparison.Ordinal);
+            Assert.DoesNotContain("failed", Rows(a, b), StringComparison.Ordinal);
+            Assert.DoesNotContain("element", Rows(a, b), StringComparison.Ordinal);
 
             Assert.Equal("every account balance agrees", Accounts(original, reloaded));
         }
