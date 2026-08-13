@@ -64,6 +64,14 @@ public sealed class SaveGameTests
         // non-zero by the time this is written out (R20d.25).
         engine.Commands.Submit(new SetVoidageReplacementCommand(1.0));
 
+        // AND BUY SOMETHING. Every save defect this test found was found because
+        // the fixture DID the thing — drilled, flooded, shut a well in. It never
+        // installed, so six fitted tiers went unsaved and two years of month-by-
+        // month comparison saw nothing at all (finding 197). A separator rung is
+        // the cheapest purchase in the catalogue and puts a tier on the chain
+        // that is not the one composition started with.
+        engine.Commands.Submit(new InstallSeparatorCommand());
+
         Fixture.Run(engine, months);
 
         return (engine, target);

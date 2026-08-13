@@ -221,7 +221,7 @@ internal sealed class FacilitiesModule() : EngineModule(Declare(
     // it is would be the type switch design 04 §1 exists to prevent.
     provides: [typeof(ISeparationModel), typeof(IHydraulicModel), typeof(SurfaceChain)],
     requires: [typeof(IFluidPropertyModel), typeof(IFlowElementRegistry)],
-    ownsState: NothingOwnedYet,
+    ownsState: ["facilities.units"],
     stages: NoStagesYet))
 {
     public override void Compose(IModuleComposition composition)
@@ -387,10 +387,16 @@ internal sealed class FacilitiesModule() : EngineModule(Declare(
             custody.Id, OGSim.Facilities.CustodyTransferPoint.OnSpecOutlet,
             tank.Id, OGSim.Facilities.Tank.Inlet));
 
-        composition.Provide(
-            new SurfaceChain(
-                manifold, flowline, separator, custody, treater, gasPlant, flare,
-                disposal, intake, tank));
+        var chain = new SurfaceChain(
+            manifold, flowline, separator, custody, treater, gasPlant, flare,
+            disposal, intake, tank);
+
+        // OWNED AS WELL AS PROVIDED (SDD-006 §8b). Six sockets carry a fitted
+        // tier and facilities registered no owner, so a reload returned the
+        // equipment a company started with and kept the money it had spent
+        // (finding 197).
+        composition.Own(new FacilitiesState(chain));
+        composition.Provide(chain);
     }
 }
 
