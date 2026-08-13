@@ -659,6 +659,49 @@ meritRank}; flare {capacity, combustionEfficiency}; VRU {capacity,
 recoveryFraction}. **A field not listed here does not exist** —
 additions go through this SDD first (rule F-1).
 
+## 8b. `facilities.units` — what the chain owns between ticks (R20d.12)
+
+**Specified before it is implemented (F-1), because it does not exist and its
+absence undoes every upgrade a company buys** (finding 197). The save walks
+`StateRegistry.Owners`; facilities register no owner, so nothing in this
+document's element set reaches a container.
+
+```csharp
+// Layer 4, beside the flood's owner and for the same reason: a tier is
+// restored by NAME through the ladder that fitted it, and the ladders are
+// composition's (Defaults.SeparatorLadder …), exactly as a drive is restored
+// through SubsurfaceState.DriveNamed.
+internal sealed class FacilitiesState : IStateOwner   // key "facilities.units"
+```
+
+**What it carries, and why each is state rather than content:**
+
+```text
+tier per socket    manifold · separator · tank · gas plant · treater · export
+                   — §0c's refit: the socket keeps its identity and what is
+                   FITTED changes, so the fitted rung is the purchase
+tank contents      held inventory, its provenance allocation, promised mass —
+                   oil a company owns, and §5's ullage is computed from it
+pipeline linefill  §6's V7 term; a line restored empty delivers its first
+                   month's oil out of nowhere
+intake commanded   §7c.1's set point for the water the flood buys
+```
+
+**Tiers restore by CONTENT ID through the ladder, never by index.** A ladder is
+an authored progression (§7b) and its order may legitimately change between
+builds; an index would silently refit a different vessel. An id the current
+ladder does not contain is a REFUSAL naming it, like every other unresolvable
+reference on load (design 11 §2.1).
+
+**Restore order**: after the field is rebuilt, since a tank's provenance names
+compartments and a linefill is inventory in an element the rebuild creates.
+
+**The fixture is part of the specification, not an afterthought.** PV2 today
+drills and floods and never INSTALLS, which is why it passes while all of this
+is missing — a test comparing two engines for two years cannot see equipment
+nobody bought. The owner lands with a fixture that buys at least one rung and
+fills the tank, or it lands untested by anything that would notice.
+
 ## 9. Test mapping
 
 R8-V1..V10 (separator/treating/tank/power) · R9-V1..V11 (compression/gas chain;
