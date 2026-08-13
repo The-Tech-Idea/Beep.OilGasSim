@@ -85,9 +85,57 @@ continuation test) · PV3 (digest across the CI matrix) · PV4 (+ derived-state
 review) · PV5 (fixtures per step) · PV6 (§6 specificity) · PV7 (SDD-010 §1) ·
 PV8 (digest sensitivity) · R19-V9..V15 as specified in the phase doc.
 
+> **R20d.12 review (finding 188) — every part of a save exists and nothing
+> assembles them, and the reason it stayed invisible is that the missing piece
+> is the only one no unit test can stand in for.**
+>
+> **What is built and correct.** `StateBlock` captures an owner into a flat
+> ordinal-sorted block and stamps the schema version itself so an owner cannot
+> forget it. `CanonicalJson` implements §3. `SaveFile.Digest` does §2's
+> per-module SHA-256 in module-name order, `SaveFile.Validate` does §6's
+> all-reasons-at-once refusal, and `MigrationChain` does §5 including the
+> gaps-are-a-startup-fault rule. `StateRegistry.Owners` returns owners in
+> state-key order **for exactly this walk** — its own comment says capture and
+> restore walk this sequence. `IRandomStream` carries `Position`/`Seek` "saved
+> and restored exactly", and `SimulationClock.RestoreTo` exists and says it is
+> for load. Nine state owners implement `Capture`/`Restore`.
+>
+> **What is missing is the walk itself.** Nothing in `src/` calls
+> `StateBlock.Capture`, builds a `SaveHeader`, or writes a container — so every
+> one of those parts is verified by a unit test of itself and the composition of
+> them by nothing. A save is not partially wired; it is absent, and R20d.25's
+> imported-water history and R20d.26.4's monitoring kits are the newest facts
+> riding on it.
+>
+> **Finding 188 names two gaps of very different cost, and they separate
+> cleanly.** `IEngine.ReadModel` is SDD-017 §2's fifteen-projection `ReadModel`;
+> composition publishes `FieldReadModel`, which draws 9 fields from 5 of the 16
+> projections because the other eleven have no source until R20d wires their
+> subsystems in. **So `IEngine` cannot be implemented today for reasons that have
+> nothing to do with saving** — it is blocked on R21.6, and pretending otherwise
+> would mean fabricating eleven views. **`WriteSave` is blocked on none of it**:
+> a save needs the state owners, the RNG positions, the tick and the container,
+> all of which exist. The save path is therefore built against composition's
+> `Engine` now, and adopting `IEngine` waits for the read model it names.
+>
+> **Load composes a NEW engine** (SDD-017 §1b, and PV2's continuation-identity
+> rule): build the module set from the header's seed, then restore each owner
+> into it. Restoring into a live engine would be mutating a graph whose
+> dependencies were wired against the old values, which is precisely the
+> "restored as a value, not as a live dependency" failure §4 opens with.
+>
+> **Two header fields have no honest source yet** and are declared rather than
+> invented: `engineVersion` and `contentVersion` are constants until there is a
+> release process to stamp them, and `activeMods` is empty because no mod system
+> exists. Each is a real value with a stated provenance, not a placeholder
+> standing in for work (L3) — and a save that refused to name its versions would
+> be worse than one that names honest ones.
+
 ## 8. Open items
 
 | # | Item | Trigger |
 |---|---|---|
 | S013-1 | Audit sidecar rotation for very long games (size cap + oldest-summarised) | R19.4 |
 | S013-2 | Save-diff tool (R19-V15) — ships as a dev utility over the canonical form; scope | R19.5 |
+| S013-3 | `engineVersion` / `contentVersion` stamped from a release process rather than declared as constants | a build pipeline |
+| S013-4 | The audit sidecar (§1's `audit/`) — the container ships state and header first; the trail is its own task with its own retention policy | R19.4 |
