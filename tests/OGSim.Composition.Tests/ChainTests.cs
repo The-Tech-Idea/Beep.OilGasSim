@@ -1383,6 +1383,11 @@ public sealed class ChainTests
     /// models, declared no state and ran in no stage, so nothing in a running
     /// game could reach them — a separator was as good after forty years as on
     /// the day it was installed.
+    ///
+    /// <para>Instrumented first, because since R20d.26.4 a condition is
+    /// something a company buys the ability to see. The wear happens either way
+    /// — the kit changes what is PUBLISHED, not what is true — so a test asking
+    /// whether equipment ages has to fit one to be able to ask.</para>
     /// </summary>
     [Fact]
     [Trait("Speed", "Slow")]
@@ -1394,15 +1399,144 @@ public sealed class ChainTests
         FieldControl field = engine.Provided.Resolve<FieldControl>();
         field.Drill(target, new Length(2000.0));
 
+        Instrument(engine);
         Fixture.Run(engine, months: 120);
 
-        double worst = 1.0;
+        var worst = 1.0;
+        var seen = 0;
 
         foreach (ChainElementView element in engine.ReadModel!.Chain)
-            if (element.Condition < worst) worst = element.Condition;
+            if (element.Condition is double condition)
+            {
+                seen++;
+                if (condition < worst) worst = condition;
+            }
+
+        Assert.True(seen > 0,
+            "no element reported a condition at all, so this measured nothing");
 
         Assert.True(worst < 1.0,
             "ten years of service and nothing in the chain had aged at all");
+    }
+
+    /// <summary>
+    /// Fit a monitoring kit to everything currently in the chain, and run the
+    /// months the installs take.
+    ///
+    /// <para>A TICK FIRST, because the chain is a read-model projection and
+    /// there is no read model until one has been built. Without it this
+    /// instrumented nothing, silently, and the test that depends on it failed
+    /// two hundred ticks later saying nothing had a condition.</para>
+    /// </summary>
+    private static void Instrument(Engine engine)
+    {
+        if (engine.ReadModel is null) engine.Pipeline.AdvanceTick();
+
+        IReadOnlyList<ChainElementView> chain = engine.ReadModel!.Chain;
+
+        for (var i = 0; i < chain.Count; i++)
+            engine.Commands.Submit(new InstallMonitoringCommand(chain[i].Element));
+
+        // They run concurrently, competing for money rather than for a rig, so
+        // a couple of months covers the whole chain.
+        Fixture.Run(engine, months: 2);
+    }
+
+    // ------------------------------ what makes the strategy selectable (R20d.26.4)
+
+    /// <summary>
+    /// R18-V5. CONDITION-BASED MAINTENANCE REQUIRES THE INSTRUMENT, which
+    /// SDD-012 §3 has said since it was written and which nothing enforced: the
+    /// gate lived in a `MaintenancePolicy` record called by its own unit test
+    /// alone, while the chain view handed every element's condition to anyone
+    /// with a read model and `service-equipment` acted on it (finding 191).
+    ///
+    /// <para>BOTH HALVES ARE ASSERTED HERE because either alone is a hole. If
+    /// the condition were hidden and the service still allowed, a player could
+    /// find the worn elements by submitting services and reading which came back
+    /// "nothing to overhaul" — the refusals would leak exactly what the hiding
+    /// was for.</para>
+    /// </summary>
+    [Fact]
+    public void R18V5_an_uninstrumented_element_reports_no_condition_and_refuses_a_service()
+    {
+        (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled();
+        Produce(engine, target);
+
+        engine.Pipeline.AdvanceTick();
+
+        ChainElementView element = engine.ReadModel!.Chain[0];
+
+        Assert.Null(element.Condition);
+
+        Assert.IsType<Rejected>(
+            engine.Commands.Submit(new ServiceEquipmentCommand(element.Element)));
+    }
+
+    /// <summary>
+    /// AND WITH THE KIT FITTED, BOTH OPEN AT ONCE. The condition appears and the
+    /// scheduled service is accepted — one purchase, and the strategy that
+    /// finding 189 measured as the paying one becomes available.
+    /// </summary>
+    [Fact]
+    public void R18V5_a_fitted_kit_publishes_the_condition_and_admits_a_service()
+    {
+        (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled();
+        Produce(engine, target);
+
+        engine.Pipeline.AdvanceTick();
+
+        EntityRef element = engine.ReadModel!.Chain[0].Element;
+
+        Assert.IsType<Accepted>(
+            engine.Commands.Submit(new InstallMonitoringCommand(element)));
+
+        Fixture.Run(engine, months: 2);
+
+        ChainElementView instrumented = Row(engine, element);
+
+        Assert.NotNull(instrumented.Condition);
+
+        // Worn by two months of service, so there is something to schedule
+        // against — and the service is now admitted where it was refused.
+        Assert.True(instrumented.Condition < 1.0,
+            "a monitored element reported as-new condition after two months in service");
+
+        Assert.IsType<Accepted>(
+            engine.Commands.Submit(new ServiceEquipmentCommand(element)));
+    }
+
+    /// <summary>
+    /// AND RUN-TO-FAILURE STILL COSTS NOTHING TO PLAY. A company that buys no
+    /// instruments keeps a complete strategy, because a failure needs no
+    /// instrument to notice — the plant stopped. That is what stops the gate
+    /// being a paywall across the mechanic rather than a choice inside it.
+    /// </summary>
+    [Fact]
+    public void R18V5_a_failure_is_visible_and_repairable_without_any_instrument()
+    {
+        (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled();
+        Produce(engine, target);
+
+        engine.Pipeline.AdvanceTick();
+
+        foreach (ChainElementView element in engine.ReadModel!.Chain)
+        {
+            Assert.Null(element.Condition);
+
+            // `Failed` is published for every element, instrumented or not.
+            Assert.False(element.Failed);
+        }
+    }
+
+    private static ChainElementView Row(Engine engine, EntityRef element)
+    {
+        IReadOnlyList<ChainElementView> chain = engine.ReadModel!.Chain;
+
+        for (var i = 0; i < chain.Count; i++)
+            if (chain[i].Element == element) return chain[i];
+
+        throw new InvalidOperationException($"no chain row for {element.Value}");
     }
 
     /// <summary>
@@ -1558,10 +1692,17 @@ public sealed class ChainTests
             // TWO OPERATIONS SINCE R20d.26.2: what has failed is an emergency
             // repair at the emergency price, what is merely worn is a scheduled
             // service — the validators refuse the wrong one on purpose.
+            //
+            // AND SINCE R20d.26.4 THE CONDITION IS BOUGHT. A trigger of zero
+            // instruments nothing, which is both cheaper and exactly what
+            // run-to-failure means: a company that will never act on wear has no
+            // reason to measure it.
             if (seen is not null)
                 for (var i = 0; i < seen.Chain.Count; i++)
                     if (seen.Chain[i].Failed)
                         engine.Commands.Submit(new RepairEquipmentCommand(seen.Chain[i].Element));
+                    else if (repairBelow > 0.0 && seen.Chain[i].Condition is null)
+                        engine.Commands.Submit(new InstallMonitoringCommand(seen.Chain[i].Element));
                     else if (seen.Chain[i].Condition < repairBelow)
                         engine.Commands.Submit(new ServiceEquipmentCommand(seen.Chain[i].Element));
 

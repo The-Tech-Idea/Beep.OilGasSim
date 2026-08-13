@@ -83,8 +83,22 @@ public sealed record ChainElementView(
     Mass Throughput,
     IReadOnlyList<(ConstraintKind Kind, Mass Deferred)> Deferred,
 
-    /// <summary>What condition it is in, 0..1 (SDD-012 §1).</summary>
-    double Condition,
+    /// <summary>
+    /// What condition it is in, 0..1 (SDD-012 §1) — or NULL where nobody can
+    /// tell, which is every element without a condition-monitoring kit fitted
+    /// (C14, §3's R20d.26.4 amendment).
+    ///
+    /// <para>Wear is not something a company knows about its plant for free; it
+    /// is something it instruments for. Publishing it unconditionally made the
+    /// kit that "enables condition-based maintenance" content nobody needed, and
+    /// made the strategy that pays the one strategy nobody has to buy.</para>
+    ///
+    /// <para>Null is UNKNOWN and never "as new". A host showing 1.0 for an
+    /// unmonitored vessel would be reporting truth the company has not
+    /// purchased, which is the same door the whole belief system exists to keep
+    /// shut.</para>
+    /// </summary>
+    double? Condition,
 
     /// <summary>Whether it is out of service — the reason a row that used to
     /// carry the whole field's oil is suddenly carrying none.</summary>
@@ -138,7 +152,7 @@ internal sealed class ChainElement(EntityId<IFlowElement> element)
     }
 
     public ChainElementView Published(
-        Func<EntityId<IFlowElement>, string> nameOf, double condition, bool failed) =>
+        Func<EntityId<IFlowElement>, string> nameOf, double? condition, bool failed) =>
         new(new EntityRef(EntityKind.FlowElement, Element.Value),
             nameOf(Element),
             new Mass(Throughput),
@@ -728,8 +742,13 @@ internal sealed class ProductionLoop
         {
             EntityId<IFlowElement> element = ordered[i].Id;
 
+            // CONDITION ONLY WHERE IT IS MEASURED, and FAILURE always: an item
+            // that has stopped needs no instrument to notice, which is why
+            // run-to-failure is the strategy that costs nothing to play.
             rows.Add(SolvedRow(element).Published(
-                _names, _integrity.ConditionOf(element), _integrity.HasFailed(element)));
+                _names,
+                _integrity.IsMonitored(element) ? _integrity.ConditionOf(element) : null,
+                _integrity.HasFailed(element)));
         }
 
         return rows;

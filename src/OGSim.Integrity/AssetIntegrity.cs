@@ -94,6 +94,28 @@ public sealed class AssetIntegrity : IStateOwner
         && (_components[at].Failed || _components[at].Condition < FullCondition);
 
     /// <summary>
+    /// Whether a condition-monitoring kit is fitted (C14, SDD-012 §3).
+    ///
+    /// <para>What gates condition-based maintenance — both halves of it: the
+    /// read model publishes a condition only where this is true, and the
+    /// scheduled service is refused where it is false. Unfitted equipment can
+    /// still be run to failure, which needs no instrument because the plant
+    /// stopping is the measurement.</para>
+    /// </summary>
+    public bool IsMonitored(EntityId<IFlowElement> element) =>
+        _index.TryGetValue(element, out int at) && _components[at].Monitored;
+
+    /// <summary>A fitted kit (C14). Bolted to the item and never removed — the
+    /// registry has no removal either, and a company does not un-instrument a
+    /// vessel it has already wired.</summary>
+    public void FitMonitoring(EntityId<IFlowElement> element)
+    {
+        if (!_index.TryGetValue(element, out int at)) return;
+
+        _components[at] = _components[at] with { Monitored = true };
+    }
+
+    /// <summary>
     /// Stage 4: enrol whatever is new, age everything, and roll.
     ///
     /// <para>Enrolment before ageing, so a well drilled this tick is under the
@@ -123,9 +145,14 @@ public sealed class AssetIntegrity : IStateOwner
             if (_index.ContainsKey(element.Id)) continue;
 
             _index.Add(element.Id, _components.Count);
+
+            // NEW EQUIPMENT ARRIVES BLIND. A kit is bought and fitted per asset
+            // (C14), so a vessel installed in year twenty is no more instrumented
+            // than the one that came with the field — which is what makes the
+            // purchase a recurring decision rather than a one-off unlock.
             _components.Add(new ComponentState(
                 element.Id, _classOf(element), FullCondition,
-                Failed: false, TicksSinceService: 0));
+                Failed: false, TicksSinceService: 0, Monitored: false));
         }
 
         IReadOnlyList<FailureOutcome> failures =
@@ -178,7 +205,7 @@ public sealed class AssetIntegrity : IStateOwner
 
     public StateKey Key { get; } = new("integrity.conditions");
 
-    public int SchemaVersion => 1;
+    public int SchemaVersion => 2;
 
     /// <summary>
     /// Conditions survive a save, and they have to: a campaign reloaded with
@@ -206,6 +233,12 @@ public sealed class AssetIntegrity : IStateOwner
             writer.WriteDouble(at + "condition", component.Condition);
             writer.WriteInt64(at + "failed", component.Failed ? 1L : 0L);
             writer.WriteInt64(at + "unserviced", component.TicksSinceService);
+
+            // A kit a company paid for. Restoring it unfitted would silently
+            // take back the purchase that makes condition-based maintenance
+            // possible, which is the same laundering the condition itself is
+            // saved to prevent.
+            writer.WriteInt64(at + "monitored", component.Monitored ? 1L : 0L);
         }
     }
 
@@ -228,7 +261,8 @@ public sealed class AssetIntegrity : IStateOwner
                 new ContentId(reader.ReadString(at + "class")),
                 reader.ReadDouble(at + "condition"),
                 Failed: reader.ReadInt64(at + "failed") != 0L,
-                TicksSinceService: (int)reader.ReadInt64(at + "unserviced"));
+                TicksSinceService: (int)reader.ReadInt64(at + "unserviced"),
+                Monitored: reader.ReadInt64(at + "monitored") != 0L);
 
             _index.Add(component.Id, _components.Count);
             _components.Add(component);

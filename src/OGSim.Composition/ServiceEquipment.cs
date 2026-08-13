@@ -71,6 +71,25 @@ internal sealed class ServiceEquipmentActivity(
                     $"there is no element {command.Equipment.Value} in this field"),
             ];
 
+        // NOBODY CAN SEE IT (C14, §3's R20d.26.4 amendment). Condition-based
+        // maintenance requires the instrument that makes condition a fact a
+        // company holds, and this refusal is the second half of that gate: the
+        // read model publishes no condition for an unmonitored element, and
+        // without this a player could still find the worn ones by submitting
+        // services and reading which came back "nothing to overhaul".
+        //
+        // ASKED BEFORE the failure test on purpose. A company with no kit
+        // learns nothing here either way — the answer is the same sentence
+        // whether the vessel is worn, as-new, or broken.
+        if (!integrity.IsMonitored(element))
+            return
+            [
+                new RejectionReason(
+                    "$loc:reject.not-monitored",
+                    "nothing is measuring this equipment's condition, so there is no " +
+                    "condition to schedule work against; fit a monitoring kit first"),
+            ];
+
         // ALREADY BROKEN. Planned work is planned because the plant is still
         // running; what has failed is an emergency and pays the emergency
         // price. The exclusion is the whole reason two templates exist

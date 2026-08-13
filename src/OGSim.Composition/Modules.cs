@@ -635,6 +635,7 @@ internal sealed class FieldModule() : EngineModule(Declare(
         typeof(InstallGasPlantCommand),
         typeof(RemediateInjectorCommand),
         typeof(ServiceEquipmentCommand),
+        typeof(InstallMonitoringCommand),
         typeof(RepairEquipmentCommand),
         typeof(InstallManifoldCommand),
         typeof(InstallTankCommand),
@@ -841,6 +842,15 @@ internal sealed class FieldModule() : EngineModule(Declare(
             // dominated on every seed (finding 185).
             new ServiceEquipmentActivity(
                 Defaults.ServiceEquipmentTerms,
+                composition.Require<OGSim.Integrity.AssetIntegrity>(),
+                composition.Require<IFlowElementRegistry>()),
+
+            // AND WHAT MAKES THAT SELECTABLE (C14, R20d.26.4). §3 has always
+            // required a monitoring tier for condition-based work; the gate was
+            // implemented in a record nothing called, so the strategy that pays
+            // was the one nobody had to buy (finding 191).
+            new InstallMonitoringActivity(
+                Defaults.InstallMonitoringTerms,
                 composition.Require<OGSim.Integrity.AssetIntegrity>(),
                 composition.Require<IFlowElementRegistry>()),
 

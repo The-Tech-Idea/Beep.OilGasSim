@@ -40,7 +40,13 @@ public sealed record ComponentState(
     // not about the field it sits in. Severity is computed FROM this rather
     // than handed in beside it, which is what stops two callers disagreeing
     // about a component's own history (law L5).
-    int TicksSinceService);
+    int TicksSinceService,
+
+    // WHETHER ANYONE CAN SEE ITS CONDITION (C14, §3's R20d.26.4 amendment).
+    // A property of the item, because the kit is bolted to the item — and the
+    // one owner of it, so the read model asks here rather than keeping a second
+    // list of what is instrumented (L5).
+    bool Monitored);
 
 /// <summary>What stage 4 decided about one component.</summary>
 public sealed record FailureOutcome(
@@ -177,47 +183,17 @@ public sealed class IntegrityPass
         value.ToString(System.Globalization.CultureInfo.InvariantCulture);
 }
 
-/// <summary>
-/// R18.4's three strategies (SDD-012 §3).
-///
-/// <para>All three produce ORDINARY operations — no special execution path.
-/// That is what makes R18-V5's comparison meaningful: each strategy wins in its
-/// designed circumstance because of what it costs and when, not because the
-/// engine treats one of them specially.</para>
-/// </summary>
-public enum MaintenanceStrategy
-{
-    /// <summary>Nothing scheduled. Cheapest until it is not.</summary>
-    RunToFailure,
-
-    /// <summary>A maintenance operation every N ticks, whatever the condition.</summary>
-    Scheduled,
-
-    /// <summary>Triggered by condition — needs a monitoring tier installed.</summary>
-    ConditionBased,
-}
-
-/// <summary>SDD-012 §3's policy, per asset class.</summary>
-public sealed record MaintenancePolicy(
-    MaintenanceStrategy Strategy,
-    int IntervalTicks,             // Scheduled
-    double ConditionTrigger,       // ConditionBased
-    bool HasMonitoring)            // ConditionBased requires it (C14)
-{
-    /// <summary>
-    /// Whether this component is due for maintenance now.
-    ///
-    /// <para>Condition-based WITHOUT monitoring never triggers — and that is the
-    /// point of the monitoring tier. A policy that fell back to scheduled would
-    /// make the monitoring purchase free, and a player would get
-    /// condition-based behaviour without paying for the instrument that makes
-    /// it possible.</para>
-    /// </summary>
-    public bool IsDue(double condition, int ticksSinceService) => Strategy switch
-    {
-        MaintenanceStrategy.RunToFailure => false,
-        MaintenanceStrategy.Scheduled => ticksSinceService >= IntervalTicks,
-        MaintenanceStrategy.ConditionBased => HasMonitoring && condition < ConditionTrigger,
-        _ => false,
-    };
-}
+// SDD-012 §3's THREE STRATEGIES ARE NOT A TYPE IN THIS ENGINE, and the record
+// that used to be here is deleted rather than left unused (§3's R20d.26.4
+// amendment). A strategy is how a player drives ordinary operations — §3's own
+// "all three produce ordinary SDD-007 operations, no special execution path" —
+// so run-to-failure is answering only failures, scheduled is servicing on a
+// clock, and condition-based is servicing on what the chain view reports. A
+// declared policy the engine scheduled from would be a second way to state one
+// law, and L5 allows one owner per fact.
+//
+// Its monitoring gate now lives where the decision is: `AssetIntegrity`
+// remembers which items are instrumented, the read model publishes a condition
+// only for those, and `service-equipment` is refused on the rest. That gate had
+// been stated in two places and enforced in neither, because `IsDue` was called
+// by its own unit test alone (finding 191).

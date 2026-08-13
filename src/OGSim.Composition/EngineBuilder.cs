@@ -1080,6 +1080,24 @@ internal static class Defaults
         Outcomes: SurveyOutcomes);
 
     /// <summary>
+    /// A CONDITION-MONITORING KIT (catalogue C14, SDD-012 §3). Vibration and
+    /// temperature on one asset, which is what makes that asset's wear a fact
+    /// the company holds rather than a thing the engine happens to know.
+    ///
+    /// <para>A quarter of a planned service and a month to fit, because it is a
+    /// sensor and a wire rather than a crew and a crane. The decision is not
+    /// whether one kit is affordable — it obviously is — but whether
+    /// instrumenting a dozen elements is worth it before any of them has told
+    /// you anything.</para>
+    /// </summary>
+    public static ActivityTerms InstallMonitoringTerms { get; } = new(
+        Template: new ContentId("install-monitoring"),
+        Cost: Money.FromMillions(0.2),
+        DurationTicks: 1,
+        Rig: null,
+        Outcomes: SurveyOutcomes);
+
+    /// <summary>
     /// AN EMERGENCY REPAIR (SDD-012 §3, R20d.26.2 amendment). Three times the
     /// planned job, which is inside the 2–5× that unplanned industrial work
     /// genuinely runs — parts freighted rather than stocked, a crew mobilised

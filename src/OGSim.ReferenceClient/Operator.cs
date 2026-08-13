@@ -130,6 +130,12 @@ public sealed class Operator
     /// a surface. What matters here is that the read model carries the CONDITION
     /// a decision needs — without it the choice is unmakeable from outside the
     /// engine, which is the property this client exists to prove.</para>
+    ///
+    /// <para>AND SINCE R20d.26.4 THE CONDITION HAS TO BE BOUGHT. An element with
+    /// no monitoring kit reports a null condition, so this client instruments
+    /// first and services afterwards — which is the whole of C14's decision
+    /// expressed through the surface: spend a little to see wear, or spend
+    /// nothing and answer breakdowns at the emergency price.</para>
     /// </summary>
     private void MaintainTheChain(FieldReadModel seen)
     {
@@ -140,10 +146,18 @@ public sealed class Operator
             // ONE AT A TIME, and the refusals do the rest: the scheduler allows
             // one job per target, so submitting for every element is either
             // accepted or told why. Nothing here needs to track what is already
-            // under way — or which of the two jobs an element is eligible for,
+            // under way — or which of the jobs an element is eligible for,
             // because the validators are mutually exclusive on exactly that.
             if (chain[i].Failed)
                 _engine.Commands.Submit(new RepairEquipmentCommand(chain[i].Element));
+
+            // NULL IS UNKNOWN, and the answer to not knowing is the instrument.
+            // A client that read null as "fine" would never instrument anything
+            // and would quietly be playing run-to-failure while believing it
+            // had a maintenance policy.
+            else if (chain[i].Condition is null)
+                _engine.Commands.Submit(new InstallMonitoringCommand(chain[i].Element));
+
             else if (chain[i].Condition < ServiceBelow)
                 _engine.Commands.Submit(new ServiceEquipmentCommand(chain[i].Element));
         }

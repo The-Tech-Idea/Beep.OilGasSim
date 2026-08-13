@@ -39,8 +39,15 @@ public static class Fx
             new RandomSource(seed).Stream(StreamId.Hazard), trail), trail);
     }
 
+    /// <summary>
+    /// UNMONITORED, like every component this engine enrols. Whether a kit is
+    /// fitted changes what a HOST is told and what work can be scheduled
+    /// (SDD-012 §3), and changes nothing about how the item wears or fails —
+    /// which is what these tests are about, so they take the default.
+    /// </summary>
     public static ComponentState Component(ulong id, double condition = 1.0) =>
-        new(new EntityId<IFlowElement>(id), new ContentId("pump-tier-b"), condition, false, 0);
+        new(new EntityId<IFlowElement>(id), new ContentId("pump-tier-b"), condition, false, 0,
+            Monitored: false);
 }
 
 public class DegradationTests
@@ -295,7 +302,7 @@ public class IntegrityPassTests
 
         var failed = new ComponentState(
             new EntityId<IFlowElement>(1), new ContentId("pump-tier-b"), 0.3, Failed: true,
-            TicksSinceService: 0);
+            TicksSinceService: 0, Monitored: false);
 
         pass.Advance([failed], _ => Fx.Harsh, Fx.OneYear, out IReadOnlyList<ComponentState> aged);
 
@@ -329,46 +336,16 @@ public class IntegrityPassTests
     }
 }
 
-public class MaintenanceStrategyTests
-{
-    [Fact] // Run-to-failure schedules nothing
-    public void R18V5_run_to_failure_never_triggers()
-    {
-        var policy = new MaintenancePolicy(
-            MaintenanceStrategy.RunToFailure, 0, 0.0, HasMonitoring: false);
-
-        Assert.False(policy.IsDue(0.01, 999));
-    }
-
-    [Fact] // Scheduled triggers on the clock, whatever the condition
-    public void R18V5_scheduled_maintenance_triggers_on_its_interval()
-    {
-        var policy = new MaintenancePolicy(
-            MaintenanceStrategy.Scheduled, IntervalTicks: 12, 0.0, HasMonitoring: false);
-
-        Assert.False(policy.IsDue(condition: 0.99, ticksSinceService: 11));
-        Assert.True(policy.IsDue(condition: 0.99, ticksSinceService: 12));
-
-        // Even on a healthy component — which is exactly why scheduled
-        // maintenance costs more than it needs to on equipment in mild service.
-        Assert.True(policy.IsDue(condition: 1.0, ticksSinceService: 24));
-    }
-
-    [Fact] // Condition-based triggers on condition — and NEEDS the monitoring tier
-    public void R18V5_condition_based_maintenance_requires_monitoring()
-    {
-        var monitored = new MaintenancePolicy(
-            MaintenanceStrategy.ConditionBased, 0, ConditionTrigger: 0.5, HasMonitoring: true);
-
-        Assert.False(monitored.IsDue(0.6, 0));
-        Assert.True(monitored.IsDue(0.4, 0));
-
-        // WITHOUT the instrument it never triggers, and does NOT fall back to
-        // scheduled. A fallback would make the monitoring purchase free, and a
-        // player would get condition-based behaviour without paying for the
-        // thing that makes it possible.
-        var blind = monitored with { HasMonitoring = false };
-
-        Assert.False(blind.IsDue(0.01, 999));
-    }
-}
+// R18-V5 USED TO LIVE HERE, against a `MaintenancePolicy` record that declared
+// the three strategies and answered "is this due?". The record was called from
+// these tests and from nothing else, so what they verified was that a type
+// computed what it said it computed — never that a game gated anything (finding
+// 191). It is deleted rather than rewired: a strategy in this engine is how a
+// player drives ordinary operations, which is SDD-012 §3's own rule, and a
+// declared policy the engine scheduled from would be a second owner of one law
+// (L5).
+//
+// The claims survive where the gate now is, in the composition suite: an
+// element with no monitoring kit publishes NO condition and refuses a scheduled
+// service, one with a kit does both, and a failure can always be repaired
+// because a stopped plant needs no instrument to notice.
