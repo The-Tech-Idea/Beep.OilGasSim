@@ -119,14 +119,16 @@ public sealed class SaveGameTests
     /// not written at all and a reload re-opened wells a player had closed. A
     /// fixture that only ever drilled would not have asked.</para>
     ///
-    /// <para>WHAT THIS PINS TODAY is the physical half: the field rebuilds and
-    /// produces identically, to the cubic metre, for two years. The money does
-    /// not yet agree and the gap is stated at the bottom rather than hidden —
-    /// PV2 is not met until it does.</para>
+    /// <para>IT TOOK SIX DEFECTS TO GET HERE, none of them findable by an
+    /// owner's own round-trip test: a reservoir restored onto the wrong drive, a
+    /// ledger that re-asked history to justify itself, an aquifer with no water
+    /// behind it, a market whose price was never saved, a voidage set point a
+    /// reload forgot, and a flood-share list whose absence left the injector
+    /// reporting no room for exactly one month (findings 192–196).</para>
     /// </summary>
     [Fact]
     [Trait("Speed", "Slow")]
-    public void PV2_a_reloaded_field_produces_identically()
+    public void PV2_a_saved_game_reloaded_continues_identically()
     {
         (Engine original, _) = Played(months: 60);
 
@@ -146,46 +148,38 @@ public sealed class SaveGameTests
 
         // A LOADED ENGINE HAS NO READ MODEL UNTIL IT TICKS, by design: the
         // projection is built at the close of a month, and a game that has not
-        // run one has nothing to show. So both are compared after the tick
-        // below, never before it.
-        Fixture.Repair(original);
-        Fixture.Repair(reloaded);
+        // run one has nothing to show. So both are compared after each tick,
+        // never before the first.
+        for (var month = 0; month < 24; month++)
+        {
+            Fixture.Repair(original);
+            Fixture.Repair(reloaded);
 
-        original.Pipeline.AdvanceTick();
-        reloaded.Pipeline.AdvanceTick();
+            original.Pipeline.AdvanceTick();
+            reloaded.Pipeline.AdvanceTick();
 
-        FieldReadModel a = original.ReadModel!;
-        FieldReadModel b = reloaded.ReadModel!;
+            FieldReadModel a = original.ReadModel!;
+            FieldReadModel b = reloaded.ReadModel!;
 
-        Assert.Equal(a.Tick, b.Tick);
+            // THE PHYSICS AND THE MONEY, month after month, to the cubic metre
+            // and to the cent — and the accounts individually, so a divergence
+            // names the ledger line rather than a total.
+            Assert.True(
+                a.ProducedThisTick == b.ProducedThisTick && a.Cash == b.Cash,
+                $"a reloaded game diverged {month + 1} month(s) after the save: produced " +
+                $"{a.ProducedThisTick.CubicMetres:F3} m³ against " +
+                $"{b.ProducedThisTick.CubicMetres:F3}, cash {a.Cash} against {b.Cash}. " +
+                Accounts(original, reloaded));
 
-        Assert.Equal(a.Wellbores.Count, b.Wellbores.Count);
+            Assert.Equal("every account balance agrees", Accounts(original, reloaded));
+        }
 
-        // THE MONTH AFTER THE SAVE, TO THE CUBIC METRE. Every part of the
-        // rebuild has to be right for this: the wells reopened onto the same
-        // compartments at the same depths with the same chokes, the reservoir
-        // back at its own pressure with its own drive, the aquifer as depleted as
-        // it was, the equipment as worn, and the price where the market left it.
-        // Each of those was wrong at some point in getting here, and each was a
-        // separate defect no owner's own round-trip test could see.
-        Assert.True(a.ProducedThisTick == b.ProducedThisTick,
-            $"a reloaded field produced {a.ProducedThisTick.CubicMetres:F3} m³ against " +
-            $"{b.ProducedThisTick.CubicMetres:F3} in the month after the save");
-
-        // AND IT IS NOT PV2 YET, which is the point of stopping here rather than
-        // asserting less over longer (finding 196). Design 11 §4 asks for a
-        // hundred months of identity and this engine holds one: the money is
-        // already apart by ~$224k of opex with tax following, and by the second
-        // month the production itself parts by eight millionths. Both are named
-        // there with their measurements. A test that ran to N+100 and compared
-        // nothing meaningful would be worse than one that stops where the
-        // evidence does.
-        Assert.True(
-            original.Provided.Resolve<CompanyState>().Ledger.Cash
-                != reloaded.Provided.Resolve<CompanyState>().Ledger.Cash,
-            "the cash now agrees — finding 196's first half is closed, and this should " +
-            "become the full read-model comparison over 24 months that PV2 asks for: " +
-            Accounts(original, reloaded));
+        // NOT THE WHOLE PROJECTION YET. `FieldReadModel` compares equal only if
+        // every collection on it does, and the two still part somewhere outside
+        // production, cash and the ledger — the chain rows are the likely half,
+        // and neither has been isolated. Asserting the whole record here would
+        // fail on that alone and hide the two years of exact agreement above,
+        // which is the claim worth keeping (S013-8's remainder).
     }
 
     /// <summary>

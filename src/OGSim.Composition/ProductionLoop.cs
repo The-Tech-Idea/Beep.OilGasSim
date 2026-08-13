@@ -440,6 +440,22 @@ internal sealed class ProductionLoop : IStateOwner
         writer.WriteDouble("voidage-replacement", VoidageReplacement);
         writer.WriteDouble("voidage-last-tick", _voidageLastTick);
         writer.WriteDouble("produced-water-last-tick", _producedWaterLastTick);
+
+        // WHICH COMPARTMENTS THE FLOOD IS SPLIT BETWEEN, and in what proportion.
+        // The fourth cross-tick field on this class and the one that made a
+        // reloaded field skip a month of injection: `ReservoirRoom` walks this
+        // list, so an empty one leaves its cap at infinity and returns ZERO room
+        // — a flood that stopped for a month and then caught up (S013-8).
+        writer.WriteInt64("flood-share-count", _floodShares.Count);
+
+        for (int i = 0; i < _floodShares.Count; i++)
+        {
+            string at = "flood-share."
+                + i.ToString("D4", System.Globalization.CultureInfo.InvariantCulture) + ".";
+
+            writer.WriteInt64(at + "compartment", (long)_floodShares[i].Item1.Value);
+            writer.WriteDouble(at + "share", _floodShares[i].Item2);
+        }
     }
 
     public void Restore(IStateReader reader)
@@ -449,6 +465,21 @@ internal sealed class ProductionLoop : IStateOwner
         VoidageReplacement = reader.ReadDouble("voidage-replacement");
         _voidageLastTick = reader.ReadDouble("voidage-last-tick");
         _producedWaterLastTick = reader.ReadDouble("produced-water-last-tick");
+
+        _floodShares.Clear();
+
+        long count = reader.ReadInt64("flood-share-count");
+
+        for (long i = 0; i < count; i++)
+        {
+            string at = "flood-share."
+                + i.ToString("D4", System.Globalization.CultureInfo.InvariantCulture) + ".";
+
+            _floodShares.Add((
+                new EntityId<IReservoirCompartmentEntity>(
+                    (ulong)reader.ReadInt64(at + "compartment")),
+                reader.ReadDouble(at + "share")));
+        }
     }
 
     /// <summary>What the flood actually bought this tick, in reservoir m³ — and
