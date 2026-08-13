@@ -133,6 +133,14 @@ public class MetadataRules
                 "OGSim.Flow", "OGSim.Subsurface", "OGSim.Wells", "OGSim.Facilities",
                 "OGSim.Operations", "OGSim.Company", "OGSim.Information", "OGSim.World",
                 "OGSim.Capabilities", "OGSim.Integrity", "OGSim.Objectives",
+
+                // Persistence was missing from this list until R20d.12, and its
+                // absence was an accurate record rather than an oversight:
+                // composition had never referenced it, because nothing assembled
+                // the state owners into a save (finding 188). It is a Layer 3
+                // module like every other name here — composition may reference
+                // it, and it may not reference composition.
+                "OGSim.Persistence",
             ],
         };
 
