@@ -89,7 +89,7 @@ public sealed class Operator
                 // — so there is no development decision worth taking while the
                 // chain is down, and a month spent drilling instead is a month
                 // the field earned zero.
-                RepairWhatIsBroken(seen);
+                MaintainTheChain(seen);
 
                 debottlenecked |= Develop(seen);
                 abandoned += CloseWhatIsFinished(seen);
@@ -108,7 +108,7 @@ public sealed class Operator
     }
 
     /// <summary>
-    /// Fix what has broken (SDD-012 §2–§3).
+    /// Keep the chain running (SDD-012 §2–§3).
     ///
     /// <para>THE CLIENT CAN SEE THIS AT ALL because the chain view carries every
     /// registered element with its condition, including the ones that did not
@@ -117,27 +117,40 @@ public sealed class Operator
     /// vanishing — the field stops earning and nothing on the surface says
     /// why.</para>
     ///
-    /// <para>RUN-TO-FAILURE, which is one of SDD-012 §3's three strategies and
-    /// the cheapest to write: this operator repairs what is broken and never
-    /// what is merely worn. A client that overhauled at condition 0.5 would
-    /// spend more and lose fewer months, and the engine is what makes that a
-    /// real question rather than a setting.</para>
+    /// <para>CONDITION-BASED, which is the middle of SDD-012 §3's three
+    /// strategies and, since R20d.26.2, the one that pays: an emergency repair
+    /// costs three times a scheduled service, so a company that only ever
+    /// answers breakdowns buys every one of them at the emergency price. This
+    /// client played run-to-failure until then, and it was the right choice
+    /// while the two jobs cost the same.</para>
+    ///
+    /// <para>THE TRIGGER IS DELIBERATELY NOT THE BEST ONE. Measured across four
+    /// seeds the peak sits between 0.2 and 0.7 depending on the dice, and a
+    /// client tuned to a seed would be demonstrating a lucky number rather than
+    /// a surface. What matters here is that the read model carries the CONDITION
+    /// a decision needs — without it the choice is unmakeable from outside the
+    /// engine, which is the property this client exists to prove.</para>
     /// </summary>
-    private void RepairWhatIsBroken(FieldReadModel seen)
+    private void MaintainTheChain(FieldReadModel seen)
     {
         IReadOnlyList<ChainElementView> chain = seen.Chain;
 
         for (var i = 0; i < chain.Count; i++)
         {
-            if (!chain[i].Failed) continue;
-
             // ONE AT A TIME, and the refusals do the rest: the scheduler allows
-            // one job per target, so submitting for every broken element is
-            // either accepted or told why. Nothing here needs to track what is
-            // already under way.
-            _engine.Commands.Submit(new RepairEquipmentCommand(chain[i].Element));
+            // one job per target, so submitting for every element is either
+            // accepted or told why. Nothing here needs to track what is already
+            // under way — or which of the two jobs an element is eligible for,
+            // because the validators are mutually exclusive on exactly that.
+            if (chain[i].Failed)
+                _engine.Commands.Submit(new RepairEquipmentCommand(chain[i].Element));
+            else if (chain[i].Condition < ServiceBelow)
+                _engine.Commands.Submit(new ServiceEquipmentCommand(chain[i].Element));
         }
     }
+
+    /// <summary>The condition a scheduled service is ordered at (SDD-012 §3).</summary>
+    private const double ServiceBelow = 0.4;
 
     /// <summary>
     /// Drill while there is a rig free and a field worth developing, and answer
@@ -231,11 +244,35 @@ public sealed class Operator
     /// reports production per field. That is a real limit of the current read
     /// model rather than a policy choice, and it is recorded here instead of
     /// worked around: a client inventing a per-well number would be guessing.</para>
+    ///
+    /// <para>A MONTH WITH THE CHAIN DOWN IS NOT EVIDENCE OF ANYTHING. The only
+    /// signal the surface offers is the cash BALANCE, so the flow computed here
+    /// is every movement there was — production, but also the repair bill and
+    /// the export line. A field whose separator is broken therefore looks
+    /// exactly like a field that has run out: it earns nothing and it is paying
+    /// a crew. Plugging on that is plugging a field for being under repair, and
+    /// it is what a 3× emergency price turned from a latent misreading into four
+    /// abandoned wells on the biggest field in the suite (R20d.26.2).</para>
+    ///
+    /// <para>So an outage month is skipped rather than counted. That is a
+    /// narrower answer than the real one: **the read model cannot say whether a
+    /// company is losing money on OPERATIONS**, because it publishes a balance
+    /// and not a cash flow split into what the field earned and what the company
+    /// chose to spend. Until it does, no client can tell a month of investment
+    /// from a month of decline, and this one is guessing carefully rather than
+    /// well.</para>
     /// </summary>
     private int CloseWhatIsFinished(FieldReadModel seen)
     {
         Money flow = seen.Cash - _lastSeenCash;
         _lastSeenCash = seen.Cash;
+
+        // NEITHER COUNTED NOR FORGIVEN. An outage month is no evidence that the
+        // field is finished, but it is no evidence that it is healthy either —
+        // and a field in terminal decline breaks OFTEN, so resetting the count
+        // here would let a dying field stay open for ever on the strength of its
+        // own unreliability. The month is skipped and the tally survives it.
+        if (ChainIsDown(seen)) return 0;
 
         // Still clearing the hurdle: nothing to close. A single bad month is not
         // a reason to plug a field either, so the shortfall has to persist.
@@ -263,6 +300,17 @@ public sealed class Operator
         }
 
         return closed;
+    }
+
+    /// <summary>Whether anything in the chain is out of service — in which case
+    /// the field is shut in behind it (SDD-002 §5) and this month says nothing
+    /// about whether the oil has run out.</summary>
+    private static bool ChainIsDown(FieldReadModel seen)
+    {
+        for (int i = 0; i < seen.Chain.Count; i++)
+            if (seen.Chain[i].Failed) return true;
+
+        return false;
     }
 
     private static int Producing(FieldReadModel seen)
