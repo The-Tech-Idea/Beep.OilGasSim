@@ -36,6 +36,36 @@ tick, and Cash equals opening + movements — exactly, in integers. Revenue may 
 credited **only** with a `custody.transferred` cause (R13-V2, architecture-
 tested).
 
+> **R20d.12 amendment — the origination check runs at POSTING and never at
+> RESTORE, because a restore is not an origination and the check cannot be
+> repeated anyway.**
+>
+> The rule above is about the moment revenue is CREATED: it exists so no code
+> path can credit revenue for anything but a metered sale. `CompanyState.Restore`
+> replayed a saved ledger through the same `Post`, so every historical movement
+> was re-asked to justify itself — and **a freshly composed engine has an empty
+> audit trail**, so the first restored revenue credit failed on a cause the trail
+> had never heard of. That is not a defect in the save; it is the check being
+> asked a question it cannot answer.
+>
+> **It could not answer it even within one session.** The trail is retained on a
+> WINDOW (`AuditRetention.DetailWindowTicks`, design 09 §4.4), so a movement from
+> tick 5 in a game saved at tick 60 cites a cause the running engine has already
+> summarised away. Re-validating history against a windowed record is
+> structurally unsound whether or not a save is involved, and saving the trail
+> would not fix it — the window is the point.
+>
+> So the ledger gains a **replay** path used only by `Restore`: same arithmetic,
+> same accounts, same `Movement` records, and **no origination check**. What
+> still runs at restore is **INV2**, which is repeatable by construction because
+> it is a property of the numbers rather than of a trail — and it is the check
+> that would actually catch a corrupted or truncated ledger.
+>
+> **This was invisible until something composed the owners together** (finding
+> 188). `CompanyState`'s own round-trip test supplies a predicate that answers
+> true, so it verified that a ledger's VALUES survive and could not have
+> discovered that its restore path is unreachable in a real engine.
+
 ## 2. Accrual overlays
 
 - **Depreciation — units of production** (the industry method, pinned):

@@ -101,7 +101,27 @@ public sealed class CostLedger
     /// — the type makes an unbalanced entry unspellable, which is a stronger
     /// guarantee than checking for one afterwards.
     /// </summary>
-    public void Post(Movement movement)
+    public void Post(Movement movement) => Enter(movement, originating: true);
+
+    /// <summary>
+    /// Rebuilds one movement from a save (SDD-009 §1's R20d.12 amendment).
+    ///
+    /// <para>SAME ARITHMETIC, NO ORIGINATION CHECK. The custody rule below is
+    /// about the moment revenue is CREATED, and a replay creates nothing — it
+    /// reconstructs an entry that was already checked when it happened. Asking
+    /// it again is not a stricter test, it is an unanswerable one: a freshly
+    /// composed engine has an empty audit trail, and even a running one retains
+    /// detail on a WINDOW (design 09 §4.4), so a movement from tick 5 in a game
+    /// saved at tick 60 cites a cause that has already been summarised away.</para>
+    ///
+    /// <para>What still runs is everything that is a property of the NUMBERS —
+    /// the unsigned amount, the two distinct accounts, and INV2 at the end of the
+    /// replay. Those are repeatable, and they are what would actually catch a
+    /// corrupted ledger.</para>
+    /// </summary>
+    public void Replay(Movement movement) => Enter(movement, originating: false);
+
+    private void Enter(Movement movement, bool originating)
     {
         ArgumentNullException.ThrowIfNull(movement);
 
@@ -114,7 +134,8 @@ public sealed class CostLedger
                 $"movement debits and credits the same account ({movement.Debit}); " +
                 "that is not a transaction");
 
-        if (movement.Credit == Account.Revenue && !_isCustodyTransfer(movement.Cause))
+        if (originating
+            && movement.Credit == Account.Revenue && !_isCustodyTransfer(movement.Cause))
             throw new InvariantFault("SDD-009 §1", null,
                 $"revenue was credited with cause {movement.Cause.Value}, which is not a " +
                 "custody transfer. Revenue originates at exactly one kind of event " +
