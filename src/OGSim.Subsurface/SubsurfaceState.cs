@@ -99,7 +99,7 @@ internal sealed class SubsurfaceState : IStateOwner
     // (SDD-012 §5's R20d.25 amendment). Souring cares which water it was, and
     // the balance cannot tell — so the provenance is written beside the volume
     // rather than derived from it, which is not possible after the fact.
-    public int SchemaVersion => 2;
+    public int SchemaVersion => 3;
 
     public int Count => _compartments.Count;
 
@@ -479,6 +479,15 @@ internal sealed class SubsurfaceState : IStateOwner
             writer.WriteDouble(at + "goc", compartment.Contacts.GasOilContact.Metres);
             writer.WriteDouble(at + "owc", compartment.Contacts.OilWaterContact.Metres);
 
+            // THE DRIVE, which decides which expansion terms this compartment
+            // even admits (SDD-003 §4.2b). Restoring every compartment onto the
+            // module's default drive silently changed a water-drive field into a
+            // solution-gas one — the physics of the reservoir, altered by a
+            // reload (finding 192). World generation picks a drive per
+            // compartment, so it is a property of the compartment and has to
+            // travel with it.
+            writer.WriteString(at + "drive", compartment.Drive.Id.Value);
+
             writer.WriteDouble(at + "np", compartment.Cumulative.Oil.CubicMetres);
             writer.WriteDouble(at + "gp", compartment.Cumulative.Gas.CubicMetres);
             writer.WriteDouble(at + "wp", compartment.Cumulative.Water.CubicMetres);
@@ -535,8 +544,15 @@ internal sealed class SubsurfaceState : IStateOwner
                 new Length(reader.ReadDouble(at + "goc")),
                 new Length(reader.ReadDouble(at + "owc")));
 
+            // ITS OWN DRIVE, resolved by name through the same door that created
+            // it. This read `_defaultDrive` and so restored every compartment
+            // onto whatever the module was composed with — a water-drive field
+            // came back as solution-gas, and the only reason it was not silent
+            // is that §4.2b's coherence check refuses a compartment carrying an
+            // influx term its drive does not admit (finding 192).
             var compartment = new ReservoirCompartment(
-                id, initial, contacts, rock, _defaultDrive, []);
+                id, initial, contacts, rock,
+                DriveNamed(new ContentId(reader.ReadString(at + "drive"))), []);
 
             compartment.RestoreTo(
                 new CumulativeProduction(
