@@ -61,6 +61,30 @@ A module attempting to register a state key for any of these fails the
 this table (a new mechanical check for [22](../design/22_DESIGN_COHERENCE.md)
 §6.1: every never-save row names its rebuild source).
 
+> **R20d.12 note (finding 196) — pressure was suspected of being
+> path-dependent, and it is not. §4 stands as written.**
+>
+> The reasoning ran: the engine reaches a pressure through one clamped solve per
+> tick while `RestoreTo` performs a single unbounded solve, so the two would
+> agree only where `MaxTickPressureDropFraction` never bound — which would make
+> pressure a third kind of state, neither stored nor derived, and would explain a
+> reloaded field's injector reporting no headroom.
+>
+> **It was built, and it was wrong twice over.** Storing the pressure did not
+> close the gap; and `ReservoirCompartment`'s own header says why it could not:
+> *"Pressure is RE-SOLVED from initial conditions every tick, never stepped from
+> last tick's value: §3.1 measures every expansion term from Pi, so a rounding
+> error in one month cannot compound into the next, and a save that restores
+> cumulative production restores the pressure exactly rather than
+> approximately."* Every tick already starts from Pi. There is no path to depend
+> on, by deliberate design, and `The_save_carries_no_pressure` pins it with a
+> rationale storing it would have broken: a save that could assert a pressure
+> lets a hand-edited file claim one the material balance never produced.
+>
+> **Reverted, and recorded rather than quietly dropped** — the next reader to
+> notice those two solve calls differ deserves to find this note instead of
+> repeating the day. The flood residual (S013-8) has some other cause.
+
 ## 5. Migrations
 
 ```csharp
@@ -181,4 +205,5 @@ PV8 (digest sensitivity) · R19-V9..V15 as specified in the phase doc.
 | S013-4 | The audit sidecar (§1's `audit/`) — the container ships state and header first; the trail is its own task with its own retention policy | R19.4 |
 | S013-5 | **The rebuild + declared restore order** — reopen saved completions through `FieldControl` with their saved ids, and give `StateRegistry` design 11 §2.1's topologically sorted restore order beside its key-ordered capture. The two land together; neither is useful alone | R20d.12 |
 | S013-6 | The EPOCH is not in the header, so a save's dates depend on the `EngineSettings` it is loaded with. Harmless while one scenario ships; a relabelling bug the moment two do | a second scenario |
-| S013-7 | **§4 splits state into stored and derived, and reservoir pressure is neither**: it is derived from a PATH. `RestoreTo` recomputes it from the cumulatives in one unbounded solve while the engine reaches it through hundreds of solves each clamped by `MaxTickPressureDropFraction`, so the two agree only where the clamp never bound. Decide between storing the pressure and making the restore walk the bounded path — and add the third column to §4, because every other quantity reached by a limited step has the same problem (finding 196) | R20d.12 |
+| S013-7 | ~~Reservoir pressure is path-dependent and must be stored~~ **Withdrawn** — built, measured, reverted: every tick already re-solves from Pi, so there is no path, and storing it would break the hand-edit guarantee `The_save_carries_no_pressure` exists for (see §4's note) | — |
+| S013-8 | **The flood residual is still open and its cause is unknown.** A reloaded field reports injection headroom 0 against 35,558 m³ and spends ~$224k less opex a month; the voidage set point, its last-tick companions and now the pressure all restore correctly, so the plausible explanation has been tested and retired (finding 196). Next step is to instrument `ReservoirRoom()` on both engines rather than reason about it again | R20d.12 |
