@@ -230,6 +230,64 @@ All three produce ordinary SDD-007 operations — no special execution path.
 > would go under. That is the number any further asymmetry is spent against, and
 > it is why the duration lever stays reverted.
 
+> **R20d.26.4 amendment — the monitoring gate this section has always stated is
+> implemented by a record nothing calls, and the strategy that wins is free.**
+>
+> §3's line — *"ConditionBased: requires monitoring tier installed (C14)"* — is
+> implemented, correctly, in `MaintenancePolicy.IsDue`, which returns false for
+> condition-based work without monitoring and says in its own comment why: *"a
+> policy that fell back to scheduled would make the monitoring purchase free"*.
+> **`MaintenancePolicy` is called from its own unit test and from nowhere else.**
+> Meanwhile R20d.26.2 shipped `service-equipment` with no gate of any kind, so a
+> player reads every element's condition off the chain view for nothing and
+> services on it — and C14's condition-monitoring kit, whose catalogue entry is
+> literally *"enables condition-based maintenance"*, is content no one needs.
+>
+> **Where the gate belongs, and why not in `MaintenancePolicy`.** This
+> composition expresses a strategy as the player's own COMMANDS, which is §3's
+> own rule read straight — "all three produce ordinary SDD-007 operations, no
+> special execution path". There is no engine-side scheduler reading a declared
+> policy, and there should not be one: it would be a second way to express the
+> same law and L5 allows one owner per fact. So the record is **deleted** and the
+> gate moves to where the decision actually is — the command validator and the
+> read model.
+>
+> **Both halves, because either alone is incoherent:**
+>
+> ```text
+> information   an element's CONDITION is published only where monitoring is
+>               fitted; elsewhere a host is told it is unknown
+> action        service-equipment is REFUSED on an unmonitored element
+> ```
+>
+> Without the action gate the refusals leak the information the other half is
+> hiding — `nothing-to-repair` tells a player the element is as-new, so
+> condition is binary-searchable through rejections for the price of submitting
+> commands. Without the information gate a player is shown exactly what is worn
+> and then forbidden to touch it, which is a tax with a diagnosis attached.
+>
+> **`repair-equipment` stays ungated.** A failure needs no instrument: the plant
+> stopped, and the chain view has always reported `Failed`. That is exactly
+> run-to-failure, which §3 says requires nothing — so an uninstrumented company
+> still has a complete, playable, and now measurably worse strategy.
+>
+> **NOT era-gated or technology-gated in this slice, and the reason is recorded
+> here so it is not silently lost.** C14 puts the kit at E3 behind a "Condition
+> monitoring" technology. In this engine **nothing can acquire a technology and
+> the era never advances** — `CapabilityState.Era` is written at construction and
+> by `Restore` and by nothing else, and `Acquire`/`ApplyDiffusion` are called
+> only from their own tests. Gating on either today would put condition-based
+> maintenance permanently out of reach, which is the cost-with-no-response shape
+> findings 172 and 177 already cost this project twice. **The kit is the gate
+> now; the technology and the era become gates when R20d.10 makes them
+> reachable**, and that is a prerequisite recorded against R20d.10 rather than a
+> gap left to be rediscovered.
+>
+> **State.** Monitored-or-not is a property of the component, so it is owned by
+> `AssetIntegrity` beside condition and failure (L5) and captured with them —
+> which also means it is one more fact riding on a save path that does not exist
+> (finding 188).
+
 ## 4. Non-equipment hazards
 
 Hydrate/wax/erosion/blowout/spill triggers evaluate their condition margins
