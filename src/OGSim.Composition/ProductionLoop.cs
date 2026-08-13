@@ -455,6 +455,14 @@ internal sealed class ProductionLoop : IStateOwner
         writer.WriteDouble("cumulative-flared", CumulativeFlared.Kilograms);
         writer.WriteDouble("cumulative-produced", CumulativeProduced.CubicMetres);
 
+        // THE DISPOSAL WELL'S PLUGGING, which IS its cumulative injection: §6c's
+        // impairment scales with what has been put away against the reference
+        // volume, so a restored injector came back with a clean formation
+        // however many years it had been used. It is written here rather than in
+        // a block of its own because facilities own no state — the day they do,
+        // this moves and the key goes with it (S013-9).
+        writer.WriteDouble("disposal-injected", _disposal.CumulativeInjected.CubicMetres);
+
         writer.WriteInt64("flood-share-count", _floodShares.Count);
 
         for (int i = 0; i < _floodShares.Count; i++)
@@ -477,6 +485,8 @@ internal sealed class ProductionLoop : IStateOwner
 
         CumulativeFlared = new Mass(reader.ReadDouble("cumulative-flared"));
         CumulativeProduced = new SurfaceVolume(reader.ReadDouble("cumulative-produced"));
+
+        _disposal.RestoreTo(new ReservoirVolume(reader.ReadDouble("disposal-injected")));
 
         _floodShares.Clear();
 

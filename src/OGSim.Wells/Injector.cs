@@ -252,6 +252,29 @@ public sealed class Injector : IFlowElement
     /// </summary>
     public void Remediate() => _cumulativeInjectedM3 = 0.0;
 
+    /// <summary>
+    /// Puts a restored injector back to what it has already taken (R20d.12).
+    ///
+    /// <para>THE PLUGGING IS THIS NUMBER. Impairment scales with the volume put
+    /// away against the reference, so an injector restored at zero comes back
+    /// with a clean formation however many years it has been used — which showed
+    /// up as a reloaded field disposing water at a different rate and, through
+    /// the severity terms, ageing its equipment differently.</para>
+    ///
+    /// <para>Separate from <see cref="Commit"/> for the reason every restore in
+    /// this engine is separate from its advance: restoring is allowed to jump,
+    /// and only before the engine ticks.</para>
+    /// </summary>
+    public void RestoreTo(ReservoirVolume injected)
+    {
+        if (injected.CubicMetres < 0.0 || !double.IsFinite(injected.CubicMetres))
+            throw new SaveDataFault("SDD-003 §6c", null,
+                "a save says this injector has taken a negative or non-finite volume; " +
+                "an injector cannot un-inject what it has put away");
+
+        _cumulativeInjectedM3 = injected.CubicMetres;
+    }
+
     private const double SteadyStateOffset = 0.75;
 
     private static void Validate(InjectionConditions c)
