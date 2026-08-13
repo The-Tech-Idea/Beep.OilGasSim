@@ -75,6 +75,34 @@ public sealed class StateBlock : IStateWriter, IStateReader
         owner.Restore(block);
     }
 
+    /// <summary>
+    /// A block as something to READ, without restoring an owner from it.
+    ///
+    /// <para>What a loader needs (design 11 §2.1): the field has to be rebuilt
+    /// before its owner can be told what it holds, and the instructions for
+    /// rebuilding it are in the block. Reading them is not restoring — the owner
+    /// still gets its own <see cref="Restore"/>, version check and all, once the
+    /// thing it describes exists.</para>
+    ///
+    /// <para>NO VERSION CHECK HERE, deliberately: the owner performs it on the
+    /// same block moments later, and doing it twice would put the rule in two
+    /// places to disagree about.</para>
+    /// </summary>
+    public static IStateReader ReaderFor(JsonValue state)
+    {
+        ArgumentNullException.ThrowIfNull(state);
+
+        if (state is not JsonObject json)
+            throw new SaveDataFault("SDD-013 §3", null, "a state block is not an object.");
+
+        var block = new StateBlock(reading: true);
+
+        foreach (KeyValuePair<string, JsonValue> member in json.Members)
+            block._values[member.Key] = member.Value;
+
+        return block;
+    }
+
     private const string SchemaVersionKey = "$schema-version";
 
     /// <summary>The block as canonical JSON.</summary>

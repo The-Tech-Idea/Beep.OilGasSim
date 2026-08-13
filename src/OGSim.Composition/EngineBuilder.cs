@@ -1625,6 +1625,36 @@ public static class EngineBuilder
     }
 
     /// <summary>
+    /// Composes the shipped set AS OF a tick — the door a load comes through
+    /// (SDD-013, R20d.12).
+    ///
+    /// <para>The clock is restored BEFORE the modules compose, not after. A
+    /// module that reads the date while being constructed would otherwise build
+    /// itself in month zero and then be told it is month sixty, and the
+    /// difference between those two is exactly the "restored as a value, not as
+    /// a live dependency" failure SDD-013 §4 opens with.</para>
+    ///
+    /// <para>Internal because a host does not choose a tick — a SAVE does.
+    /// Composition is the only layer entitled to build an engine that starts
+    /// anywhere but the beginning.</para>
+    /// </summary>
+    internal static BuildResult BuildAt(EngineSettings settings, Tick tick)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+
+        var clock = new SimulationClock(settings.Epoch);
+        clock.RestoreTo(tick);
+
+        var audit = new AuditTrail(clock, settings.Retention);
+
+        return Build(
+            settings,
+            ShippedModules(audit, clock, new RandomSource(settings.WorldSeed),
+                           Defaults.ProfileNamed(settings.RealityProfile)),
+            clock, audit);
+    }
+
+    /// <summary>
     /// Composes a DECLARED set — the door a scenario uses to compose a variant,
     /// and the door tests use to compose an incomplete set and read the refusal.
     /// </summary>

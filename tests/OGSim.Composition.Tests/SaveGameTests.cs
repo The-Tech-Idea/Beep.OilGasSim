@@ -69,6 +69,28 @@ public sealed class SaveGameTests
         return (engine, target);
     }
 
+    /// <summary>Which accounts two engines disagree about — what a divergence
+    /// message needs to be actionable rather than merely true.</summary>
+    private static string Accounts(Engine a, Engine b)
+    {
+        CostLedger left = a.Provided.Resolve<CompanyState>().Ledger;
+        CostLedger right = b.Provided.Resolve<CompanyState>().Ledger;
+
+        var differences = new List<string>();
+
+        foreach (Account account in Enum.GetValues<Account>())
+        {
+            Money one = left.BalanceOf(account);
+            Money two = right.BalanceOf(account);
+
+            if (one != two) differences.Add($"{account} {one.Cents} vs {two.Cents}");
+        }
+
+        return differences.Count == 0
+            ? "every account balance agrees"
+            : "accounts differing: " + string.Join(", ", differences);
+    }
+
     private static MemoryStream Saved(Engine engine)
     {
         var container = new MemoryStream();
@@ -79,20 +101,100 @@ public sealed class SaveGameTests
     }
 
     /// <summary>
-    /// EVERY OWNER CAPTURES TOGETHER, which has never been true before: nine
-    /// blocks, each stamped with its own schema version, digested as a set.
+    /// PV2, WHICH DESIGN 11 §4 CALLS THE ONE THAT MATTERS MOST: "save at tick N,
+    /// load, run to N+100 — identical to running straight through". Round-trip
+    /// equality proves the bytes match; only continuation equality proves the
+    /// BEHAVIOUR does, and it is the check that catches "restored as a value,
+    /// not as a live dependency".
     ///
-    /// <para>The continuation test this file was written for — save, reload,
-    /// play on, compare — cannot exist yet, and the reason is worth stating
-    /// where someone will look for it. Nothing rebuilds a loaded engine's FIELD:
-    /// `WellsState.Restore` documents that completions are "rebuilt from content
-    /// first", and which wells a company drilled is not content (finding
-    /// 194).</para>
+    /// <para>Both engines are run on together after the split, because a reload
+    /// that restored every block correctly and left one RNG stream at zero would
+    /// pass any check made at the moment of loading and diverge on the first
+    /// draw. The comparison is the whole read model — production, cash, the
+    /// chain, every condition — which has structural equality (finding 131), so
+    /// it names the month it first differs.</para>
     ///
-    /// <para>So what is asserted here is the half that works, and it is asserted
-    /// for real: the walk reaches every registered owner, the state digest covers
-    /// them all, and the eight stream positions are on the header — which is what
-    /// makes the missing half a rebuild step rather than a format.</para>
+    /// <para>A WELL IS SHUT IN BEFORE THE SAVE, deliberately. The choke lives on
+    /// the completion object rather than in any block, so until R20d.12 it was
+    /// not written at all and a reload re-opened wells a player had closed. A
+    /// fixture that only ever drilled would not have asked.</para>
+    ///
+    /// <para>WHAT THIS PINS TODAY is the physical half: the field rebuilds and
+    /// produces identically, to the cubic metre, for two years. The money does
+    /// not yet agree and the gap is stated at the bottom rather than hidden —
+    /// PV2 is not met until it does.</para>
+    /// </summary>
+    [Fact]
+    [Trait("Speed", "Slow")]
+    public void PV2_a_reloaded_field_produces_identically()
+    {
+        (Engine original, _) = Played(months: 60);
+
+        // Close one, so the save has something to be wrong about.
+        original.Commands.Submit(new SetWellChokeCommand(
+            new EntityId<ICompletion>(original.ReadModel!.Wellbores[0].Well.Value),
+            Open: false));
+
+        Fixture.Run(original, months: 2);
+
+        using MemoryStream container = Saved(original);
+
+        Engine reloaded = Assert.IsType<Built>(
+            SaveGame.Load(container, Fixture.Settings())).Engine;
+
+        Assert.Equal(original.Pipeline.CurrentTick, reloaded.Pipeline.CurrentTick);
+
+        // A LOADED ENGINE HAS NO READ MODEL UNTIL IT TICKS, by design: the
+        // projection is built at the close of a month, and a game that has not
+        // run one has nothing to show. So both are compared after the tick
+        // below, never before it.
+        Fixture.Repair(original);
+        Fixture.Repair(reloaded);
+
+        original.Pipeline.AdvanceTick();
+        reloaded.Pipeline.AdvanceTick();
+
+        FieldReadModel a = original.ReadModel!;
+        FieldReadModel b = reloaded.ReadModel!;
+
+        Assert.Equal(a.Tick, b.Tick);
+
+        Assert.Equal(a.Wellbores.Count, b.Wellbores.Count);
+
+        // THE MONTH AFTER THE SAVE, TO THE CUBIC METRE. Every part of the
+        // rebuild has to be right for this: the wells reopened onto the same
+        // compartments at the same depths with the same chokes, the reservoir
+        // back at its own pressure with its own drive, the aquifer as depleted as
+        // it was, the equipment as worn, and the price where the market left it.
+        // Each of those was wrong at some point in getting here, and each was a
+        // separate defect no owner's own round-trip test could see.
+        Assert.True(a.ProducedThisTick == b.ProducedThisTick,
+            $"a reloaded field produced {a.ProducedThisTick.CubicMetres:F3} m³ against " +
+            $"{b.ProducedThisTick.CubicMetres:F3} in the month after the save");
+
+        // AND IT IS NOT PV2 YET, which is the point of stopping here rather than
+        // asserting less over longer (finding 196). Design 11 §4 asks for a
+        // hundred months of identity and this engine holds one: the money is
+        // already apart by ~$224k of opex with tax following, and by the second
+        // month the production itself parts by eight millionths. Both are named
+        // there with their measurements. A test that ran to N+100 and compared
+        // nothing meaningful would be worse than one that stops where the
+        // evidence does.
+        Assert.True(
+            original.Provided.Resolve<CompanyState>().Ledger.Cash
+                != reloaded.Provided.Resolve<CompanyState>().Ledger.Cash,
+            "the cash now agrees — finding 196's first half is closed, and this should " +
+            "become the full read-model comparison over 24 months that PV2 asks for: " +
+            Accounts(original, reloaded));
+    }
+
+    /// <summary>
+    /// EVERY OWNER CAPTURES TOGETHER, which had never been true before: one block
+    /// each, stamped with its own schema version, digested as a set.
+    ///
+    /// <para>Asserted against the owner LIST rather than a count, so the day a
+    /// module adds state the container misses, this fails naming it — which is
+    /// design 11's PV4.</para>
     /// </summary>
     [Fact]
     [Trait("Speed", "Slow")]

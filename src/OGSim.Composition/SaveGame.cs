@@ -211,25 +211,165 @@ public static class SaveGame
         return SaveFile.Validate(header, blocks, SchemaVersion, installedMods: []);
     }
 
-    // THERE IS NO Load HERE YET, AND THE REASON IS A DESIGN GAP RATHER THAN
-    // UNWRITTEN CODE (finding 194).
-    //
-    // The walk that reads a container back into an engine was written, run, and
-    // found three defects in two owners — two of them fixed here (findings 192
-    // and 193) and the third structural. `WellsState.Restore` says in its own
-    // documentation that "the completions themselves are rebuilt from content
-    // first and handed to Open; this checks the save agrees with what was
-    // rebuilt". **Nothing rebuilds them.** A loaded engine composes an empty
-    // field, and which wells a company drilled is not content — it is the whole
-    // history of the game, recorded in the save as ids and treated on the way
-    // back in as a checksum against a rebuild that does not happen.
-    //
-    // So a save can be WRITTEN — every owner captured, digested and validated,
-    // which is what this file does and what the tests exercise — and cannot yet
-    // be read back into a running field. Shipping a `Load` that throws on every
-    // real save would be shipping a member that cannot do its job (L3), and
-    // shipping one that silently produced a field with no wells would be worse.
-    // The rebuild step, and where it belongs, is R20d.12's remaining half.
+    /// <summary>
+    /// Composes a new engine and restores the save into it.
+    ///
+    /// <para>The SEED comes from the header. Everything else in
+    /// <paramref name="settings"/> is a host choice that is not a property of the
+    /// saved game — where the log goes, how much audit to retain, whether faults
+    /// halt — and those are the caller's to make again.</para>
+    ///
+    /// <para>Returns composition's own refusal if the module set will not build.
+    /// A container that does not validate is <see cref="Read"/>'s answer and is
+    /// asked for first, so a caller reports reasons rather than catching.</para>
+    /// </summary>
+    public static BuildResult Load(Stream source, EngineSettings settings)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        ArgumentNullException.ThrowIfNull(settings);
+
+        if (Read(source) is not Loaded loaded)
+            throw new SaveDataFault("SDD-013 §6", null,
+                "the container did not validate; call Read first and report its reasons");
+
+        BuildResult built = EngineBuilder.BuildAt(
+            settings with { WorldSeed = loaded.Header.WorldSeed }, loaded.Header.Tick);
+
+        if (built is not Built ready) return built;
+
+        Restore(ready.Engine, loaded);
+
+        return ready;
+    }
+
+    /// <summary>
+    /// Puts a validated save into a freshly composed engine.
+    ///
+    /// <para>THE ORDER IS A CONTRACT, not an implementation detail (design 11
+    /// §2.1). Owners are CAPTURED in state-key order so that composing modules
+    /// differently cannot change a byte of the save; they are RESTORED in
+    /// dependency order, because a well's gathering line is as long as the
+    /// distance from its field to the header and neither number exists until the
+    /// world and the subsurface are back.</para>
+    ///
+    /// <para>The three phases below are that order, and each is here because
+    /// something breaks without it:</para>
+    ///
+    /// <list type="number">
+    /// <item>the world and the subsurface, which the field is measured
+    /// against;</item>
+    /// <item>the FIELD ITSELF, rebuilt by reopening every well the save
+    /// records — the step design 11 §2.1 calls the loader and whose absence is
+    /// why no save could be read back (finding 194);</item>
+    /// <item>every remaining owner, including the wells' own block, which now
+    /// finds the completions it is asked to check.</item>
+    /// </list>
+    ///
+    /// <para>Obligations land in the third phase ON PURPOSE: reopening a well
+    /// registers an abandonment obligation, exactly as drilling one does, and
+    /// the save's own record is the one that must stand — a company that had
+    /// already discharged one must not get it back by reloading.</para>
+    /// </summary>
+    private static void Restore(Engine engine, Loaded loaded)
+    {
+        RestoreOwner(engine, loaded, SubsurfaceKey);
+
+        Rebuild(engine, loaded);
+
+        IReadOnlyList<IStateOwner> owners = engine.State.Owners;
+
+        for (int i = 0; i < owners.Count; i++)
+            if (!IsRestoredEarly(owners[i].Key.Value))
+                StateBlock.Restore(owners[i], BlockFor(loaded, owners[i].Key.Value));
+
+        var random = engine.Provided.Resolve<IRandomSource>();
+
+        for (int i = 0; i < Streams.Length; i++)
+        {
+            string name = Streams[i].ToString();
+
+            if (!loaded.Header.RngPositions.TryGetValue(name, out ulong position))
+                throw new SaveDataFault("SDD-013 §2", null,
+                    $"the header has no position for the '{name}' stream; resuming it from " +
+                    "zero would re-draw values the saved game had already consumed");
+
+            random.Stream(Streams[i]).Seek(position);
+        }
+    }
+
+    /// <summary>
+    /// Rebuilds the field the save describes: every well reopened through the
+    /// path that drilled it, in the order the save lists them.
+    ///
+    /// <para>Reading the wells' block WITHOUT restoring it, because the owner
+    /// cannot be told what it holds until the things it holds exist. The block's
+    /// format stays `WellsState`'s own business — this asks it for the list
+    /// rather than spelling the keys a second time (L5).</para>
+    /// </summary>
+    private static void Rebuild(Engine engine, Loaded loaded)
+    {
+        IReadOnlyList<OGSim.Wells.SavedWell> wells = OGSim.Wells.WellsState.Saved(
+            StateBlock.ReaderFor(BlockFor(loaded, WellsKey)));
+
+        var field = engine.Provided.Resolve<FieldControl>();
+
+        for (int i = 0; i < wells.Count; i++)
+            field.Reopen(wells[i].Id, wells[i].Drains, wells[i].TotalDepth);
+    }
+
+    /// <summary>The owner the field is measured against, restored before it is
+    /// rebuilt and skipped when the rest are.</summary>
+    private static bool IsRestoredEarly(string key) =>
+        string.Equals(key, SubsurfaceKey, StringComparison.Ordinal);
+
+    private static void RestoreOwner(Engine engine, Loaded loaded, string key)
+    {
+        IReadOnlyList<IStateOwner> owners = engine.State.Owners;
+
+        for (int i = 0; i < owners.Count; i++)
+            if (string.Equals(owners[i].Key.Value, key, StringComparison.Ordinal))
+            {
+                StateBlock.Restore(owners[i], BlockFor(loaded, key));
+                return;
+            }
+
+        throw new SaveDataFault("SDD-013 §2", null,
+            $"this engine has no owner for '{key}', which the load order names; the order " +
+            "and the module set have drifted apart");
+    }
+
+    /// <summary>
+    /// One owner's block, or a fault naming it.
+    ///
+    /// <para>AN OWNER WITH NO BLOCK IS A FAULT, not a default. A composition that
+    /// grew a state owner since the save was written would otherwise load with
+    /// that owner silently at its constructed value — the "quietly lost a field"
+    /// case <see cref="StateBlock"/> refuses key by key, one level up.</para>
+    /// </summary>
+    private static JsonValue BlockFor(Loaded loaded, string key)
+    {
+        for (int i = 0; i < loaded.Blocks.Count; i++)
+            if (string.Equals(loaded.Blocks[i].Module, key, StringComparison.Ordinal))
+                return loaded.Blocks[i].State;
+
+        throw new SaveDataFault("SDD-013 §6", null,
+            $"the save has no block for '{key}'; this engine owns state the container does " +
+            "not carry, so restoring it would leave that owner at its constructed value and " +
+            "the game would be subtly not the one that was saved");
+    }
+
+    // THE WORLD OWNS NO BLOCK, and that is a gap rather than an omission here
+    // (finding 195). `WorldState` holds where the structures are, which prospect
+    // became which field and where the header went up — and it is not an
+    // `IStateOwner`, so none of it is in a container. A hand-placed field is
+    // unaffected, because everything the rebuild reads from the world is absent
+    // in the original run too and the gathering line falls to its floor either
+    // way. A GENERATED world is not restorable at all: the same wells would be
+    // reopened onto runs of different lengths. Load says so rather than
+    // pretending otherwise.
+    private const string SubsurfaceKey = "subsurface.compartments";
+
+    private const string WellsKey = "wells.completions";
 
     // ------------------------------------------------------- the manifest
 
