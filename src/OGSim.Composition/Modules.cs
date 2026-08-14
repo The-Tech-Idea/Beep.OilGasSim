@@ -617,7 +617,7 @@ internal sealed class FieldModule() : EngineModule(Declare(
     // Provided here because the field is where an asset is CREATED, and
     // registration is unconditional at creation (SDD-007 §6).
 
-    ownsState: ["field.activities", "company.obligations", "field.flood"],
+    ownsState: ["field.activities", "company.obligations", "field.flood", "field.export"],
     stages:
     [
         new StageParticipation(StageId.Operations, Order: 0),
@@ -762,6 +762,12 @@ internal sealed class FieldModule() : EngineModule(Declare(
         // and it was in no save at all: a reloaded game kept the water already
         // injected and quietly stopped buying more (R20d.12).
         composition.Own(loop);
+
+        // AND THE EXPORT LINE, the most expensive purchase in the catalogue.
+        // Owned here because this module composes the terminal; the five rungs
+        // on the surface chain are `facilities.units`, and one fact has one
+        // owner (SDD-006 §8b).
+        composition.Own(new FacilitiesState.ExportState(terminal));
 
         composition.Provide(bank);
         composition.Contribute(order: 0, new SegmentationStage(

@@ -696,14 +696,19 @@ reference on load (design 11 §2.1).
 **Restore order**: after the field is rebuilt, since a tank's provenance names
 compartments and a linefill is inventory in an element the rebuild creates.
 
-**Built at R20d.12 for the five ladder sockets** — manifold, separator, tank, gas
-plant, treater — each restored by id through its ladder, with a refusal naming
-the rung when this build's ladder has no such id. **The export terminal is
-outstanding**: it is composed in the field module rather than carried on
-`SurfaceChain`, so its tier needs either a chain member or a second owner, and
-inventing one at the call site is what F-4 forbids. **The four carried numbers
-are also outstanding** — a tank's contents, provenance and promised mass, a
-pipeline's linefill and an intake's commanded rate.
+**Built at R20d.12. All six rungs round-trip**, each restored by id through its
+ladder with a refusal naming the rung when this build's ladder has no such id.
+Five sit in `facilities.units`; the EXPORT terminal has its own block,
+`field.export`, because the field module composes it rather than the chain
+carrying it — a second owner rather than a second copy, since one fact has one
+owner (L5) and the alternative would have two modules believing they hold the
+same element. Moving the terminal onto the chain so all six share a block is a
+composition restructure and its own change; shipping the most expensive purchase
+in the catalogue unsaved while that was designed would have been the wrong
+order.
+
+**Outstanding: the four carried numbers** — a tank's contents, provenance and
+promised mass, a pipeline's linefill and an intake's commanded rate.
 
 **The fixture is part of the specification, not an afterthought.** PV2 today
 drills and floods and never INSTALLS, which is why it passes while all of this

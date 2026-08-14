@@ -72,6 +72,11 @@ public sealed class SaveGameTests
         // that is not the one composition started with.
         engine.Commands.Submit(new InstallSeparatorCommand());
 
+        // AND THE EXPORT LINE, which is owned by a different module and so a
+        // different block. Buying only the separator would have left that one
+        // exactly as unsaved as all six were, and just as invisible.
+        engine.Commands.Submit(new ExpandExportCommand());
+
         Fixture.Run(engine, months);
 
         return (engine, target);

@@ -69,6 +69,46 @@ internal sealed class FacilitiesState(SurfaceChain chain) : IStateOwner
     }
 
     /// <summary>
+    /// The export terminal's rung, owned separately because the terminal is
+    /// composed by the FIELD module rather than carried on
+    /// <see cref="SurfaceChain"/> (SDD-006 §8b).
+    ///
+    /// <para>A second owner rather than a second copy: law L5 gives one owner
+    /// per fact, and the alternative — reaching the terminal from the facilities
+    /// block — would mean the field module handing its element to another
+    /// module's owner and two places believing they hold it. The key says which
+    /// module composed it, which is what a state key is for.</para>
+    ///
+    /// <para>The honest alternative is to move the terminal onto the chain so
+    /// all six rungs sit in one block. That is a composition restructure and it
+    /// belongs in its own change: the export line is the most expensive purchase
+    /// in the catalogue and shipping it unsaved while the restructure is designed
+    /// would be the wrong order.</para>
+    /// </summary>
+    internal sealed class ExportState(OGSim.Facilities.ExportTerminal terminal) : IStateOwner
+    {
+        public StateKey Key { get; } = new("field.export");
+
+        public int SchemaVersion => 1;
+
+        public void Capture(IStateWriter writer)
+        {
+            ArgumentNullException.ThrowIfNull(writer);
+
+            writer.WriteString("tier", terminal.Tier.Id.Value);
+        }
+
+        public void Restore(IStateReader reader)
+        {
+            ArgumentNullException.ThrowIfNull(reader);
+
+            terminal.Fit(
+                Rung(Defaults.ExportLadder, reader.ReadString("tier"), "export terminal",
+                     tier => tier.Id));
+        }
+    }
+
+    /// <summary>
     /// The rung a save names, found by CONTENT ID and never by index.
     ///
     /// <para>A ladder is an authored progression (SDD-006 §7b) and its order may
