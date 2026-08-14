@@ -49,6 +49,25 @@ internal sealed class FacilitiesState(SurfaceChain chain) : IStateOwner
         Inventory(writer, "linefill", chain.Flowline.Linefill);
 
         writer.WriteDouble("intake-commanded", chain.Intake.Commanded.CubicMetresPerSecond);
+
+        // THE TANK'S CONTENTS — oil the company owns, and the ullage every
+        // export decision is taken against. Its PROVENANCE travels with it,
+        // because a barrel is credited to the compartment it came from and a
+        // restored blend that had forgotten whose oil it was would allocate the
+        // next sale to the wrong reservoir.
+        Inventory(writer, "tank-held", chain.Tank.Held);
+
+        writer.WriteInt64("tank-shares", chain.Tank.Provenance.Shares.Length);
+
+        for (int i = 0; i < chain.Tank.Provenance.Shares.Length; i++)
+        {
+            (EntityRef compartment, double fraction) = chain.Tank.Provenance.Shares[i];
+            string at = Ordinal("tank-share", i);
+
+            writer.WriteInt64(at + ".kind", (long)compartment.Kind);
+            writer.WriteInt64(at + ".id", (long)compartment.Value);
+            writer.WriteDouble(at + ".fraction", fraction);
+        }
     }
 
     public void Restore(IStateReader reader)
@@ -78,6 +97,25 @@ internal sealed class FacilitiesState(SurfaceChain chain) : IStateOwner
         chain.Flowline.CommitLinefill(Inventory(reader, "linefill"));
 
         chain.Intake.Command(new ReservoirRate(reader.ReadDouble("intake-commanded")));
+
+        var shares =
+            System.Collections.Immutable.ImmutableArray.CreateBuilder<(EntityRef, double)>();
+
+        var count = (int)reader.ReadInt64("tank-shares");
+
+        for (var i = 0; i < count; i++)
+        {
+            string at = Ordinal("tank-share", i);
+
+            shares.Add((
+                new EntityRef(
+                    (EntityKind)reader.ReadInt64(at + ".kind"),
+                    (ulong)reader.ReadInt64(at + ".id")),
+                reader.ReadDouble(at + ".fraction")));
+        }
+
+        chain.Tank.RestoreTo(
+            Inventory(reader, "tank-held"), Allocation.Validated(shares.ToImmutable()));
     }
 
     /// <summary>

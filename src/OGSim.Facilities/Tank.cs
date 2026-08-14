@@ -117,6 +117,29 @@ public sealed class Tank : IFlowElement
     /// abandoned with it, and either way they are not this tick's.</summary>
     public void ForgetPromises() => _promisedKilograms = 0.0;
 
+    /// <summary>
+    /// Puts a restored tank back to what it is holding (SDD-006 §8b, R20d.12).
+    ///
+    /// <para>A tank's contents are OIL A COMPANY OWNS — inventory on its balance
+    /// sheet and the ullage every export decision is taken against — so a
+    /// reloaded tank that came back empty would hand back stock and free space
+    /// that was already spoken for.</para>
+    ///
+    /// <para>The PROMISED mass is not restored and is not saved: it is cleared
+    /// at the top of every tick before anything reserves against it, so it is
+    /// scratch within a month rather than state across one (SDD-013 §4's
+    /// never-saved rule).</para>
+    ///
+    /// <para>Separate from <see cref="Receive"/> for the reason every restore in
+    /// this engine is separate from its advance: restoring is allowed to jump,
+    /// and only before the engine ticks.</para>
+    /// </summary>
+    public void RestoreTo(MaterialInventory held, Allocation provenance)
+    {
+        _held = held;
+        _provenance = provenance;
+    }
+
     /// <summary>The ports by name, so a caller wiring the chain never writes a
     /// bare index.</summary>
     public static PortId Inlet { get; } = new(0);

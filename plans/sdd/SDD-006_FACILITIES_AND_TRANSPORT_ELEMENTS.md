@@ -713,11 +713,17 @@ ordinal by ordinal with the count beside them: the catalogue assigns ordinals
 every mass the day one is added. Both types already exposed a getter and a
 setter, so neither needed a member invented for persistence.
 
-**Outstanding: the TANK's contents** — held inventory, its provenance
-`Allocation` and the promised mass. The inventory is the same shape as the
-linefill; the allocation is not, and the tank exposes no way to restore either.
-That is a member per fact on `Tank` and it is specified here before it is
-written, like everything else in this section.
+**The TANK's contents complete the block**: the held inventory and its
+provenance `Allocation`, restored through one `Tank.RestoreTo` — a barrel is
+credited to the compartment it came from, so a blend that had forgotten whose
+oil it was would allocate the next sale to the wrong reservoir. The PROMISED
+mass is deliberately NOT saved: `ForgetPromises` runs at the top of every tick
+before anything reserves against it, so it is scratch within a month rather than
+state across one, which is §4's never-saved rule applied rather than assumed.
+
+**Everything §8b names is now carried.** What remains outside it is the
+`CustodyTransferPoint` and the `Flare`, neither of which has been examined for
+carried state.
 
 **The fixture is part of the specification, not an afterthought.** PV2 today
 drills and floods and never INSTALLS, which is why it passes while all of this
