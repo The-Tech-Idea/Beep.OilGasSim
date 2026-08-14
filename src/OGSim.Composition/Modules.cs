@@ -1040,7 +1040,7 @@ internal sealed class WorldModule() : EngineModule(Declare(
     "world",
     provides: [typeof(IWorldGenerator), typeof(WorldState)],
     requires: [],
-    ownsState: NothingOwnedYet,
+    ownsState: ["world.decisions"],
     stages: NoStagesYet))   // world-gen runs once, at tick zero, not in the loop
 {
     public override void Compose(IModuleComposition composition)
@@ -1053,7 +1053,15 @@ internal sealed class WorldModule() : EngineModule(Declare(
         // rather than created by `CreateNew` because the FIELD reads it — a well
         // tied in has to know where its prospect is — and a module cannot depend
         // on something built after composition finished.
-        composition.Provide<WorldState>(new WorldState());
+        // OWNED as well as provided (SDD-010 §4c). Where a company built its
+        // header is a decision rather than a function of the seed, and every
+        // later well's gathering line is as long as its field is from it —
+        // unsaved, a reloaded campaign re-sited it at whichever field it next
+        // tied in (finding 195).
+        var world = new WorldState();
+
+        composition.Own(world);
+        composition.Provide(world);
     }
 }
 

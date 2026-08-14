@@ -37,7 +37,7 @@ namespace OGSim.Composition;
 /// would make the module that owns the field depend on the module that owns
 /// generation and the reverse at the same time.</para>
 /// </summary>
-public sealed class WorldState
+public sealed class WorldState : IStateOwner
 {
     private readonly List<EntityId<IProspect>> _prospects = [];
     private readonly List<Coordinate> _at = [];
@@ -153,6 +153,59 @@ public sealed class WorldState
     internal void HeaderAt(Coordinate site) => _header ??= site;
 
     private Coordinate? _header;
+
+    // ------------------------------------------------ the save (SDD-010 §4c)
+    //
+    // THE HEADER IS A DECISION, and the only part of this object that is
+    // unambiguously one. Where a company built its manifold is not a function of
+    // the world seed — it is where the first field it chose to develop happens
+    // to be — and every later well's gathering line is as long as its field is
+    // from it. Unsaved, a reloaded campaign re-sited the header at whichever
+    // field it next tied in.
+    //
+    // THE PLACEMENTS ARE NOT HERE YET, and deliberately: §4c's boundary — the
+    // count of prospects standing when generation finished — has to exist before
+    // a save can tell a generated structure from a declared one, and guessing
+    // which entries to replay would restore a world subtly unlike the one saved.
+    // A generated world still cannot be reloaded (finding 195); this closes the
+    // part that needs no seam.
+
+    public StateKey Key { get; } = new("world.decisions");
+
+    public int SchemaVersion => 1;
+
+    public void Capture(IStateWriter writer)
+    {
+        ArgumentNullException.ThrowIfNull(writer);
+
+        // A FLAG rather than a sentinel coordinate: (0,0) is a legitimate place
+        // to build, and picking any coordinate to mean "nowhere" would make that
+        // spot unusable the day a basin puts a field there.
+        writer.WriteInt64("has-header", _header is null ? 0L : 1L);
+
+        if (_header is not Coordinate header) return;
+
+        writer.WriteDouble("header-x", header.X);
+        writer.WriteDouble("header-y", header.Y);
+    }
+
+    public void Restore(IStateReader reader)
+    {
+        ArgumentNullException.ThrowIfNull(reader);
+
+        if (reader.ReadInt64("has-header") == 0L)
+        {
+            _header = null;
+            return;
+        }
+
+        // Assigned directly rather than through HeaderAt, which is write-once by
+        // design (`??=`): a restore is allowed to set what a game has already
+        // decided, and going through the one-way door would silently keep
+        // whatever a rebuild had put there first.
+        _header = new Coordinate(
+            reader.ReadDouble("header-x"), reader.ReadDouble("header-y"));
+    }
 
     /// <summary>
     /// How far a field is from the header — the gathering line a well on it
