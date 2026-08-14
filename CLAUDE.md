@@ -120,15 +120,25 @@ every `IStateOwner` in state-key order, writes SDD-013 §1's container, and load
 by composing a NEW engine, rebuilding the field from the save, and restoring
 into it. **A reloaded game continues identically for two years** on every read-
 model field but `Chain` (`PV2_a_saved_game_reloaded_continues_identically`).
-Building it found **twenty facts that no block carried** — a compartment's drive
-and aquifer, the market price, the voidage set point and flood shares, well
-depth and chokes, six fitted tiers, tank contents, linefill, cumulative flaring
-and production, injector plugging — none of them findable by an owner's own
-round-trip test, which is what finding 188 was actually about. **So: a module
-having `Capture`/`Restore` still says nothing about whether its state survives a
-real reload**, and the way these were found is always the same — make the
-fixture DO the thing (drill, flood, shut in, *buy*), then ask the test which
-field differs.
+Building it found **twenty-two facts that no block carried** — a compartment's
+drive and aquifer, the market price, the voidage set point and flood shares,
+well depth and chokes, six fitted tiers, tank contents, linefill, cumulative
+flaring and production, injector plugging, and **everything the company had paid
+to learn** (beliefs and POS, finding 198) — none of them findable by an owner's
+own round-trip test, which is what finding 188 was actually about. **So: a
+module having `Capture`/`Restore` still says nothing about whether its state
+survives a real reload**, and the way these were found is always the same — make
+the fixture DO the thing (drill, flood, shut in, *buy*, **survey**), then ask
+the test which field differs. A check the fixture never exercises is *true and
+vacuous*, which is worse than absent: `Beliefs` was compared month after month
+for two years and agreed because both sides were empty.
+
+**`BeliefStore` is the one owner behind the truth boundary**, and it implements
+`IStateOwner` **explicitly** — `Restore` is a bulk import, and the header of
+that file states that the *absence* of one is what enforces "`Apply` is the only
+writer". Explicit implementation keeps it off the surface every consumer holds
+(`IBeliefStore`), reachable only through a reference typed as `IStateOwner`.
+Follow the same rule if another wall-side store ever needs a block.
 
 **Truth vs belief is structural.** The subsurface truth model stays `internal`
 to `OGSim.Information`; nothing else can reach it. Initial world beliefs cross
