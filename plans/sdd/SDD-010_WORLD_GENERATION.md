@@ -287,12 +287,31 @@ on a reload: regenerate, restore, and assert the world matches the one saved.
 > generated data with decided data in the same three lists, and a restore cannot
 > simply replay the second kind.
 >
-> **That is a seam to fix before the owner is written, not around it.** Either
-> placement moves behind a door that records who placed it, or the scenario path
-> (§4b's declared known field) becomes a distinguishable kind of placement that a
-> save can replay. Writing the owner first would mean guessing which entries in
-> those lists a load should recreate — and a guess there restores a world subtly
-> unlike the one saved, which is the failure mode this whole arc has been about.
+> **That is a seam to fix before the owner is written, not around it.** Writing
+> the owner first would mean guessing which entries in those lists a load should
+> recreate — and a guess there restores a world subtly unlike the one saved,
+> which is the failure mode this whole arc has been about.
+>
+> **The seam is a BOUNDARY, not a flag per entry.** Generation runs once, at
+> creation, before a game has done anything; every placement after it is a
+> decision. So `WorldState` records the count of prospects standing when
+> generation finished — one `int`, set by the same door the generator already
+> comes through (`WorldSink`) — and everything at or beyond that index is a
+> decision a save replays:
+>
+> ```text
+> [0 .. generated)   the generator's, reproduced by regenerating from the seed
+> [generated .. n)   declared in play — §4b's known field, and any later
+>                    placement — captured and replayed in order
+> ```
+>
+> A per-entry flag would say the same thing less well: it invites a placement
+> that is somehow both, and it leaves the ordering question open. The boundary
+> cannot, because generation is finished before the first tick.
+>
+> **A hand-placed fixture falls out correctly with no special case** — nothing
+> generated, so the boundary is zero and every prospect is a decision, which is
+> exactly what those scenarios are.
 
 ## 5. Test mapping
 
