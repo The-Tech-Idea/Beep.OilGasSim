@@ -276,10 +276,23 @@ narrowed to say so.
 
 **What the owner carries** — `world.decisions`, in Layer 4 beside the other
 composition-owned blocks: the header coordinate if one has been placed, and the
-prospect↔compartment links `DeclareKnownField` and a discovery create. **What it
-must NOT carry** is anything the generator produces, and the test that keeps it
-honest is PV7 turned on a reload: regenerate, restore, and assert the world
-matches the one saved.
+prospect↔compartment links `Found` creates. **What it must NOT carry** is
+anything the generator produces, and the test that keeps it honest is PV7 turned
+on a reload: regenerate, restore, and assert the world matches the one saved.
+
+> **The split is clean in principle and NOT clean in the code, which is the
+> implementation note this section needs.** `DeclareKnownField` both PLACES a
+> prospect — appending to `_prospects`, `_at` and `_capacity`, the same lists the
+> generator fills — and LINKS it through `Found`. So one object interleaves
+> generated data with decided data in the same three lists, and a restore cannot
+> simply replay the second kind.
+>
+> **That is a seam to fix before the owner is written, not around it.** Either
+> placement moves behind a door that records who placed it, or the scenario path
+> (§4b's declared known field) becomes a distinguishable kind of placement that a
+> save can replay. Writing the owner first would mean guessing which entries in
+> those lists a load should recreate — and a guess there restores a world subtly
+> unlike the one saved, which is the failure mode this whole arc has been about.
 
 ## 5. Test mapping
 
