@@ -237,6 +237,50 @@ public sealed record WorldParameters(
 > Capacity is the one quantity every structure has, so it is the one a survey can
 > sharpen before anybody drills.
 
+## 4c. Reloading a generated world (R20d.12, finding 195)
+
+**A generated game cannot be reloaded at all today.** `WorldState` is not an
+`IStateOwner`, so where the structures are, which prospect became which field
+and where the header went up reach no container. Hand-placed fixtures are
+unaffected — everything the rebuild reads from the world is absent in their
+original runs too — which is exactly why the save arc got as far as it did
+without noticing.
+
+**The split, and it is not what PSD2 appears to say.** What this module holds
+divides cleanly:
+
+```text
+regenerable   surface, harbours, climate, jurisdictions, prospects, their
+              positions and capacities — a pure function of the world seed,
+              which PV7 already asserts
+decisions     where the HEADER went up; which prospect a discovery turned into
+              which compartment — things the GAME did, reproducible from
+              nothing
+```
+
+**So a load regenerates and then restores the decisions**, rather than storing a
+heightfield. The seed is already in the header (§2), the generator is already
+called by `CreateNew`, and PV7 is already the guarantee that running it again
+gives the same world — a save that stored the terrain would be storing a
+function of a number it also stores, and every future generator change would
+silently fork old saves from new ones.
+
+**Design 11 §6's PSD2 recommends (a) store the generated truth**, on the
+grounds that "the world can be *modified* in play (production changes reservoir
+state), so regeneration alone is insufficient". **Read closely, that reasoning is
+about the SUBSURFACE and not the surface** — production changes compartment
+state, which `subsurface.compartments` has stored since R20c.7. Nothing in play
+moves a harbour. So regenerating the surface and storing the decisions honours
+PSD2's intent rather than contradicting it, and PSD2's wording should be
+narrowed to say so.
+
+**What the owner carries** — `world.decisions`, in Layer 4 beside the other
+composition-owned blocks: the header coordinate if one has been placed, and the
+prospect↔compartment links `DeclareKnownField` and a discovery create. **What it
+must NOT carry** is anything the generator produces, and the test that keeps it
+honest is PV7 turned on a reload: regenerate, restore, and assert the world
+matches the one saved.
+
 ## 5. Test mapping
 
 R15-V1 (PV7 identity) · V2 (substreams) · V3/MB5 (size log-normality emerges
