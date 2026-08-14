@@ -1606,6 +1606,13 @@ public static class EngineBuilder
             // (SDD-001 §4's eight named streams).
             ready.Engine.Provided.Resolve<IRandomSource>().Stream(StreamId.WorldGen));
 
+        // AND THE LINE IS DRAWN HERE (SDD-010 §4c). Everything the generator has
+        // just placed is a function of the seed and is regenerated on load;
+        // everything placed after this moment is a decision the game made and is
+        // replayed from the save. Sealed at the one instant both statements are
+        // true — after generation, before the first tick.
+        ready.Engine.Provided.Resolve<WorldState>().SealGeneration();
+
         return built;
     }
 

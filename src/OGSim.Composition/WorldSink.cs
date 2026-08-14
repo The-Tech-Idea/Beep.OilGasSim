@@ -183,28 +183,95 @@ public sealed class WorldState : IStateOwner
         // spot unusable the day a basin puts a field there.
         writer.WriteInt64("has-header", _header is null ? 0L : 1L);
 
-        if (_header is not Coordinate header) return;
+        if (_header is Coordinate header)
+        {
+            writer.WriteDouble("header-x", header.X);
+            writer.WriteDouble("header-y", header.Y);
+        }
 
-        writer.WriteDouble("header-x", header.X);
-        writer.WriteDouble("header-y", header.Y);
+        // THE BOUNDARY (SDD-010 §4c). Generation runs once, before a game has
+        // done anything, so everything placed at or beyond this index is a
+        // DECISION and everything before it is a function of the seed. One int
+        // rather than a flag per entry: a flag invites a placement that is
+        // somehow both and leaves the ordering open, and a boundary cannot.
+        writer.WriteInt64("generated", _generated);
+        writer.WriteInt64("placed", _prospects.Count - _generated);
+
+        for (int i = _generated; i < _prospects.Count; i++)
+        {
+            string at = "placement."
+                + (i - _generated).ToString("D4", System.Globalization.CultureInfo.InvariantCulture)
+                + ".";
+
+            writer.WriteDouble(at + "x", _at[i].X);
+            writer.WriteDouble(at + "y", _at[i].Y);
+            writer.WriteDouble(at + "capacity", _capacity[i].CubicMetres);
+
+            // The field it was found in, if it has been. A prospect placed and
+            // not yet drilled is a legitimate state and says so with a flag.
+            bool found = _found.TryGetValue(
+                _prospects[i], out EntityId<IReservoirCompartmentEntity> compartment);
+
+            writer.WriteInt64(at + "found", found ? 1L : 0L);
+
+            if (found) writer.WriteInt64(at + "compartment", (long)compartment.Value);
+        }
     }
+
+    /// <summary>
+    /// How many prospects the GENERATOR placed — the line between what a reload
+    /// regenerates and what it replays (SDD-010 §4c).
+    ///
+    /// <para>Sealed once, by the door generation already comes through. A
+    /// hand-placed scenario never calls it, so its boundary is zero and every
+    /// prospect is a decision — which is exactly what those scenarios are.</para>
+    /// </summary>
+    internal void SealGeneration() => _generated = _prospects.Count;
+
+    private int _generated;
 
     public void Restore(IStateReader reader)
     {
         ArgumentNullException.ThrowIfNull(reader);
 
-        if (reader.ReadInt64("has-header") == 0L)
-        {
-            _header = null;
-            return;
-        }
-
         // Assigned directly rather than through HeaderAt, which is write-once by
         // design (`??=`): a restore is allowed to set what a game has already
         // decided, and going through the one-way door would silently keep
         // whatever a rebuild had put there first.
-        _header = new Coordinate(
-            reader.ReadDouble("header-x"), reader.ReadDouble("header-y"));
+        _header = reader.ReadInt64("has-header") == 0L
+            ? null
+            : new Coordinate(reader.ReadDouble("header-x"), reader.ReadDouble("header-y"));
+
+        // THE GENERATED PROSPECTS ARE ALREADY THERE — regenerated from the seed
+        // by the same generator that made them, which PV7 guarantees reproduces
+        // them exactly. A save that stored them would be storing a function of a
+        // number it also stores. What is replayed is what the GAME placed.
+        long generated = reader.ReadInt64("generated");
+
+        if (generated != _generated)
+            throw new SaveDataFault("SDD-010 §4c", null,
+                $"the save was generated with {generated} prospects and this engine " +
+                $"regenerated {_generated}; the world would be restored onto a basin that " +
+                "is not the one it was played on");
+
+        long placed = reader.ReadInt64("placed");
+
+        for (long i = 0; i < placed; i++)
+        {
+            string at = "placement."
+                + i.ToString("D4", System.Globalization.CultureInfo.InvariantCulture) + ".";
+
+            // IN ORDER, so the ids fall out rather than being assigned: `Place`
+            // numbers a prospect from the count standing, exactly as the well
+            // rebuild relies on `NextWellId` doing.
+            EntityId<IProspect> prospect = Place(
+                new Coordinate(reader.ReadDouble(at + "x"), reader.ReadDouble(at + "y")),
+                new ReservoirVolume(reader.ReadDouble(at + "capacity")));
+
+            if (reader.ReadInt64(at + "found") != 0L)
+                Found(prospect, new EntityId<IReservoirCompartmentEntity>(
+                    (ulong)reader.ReadInt64(at + "compartment")));
+        }
     }
 
     /// <summary>
