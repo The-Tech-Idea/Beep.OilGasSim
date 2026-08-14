@@ -109,11 +109,26 @@ defined one-tick lag, not a circular dependency).
 nothing implements it (finding 188). What a host actually holds is the
 `Engine` record from `EngineBuilder.cs` — `Pipeline`, `Commands`, `Audit`,
 `Events`, `State`, `Provided`, `ReadModel` — which is most of the same surface
-under different names and is what every test and both clients use. The members
-with no counterpart there are `World`, `Events(tick)` and **`WriteSave`, which
-is implemented nowhere**: no path in `src/` writes or reads a save, so every
-`IStateOwner.Capture`/`Restore` is exercised only by its own unit test. Do not
-assume a save round-trip is covered because a module has persistence code.
+under different names and is what every test and both clients use. `IEngine`
+stays unimplemented for a reason that has nothing to do with saving: its
+`ReadModel` is SDD-017 §2's fifteen-projection record and eleven of those have
+no source until R20d wires their subsystems in, so adopting it today would mean
+fabricating them (R20d.12.0). It waits on R21.6.
+
+**The save is `SaveGame` in composition, not `WriteSave`** (R20d.12). It walks
+every `IStateOwner` in state-key order, writes SDD-013 §1's container, and loads
+by composing a NEW engine, rebuilding the field from the save, and restoring
+into it. **A reloaded game continues identically for two years** on every read-
+model field but `Chain` (`PV2_a_saved_game_reloaded_continues_identically`).
+Building it found **twenty facts that no block carried** — a compartment's drive
+and aquifer, the market price, the voidage set point and flood shares, well
+depth and chokes, six fitted tiers, tank contents, linefill, cumulative flaring
+and production, injector plugging — none of them findable by an owner's own
+round-trip test, which is what finding 188 was actually about. **So: a module
+having `Capture`/`Restore` still says nothing about whether its state survives a
+real reload**, and the way these were found is always the same — make the
+fixture DO the thing (drill, flood, shut in, *buy*), then ask the test which
+field differs.
 
 **Truth vs belief is structural.** The subsurface truth model stays `internal`
 to `OGSim.Information`; nothing else can reach it. Initial world beliefs cross
