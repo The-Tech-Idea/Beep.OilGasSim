@@ -312,6 +312,28 @@ on a reload: regenerate, restore, and assert the world matches the one saved.
 > **A hand-placed fixture falls out correctly with no special case** — nothing
 > generated, so the boundary is zero and every prospect is a decision, which is
 > exactly what those scenarios are.
+>
+> **Built at R20d.12.9, and the last step is a REGENERATION CALL that does not
+> exist yet.** `SaveGame.Load` composes through `BuildAt`, which does not
+> generate — so a generated save meets an engine holding no basin, the boundary
+> check finds N against 0, and **the load is REFUSED naming the mismatch**. That
+> is the correct failure and a deliberate one: a generated campaign that cannot
+> be reloaded is a limitation, while one restored onto an empty basin is a
+> corrupted game that looks fine.
+>
+> **Closing it needs one input the header does not carry.** Generation takes
+> `WorldParameters` (`CreateNew(settings, world)`) and a save records only the
+> seed, so `Load` cannot call the generator without them. Either the parameters
+> join the header — they are a scenario's declaration and a handful of numbers —
+> or `LoadSave` takes them from the caller, as `IEngineFactory` already shapes it
+> for content (SDD-017 §1b). **The first is better**: a save that needed a caller
+> to remember which world it was would put the burden exactly where PR5's
+> "loading without them fails explicitly" says it must not be.
+>
+> **Then the test §4c asks for becomes possible, and not before**: regenerate,
+> restore, assert the `WorldView` matches the one saved. PV7 today asserts a seed
+> reproduces a world; it says nothing about regenerate-then-restore, and those
+> are different claims.
 
 ## 5. Test mapping
 
