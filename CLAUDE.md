@@ -117,8 +117,22 @@ fabricating them (R20d.12.0). It waits on R21.6.
 
 **The save is `SaveGame` in composition, not `WriteSave`** (R20d.12). It walks
 every `IStateOwner` in state-key order, writes SDD-013 §1's container, and loads
-by composing a NEW engine, rebuilding the field from the save, and restoring
-into it. **A reloaded game continues identically for two years** on every read-
+by composing a NEW engine, **regenerating the basin** from the seed and the
+parameters in `world.decisions` (SDD-010 §4c.1 — the surface is a function of
+the seed and is never stored), rebuilding the field from the save, and restoring
+into it.
+
+**The restore ORDER is not the capture order and is hand-maintained** in
+`SaveGame.Restore`: regenerate → subsurface → world → rebuild the wells → every
+remaining owner in key order. The world is early because reopening a well lays a
+gathering line measured to the header, which lives in that block. S013-5 replaces
+this list with design 11 §2.1's declared topological order.
+
+**To find out which subsystem failed a reload, diff the digests.** Save the
+reloaded engine at the same tick and compare `Header.ModuleDigests` per module —
+the container already digests each block separately, so it names the culprit in
+one comparison. If they all match and the game still diverges, the state is in
+no owner at all and the search moves to live objects (finding 201). **A reloaded game continues identically for two years** on every read-
 model field but `Chain` (`PV2_a_saved_game_reloaded_continues_identically`).
 Building it found **twenty-two facts that no block carried** — a compartment's
 drive and aquifer, the market price, the voidage set point and flood shares,
