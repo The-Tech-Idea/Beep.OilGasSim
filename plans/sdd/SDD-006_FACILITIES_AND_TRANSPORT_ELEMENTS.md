@@ -721,9 +721,17 @@ mass is deliberately NOT saved: `ForgetPromises` runs at the top of every tick
 before anything reserves against it, so it is scratch within a month rather than
 state across one, which is §4's never-saved rule applied rather than assumed.
 
-**Everything §8b names is now carried.** What remains outside it is the
-`CustodyTransferPoint` and the `Flare`, neither of which has been examined for
-carried state.
+**Everything §8b names is now carried, and the last two elements were EXAMINED
+rather than assumed clean.** `Flare` holds nothing mutable at all — its capacity
+and combustion efficiency are readonly and what it has burned accumulates in the
+production loop's `CumulativeFlared`, which is saved. `CustodyTransferPoint`
+holds `LastBreaches`, and it is assigned on every `Transform` before it is read,
+so it is a report of the month just solved rather than state carried into the
+next one: per-tick scratch, and §4's never-saved rule applies.
+
+**The sweep is therefore closed rather than merely finished** — every element on
+the chain has been looked at, and the two that carry nothing say so here so the
+next reader does not have to check again.
 
 **The fixture is part of the specification, not an afterthought.** PV2 today
 drills and floods and never INSTALLS, which is why it passes while all of this
