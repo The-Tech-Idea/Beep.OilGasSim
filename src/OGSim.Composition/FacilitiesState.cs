@@ -41,6 +41,14 @@ internal sealed class FacilitiesState(SurfaceChain chain) : IStateOwner
         writer.WriteString("tank-tier", chain.Tank.Tier.Id.Value);
         writer.WriteString("gas-plant-tier", chain.GasPlant.Tier.Id.Value);
         writer.WriteString("treater-tier", chain.Treater.Tier.Id.Value);
+
+        // WHAT THE CHAIN IS HOLDING, as distinct from what it IS. A line
+        // restored empty delivers its first month's oil out of nowhere (§6's V7
+        // term), and an intake restored at zero stops buying the water a flood
+        // was ordered to put back.
+        Inventory(writer, "linefill", chain.Flowline.Linefill);
+
+        writer.WriteDouble("intake-commanded", chain.Intake.Commanded.CubicMetresPerSecond);
     }
 
     public void Restore(IStateReader reader)
@@ -66,7 +74,40 @@ internal sealed class FacilitiesState(SurfaceChain chain) : IStateOwner
         chain.Treater.Fit(
             Rung(Defaults.TreaterLadder, reader.ReadString("treater-tier"), "treater",
                  tier => tier.Id));
+
+        chain.Flowline.CommitLinefill(Inventory(reader, "linefill"));
+
+        chain.Intake.Command(new ReservoirRate(reader.ReadDouble("intake-commanded")));
     }
+
+    /// <summary>
+    /// An inventory, ordinal by ordinal.
+    ///
+    /// <para>By ORDINAL POSITION and with the count written, because the
+    /// catalogue assigns ordinals and a save that assumed a fixed material set
+    /// would silently re-key every mass the day one is added — which is the
+    /// failure SDD-004 §6 keeps ordinals out of content to avoid.</para>
+    /// </summary>
+    private static void Inventory(IStateWriter writer, string what, MaterialInventory held)
+    {
+        writer.WriteInt64(what + "-count", held.KilogramsByOrdinal.Length);
+
+        for (int i = 0; i < held.KilogramsByOrdinal.Length; i++)
+            writer.WriteDouble(Ordinal(what, i), held.KilogramsByOrdinal[i]);
+    }
+
+    private static MaterialInventory Inventory(IStateReader reader, string what)
+    {
+        var count = (int)reader.ReadInt64(what + "-count");
+        var kilograms = new double[count];
+
+        for (int i = 0; i < count; i++) kilograms[i] = reader.ReadDouble(Ordinal(what, i));
+
+        return MaterialInventory.Of(kilograms);
+    }
+
+    private static string Ordinal(string what, int index) =>
+        what + "." + index.ToString("D2", System.Globalization.CultureInfo.InvariantCulture);
 
     /// <summary>
     /// The export terminal's rung, owned separately because the terminal is

@@ -707,8 +707,17 @@ composition restructure and its own change; shipping the most expensive purchase
 in the catalogue unsaved while that was designed would have been the wrong
 order.
 
-**Outstanding: the four carried numbers** — a tank's contents, provenance and
-promised mass, a pipeline's linefill and an intake's commanded rate.
+**The pipeline's LINEFILL and the intake's SET POINT are carried too**, written
+ordinal by ordinal with the count beside them: the catalogue assigns ordinals
+(SDD-004 §6), so a save assuming a fixed material set would silently re-key
+every mass the day one is added. Both types already exposed a getter and a
+setter, so neither needed a member invented for persistence.
+
+**Outstanding: the TANK's contents** — held inventory, its provenance
+`Allocation` and the promised mass. The inventory is the same shape as the
+linefill; the allocation is not, and the tank exposes no way to restore either.
+That is a member per fact on `Tank` and it is specified here before it is
+written, like everything else in this section.
 
 **The fixture is part of the specification, not an afterthought.** PV2 today
 drills and floods and never INSTALLS, which is why it passes while all of this
