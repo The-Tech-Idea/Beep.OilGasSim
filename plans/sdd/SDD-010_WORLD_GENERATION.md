@@ -321,19 +321,67 @@ on a reload: regenerate, restore, and assert the world matches the one saved.
 > be reloaded is a limitation, while one restored onto an empty basin is a
 > corrupted game that looks fine.
 >
-> **Closing it needs one input the header does not carry.** Generation takes
+> **Closing it needs one input the save does not carry.** Generation takes
 > `WorldParameters` (`CreateNew(settings, world)`) and a save records only the
-> seed, so `Load` cannot call the generator without them. Either the parameters
-> join the header — they are a scenario's declaration and a handful of numbers —
-> or `LoadSave` takes them from the caller, as `IEngineFactory` already shapes it
-> for content (SDD-017 §1b). **The first is better**: a save that needed a caller
-> to remember which world it was would put the burden exactly where PR5's
-> "loading without them fails explicitly" says it must not be.
->
-> **Then the test §4c asks for becomes possible, and not before**: regenerate,
-> restore, assert the `WorldView` matches the one saved. PV7 today asserts a seed
-> reproduces a world; it says nothing about regenerate-then-restore, and those
-> are different claims.
+> seed, so `Load` cannot call the generator without them. **They must come from
+> the SAVE and not from the caller**: a save that needed a host to remember which
+> world it was would put the burden exactly where PR5's "loading without them
+> fails explicitly" says it must not be.
+
+### 4c.1 Where the parameters live — R20d.12.12 amendment
+
+The paragraph above proposed the **header**, on the grounds that the parameters
+are a scenario's declaration and a handful of numbers. **They belong in
+`world.decisions` instead**, and the reason is that the objection to the block —
+that a load needs them *before* any owner is restored — turns out not to hold.
+
+`SaveGame` already reads a block without restoring it. `Rebuild` calls
+`WellsState.Saved(StateBlock.ReaderFor(...))` for exactly this situation: the
+owner cannot be told what it holds until the things it holds exist, so the
+loader reads the instructions out of the block first and lets the owner check
+its own work afterwards. `ReaderFor` exists for that, and carries no version
+check precisely because the owner performs it moments later. Regeneration is the
+same shape one step earlier.
+
+Given that door, the block is better on three counts:
+
+- **L5.** What a world was generated from is a fact *about the world*, and
+  `WorldState` is the thing that owns the boundary those parameters are one side
+  of. The header is the container's metadata — schema, engine and content
+  versions, mods, seed, tick, stream positions, digests — and every entry in it
+  is about the FILE.
+- **The container format does not move.** `SaveHeader`, `Manifest`,
+  `HeaderFrom` and `SaveFile.Validate` are untouched, so the save's schema
+  version does not turn over and no migration is owed for a change no reader of
+  the header cares about.
+- **It is digested with the world.** A block is covered by its per-module
+  digest, so tampered parameters are refused naming `world.decisions` — the same
+  refusal as tampering with the boundary they are checked against, which is the
+  right pairing since neither means anything without the other.
+
+**Recorded at the door that already seals the boundary.** `SealGeneration` is
+called from `CreateNew` at the one instant both halves of the split are true,
+and `CreateNew` is holding the `WorldParameters` when it calls it. So the seal
+takes them: `SealGeneration(parameters)`, one call, no second path for the world
+to learn what made it.
+
+**A hand-placed scenario carries none, and that is the flag.** It never seals,
+so it has no parameters, and a load regenerates only when the block says the
+world was generated — the same distinction the boundary already draws, rather
+than a second one beside it.
+
+> **One consequence to state rather than discover.** Regeneration at load runs
+> with the clock already restored to tick N, because `BuildAt` restores it before
+> the modules compose. The generator takes no clock and its beliefs are replaced
+> by the save's ([SDD-008](SDD-008_INFORMATION_AND_BELIEFS.md) §4b.1), so nothing
+> simulated differs — but its audit entries are stamped at N rather than at zero.
+> Cosmetic, and cheaper to write down than to rediscover from a trail that says a
+> basin was drawn in year forty.
+
+**Then the test §4c asks for becomes possible, and not before**: regenerate,
+restore, assert the `WorldView` matches the one saved. PV7 today asserts a seed
+reproduces a world; it says nothing about regenerate-then-restore, and those are
+different claims.
 
 ## 5. Test mapping
 

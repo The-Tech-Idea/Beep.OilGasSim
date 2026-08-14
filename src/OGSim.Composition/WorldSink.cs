@@ -197,6 +197,30 @@ public sealed class WorldState : IStateOwner
         writer.WriteInt64("generated", _generated);
         writer.WriteInt64("placed", _prospects.Count - _generated);
 
+        // AND WHAT THE GENERATOR WAS ASKED FOR (SDD-010 §4c.1). Without it a load
+        // cannot call the generator at all, so a generated save met an engine
+        // holding no basin and was refused — correctly, and uselessly. Here
+        // rather than on the header because what a world was generated from is a
+        // fact about the WORLD, and every entry on the header is about the file.
+        writer.WriteInt64("has-parameters", _from is null ? 0L : 1L);
+
+        if (_from is WorldParameters from)
+        {
+            writer.WriteString("gen-template", from.Template.Value);
+            writer.WriteInt64("gen-width", from.WidthCells);
+            writer.WriteInt64("gen-height", from.HeightCells);
+            writer.WriteDouble("gen-land-fraction", from.LandFraction);
+            writer.WriteDouble("gen-richness", from.ResourceRichness);
+            writer.WriteDouble("gen-maturity", from.BasinMaturity);
+            writer.WriteDouble("gen-climate-severity", from.ClimateSeverity);
+            writer.WriteInt64("gen-rivals", from.RivalCount);
+
+            // The era by NAME. An ordinal would re-key silently the day an era is
+            // inserted into the enum, and a save would open a game in the wrong
+            // technological age with every field still present.
+            writer.WriteString("gen-era", EraName(from.StartEra));
+        }
+
         for (int i = _generated; i < _prospects.Count; i++)
         {
             string at = "placement."
@@ -220,15 +244,91 @@ public sealed class WorldState : IStateOwner
 
     /// <summary>
     /// How many prospects the GENERATOR placed — the line between what a reload
-    /// regenerates and what it replays (SDD-010 §4c).
+    /// regenerates and what it replays (SDD-010 §4c) — and WHAT IT WAS GENERATED
+    /// FROM, which is the input a reload needs to regenerate at all (§4c.1).
     ///
-    /// <para>Sealed once, by the door generation already comes through. A
-    /// hand-placed scenario never calls it, so its boundary is zero and every
-    /// prospect is a decision — which is exactly what those scenarios are.</para>
+    /// <para>Sealed once, by the door generation already comes through, and
+    /// taking the parameters here because the caller is holding them at exactly
+    /// this instant. A second path for the world to learn what made it would be a
+    /// second place for the two to disagree.</para>
+    ///
+    /// <para>A hand-placed scenario never calls this, so its boundary is zero,
+    /// its parameters are absent, and every prospect is a decision — which is
+    /// exactly what those scenarios are, and is why the absence is the flag a
+    /// load reads rather than a second one beside it.</para>
     /// </summary>
-    internal void SealGeneration() => _generated = _prospects.Count;
+    internal void SealGeneration(WorldParameters from)
+    {
+        ArgumentNullException.ThrowIfNull(from);
+
+        _generated = _prospects.Count;
+        _from = from;
+    }
 
     private int _generated;
+
+    private WorldParameters? _from;
+
+    /// <summary>
+    /// What the world was generated from, or null for a world nobody generated —
+    /// read WITHOUT restoring, because the basin has to exist before the owner
+    /// that describes it can be told anything (SDD-010 §4c.1, design 11 §2.1).
+    ///
+    /// <para>The same door <c>WellsState.Saved</c> opens one step later, and here
+    /// for the same reason: the block's key spelling has one owner, and a loader
+    /// that read <c>"gen-template"</c> for itself would be a second place for this
+    /// format to be written down (law L5).</para>
+    ///
+    /// <para>Null is a legitimate answer and not a missing field. A hand-placed
+    /// scenario generated nothing, so there is nothing to regenerate — which is
+    /// why the flag is written even when the parameters are not.</para>
+    /// </summary>
+    public static WorldParameters? GeneratedFrom(IStateReader reader)
+    {
+        ArgumentNullException.ThrowIfNull(reader);
+
+        if (reader.ReadInt64("has-parameters") == 0L) return null;
+
+        return new WorldParameters(
+            new ContentId(reader.ReadString("gen-template")),
+            (int)reader.ReadInt64("gen-width"),
+            (int)reader.ReadInt64("gen-height"),
+            reader.ReadDouble("gen-land-fraction"),
+            reader.ReadDouble("gen-richness"),
+            reader.ReadDouble("gen-maturity"),
+            reader.ReadDouble("gen-climate-severity"),
+            (int)reader.ReadInt64("gen-rivals"),
+            EraNamed(reader.ReadString("gen-era")));
+    }
+
+    /// <summary>
+    /// The era, spelled out both ways rather than reflected over. `Enum.TryParse`
+    /// reads a name through the runtime's own table, which makes the SAVE FORMAT
+    /// a consequence of how the enum happens to be written — rename a member and
+    /// every existing save stops loading, silently and only for players who had
+    /// one. Two explicit maps put the format under this file's control and make
+    /// that rename a compile error instead.
+    /// </summary>
+    private static string EraName(Era era) => era switch
+    {
+        Era.E1 => "E1",
+        Era.E2 => "E2",
+        Era.E3 => "E3",
+        Era.E4 => "E4",
+        _ => throw new InvariantFault("SDD-010 §4c.1", null,
+            $"era {era} has no name in the save format"),
+    };
+
+    private static Era EraNamed(string name) => name switch
+    {
+        "E1" => Era.E1,
+        "E2" => Era.E2,
+        "E3" => Era.E3,
+        "E4" => Era.E4,
+        _ => throw new SaveDataFault("SDD-010 §4c.1", null,
+            $"the save was generated in era '{name}', which this build does not declare; " +
+            "regenerating it in another age would place a world the game never played"),
+    };
 
     public void Restore(IStateReader reader)
     {

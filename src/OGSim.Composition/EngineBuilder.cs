@@ -1611,7 +1611,12 @@ public static class EngineBuilder
         // everything placed after this moment is a decision the game made and is
         // replayed from the save. Sealed at the one instant both statements are
         // true — after generation, before the first tick.
-        ready.Engine.Provided.Resolve<WorldState>().SealGeneration();
+        // AND WHAT IT WAS DRAWN FROM travels with the line (SDD-010 §4c.1),
+        // because a reload has to call this same generator with the same
+        // parameters and the save is the only thing that can tell it what they
+        // were. Recorded here rather than anywhere else for the same reason the
+        // boundary is: this is the one instant the caller is holding both.
+        ready.Engine.Provided.Resolve<WorldState>().SealGeneration(world);
 
         return built;
     }

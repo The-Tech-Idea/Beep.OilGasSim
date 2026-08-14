@@ -9,6 +9,7 @@ using OGSim.Composition;
 using OGSim.Contracts;
 using OGSim.Company;
 using OGSim.Kernel;
+using OGSim.Persistence;
 using OGSim.ReferenceClient;
 
 namespace OGSim.Composition.Tests;
@@ -59,12 +60,18 @@ public sealed class NewGameTests
     /// mean these tests silently stop asking their question the first time step 6
     /// is tuned.
     /// </summary>
-    private static Engine BasinWithSeveralProspects()
+    private static Engine BasinWithSeveralProspects() => NewGame(SeedOfBasinWithSeveralProspects());
+
+    /// <summary>
+    /// The seed itself, because a SAVE needs it — <see cref="SaveGame.Write"/> is
+    /// told which world it is writing, and a test that walked seeds and kept only
+    /// the engine could not say.
+    /// </summary>
+    private static ulong SeedOfBasinWithSeveralProspects()
     {
         for (ulong seed = 1UL; seed < 40UL; seed++)
         {
-            Engine engine = NewGame(seed);
-            WorldState world = WorldOf(engine);
+            WorldState world = WorldOf(NewGame(seed));
 
             var discoveries = 0;
 
@@ -72,7 +79,7 @@ public sealed class NewGameTests
                 if (world.DistanceToMarket(world.Prospects[i]) is not null
                     && world.Beneath(world.Prospects[i]) is not null) discoveries++;
 
-            if (discoveries > 1) return engine;
+            if (discoveries > 1) return seed;
         }
 
         throw new InvalidOperationException(
@@ -80,6 +87,119 @@ public sealed class NewGameTests
     }
 
     // ------------------------------------------------- the world reaches the engine
+
+    /// <summary>
+    /// SDD-010 §4c's test, which was not possible until R20d.12.12: REGENERATE,
+    /// RESTORE, AND ASSERT THE WORLD IS THE ONE THAT WAS SAVED.
+    ///
+    /// <para>A generated campaign could not be reloaded AT ALL before this. The
+    /// save deliberately stores no heightfield — the surface is a pure function of
+    /// the seed, and storing it would fork old saves from new ones on every
+    /// generator change — but `Load` composes through `BuildAt`, which does not
+    /// generate. So a generated save met an engine holding no basin and the
+    /// boundary check refused it: N prospects against zero. Correct, and useless
+    /// (finding 195).</para>
+    ///
+    /// <para>PV7 says a seed reproduces a world. This says something else, and the
+    /// difference is the whole point: that regenerating and THEN restoring
+    /// decisions on top of it gives back the game that was played. The two are
+    /// separate claims and only one of them was ever asserted.</para>
+    ///
+    /// <para>What is compared is deliberately not the prospect list alone.
+    /// `DistanceToMarket` is a function of where a structure sits AND where the
+    /// harbours are, so comparing it for every prospect asks whether the SURFACE
+    /// came back — the part of the world that is never stored. `Beneath` asks the
+    /// other half: which structures charge reached, and which discovery the game
+    /// turned into which compartment.</para>
+    /// </summary>
+    [Fact]
+    public void R20d8V5_a_generated_world_reloads_as_the_world_it_was()
+    {
+        ulong seed = SeedOfBasinWithSeveralProspects();
+
+        Engine original = NewGame(seed);
+        WorldState before = WorldOf(original);
+
+        // DEVELOP ONE, so the save carries decisions as well as a basin: drilling
+        // places the header, lays the gathering line, and gives the reload
+        // something to be wrong about.
+        original.Provided.Resolve<FieldControl>()
+            .Drill(before.Beneath(Discovery(before, 0))!.Value, new Length(2000.0));
+
+        Fixture.Run(original, months: 12);
+
+        var container = new MemoryStream();
+        SaveGame.Write(original, seed, container);
+        container.Position = 0;
+
+        // THE HEADLINE: it loads. This was a refusal until the regeneration call
+        // existed, and the refusal was the correct behaviour of an engine that
+        // could not do this at all.
+        Engine reloaded = Assert.IsType<Built>(
+            SaveGame.Load(container, Fixture.Settings())).Engine;
+
+        // WHICH BLOCK DID NOT COME BACK. Saving the reloaded engine at the same
+        // tick and diffing per-module digests names the subsystem outright — the
+        // container already digests every block separately, so the answer is one
+        // comparison rather than an investigation.
+        var again = new MemoryStream();
+        SaveGame.Write(reloaded, seed, again);
+        again.Position = 0;
+
+        container.Position = 0;
+        var one = Assert.IsType<Loaded>(SaveGame.Read(container));
+        var two = Assert.IsType<Loaded>(SaveGame.Read(again));
+
+        var blocksApart = new List<string>();
+
+        foreach (KeyValuePair<string, string> digest in one.Header.ModuleDigests)
+            if (!two.Header.ModuleDigests.TryGetValue(digest.Key, out string? theirs)
+                || !string.Equals(digest.Value, theirs, StringComparison.Ordinal))
+                blocksApart.Add(digest.Key);
+
+        Assert.True(blocksApart.Count == 0,
+            "blocks that did not survive the reload: " + string.Join(", ", blocksApart));
+
+        WorldState after = WorldOf(reloaded);
+
+        Assert.NotEmpty(after.Prospects);
+        Assert.Equal(before.Prospects.Count, after.Prospects.Count);
+
+        for (var i = 0; i < before.Prospects.Count; i++)
+        {
+            EntityId<IProspect> prospect = before.Prospects[i];
+
+            Assert.Equal(prospect, after.Prospects[i]);
+            Assert.Equal(before.PositionOf(prospect), after.PositionOf(prospect));
+
+            // The surface, asked indirectly: no harbour, no distance.
+            Assert.Equal(before.DistanceToMarket(prospect), after.DistanceToMarket(prospect));
+
+            // And what charge reached — including the one this game drilled.
+            Assert.Equal(before.Beneath(prospect), after.Beneath(prospect));
+        }
+
+        // CONTINUATION IS DELIBERATELY NOT ASSERTED HERE, and the reason is worth
+        // more than the check would be.
+        //
+        // Ticking both engines on shows the reloaded field producing LESS WATER
+        // in the very first month — `water-disposal` throughput 233,955 against
+        // 3,644 — so more of the same fluid is oil and revenue, royalty and tax
+        // all follow it. Every state block above is byte-identical, so this is
+        // not a field the save has lost: it is state no owner holds (S013-9,
+        // finding 201).
+        //
+        // It is the SAME divergence PV2 already admits as its one exception,
+        // arriving sooner. There it appears in a later month as `throughput` on
+        // `water-disposal`; a hand-built fixture takes years to break through,
+        // while a generated compartment carries a real water cut from the start.
+        //
+        // So asserting continuation here would either fail on a known open item
+        // or, admitted, quietly green-light it in a second place. The claim this
+        // test makes is the one it can prove outright: a generated world
+        // regenerates, restores, and comes back identical in every fact anything
+        // owns. The continuation claim belongs with S013-9 and lands when it does.
+    }
 
     /// <summary>
     /// THE FINDING, stated as its opposite. A new game has compartments nobody

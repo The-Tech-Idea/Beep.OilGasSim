@@ -26,6 +26,7 @@
 // the half that carries the GAME and saying so beats shipping neither.
 
 using System.IO.Compression;
+using OGSim.Contracts;
 using OGSim.Kernel;
 using OGSim.Persistence;
 
@@ -272,7 +273,30 @@ public static class SaveGame
     /// </summary>
     private static void Restore(Engine engine, Loaded loaded)
     {
+        Regenerate(engine, loaded);
+
         RestoreOwner(engine, loaded, SubsurfaceKey);
+
+        // AND THE WORLD, BEFORE THE FIELD IS REBUILT. `OpenWell` lays a gathering
+        // line of `_world.DistanceToHeaderOf(drains) ?? MinimumGatheringRun`, and
+        // the header is in THIS block — so restored in key order it arrived after
+        // the wells that had already measured against it, and every reopened
+        // well's tieback fell to the floor.
+        //
+        // NO TEST PINS THIS, and the reason is worth stating rather than leaving
+        // for someone to rediscover. A gathering line is a live flow element
+        // built at reopen time and held in no block, so the per-module digests
+        // cannot see its length; and the header is placed at the FIRST field a
+        // company develops, so a game with one field measures zero metres to it
+        // and reads the same either way. Distinguishing the two orderings needs a
+        // second field away from the header AND a way to observe a tieback's
+        // length, and the engine exposes neither today (finding 201).
+        //
+        // Corrected from reading `OpenWell` rather than from a failing test,
+        // which is the weaker justification of the two and is why it is written
+        // down. It belongs to S013-5's declared topological order, where the
+        // dependency would be stated once instead of maintained here by hand.
+        RestoreOwner(engine, loaded, WorldKey);
 
         Rebuild(engine, loaded);
 
@@ -298,6 +322,52 @@ public static class SaveGame
     }
 
     /// <summary>
+    /// Draws the basin again, from the seed and the parameters the save carries
+    /// (SDD-010 §4c.1) — the step whose absence made a generated campaign
+    /// unloadable (finding 195).
+    ///
+    /// <para>FIRST, before anything is restored, because everything after it
+    /// assumes the world exists: the subsurface block replaces the compartments
+    /// generation just made, the rebuild measures a gathering line from a field
+    /// to a header, and the world's own block checks its boundary against the
+    /// count standing here.</para>
+    ///
+    /// <para>The streams are at ZERO at this moment — <c>BuildAt</c> composes a
+    /// fresh <c>RandomSource</c> — so the generator consumes `worldGen` from the
+    /// same position the original run did and PV7's guarantee applies unchanged.
+    /// Seeking every stream to its saved position happens afterwards, which is
+    /// the only order in which both are true.</para>
+    ///
+    /// <para>A world nobody generated regenerates nothing and says so by carrying
+    /// no parameters — a hand-placed scenario declared its field outright, and
+    /// there is no basin behind it to draw.</para>
+    /// </summary>
+    private static void Regenerate(Engine engine, Loaded loaded)
+    {
+        if (WorldState.GeneratedFrom(
+                StateBlock.ReaderFor(BlockFor(loaded, WorldKey))) is not WorldParameters from)
+            return;
+
+        var world = engine.Provided.Resolve<WorldState>();
+
+        engine.Provided.Resolve<IWorldGenerator>().Generate(
+            from,
+            new WorldSink(
+                engine.Provided.Resolve<FieldControl>(),
+                engine.Provided.Resolve<IBeliefStore>(),
+                world,
+                engine.Provided.Resolve<OGSim.Information.ProspectRisks>()),
+            engine.Provided.Resolve<IRandomSource>().Stream(StreamId.WorldGen));
+
+        // SEALED AGAIN, exactly as creation seals it, so the boundary the world's
+        // own block is about to be checked against is the one this engine just
+        // drew rather than the one the save asserts. A mismatch between them is
+        // the refusal that has to survive: it means this build's generator no
+        // longer draws the basin the save was played on.
+        world.SealGeneration(from);
+    }
+
+    /// <summary>
     /// Rebuilds the field the save describes: every well reopened through the
     /// path that drilled it, in the order the save lists them.
     ///
@@ -317,10 +387,14 @@ public static class SaveGame
             field.Reopen(wells[i].Id, wells[i].Drains, wells[i].TotalDepth);
     }
 
-    /// <summary>The owner the field is measured against, restored before it is
-    /// rebuilt and skipped when the rest are.</summary>
+    /// <summary>The owners the field is measured against, restored before it is
+    /// rebuilt and skipped when the rest are — the subsurface it drains and the
+    /// world it is sited in. Both are DISTANCES a reopened well needs in hand,
+    /// and a hand-maintained list of them is exactly what S013-5 replaces with
+    /// the declared topological order design 11 §2.1 asks for.</summary>
     private static bool IsRestoredEarly(string key) =>
-        string.Equals(key, SubsurfaceKey, StringComparison.Ordinal);
+        string.Equals(key, SubsurfaceKey, StringComparison.Ordinal)
+        || string.Equals(key, WorldKey, StringComparison.Ordinal);
 
     private static void RestoreOwner(Engine engine, Loaded loaded, string key)
     {
@@ -372,6 +446,8 @@ public static class SaveGame
     private const string SubsurfaceKey = "subsurface.compartments";
 
     private const string WellsKey = "wells.completions";
+
+    private const string WorldKey = "world.decisions";
 
     // ------------------------------------------------------- the manifest
 
