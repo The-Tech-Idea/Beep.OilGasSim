@@ -452,6 +452,23 @@ internal sealed class ProductionLoop : IStateOwner
         // the bank lends against. A reload reset both to zero, so a
         // forty-year field came back with the flaring record of a new one
         // (S013-9).
+        // WHAT THE CHAIN DELIVERED LAST TICK, and it is state rather than
+        // scratch for one reason: design 03 §6.1's DECLARED LAG. Stage 4 ages
+        // equipment on the service it has HAD, so last month's rates are an
+        // input to next month — and a reloaded field read zeroes and aged itself
+        // for a month as though it were dry (S013-9, measured at a cut of
+        // 7.77e-6 against 0).
+        //
+        // SAVED AT ITS SOURCE, not at its ratio. `WaterCut` is derived from this
+        // and saving the cut as well would give one fact two owners (L5); the
+        // cut stays a property and this is what it reads.
+        writer.WriteInt64("delivered-count", Defaults.MaterialCount);
+
+        for (var i = 0; i < Defaults.MaterialCount; i++)
+            writer.WriteDouble(
+                "delivered." + i.ToString("D2", System.Globalization.CultureInfo.InvariantCulture),
+                Delivered[new MaterialId(i)].KgPerSecond);
+
         writer.WriteDouble("cumulative-flared", CumulativeFlared.Kilograms);
         writer.WriteDouble("cumulative-produced", CumulativeProduced.CubicMetres);
 
@@ -482,6 +499,15 @@ internal sealed class ProductionLoop : IStateOwner
         VoidageReplacement = reader.ReadDouble("voidage-replacement");
         _voidageLastTick = reader.ReadDouble("voidage-last-tick");
         _producedWaterLastTick = reader.ReadDouble("produced-water-last-tick");
+
+        var materials = (int)reader.ReadInt64("delivered-count");
+        var delivered = new double[materials];
+
+        for (var i = 0; i < materials; i++)
+            delivered[i] = reader.ReadDouble(
+                "delivered." + i.ToString("D2", System.Globalization.CultureInfo.InvariantCulture));
+
+        Delivered = OGSim.Kernel.Composition.Validated([.. delivered]);
 
         CumulativeFlared = new Mass(reader.ReadDouble("cumulative-flared"));
         CumulativeProduced = new SurfaceVolume(reader.ReadDouble("cumulative-produced"));

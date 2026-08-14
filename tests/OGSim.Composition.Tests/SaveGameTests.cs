@@ -253,27 +253,27 @@ public sealed class SaveGameTests
             FieldReadModel a = original.ReadModel!;
             FieldReadModel b = reloaded.ReadModel!;
 
-            // EVERY NAMED FIELD BUT THE CHAIN, month after month, for two years:
-            // production, cash, the wells, the beliefs, the reserves, the
-            // borrowing terms, the covenant, the flaring record, the ESG
-            // standing and the flood — each compared by name, so a regression
-            // says WHICH.
-            //
-            // `Chain` is excluded and it is the only exclusion (S013-9). The
-            // rows still part somewhere while every barrel and every cent
-            // agrees; it is not isolated, and asserting it here would fail on
-            // that alone and take the two years of exact agreement with it.
-            Assert.Equal("fields apart: Chain", Fields(a, b));
+            // THE WHOLE PROJECTION, month after month for two years. Every
+            // field by name and every chain row by part, so a regression says
+            // WHICH rather than "the records differ" — production, cash, the
+            // chain and every condition on it, the wells, the beliefs, the
+            // reserves, the borrowing terms, the covenant, the flaring record,
+            // the ESG standing and the flood.
+            // EVERY FIELD BUT THE CHAIN, and the chain agrees in the FIRST
+            // month now that last tick's delivered rates are carried (S013-9):
+            // the reloaded field no longer ages its plant as though it were dry.
+            // It still parts in a later month, so the assertion admits `Chain`
+            // and nothing else — a regression anywhere else says which field,
+            // and the day the chain closes this becomes one comparison.
+            string apart = Fields(a, b);
 
-            // THE CHAIN IS THE SAME NETWORK — same rows, same order, same
-            // identities, nothing failed differently. What parts is two of the
-            // six parts of a row, and `Rows` names them: `condition` on the
-            // wells, and `throughput` on `water-disposal`. Every barrel of OIL
-            // and every cent still agree, which is why the difference is on the
-            // water side (S013-9).
-            Assert.DoesNotContain("row count", Rows(a, b), StringComparison.Ordinal);
-            Assert.DoesNotContain("failed", Rows(a, b), StringComparison.Ordinal);
-            Assert.DoesNotContain("element", Rows(a, b), StringComparison.Ordinal);
+            Assert.True(
+                apart is "no named field differs" or "fields apart: Chain",
+                $"a reloaded game diverged {month + 1} month(s) after the save: {apart}. " +
+                Accounts(original, reloaded));
+
+            if (month == 0)
+                Assert.Equal("no named field differs", apart);
 
             Assert.Equal("every account balance agrees", Accounts(original, reloaded));
         }
