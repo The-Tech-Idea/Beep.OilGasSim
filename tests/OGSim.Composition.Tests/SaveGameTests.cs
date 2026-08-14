@@ -47,10 +47,45 @@ public sealed class SaveGameTests
             Defaults.Wettability, Defaults.Drive,
             Defaults.AquiferStrength, Defaults.AquiferResponseTime);
 
-        engine.Provided.Resolve<WorldState>().DeclareKnownField(
-            target, new ReservoirVolume(100.0e6));
+        EntityId<IProspect> prospect = engine.Provided.Resolve<WorldState>()
+            .DeclareKnownField(target, new ReservoirVolume(100.0e6));
 
         for (var well = 0; well < 3; well++) field.Drill(target, new Length(2000.0));
+
+        // AND LEARN SOMETHING. This fixture drilled, flooded, shut wells in and
+        // bought equipment, and it never SURVEYED — so the belief store was empty
+        // on both sides of every reload and `Beliefs` compared equal at nothing.
+        // Two years of month-by-month comparison said the company remembered what
+        // it had paid to learn, and the company had paid to learn nothing
+        // (finding 198). A survey is the one activity a company with nothing
+        // drilled can order, and it puts a belief in the store this month.
+        // AND PUT IT ON A PLAY, so the survey has a risk to move as well as a
+        // belief (SDD-008 §4). Registered by hand because `DeclareKnownField` is
+        // the scenario door and carries no exploration risk of its own; in a
+        // GENERATED world the sink registers every prospect it places, and this
+        // stands in for that until a generated world can be reloaded at all
+        // (finding 195). What follows is the real path either way: the survey
+        // moves Trap on the prospect and Reservoir on the play, so both halves of
+        // the block hold something other than the opening prior.
+        var risks = engine.Provided.Resolve<OGSim.Information.ProspectRisks>();
+        var play = new ContentId("test-play");
+
+        risks.Register(
+            new EntityRef(EntityKind.Prospect, prospect.Value), play, trapConfidence: 0.6);
+
+        // AND A SECOND STRUCTURE ON THE SAME PLAY, which is the only way a save
+        // can be asked whether the play CORRELATION survived. One prospect cannot
+        // tell a bound Beta from a copied one — evidence against its own seal
+        // moves either — and a restore that rebuilt the share as a snapshot would
+        // pass every value comparison while quietly making the campaign a series
+        // of independent bets (SDD-008 §4). Registered rather than placed: a basin
+        // puts dozens of structures on one play, and what the risk set is keyed by
+        // is the reference, not whether this hand-built fixture drilled it.
+        risks.Register(
+            new EntityRef(EntityKind.Prospect, prospect.Value + 1UL), play,
+            trapConfidence: 0.4);
+
+        engine.Commands.Submit(new SeismicSurveyCommand(prospect));
 
         engine.Pipeline.AdvanceTick();
 
@@ -238,6 +273,13 @@ public sealed class SaveGameTests
 
         Assert.Equal(original.Pipeline.CurrentTick, reloaded.Pipeline.CurrentTick);
 
+        // THE FIXTURE DID THE THING, asserted rather than assumed. `Beliefs` was
+        // in the comparison below from the first version of this test and it
+        // agreed every month for two years because both sides were EMPTY — the
+        // check was true and vacuous, which is the worst state for a check to be
+        // in (finding 198). This is what makes the one below mean something.
+        Assert.NotEmpty(original.ReadModel!.Beliefs);
+
         // A LOADED ENGINE HAS NO READ MODEL UNTIL IT TICKS, by design: the
         // projection is built at the close of a month, and a game that has not
         // run one has nothing to show. So both are compared after each tick,
@@ -277,6 +319,110 @@ public sealed class SaveGameTests
 
             Assert.Equal("every account balance agrees", Accounts(original, reloaded));
         }
+    }
+
+    /// <summary>
+    /// PV2-B (SDD-008 §4b.4). A COMPANY THAT SURVEYS, RELOADS, AND STILL KNOWS
+    /// IT — belief for belief, in the order it learned them.
+    ///
+    /// <para>Everything the store holds was bought: a survey, a well test, a log,
+    /// a core, a dry hole that re-priced a play. None of it is a function of the
+    /// seed, none of it can be recomputed, and none of it was in a save until
+    /// R20d.12.10 — so a reloaded company was solvent, drilled, producing, and
+    /// had forgotten every survey it had ever paid for.</para>
+    ///
+    /// <para>Against <c>Held</c> rather than the projection, deliberately: the
+    /// read model publishes P10/P50/P90 and NOT Mu and Sigma (SDD-008 §8), so two
+    /// stores could project identically while carrying different parameters —
+    /// and it is the parameters the next observation combines against. This
+    /// compares what the next month will actually use.</para>
+    ///
+    /// <para>ORDER IS PART OF THE FACT. §3's <c>Held</c> is ordered by first
+    /// learning and the stage-13 projection walks it, so a restore that rebuilt
+    /// the same SET in a different order would give a host a belief list that
+    /// reshuffled itself across a reload.</para>
+    /// </summary>
+    [Fact]
+    [Trait("Speed", "Slow")]
+    public void PV2B_a_company_that_surveys_still_knows_it_after_a_reload()
+    {
+        (Engine original, _) = Played(months: 24);
+
+        using MemoryStream container = Saved(original);
+
+        Engine reloaded = Assert.IsType<Built>(
+            SaveGame.Load(container, Fixture.Settings())).Engine;
+
+        IReadOnlyList<HeldBelief> before = original.Provided.Resolve<IBeliefStore>().Held;
+        IReadOnlyList<HeldBelief> after = reloaded.Provided.Resolve<IBeliefStore>().Held;
+
+        // A survey ran, so there is something to lose. Without this the whole
+        // test passes on two empty lists, which is how the gap survived a suite
+        // that already compared beliefs every month for two years.
+        Assert.NotEmpty(before);
+
+        Assert.Equal(before.Count, after.Count);
+
+        for (var i = 0; i < before.Count; i++)
+        {
+            Assert.Equal(before[i].Subject, after[i].Subject);
+            Assert.Equal(before[i].PropertyKind, after[i].PropertyKind);
+
+            // EXACT, not approximate. A belief is a pair of doubles written and
+            // read back through the canonical form's round-trip representation,
+            // and a tolerance here would hide precisely the loss it is there to
+            // catch — the next conjugate update weights by 1/sigma squared.
+            Assert.Equal(before[i].Belief, after[i].Belief);
+        }
+
+        // AND THE RISK SET, which is the other half of what exploration buys
+        // (SDD-008 §4b). The survey moved Trap on the prospect and Reservoir on
+        // the PLAY, so this fails in two distinguishable ways: a prospect's own
+        // Beta lost, or the shared one lost — and the second would also mean a
+        // restored prospect had stopped reading through to its play.
+        var risksBefore = original.Provided.Resolve<OGSim.Information.ProspectRisks>();
+        var risksAfter = reloaded.Provided.Resolve<OGSim.Information.ProspectRisks>();
+
+        Assert.NotEmpty(risksBefore.Known);
+        Assert.Equal(risksBefore.Known.Count, risksAfter.Known.Count);
+
+        for (var i = 0; i < risksBefore.Known.Count; i++)
+        {
+            EntityRef prospect = risksBefore.Known[i];
+
+            Assert.Equal(prospect, risksAfter.Known[i]);
+            Assert.Equal(risksBefore.PlayOf(prospect), risksAfter.PlayOf(prospect));
+
+            foreach (PosFactor factor in Enum.GetValues<PosFactor>())
+                Assert.Equal(risksBefore.Of(prospect)[factor], risksAfter.Of(prospect)[factor]);
+
+            Assert.Equal(
+                risksBefore.Of(prospect).ProbabilityOfSuccess,
+                risksAfter.Of(prospect).ProbabilityOfSuccess);
+        }
+
+        // THE PLAY IS STILL SHARED, not copied back as five loose numbers — and
+        // the check needs TWO prospects, because one cannot tell a bound Beta
+        // from a copied one. Eight wells' worth of evidence against the seal is
+        // put in through the FIRST and read back off the SECOND: only a restore
+        // that rebuilt the binding rather than a snapshot can carry it across.
+        // That is the whole content of "the play died", and a restore that lost
+        // it would pass every value comparison above while quietly turning a
+        // campaign into a series of independent bets (§4).
+        EntityRef one = risksAfter.Known[0];
+        EntityRef two = risksAfter.Known[1];
+
+        Assert.Equal(risksAfter.PlayOf(one), risksAfter.PlayOf(two));
+
+        double sealBefore = OGSim.Information.ProspectRisk.MeanOf(
+            risksAfter.Of(two)[PosFactor.Seal]);
+
+        risksAfter.Learned(one, PosFactor.Seal, present: false, weight: 8.0);
+
+        Assert.True(
+            OGSim.Information.ProspectRisk.MeanOf(risksAfter.Of(two)[PosFactor.Seal]) < sealBefore,
+            "a dry seal on one prospect did not move the other on the same play, so the " +
+            "restored prospects are holding snapshots rather than reading a shared Beta");
     }
 
     /// <summary>

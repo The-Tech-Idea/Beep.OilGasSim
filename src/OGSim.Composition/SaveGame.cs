@@ -358,15 +358,17 @@ public static class SaveGame
             "the game would be subtly not the one that was saved");
     }
 
-    // THE WORLD OWNS NO BLOCK, and that is a gap rather than an omission here
-    // (finding 195). `WorldState` holds where the structures are, which prospect
-    // became which field and where the header went up — and it is not an
-    // `IStateOwner`, so none of it is in a container. A hand-placed field is
-    // unaffected, because everything the rebuild reads from the world is absent
-    // in the original run too and the gathering line falls to its floor either
-    // way. A GENERATED world is not restorable at all: the same wells would be
-    // reopened onto runs of different lengths. Load says so rather than
-    // pretending otherwise.
+    // THE WORLD OWNS A BLOCK SINCE R20d.12.9 and a GENERATED world still cannot
+    // be loaded — both, and the second is not a leftover of the first.
+    // `world.decisions` carries where the header went up and every prospect the
+    // GAME placed, which is what a hand-built scenario is made of. What it
+    // deliberately does not carry is what GENERATION placed: SDD-010 §4c makes
+    // that a function of the seed, to be regenerated rather than stored, and this
+    // load path composes without generating. So a generated save meets
+    // `WorldState.Restore`'s boundary check — saved with N prospects, regenerated
+    // with none — and is REFUSED naming the mismatch. That is the correct failure
+    // and not a corruption; closing it needs `WorldParameters` on the header and
+    // a generation call here, which is S010's remaining item.
     private const string SubsurfaceKey = "subsurface.compartments";
 
     private const string WellsKey = "wells.completions";

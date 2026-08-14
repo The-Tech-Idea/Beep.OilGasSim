@@ -997,7 +997,7 @@ internal sealed class InformationModule() : EngineModule(Declare(
         typeof(OGSim.Information.ProspectRisks),
     ],
     requires: [typeof(IAuditTrail), typeof(IRandomSource)],
-    ownsState: NothingOwnedYet,
+    ownsState: ["information.beliefs", "information.prospect-risk"],
     stages: NoStagesYet))
 {
     public override void Compose(IModuleComposition composition)
@@ -1006,8 +1006,16 @@ internal sealed class InformationModule() : EngineModule(Declare(
 
         IAuditTrail audit = composition.Require<IAuditTrail>();
 
-        composition.Provide<IBeliefStore>(new OGSim.Information.BeliefStore(
-            audit, Defaults.SigmaFloorFor, () => new GameDate(1965, 1)));
+        // OWNED as well as provided (SDD-008 §4b). Everything this store holds
+        // was bought — surveys, well tests, logs, cores, the dry hole that
+        // re-priced a play — and none of it was in a save until R20d.12.10, so a
+        // reloaded company was solvent, drilled, producing, and had forgotten
+        // every survey it had ever paid for (finding 198).
+        var beliefs = new OGSim.Information.BeliefStore(
+            audit, Defaults.SigmaFloorFor, () => new GameDate(1965, 1));
+
+        composition.Own(beliefs);
+        composition.Provide<IBeliefStore>(beliefs);
 
         var model = new RegionalObservationModel();
         composition.Provide<IObservationModel>(model);
@@ -1016,7 +1024,13 @@ internal sealed class InformationModule() : EngineModule(Declare(
         // consumed by nobody for four phases — because a probability of success
         // is a statement about a PROSPECT and nothing generated prospects. The
         // world does now.
-        composition.Provide(new OGSim.Information.ProspectRisks(Defaults.ExplorationPrior));
+        // OWNED for the same reason the belief store is: what a play believes IS
+        // the campaign, and a reload that dropped it handed the company back its
+        // opening conviction (SDD-008 §4b).
+        var risks = new OGSim.Information.ProspectRisks(Defaults.ExplorationPrior);
+
+        composition.Own(risks);
+        composition.Provide(risks);
 
         // R14.3's sampler, COMPOSED. It existed, was tested and was provided by
         // nobody, so the first activity that measured anything sampled truth by

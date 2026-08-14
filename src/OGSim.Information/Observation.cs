@@ -124,6 +124,13 @@ public sealed class ProspectRisk
         PosFactor.Trap, PosFactor.Timing,
     ];
 
+    /// <summary>The same five, in the same order, for a save to walk
+    /// (SDD-008 §4b.3). Read from here rather than re-listed there, because two
+    /// declarations of "the five factors in order" would be free to disagree the
+    /// day a sixth arrives — and the disagreement would be a save that writes one
+    /// factor's Beta under another's key.</summary>
+    internal static IReadOnlyList<PosFactor> Declared => Factors;
+
     // Which factors belong to the play rather than to this prospect. Membership
     // is only ever asked, never enumerated (rule D-5).
     private readonly HashSet<PosFactor> _shared = [];
@@ -256,6 +263,40 @@ public sealed class ProspectRisk
         double evidence = current.Alpha + current.Beta;
 
         _factors[factor] = new FactorBelief(evidence * mean, evidence * (1.0 - mean));
+    }
+
+    /// <summary>
+    /// SDD-008 §4b.3. Puts back one factor's Beta exactly as a save recorded it.
+    ///
+    /// <para>Not <see cref="Observe"/> and not <see cref="Weigh"/>: the first
+    /// would add a well's worth of evidence to a total that already counts it,
+    /// and the second would re-apply the mapping confidence that is already
+    /// inside the α and β being restored. Both would load a company more or less
+    /// certain than the one that was saved.</para>
+    ///
+    /// <para>A SHARED factor is refused rather than written. It lives on the play
+    /// (§4), and a prospect's copy of it is exactly the stale duplicate
+    /// <see cref="ShareFrom"/> was changed from a copy to a bind to prevent.</para>
+    /// </summary>
+    internal void RestoreFactor(PosFactor factor, FactorBelief belief)
+    {
+        // The same invariant the constructor checks, reported as what it is here:
+        // a zero on either side arrives from a FILE rather than from a model, and
+        // "the save is wrong" is what a player can act on.
+        if (belief.Alpha <= 0.0 || belief.Beta <= 0.0
+            || !double.IsFinite(belief.Alpha) || !double.IsFinite(belief.Beta))
+            throw new SaveDataFault("SDD-008 §4b.3", null,
+                $"the save carries Beta({belief.Alpha}, {belief.Beta}) for factor {factor}; " +
+                "a non-positive side would freeze the factor, because no evidence could " +
+                "ever move it again");
+
+        if (_shared.Contains(factor))
+            throw new SaveDataFault("SDD-008 §4b.3", null,
+                $"the save carries factor {factor} for a prospect that shares it with its " +
+                "play; restoring it here would leave the prospect answering for a number " +
+                "the play owns");
+
+        _factors[factor] = belief;
     }
 
     private static void Validate(FactorBelief belief)

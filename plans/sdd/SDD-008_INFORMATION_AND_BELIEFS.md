@@ -310,6 +310,99 @@ entity), and appraisal continues updating them through §2.1. Nothing is thrown
 away and nothing double-counts — one belief line per fact, before and after
 the strike.
 
+## 4b. What a save carries — R20d.12.10 amendment (finding 198)
+
+Everything §2–§4 accumulates is **bought**. A survey, a well test, a log, a
+core, a dry hole that re-priced a play: each cost money, each moved a number,
+and none of it is a function of anything a reload can recompute. Until this
+amendment none of it was in a save, so a reloaded company was solvent, drilled,
+producing — and had forgotten every survey it had ever paid for.
+
+**Two owners, because there are two facts.** The belief set and the risk set
+are updated by different evidence through different rules and neither is
+derivable from the other:
+
+| Owner | Key | Holds |
+|---|---|---|
+| `BeliefStore` | `information.beliefs` | §2's held beliefs, in learning order |
+| `ProspectRisks` | `information.prospect-risk` | §4's per-play and per-prospect Betas |
+
+### 4b.1 The whole set, not a boundary
+
+[SDD-010](SDD-010_WORLD_GENERATION.md) §4c draws a line through the world:
+what generation placed is regenerated from the seed, what the game placed is
+replayed from the save. **That line cannot be drawn here**, and the reason is
+§2's update rule rather than a convenience: a belief is updated *in place*.
+A survey over a generated prospect does not append an entry — it rewrites the
+one generation created, at the index generation created it. There is no
+suffix that separates learned from generated, because the learning happens
+*inside* the generated region.
+
+So the save carries the **entire** set and a restore **replaces** the entire
+set. When a load regenerates a world (SDD-010 §4c), generation's initial
+beliefs are applied first and then overwritten by the save's — correctly, since
+the save's set already contains them plus everything learned since.
+
+### 4b.2 The wall is not opened
+
+§2 states that `Apply` is the only writer and that there is no `Set`, no
+seed-from-truth and no bulk import; the absence of the method **is** the
+enforcement. A restore is a bulk import, and it stays outside that surface:
+
+- `BeliefStore` implements `IStateOwner` **explicitly**. `Capture` and
+  `Restore` are reachable only through a reference *typed as* `IStateOwner`,
+  which is what a state registry holds and what nothing else in the engine
+  does. Every consumer holds `IBeliefStore`, whose surface is unchanged.
+- The import's source is a **prior belief set**, never truth. What a save
+  holds got there through `Apply` and no other door, so restoring it cannot
+  introduce a value the wall would have stopped.
+- Restore is not an update: it writes `(Mu, Sigma, Space, BestSource, AsOf)`
+  verbatim. Replaying through `Apply` would re-floor σ, re-combine against
+  whatever stood there, and re-stamp `AsOf` with the load date — three
+  silent corruptions of a number the player paid for.
+
+### 4b.3 Per-entry fields
+
+Both blocks are flat maps under an ordinal-sorted index prefix
+([SDD-013](SDD-013_PERSISTENCE_FORMATS.md) §3).
+
+`information.beliefs`, schema 1 — `count`, then per entry:
+
+| Field | Type | Note |
+|---|---|---|
+| `subject-kind` | int | `EntityKind`, refused if not a declared member |
+| `subject-id` | int | |
+| `kind` | string | the `ContentId` of the property |
+| `mu`, `sigma` | double | in the belief's own space |
+| `space` | int | `BeliefSpace` |
+| `source` | int | `Provenance` — the BEST contributor (§2.1), not the last |
+| `as-of-year`, `as-of-month` | int | `GameDate`; month validated 1–12 |
+
+Order is the learning order §3's `Held` guarantees, and a restore rebuilds it
+by appending in that order — so a save round-trips `Held` element for element,
+not merely as a set.
+
+`information.prospect-risk`, schema 1 — the plays first, then the prospects,
+because a prospect binds to its play's shared Beta and the play must exist to
+be bound to. Per play: its `ContentId` and five `(α, β)` pairs. Per prospect:
+its `EntityRef`, its play's `ContentId`, and the `(α, β)` of the two factors it
+owns — Trap and Timing. **Source, Reservoir and Seal are deliberately absent:**
+§4 makes them the play's Beta *read through*, and writing a prospect's copy
+would create the stale duplicate `ShareFrom` was changed from a copy to a bind
+to prevent (law L5).
+
+Restore reconstructs through the same binding `Register` performs, minus the
+trap re-weighting — the confidence a trap was mapped with is already inside the
+α/β being restored, and applying it twice would count it twice.
+
+### 4b.4 Verification
+
+**PV2-B** — a company that SURVEYS, reloads, and knows the same things. The
+existing continuation test misses this entirely and the reason generalises: its
+fixture drills, floods, shuts wells in and buys equipment, and never *learns*,
+so both sides compare equal at empty. A persistence fixture proves nothing
+about a subsystem it never exercises.
+
 ## 5. Volumetrics
 
 In-place = product of Log-space beliefs (A, h, φ, 1−Sw, 1/Boi):
@@ -400,7 +493,8 @@ samples) · V4 (floors) · V5 (provenance weighting = σ ordering) · V6 (shared
 Beta correlation) · V7 (diagnosis hard-update) · V8 (five-factor product) ·
 V9 (log-normal product moments exact) · V10 (VOI vs hand-computed two-action
 case) · V11 (`p/Z` WLS recovers G within fit σ) · V12 (BIC compartment) ·
-V13/MB4 end-to-end · V14 (detectability nothing) · R15-V10 (leak).
+V13/MB4 end-to-end · V14 (detectability nothing) · R15-V10 (leak) ·
+**PV2-B** (§4b.4 — a company that surveys, reloads and still knows it).
 
 ## 11. Open items
 
