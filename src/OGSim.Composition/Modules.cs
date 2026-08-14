@@ -996,7 +996,7 @@ internal sealed class InformationModule() : EngineModule(Declare(
         typeof(OGSim.Information.ObservationSampler),
         typeof(OGSim.Information.ProspectRisks),
     ],
-    requires: [typeof(IAuditTrail), typeof(IRandomSource)],
+    requires: [typeof(IAuditTrail), typeof(IRandomSource), typeof(SimulationClock)],
     ownsState: ["information.beliefs", "information.prospect-risk"],
     stages: NoStagesYet))
 {
@@ -1011,8 +1011,24 @@ internal sealed class InformationModule() : EngineModule(Declare(
         // re-priced a play — and none of it was in a save until R20d.12.10, so a
         // reloaded company was solvent, drilled, producing, and had forgotten
         // every survey it had ever paid for (finding 198).
+        // WHEN, FROM THE CLOCK. SDD-008 §2.1's update rule ends "AsOf = now", and
+        // this passed a literal epoch instead — so every belief the engine has
+        // ever held claimed to have been learned in January 1965, including the
+        // ones a company spent forty years and a great deal of money buying. It
+        // is player-visible: `AsOf` is one of the five fields a belief projects
+        // (§8) and it is what makes a survey shot last month distinguishable from
+        // the regional guess the game opened with. Nothing caught it because a
+        // constant is perfectly self-consistent — every belief agreed with every
+        // other, the projection was populated, the round trip was exact
+        // (finding 199).
+        //
+        // Held as ISimulationClock rather than the concrete type: `Advance` is on
+        // SimulationClock alone, so a module that reads the date this way cannot
+        // move it even by mistake.
+        ISimulationClock clock = composition.Require<SimulationClock>();
+
         var beliefs = new OGSim.Information.BeliefStore(
-            audit, Defaults.SigmaFloorFor, () => new GameDate(1965, 1));
+            audit, Defaults.SigmaFloorFor, () => clock.Date);
 
         composition.Own(beliefs);
         composition.Provide<IBeliefStore>(beliefs);

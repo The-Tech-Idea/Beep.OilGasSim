@@ -188,6 +188,37 @@ public sealed class ActivityTests
     }
 
     /// <summary>
+    /// AND IT IS DATED WHEN IT WAS LEARNED — SDD-008 §2.1's update rule ends
+    /// "AsOf = now", and until R20d.12.11 the store was built with a literal
+    /// epoch, so every belief in every game claimed January 1965 (finding 199).
+    ///
+    /// <para>The test above stops one field short of this, which is exactly how
+    /// it survived: it asserts the provenance and the space of a freshly learned
+    /// belief and not its date. A CONSTANT IS PERFECTLY SELF-CONSISTENT — every
+    /// belief agreed with every other, the projection was populated and the save
+    /// round-tripped it exactly — so nothing short of comparing it to the clock
+    /// could tell.</para>
+    ///
+    /// <para>The survey is ordered after two years have passed, because a check
+    /// made in month one would pass against the epoch as well.</para>
+    /// </summary>
+    [Fact]
+    public void A_belief_is_dated_when_it_was_learned_and_not_at_the_epoch()
+    {
+        (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled();
+
+        for (var month = 0; month < 24; month++) engine.Pipeline.AdvanceTick();
+
+        engine.Commands.Submit(new SeismicSurveyCommand(Structure(engine, target)));
+        RunToQuiet(engine);
+
+        Belief learned = BeliefAboutStructure(engine, Structure(engine, target))!.Value;
+
+        Assert.Equal(engine.ReadModel!.Date, learned.AsOf);
+        Assert.NotEqual(Fixture.Settings().Epoch, learned.AsOf);
+    }
+
+    /// <summary>
     /// The rig is not involved, so a survey runs while a well is being drilled.
     /// A company that had to choose between exploring and developing would only
     /// ever do one of them.
