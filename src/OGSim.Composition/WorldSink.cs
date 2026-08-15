@@ -558,7 +558,26 @@ public sealed class WorldSink : IWorldSink
                 // shallow trap below its own oil-water contact.
                 gasOilContact: new Length(generated.Depth.Metres - ContactStandoff),
                 oilWaterContact: new Length(generated.Depth.Metres + ContactStandoff),
-                Defaults.Wettability,
+
+                // THE ROCK CURVE CARRIES THE SATURATION THE GENERATOR DREW
+                // (SDD-003 §3.1's R20d.12.18 amendment, finding 206). This
+                // passed `Defaults.Wettability` — one fixed curve declaring an
+                // irreducible 0.30 — to every compartment in every basin, while
+                // step 7 draws a DIFFERENT oil saturation for each. So a trap
+                // generated at 0.613 was handed rock that says its water cannot
+                // fall below 0.30, and the compartment then derived a connate of
+                // 0.387 from the draw: two statements about one reservoir, and
+                // the engine believed both.
+                //
+                // Irreducible water is the rock's, so the rock is what has to
+                // say it — and a generated basin generates its rock as surely as
+                // its structures. The rest of the curve is content until
+                // generated geology emits a full rock sheet; only the endpoint
+                // the generator actually determined moves here.
+                Defaults.Wettability with
+                {
+                    ConnateWaterSaturation = 1.0 - generated.OilSaturation,
+                },
                 Defaults.Drive,
                 Defaults.AquiferStrength,
                 Defaults.AquiferResponseTime));

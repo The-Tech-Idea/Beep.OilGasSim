@@ -185,14 +185,30 @@ VALIDITY LIMIT (05 §3.1), checked AFTER the solve:
 > origin into a large relative change in a near-zero water cut. That is PV2's
 > `Chain` exception and 3,644 kg of produced water against 233,955.
 >
-> **The fix is a decision about which owner keeps the fact, and it is not made
-> here.** The rock curve is the honest candidate — irreducible water saturation
-> is a property of the rock and belongs with the Corey endpoints that use it — in
-> which case `1.0 - OilSaturation` is the derivation to delete, and world
-> generation's oil saturation becomes something that must be RECONCILED with the
-> curve a compartment is given rather than an independent draw. That reaches
-> [SDD-010](SDD-010_WORLD_GENERATION.md) §2, so it is specified before it is
-> coded rather than patched at the point where the symptom showed.
+> **DECIDED (R20d.12.18): the ROCK CURVE owns it.** Irreducible water saturation
+> is a capillary property of the rock and belongs with the Corey endpoints that
+> consume it — `krw` and `kro` are both normalised by `(Sw − swc)`, so the curve
+> cannot be evaluated without it while the compartment can perfectly well read
+> it. `Create` therefore takes `Initial.ConnateWaterSaturation` from
+> `wettability.ConnateWaterSaturation`, and `1.0 - generated.OilSaturation` is
+> deleted.
+>
+> **And the two must be RECONCILED rather than silently diverge.** A generator
+> that draws an oil saturation and a content pack that declares a curve are two
+> statements about the same reservoir: at discovery, above the transition zone,
+> initial water saturation IS the irreducible value. So `Create` refuses a pair
+> that disagrees beyond a tolerance, naming both numbers — a content fault at
+> creation, where the cause is in hand, rather than a reservoir that quietly has
+> more oil in place than its own rock curve admits. The tolerance exists because
+> the two arrive as independently-rounded decimals, not because a real
+> disagreement is acceptable.
+>
+> **Why this is not a change to [SDD-010](SDD-010_WORLD_GENERATION.md) §2.** It
+> looked as though generation's oil saturation would have to become derived. It
+> does not: generation keeps drawing it, and the guard makes an incoherent draw a
+> refusal instead of a defect. The saturation a basin generates and the rock it
+> generates are content's to keep consistent, which is what a content fault is
+> for.
 >
 > **Do not "fix" it by writing two keys into the save.** That would make the
 > reload faithful to a state that is itself wrong, and would freeze the breach

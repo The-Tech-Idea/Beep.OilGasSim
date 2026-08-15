@@ -166,6 +166,29 @@ internal sealed class SubsurfaceState : IStateOwner
             generated.Porosity, permeability, netThickness, drainageArea, rockCompressibility,
             wettability);
 
+        // ONE OWNER FOR CONNATE WATER (law L5, SDD-003 §3.1's R20d.12.18
+        // amendment, finding 206). This derived it as `1.0 - OilSaturation`
+        // while the curve carried its own `swc`, so a field generated at 0.7
+        // against a curve declaring 0.30 held 0.30000000000000004 and 0.3 — one
+        // physical fact, two doubles. The save wrote one key and restored both
+        // from it, which is how a reloaded reservoir came to produce a
+        // sixtieth of the water the original did: `krw` normalises by
+        // `(Sw − swc)`, and a producing field sits just above connate where a
+        // last-bit change in the denominator's origin is a large RELATIVE change
+        // in a near-zero cut.
+        //
+        // The rock owns it: irreducible water is capillary, and the curve cannot
+        // be evaluated without it while the compartment can simply read it.
+        if (Math.Abs(1.0 - generated.OilSaturation - wettability.ConnateWaterSaturation)
+            > ConnateAgreementTolerance)
+            throw new ContentFault("SDD-003 §3.1", null,
+                "this compartment is generated at oil saturation " +
+                $"{Number(generated.OilSaturation)}, which leaves " +
+                $"{Number(1.0 - generated.OilSaturation)} of water, and its rock curve " +
+                $"declares an irreducible {Number(wettability.ConnateWaterSaturation)}. " +
+                "At discovery, above the transition zone, those are the same number — so " +
+                "these are two statements about one reservoir and they disagree");
+
         var contacts = new ContactSet(gasOilContact, oilWaterContact);
 
         var id = new EntityId<IReservoirCompartmentEntity>(++_nextId);
@@ -187,7 +210,7 @@ internal sealed class SubsurfaceState : IStateOwner
             PoreVolume: generated.PoreVolume,
             GasInPlace: new StandardGasVolume(0.0),
             GasCapRatio: 0.0,
-            ConnateWaterSaturation: 1.0 - generated.OilSaturation,
+            ConnateWaterSaturation: wettability.ConnateWaterSaturation,
             WaterCompressibility: WaterCompressibility,
             Mass: InPlace.Empty(materialCount: 0));
 
@@ -432,6 +455,17 @@ internal sealed class SubsurfaceState : IStateOwner
     /// </summary>
     internal SurfaceVolume TrueOilInPlaceOf(EntityId<IReservoirCompartmentEntity> compartment) =>
         Find(compartment).Initial.OilInPlace;
+
+    /// <summary>
+    /// How far apart a generated oil saturation and a declared irreducible one
+    /// may be before they are describing different reservoirs. They arrive as
+    /// independently-rounded decimals, so the two agree to about a part in 10^15
+    /// when content is coherent — this admits that and nothing wider.
+    /// </summary>
+    private const double ConnateAgreementTolerance = 1.0e-9;
+
+    private static string Number(double value) =>
+        value.ToString("R", System.Globalization.CultureInfo.InvariantCulture);
 
     private ReservoirCompartment Find(EntityId<IReservoirCompartmentEntity> compartment) =>
         _byId.TryGetValue(compartment, out ReservoirCompartment? found)

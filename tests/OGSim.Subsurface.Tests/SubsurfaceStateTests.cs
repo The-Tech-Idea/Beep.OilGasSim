@@ -263,33 +263,29 @@ public sealed class SubsurfaceStateTests
         // PV2 has admitted as its one exception, and the reason six families of
         // hypothesis were eliminated before this: every state block is identical,
         // because the difference was never IN a block (finding 206).
-        // THEY DO NOT AGREE, AND THE REASON IS AN L5 BREACH RATHER THAN
-        // ARITHMETIC (finding 206). Connate water saturation has TWO owners: the
-        // compartment derives `Initial.ConnateWaterSaturation` as
-        // `1.0 - generated.OilSaturation`, and the rock's relative-permeability
-        // curve carries its own `swc` from content. For this fixture those are
-        // 1.0 - 0.7 and 0.30 — the same number in decimal and NOT the same
-        // double.
+        // THEY AGREE TO THE LAST BIT, and getting here took closing an L5 breach
+        // rather than anything about the save (finding 206).
         //
-        // The save writes one `swc` key from the compartment and restores BOTH
-        // from it, so a reloaded compartment has the two agreeing where the
-        // original had them differing. Everything else round-trips exactly: the
-        // blocks are byte-identical and the solved pressure matches to the last
-        // bit. Only the curve moves.
+        // Connate water saturation had TWO OWNERS: the compartment derived
+        // `Initial.ConnateWaterSaturation` as `1.0 - generated.OilSaturation`
+        // while the rock's curve carried its own `swc` from content. For a field
+        // generated at 0.7 against a curve declaring 0.30 those are
+        // 0.30000000000000004 and 0.3 — one physical fact, two doubles. `Capture`
+        // wrote one `swc` key and `Restore` read it into BOTH, so a reloaded
+        // compartment had them agreeing where the original had them differing.
         //
-        // It matters because `krw` normalises by `(Sw - swc) / (1 - swc - sor)`
-        // and this reservoir sits just above connate, so a last-bit change in the
-        // denominator's origin is a large RELATIVE change in a near-zero water
-        // cut — which is how it becomes 3,644 kg of produced water against
-        // 233,955 in a composed engine, and why every state block compared equal
-        // while the game played differently.
-        Assert.NotEqual(before, after);
-
-        // Bounded, so this pins the size of the effect rather than merely its
-        // existence: a change that made it WORSE would still fail here.
-        Assert.True(Math.Abs(before - after) / before < 1.0e-9,
-            $"the gap between {before:R} and {after:R} is wider than a last-bit disagreement " +
-            "in one input can explain, so something beyond finding 206 has changed");
+        // THE SAVE NEVER LOST A VALUE. It unified two that were never equal,
+        // which is why every state block compared byte-identical while a
+        // reloaded game played differently — and why the digest diff, the
+        // stream-position check and the double-reload self-consistency test were
+        // all structurally unable to find it. `krw` normalises by
+        // `(Sw − swc)`, and a producing field sits just above connate where a
+        // last-bit change in the denominator's origin is a large RELATIVE change
+        // in a near-zero cut: 3,644 kg of produced water against 233,955.
+        //
+        // Exact equality, not a tolerance. A tolerance here would have hidden the
+        // original defect completely — the gap it produced was 2e-13 relative.
+        Assert.Equal(before, after);
 
         // The pressure, exactly — it depends on the cumulative volumes and not on
         // the curve, and those DO round-trip. Stated to keep the finding narrow:

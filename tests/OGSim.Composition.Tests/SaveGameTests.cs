@@ -307,15 +307,16 @@ public sealed class SaveGameTests
             // It still parts in a later month, so the assertion admits `Chain`
             // and nothing else — a regression anywhere else says which field,
             // and the day the chain closes this becomes one comparison.
+            // EVERY FIELD, WITH NO EXCEPTION ADMITTED (R20d.12.18). `Chain` was
+            // allowed to differ here for as long as this test existed, and the
+            // reason turned out not to be the save at all: connate water
+            // saturation had two owners that disagreed in the last bit, and the
+            // container faithfully recorded one of them (finding 206). With one
+            // owner the chain agrees, so the admission is withdrawn rather than
+            // left standing as a licence for the next divergence.
             string apart = Fields(a, b);
 
-            Assert.True(
-                apart is "no named field differs" or "fields apart: Chain",
-                $"a reloaded game diverged {month + 1} month(s) after the save: {apart}. " +
-                Accounts(original, reloaded));
-
-            if (month == 0)
-                Assert.Equal("no named field differs", apart);
+            Assert.Equal("no named field differs", apart);
 
             Assert.Equal("every account balance agrees", Accounts(original, reloaded));
         }

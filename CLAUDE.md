@@ -157,8 +157,11 @@ reconstructs (a `Completion` is rebuilt by `Drill` from four saved fields plus
 the rock). When everything matches and the game still diverges, that is the
 answer, not a dead end: the state is outside the container entirely, and the
 search moves to live objects and to design 03 §6.1's one-tick lag — a freshly
-loaded engine's first tick has no previous tick to read (finding 201, S013-9). **A reloaded game continues identically for two years** on every read-
-model field but `Chain` (`PV2_a_saved_game_reloaded_continues_identically`).
+loaded engine's first tick has no previous tick to read (finding 201, S013-9). **A reloaded game continues identically for two years** on EVERY read-model
+field, with no exception admitted (`PV2_a_saved_game_reloaded_continues_identically`).
+`Chain` was allowed to differ until R20d.12.18, and the cause was never the
+save: connate water saturation had two owners disagreeing in the last bit and
+the container faithfully recorded one of them (finding 206).
 Building it found **twenty-two facts that no block carried** — a compartment's
 drive and aquifer, the market price, the voidage set point and flood shares,
 well depth and chokes, six fitted tiers, tank contents, linefill, cumulative
