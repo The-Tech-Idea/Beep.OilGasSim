@@ -14,8 +14,15 @@ code and is still authoritative. **The engine now runs.** Sixteen projects under
 `src/` compose into a playable field — a world is generated, prospects are
 drilled, a chain of surface equipment moves the fluid, a market moves under it, a
 bank lends against reserves, equipment wears out and breaks, and two headless
-clients play the whole arc through `ReadModel` + `Commands` alone. Around 965
-tests across fifteen suites, 0 warnings.
+clients play the whole arc through `ReadModel` + `Commands` alone. Around 995
+tests across sixteen suites, 0 warnings.
+
+**Treat every count in this file as stale until you have checked it.** Three
+were wrong when last verified — this one, and two in `MASTER_TRACKER.md` that
+understated the command surface and the read model by roughly threefold. They
+are all hand-counts, nothing re-derives them, and they drift silently because
+no test can fail for a number written in prose. `dotnet test` answers the first
+one in one command; the others are a `grep` over the manifests.
 
 `plans/MASTER_TRACKER.md` is the only reliable statement of what is built and
 what is next — it is updated with every task and this file is not.
