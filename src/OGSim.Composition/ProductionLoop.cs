@@ -1238,6 +1238,16 @@ internal sealed class ProductionLoop : IStateOwner
         Exported = lifted.Total;
     }
 
+    /// <summary>
+    /// What the tank holds and what room is left in it (R21 §2.4b, R21.6).
+    ///
+    /// <para>Read from the tank rather than tracked here: the tank owns its
+    /// inventory and its capacity, and a second copy on the loop would be one
+    /// more thing to forget (law L5). Projected each tick like everything else
+    /// the read model carries.</para>
+    /// </summary>
+    public StorageView Storage => new(_tank.Held.Total, _tank.Ullage);
+
     /// <summary>Everything this company has ever flared (SDD-012 §4).</summary>
     public Mass CumulativeFlared { get; private set; }
 

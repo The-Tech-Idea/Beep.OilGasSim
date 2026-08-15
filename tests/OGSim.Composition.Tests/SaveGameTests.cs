@@ -157,6 +157,12 @@ public sealed class SaveGameTests
         Check("EsgStanding", a.EsgStanding.Equals(b.EsgStanding));
         Check("Flood", a.Flood == b.Flood);
 
+        // Added with the projection rather than after it. A read-model field PV2
+        // does not compare is a field a reload may silently lose — which is how
+        // `Beliefs` agreed for two years while both sides were empty
+        // (finding 198).
+        Check("Storage", a.Storage == b.Storage);
+
         return apart.Count == 0
             ? "no named field differs"
             : "fields apart: " + string.Join(", ", apart);

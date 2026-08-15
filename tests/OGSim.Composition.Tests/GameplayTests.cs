@@ -710,4 +710,46 @@ public sealed class GameplayTests
             $"drilling ({active.ReadModel.Cash.Cents}c) must beat sitting still " +
             $"({idle.ReadModel.Cash.Cents}c) — otherwise the decision is not a decision");
     }
+
+    /// <summary>
+    /// R21.6 / R21 §2.4b row 5. WHAT THE FIELD IS HOLDING, AND THE ROOM LEFT.
+    ///
+    /// <para>The table has required tank levels and ullage since it was written
+    /// and nothing published them, so a host could see a cash balance and not
+    /// whether the company was poor or merely illiquid — the same gap finding
+    /// 190 records from the cash-flow side, and the reason any mechanic that
+    /// defers revenue currently reads as a failure to the opening scenario
+    /// (SDD-006 §7a.2).</para>
+    ///
+    /// <para>Asserted as a RELATIONSHIP rather than against a number, because a
+    /// figure copied from a run is a test of nothing: held plus ullage is the
+    /// tank's capacity by construction, and a producing field with an export
+    /// line that cannot keep up must be holding something.</para>
+    /// </summary>
+    [Fact]
+    public void R21V6_the_read_model_publishes_what_the_tank_holds_and_its_ullage()
+    {
+        (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled();
+
+        for (var well = 0; well < 3; well++)
+        {
+            while (engine.ReadModel is null || engine.ReadModel.ActivitiesRunning > 0)
+                engine.Pipeline.AdvanceTick();
+
+            engine.Commands.Submit(Drill(engine, target));
+        }
+
+        Fixture.Run(engine, months: 24);
+
+        StorageView storage = engine.ReadModel!.Storage;
+
+        Assert.True(storage.Ullage.Kilograms > 0.0,
+            "a tank with no room left would have shut this field in; the fixture is not " +
+            "measuring a producing field");
+
+        Assert.Equal(
+            Defaults.TankTier.Capacity.Kilograms,
+            storage.Held.Kilograms + storage.Ullage.Kilograms,
+            precision: 6);
+    }
 }

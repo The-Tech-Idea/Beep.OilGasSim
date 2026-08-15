@@ -159,6 +159,15 @@ public sealed record WaterFloodView(
     /// </summary>
     double Sourness);
 
+/// <summary>
+/// R21 §2.4b — what the field holds and what room is left (R21.6).
+///
+/// <para>Both, because either alone is unreadable: a mass held says nothing
+/// about whether the field is about to shut itself in, and ullage alone says
+/// nothing about what is waiting to be sold.</para>
+/// </summary>
+public readonly record struct StorageView(Mass Held, Mass Ullage);
+
 public sealed record FieldReadModel(
     Tick Tick,
     GameDate Date,
@@ -278,7 +287,25 @@ public sealed record FieldReadModel(
     /// is an acid job rather than a bigger number. A player shown only the
     /// target could not tell which they had.</para>
     /// </summary>
-    WaterFloodView Flood)
+    WaterFloodView Flood,
+
+    /// <summary>
+    /// What the field is HOLDING and what room is left to hold it — R21 §2.4b's
+    /// "tank levels and ullage", which that table has required since it was
+    /// written and nothing published (R21.6).
+    ///
+    /// <para>A cash balance says what the company has been PAID; this says what
+    /// it has produced and not yet sold. The two are different questions and
+    /// only the first was answerable, so a host could not distinguish a company
+    /// that is poor from one that is merely illiquid — which is the same gap
+    /// finding 190 records from the cash-flow side, and the reason any mechanic
+    /// that defers revenue currently reads as a failure (SDD-006 §7a.2).</para>
+    ///
+    /// <para>Ullage rather than capacity, because what a player acts on is the
+    /// room left: a tank at 90% and a tank at 10% of a vessel ten times the size
+    /// hold the same oil and are in completely different trouble.</para>
+    /// </summary>
+    StorageView Storage)
 {
     /// <summary>Where the chain is jammed, if anywhere — the elements that
     /// refused production this tick.</summary>
@@ -351,7 +378,8 @@ internal sealed class FieldProjection(
             Defaults.Record.Standing(loop.CumulativeFlared, loop.CumulativeProduced),
             new WaterFloodView(
                 loop.VoidageReplacement, loop.ImportedThisTick, loop.InjectionHeadroom,
-                loop.SourFraction));
+                loop.SourFraction),
+            loop.Storage);
 
     /// <summary>
     /// The undrilled structures, in the order the world placed them (D-5).
