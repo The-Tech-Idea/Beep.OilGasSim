@@ -551,6 +551,16 @@ internal sealed class ProductionLoop : IStateOwner
     private double _importedThisTick;
 
     /// <summary>
+    /// A number as the trail carries it: round-trip ("R"), invariant, never
+    /// rounded for display. An audit value is evidence a player checks against
+    /// the formula (design 09 §4.2), and a figure formatted for reading is one
+    /// they cannot — which is the same rule the canonical save form applies for
+    /// the same reason.
+    /// </summary>
+    private static string Recorded(double value) =>
+        value.ToString("R", System.Globalization.CultureInfo.InvariantCulture);
+
+    /// <summary>
     /// What the injector will still take this month once the produced water has
     /// had its share.
     ///
@@ -748,8 +758,42 @@ internal sealed class ProductionLoop : IStateOwner
         }
 
         for (int i = 0; i < report.Deferrals.Count; i++)
+        {
             Flowing(report.Deferrals[i].Element)
                 .Refuse(report.Deferrals[i].Kind, report.Deferrals[i].Deferred);
+
+            // AND IT GOES IN THE TRAIL, which is the fairness record for the one
+            // question a player will actually argue with: why did my field make
+            // less oil this month? `ChainElementView.Deferred` already publishes
+            // this, and a projection cannot answer it — it is a snapshot of the
+            // current tick, so it never speaks about month 214, and it carries no
+            // cause chain (design 09 §4.2–4.3, finding 202).
+            //
+            // NOTHING IN THE ENGINE WROTE A `ConstraintBinding` BEFORE THIS.
+            // SDD-001 §5 names the category in the retention partition as
+            // per-tick per-element detail, and 09 §4.4's pruning computes a cause
+            // closure over it so that "the tick-4 constraint that explains a
+            // tick-400 shut-in" survives — machinery built, tested against
+            // hand-made entries, and joined to nothing the engine produced.
+            //
+            // HERE rather than at the close: this is where the deferral is known,
+            // and it runs once per segment because the solve did. The publish
+            // loop looks like the tidier home and is the wrong one — it builds
+            // the READ MODEL, so recording there would put a side effect in a
+            // rebuild-from-state and write twice over anything that asked for the
+            // chain twice.
+            _audit.Record(
+                AuditCategory.ConstraintBinding,
+                new EntityRef(EntityKind.FlowElement, report.Deferrals[i].Element.Value),
+                cause: null,
+                new Dictionary<string, AuditValue>(StringComparer.Ordinal)
+                {
+                    ["element"] = new(_names(report.Deferrals[i].Element)),
+                    ["kind"] = new(report.Deferrals[i].Kind.ToString()),
+                    ["deferred-kg"] = new(Recorded(report.Deferrals[i].Deferred.Kilograms)),
+                    ["segment-seconds"] = new(Recorded(seconds)),
+                });
+        }
 
         // WHAT THE FIELD HANDLED, from the completions' own sourced mass: every
         // barrel that came up the hole, whether it was sold, flared or disposed

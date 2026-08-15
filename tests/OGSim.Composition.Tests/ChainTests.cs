@@ -782,6 +782,63 @@ public sealed class ChainTests
         Assert.Equal(ConstraintKind.Ullage, Assert.Single(tank.Deferred).Kind);
     }
 
+    /// <summary>
+    /// Design 09 §4.2–4.3. WHY DID MY FIELD MAKE LESS OIL? — asked of the trail,
+    /// which is where a player can still ask it in month 214.
+    ///
+    /// <para>Nothing in the engine wrote a `ConstraintBinding` before R20d.27
+    /// (finding 202). The category is declared, SDD-001 §5 names it in the
+    /// retention partition as per-tick per-element detail, and 09 §4.4's pruning
+    /// computes a cause closure over it so that "the tick-4 constraint that
+    /// explains a tick-400 shut-in" survives — machinery built, unit-tested
+    /// against hand-made entries, and joined to nothing the engine produced.</para>
+    ///
+    /// <para>THE READ MODEL IS NOT A SUBSTITUTE, which is why this is asserted
+    /// separately from the test above rather than folded into it.
+    /// <c>ChainElementView.Deferred</c> publishes the same deferral, but it is a
+    /// snapshot of the tick just closed: it answers "what is binding now" and can
+    /// never answer "what bound in month 214". A trail entry is the durable,
+    /// queryable, cause-chainable form of the same fact.</para>
+    /// </summary>
+    [Fact]
+    public void R20d27V1_a_constraint_that_held_production_back_is_in_the_trail()
+    {
+        (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled();
+
+        for (var well = 0; well < 6; well++) Produce(engine, target);
+
+        engine.Pipeline.AdvanceTick();
+
+        IReadOnlyList<AuditEntry> bound = engine.Audit.Query(
+            new AuditQuery(null, AuditCategory.ConstraintBinding, null, null));
+
+        Assert.NotEmpty(bound);
+
+        // THE ELEMENT AND THE AMOUNT, because "something bound" is not an answer
+        // a player can act on. The separator is what binds an E1 field, which the
+        // test above establishes through the read model — this asks the trail the
+        // same question and requires the same answer.
+        Assert.Contains(bound, entry =>
+            entry.Data.TryGetValue("element", out AuditValue named)
+            && named.Value == "separator");
+
+        AuditEntry separator = bound.First(entry =>
+            entry.Data["element"].Value == "separator");
+
+        // A SUBJECT, so 09 §3's "everything for this element on tick 132" is a
+        // filter rather than a text search over the data.
+        Assert.NotNull(separator.Subject);
+        Assert.Equal(EntityKind.FlowElement, separator.Subject!.Value.Kind);
+
+        // And a real mass, round-trip formatted: an audit value is evidence to
+        // check against the formula, so a figure rounded for display would be one
+        // a player cannot verify.
+        Assert.True(
+            double.Parse(separator.Data["deferred-kg"].Value,
+                System.Globalization.CultureInfo.InvariantCulture) > 0.0,
+            "a constraint recorded as binding deferred nothing, which is not a constraint");
+    }
+
     // ------------------------------------------------------------- the header
 
     /// <summary>
