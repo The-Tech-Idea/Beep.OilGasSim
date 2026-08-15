@@ -78,12 +78,12 @@ though it settled lifetime.
   Retention computes the cause closure that keeps a prunable entry alive when
   something durable depends on it; a save writing the unpruned trail would be a
   second retention policy.
-    ⚠ AND THERE IS NO RETAINED TRAIL YET. `AuditTrail.Prune()` is called by
-      nothing in the engine (finding 207), so retention is configured and inert
-      and the trail is unbounded. S013-4 depends on that caller existing —
-      written here because this line, as first drafted, assumed a bound that
-      does not exist and would have sent an implementer to write a sidecar from
-      a trail nobody had pruned.
+    (There was no retained trail when this was first written: `Prune` was called
+      by nothing and retention was configured and inert — finding 207. The
+      pipeline prunes at the tick boundary since R20d.12.21, so the bound this
+      line assumes now exists. Kept as a note because the assumption was made
+      before it was true, which is how a spec comes to depend on machinery
+      nobody had wired up.)
 · PV1 and PV2 are untouched. The trail is outside the digest, so byte-identity
   is unaffected; it is outside the read model, so continuation identity is too.
 ```

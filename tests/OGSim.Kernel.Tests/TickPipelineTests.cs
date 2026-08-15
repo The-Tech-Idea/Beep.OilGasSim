@@ -317,4 +317,49 @@ public class TickPipelineTests
         Assert.Equal(4, quarters);
         Assert.Equal(1, years);
     }
+
+    /// <summary>
+    /// Finding 207. THE TRAIL IS PRUNED AT THE TICK BOUNDARY, which nothing in
+    /// the engine did until R20d.12.21.
+    ///
+    /// <para>Design 09 §4.4's retention was implemented, CONFIGURED — an
+    /// `AuditRetention` is built with a detail window and handed to the trail at
+    /// composition — and tested, and `Prune` was called by nothing outside its
+    /// own unit tests. A forty-year game kept every entry it ever wrote.</para>
+    ///
+    /// <para>A window of ONE tick, so the effect is visible in a handful of
+    /// ticks rather than needing forty years: per-tick detail written long ago
+    /// goes, and what design 09 §4.4 calls durable — state transitions,
+    /// financial events, faults — stays however old it is.</para>
+    /// </summary>
+    [Fact]
+    public void R1V7_the_pipeline_prunes_the_trail_at_the_tick_boundary()
+    {
+        var clock = new SimulationClock(new GameDate(1965, 1));
+        var events = new EventBus(clock);
+        var trail = new AuditTrail(clock, new AuditRetention(DetailWindowTicks: 1));
+        var log = new Log(new NullSink(), LogLevel.Warning);
+
+        var pipeline = new TickPipeline(
+            clock, events, trail, new StrictFaultPolicy(log, trail), log, []);
+
+        // One of each: a per-tick detail that retention may discard, and a
+        // financial event that it may not.
+        trail.Record(AuditCategory.ConstraintBinding, null, null,
+            new Dictionary<string, AuditValue>(StringComparer.Ordinal) { ["x"] = new("1") });
+
+        trail.Record(AuditCategory.Financial, null, null,
+            new Dictionary<string, AuditValue>(StringComparer.Ordinal) { ["y"] = new("2") });
+
+        Assert.Equal(2, trail.Count);
+
+        // Far enough past the window that the detail is no longer recent.
+        for (var tick = 0; tick < 5; tick++) pipeline.AdvanceTick();
+
+        Assert.Equal(1, trail.Count);
+
+        Assert.Equal(
+            AuditCategory.Financial,
+            Assert.Single(trail.Query(new AuditQuery(null, null, null, null))).Category);
+    }
 }
