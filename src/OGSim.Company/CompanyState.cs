@@ -37,6 +37,9 @@ public sealed class CompanyState : IStateOwner
 
     public int SchemaVersion => 1;
 
+    /// <summary>Nothing has to be back before this is (SDD-013 §2b).</summary>
+    public IReadOnlyList<StateKey> RestoreAfter => [];
+
     public void Capture(IStateWriter writer)
     {
         ArgumentNullException.ThrowIfNull(writer);

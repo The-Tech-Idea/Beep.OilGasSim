@@ -218,6 +218,9 @@ public sealed class BeliefStore : IBeliefStore, IStateOwner
 
     int IStateOwner.SchemaVersion => 1;
 
+    /// <summary>Nothing has to be back before this is (SDD-013 §2b).</summary>
+    IReadOnlyList<StateKey> IStateOwner.RestoreAfter => [];
+
     void IStateOwner.Capture(IStateWriter writer)
     {
         ArgumentNullException.ThrowIfNull(writer);

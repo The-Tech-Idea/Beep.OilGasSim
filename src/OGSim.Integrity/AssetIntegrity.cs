@@ -207,6 +207,9 @@ public sealed class AssetIntegrity : IStateOwner
 
     public int SchemaVersion => 2;
 
+    /// <summary>Nothing has to be back before this is (SDD-013 §2b).</summary>
+    public IReadOnlyList<StateKey> RestoreAfter => [];
+
     /// <summary>
     /// Conditions survive a save, and they have to: a campaign reloaded with
     /// every item back at new would let a player launder twenty years of

@@ -54,6 +54,22 @@ public sealed class WellsState : IStateOwner
 
     public int SchemaVersion => 2;
 
+    /// <summary>
+    /// THE ONE OWNER THAT DEPENDS ON OTHERS (SDD-013 §2b), because restoring
+    /// this block means rebuilding the field first: every completion the save
+    /// records is reopened through the path that drilled it, and that path reads
+    /// the rock it is drilled into and the distance from its field to the header.
+    ///
+    /// <para>Neither number exists until the subsurface and the world are back.
+    /// The loader knew this as a hand-written phase and got the world half wrong
+    /// — the header arrived after the wells that measured against it, so every
+    /// reopened tieback fell to its floor (finding 201). Declared here, it is a
+    /// fact in the file that owns it rather than a line in a loader nobody
+    /// re-reads.</para>
+    /// </summary>
+    public IReadOnlyList<StateKey> RestoreAfter { get; } =
+        [new StateKey("subsurface.compartments"), new StateKey("world.decisions")];
+
     public int Count => _completions.Count;
 
     /// <summary>

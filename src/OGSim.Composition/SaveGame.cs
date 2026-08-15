@@ -275,36 +275,35 @@ public static class SaveGame
     {
         Regenerate(engine, loaded);
 
-        RestoreOwner(engine, loaded, SubsurfaceKey);
-
-        // AND THE WORLD, BEFORE THE FIELD IS REBUILT. `OpenWell` lays a gathering
-        // line of `_world.DistanceToHeaderOf(drains) ?? MinimumGatheringRun`, and
-        // the header is in THIS block — so restored in key order it arrived after
-        // the wells that had already measured against it, and every reopened
-        // well's tieback fell to the floor.
+        // THE ORDER IS DECLARED NOW, not written out here (S013-5, SDD-013 §2b).
+        // What stood in this method was three hand-maintained phases, and the
+        // middle one was wrong for a while: `world.decisions` sorts after
+        // `wells.completions`, so the rebuild measured each reopened well's
+        // gathering line against a header that had not arrived and every tieback
+        // fell to its floor (finding 201). Nothing could have caught it — a
+        // tieback's length is a live flow element in no block, so the digests are
+        // blind to it, and a one-field game measures zero metres to its own
+        // header either way.
         //
-        // NO TEST PINS THIS, and the reason is worth stating rather than leaving
-        // for someone to rediscover. A gathering line is a live flow element
-        // built at reopen time and held in no block, so the per-module digests
-        // cannot see its length; and the header is placed at the FIRST field a
-        // company develops, so a game with one field measures zero metres to it
-        // and reads the same either way. Distinguishing the two orderings needs a
-        // second field away from the header AND a way to observe a tieback's
-        // length, and the engine exposes neither today (finding 201).
-        //
-        // Corrected from reading `OpenWell` rather than from a failing test,
-        // which is the weaker justification of the two and is why it is written
-        // down. It belongs to S013-5's declared topological order, where the
-        // dependency would be stated once instead of maintained here by hand.
-        RestoreOwner(engine, loaded, WorldKey);
-
-        Rebuild(engine, loaded);
-
-        IReadOnlyList<IStateOwner> owners = engine.State.Owners;
+        // `RestoreOrder` is the same owners `Owners` returns, sorted so each
+        // follows what it declares, with key order as the tie-break. So the
+        // dependency lives in `WellsState` — the file that has the reason — and
+        // this walks a list.
+        IReadOnlyList<IStateOwner> owners = engine.State.RestoreOrder;
 
         for (int i = 0; i < owners.Count; i++)
-            if (!IsRestoredEarly(owners[i].Key.Value))
-                StateBlock.Restore(owners[i], BlockFor(loaded, owners[i].Key.Value));
+        {
+            // THE REBUILD IS PART OF RESTORING THE WELLS, not a phase beside it.
+            // Reopening every completion the save records is what materialises
+            // the things that block describes — design 11 §2.1 calls it that
+            // owner's loader — so it runs here rather than at a point in the
+            // sequence someone has to remember. The owner's own Restore then
+            // checks what the rebuild just did.
+            if (string.Equals(owners[i].Key.Value, WellsKey, StringComparison.Ordinal))
+                Rebuild(engine, loaded);
+
+            StateBlock.Restore(owners[i], BlockFor(loaded, owners[i].Key.Value));
+        }
 
         var random = engine.Provided.Resolve<IRandomSource>();
 
@@ -387,30 +386,7 @@ public static class SaveGame
             field.Reopen(wells[i].Id, wells[i].Drains, wells[i].TotalDepth);
     }
 
-    /// <summary>The owners the field is measured against, restored before it is
-    /// rebuilt and skipped when the rest are — the subsurface it drains and the
-    /// world it is sited in. Both are DISTANCES a reopened well needs in hand,
-    /// and a hand-maintained list of them is exactly what S013-5 replaces with
-    /// the declared topological order design 11 §2.1 asks for.</summary>
-    private static bool IsRestoredEarly(string key) =>
-        string.Equals(key, SubsurfaceKey, StringComparison.Ordinal)
-        || string.Equals(key, WorldKey, StringComparison.Ordinal);
 
-    private static void RestoreOwner(Engine engine, Loaded loaded, string key)
-    {
-        IReadOnlyList<IStateOwner> owners = engine.State.Owners;
-
-        for (int i = 0; i < owners.Count; i++)
-            if (string.Equals(owners[i].Key.Value, key, StringComparison.Ordinal))
-            {
-                StateBlock.Restore(owners[i], BlockFor(loaded, key));
-                return;
-            }
-
-        throw new SaveDataFault("SDD-013 §2", null,
-            $"this engine has no owner for '{key}', which the load order names; the order " +
-            "and the module set have drifted apart");
-    }
 
     /// <summary>
     /// One owner's block, or a fault naming it.
@@ -432,19 +408,12 @@ public static class SaveGame
             "the game would be subtly not the one that was saved");
     }
 
-    // THE WORLD OWNS A BLOCK SINCE R20d.12.9 and a GENERATED world still cannot
-    // be loaded — both, and the second is not a leftover of the first.
-    // `world.decisions` carries where the header went up and every prospect the
-    // GAME placed, which is what a hand-built scenario is made of. What it
-    // deliberately does not carry is what GENERATION placed: SDD-010 §4c makes
-    // that a function of the seed, to be regenerated rather than stored, and this
-    // load path composes without generating. So a generated save meets
-    // `WorldState.Restore`'s boundary check — saved with N prospects, regenerated
-    // with none — and is REFUSED naming the mismatch. That is the correct failure
-    // and not a corruption; closing it needs `WorldParameters` on the header and
-    // a generation call here, which is S010's remaining item.
-    private const string SubsurfaceKey = "subsurface.compartments";
-
+    // WHAT `world.decisions` CARRIES, and what it deliberately does not
+    // (SDD-010 §4c). It holds where the header went up and every prospect the
+    // GAME placed. What generation placed is a function of the seed, so it is
+    // redrawn by `Regenerate` above rather than stored — a save that carried the
+    // terrain would be storing a function of a number it also stores, and every
+    // generator change would silently fork old saves from new ones.
     private const string WellsKey = "wells.completions";
 
     private const string WorldKey = "world.decisions";

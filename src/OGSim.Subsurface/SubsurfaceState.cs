@@ -101,6 +101,9 @@ internal sealed class SubsurfaceState : IStateOwner
     // rather than derived from it, which is not possible after the fact.
     public int SchemaVersion => 3;
 
+    /// <summary>Nothing has to be back before this is (SDD-013 §2b).</summary>
+    public IReadOnlyList<StateKey> RestoreAfter => [];
+
     public int Count => _compartments.Count;
 
     /// <summary>

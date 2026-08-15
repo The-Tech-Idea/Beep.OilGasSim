@@ -34,6 +34,8 @@ public class CompositionTests
 
         public int SchemaVersion => 1;
 
+        public IReadOnlyList<StateKey> RestoreAfter { get; init; } = [];
+
         public long Count { get; set; }
 
         public void Capture(IStateWriter writer) => writer.WriteInt64("count", Count);
@@ -263,6 +265,47 @@ public class CompositionTests
         CompositionProblem problem = Assert.Single(refused.Problems);
         Assert.Equal(CompositionProblemKind.DuplicateStateKey, problem.Kind);
         Assert.Contains("declared but never delivered", problem.Detail);
+    }
+
+    /// <summary>
+    /// PV4c at the composition boundary (SDD-013 §2b). A RESTORE ORDER THAT
+    /// CANNOT RESOLVE STOPS THE ENGINE STARTING, rather than throwing the first
+    /// time somebody loads a save.
+    ///
+    /// <para>It is a fact about the module set and knowable the moment the set is
+    /// validated, and design 03 §3.1 has no partially-composed engine to fall
+    /// back on — an engine that runs for an hour and then cannot be reloaded is
+    /// the failure this whole arc has been about.</para>
+    ///
+    /// <para>The refusal is attributed to the MODULE that declared the key, so a
+    /// reader is sent to a manifest they can edit rather than to the set at
+    /// large.</para>
+    /// </summary>
+    [Fact]
+    public void PV4c_a_restore_order_that_cannot_resolve_refuses_at_composition()
+    {
+        var module = new TestModule(
+            "forgetful", [], [], [new StateKey("company.ledger")], [])
+        {
+            OnCompose = composition =>
+            {
+                composition.Own(new CounterState(new StateKey("company.ledger"))
+                {
+                    RestoreAfter = [new StateKey("wells.completions")],
+                });
+
+                return true;
+            },
+        };
+
+        var refused = Assert.IsType<CompositionRefused>(new ModuleComposer().Compose([module]));
+
+        CompositionProblem problem = Assert.Single(refused.Problems);
+
+        Assert.Equal(CompositionProblemKind.DependencyCycle, problem.Kind);
+        Assert.Equal("forgetful", problem.Module.Value);
+        Assert.Contains("wells.completions", problem.Detail, StringComparison.Ordinal);
+        Assert.Contains("no module owns", problem.Detail, StringComparison.Ordinal);
     }
 
     [Fact] // Failure mode 9: owning a fact the manifest never declared
