@@ -162,35 +162,45 @@ public sealed class BeliefStore : IBeliefStore, IStateOwner
     }
 
     /// <summary>
-    /// SDD-008 §2's staleness: sigma grows for DYNAMIC kinds only.
+    /// SDD-008 §2 / §2d's staleness: sigma grows for DYNAMIC kinds, on the
+    /// subject whose value actually moved.
     ///
-    /// <para>Pressure and contacts drift because production changes them; the
+    /// <para>Pressure and contacts drift because PRODUCTION changes them; the
     /// porosity of a rock does not become less certain by being ignored. Making
     /// everything drift would have the player re-log a well to learn what its
     /// core already told them.</para>
+    ///
+    /// <para>PER SUBJECT, and that is the whole of §2d.2's decision expressed in
+    /// a signature. This took a kind alone and widened every belief of that kind
+    /// wherever it was held, which cannot say "this compartment produced and that
+    /// one did not" — so a shut-in field would have gone stale at the same rate
+    /// as the one next to it that was being drained. Drift is charged to the
+    /// activity that invalidates the belief, not to the calendar.</para>
+    ///
+    /// <para>A subject with nothing known about it is left alone rather than
+    /// faulted: there is no belief to widen, which is a legitimate state and the
+    /// common one for a compartment nobody has measured.</para>
     /// </summary>
-    public void Age(ContentId propertyKind, double driftPerYear, double years)
+    public void Age(EntityRef subject, ContentId propertyKind, double driftPerYear, double years)
     {
         if (driftPerYear < 0.0)
-            throw new ModelFault("SDD-008 §2", null,
+            throw new ModelFault("SDD-008 §2", subject,
                 "staleness drift cannot be negative; a belief does not sharpen by waiting");
 
         if (driftPerYear == 0.0 || years <= 0.0) return;
 
-        // Walked over the insertion-ordered list, not the Dictionary (D-5).
-        for (int i = 0; i < _held.Count; i++)
-        {
-            HeldBelief entry = _held[i];
-            if (entry.PropertyKind != propertyKind) continue;
+        // Indexed rather than walked: the store already keys (subject, kind), so
+        // the one entry this can touch is a lookup away. Walking would be a scan
+        // of every belief in the game, once per producing compartment, once a
+        // month, for forty years.
+        if (!_at.TryGetValue((subject, propertyKind), out int at)) return;
 
-            _held[i] = entry with
-            {
-                Belief = entry.Belief with
-                {
-                    Sigma = entry.Belief.Sigma + driftPerYear * years,
-                },
-            };
-        }
+        HeldBelief entry = _held[at];
+
+        _held[at] = entry with
+        {
+            Belief = entry.Belief with { Sigma = entry.Belief.Sigma + (driftPerYear * years) },
+        };
     }
 
     // ------------------------------------------------ the save (SDD-008 §4b)

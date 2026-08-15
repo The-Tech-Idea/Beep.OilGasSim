@@ -157,7 +157,7 @@ public class BeliefUpdateTests
         store.Apply(Fx.Obs(0.22, 0.05, kind: Fx.Porosity));
         store.Apply(Fx.Obs(300.0, 20.0, kind: Fx.Permeability));
 
-        store.Age(Fx.Porosity, driftPerYear: 0.01, years: 3.0);
+        store.Age(Fx.Compartment, Fx.Porosity, driftPerYear: 0.01, years: 3.0);
 
         Assert.Equal(0.08, Assert.NotNull(store.Get(Fx.Compartment, Fx.Porosity)).Sigma, 12);
 
@@ -218,7 +218,7 @@ public class BeliefUpdateTests
 
         store.Apply(Fx.Obs(0.22, 0.05, kind: Fx.Porosity));
         store.Apply(Fx.Obs(300.0, 20.0, kind: Fx.Permeability));
-        store.Age(Fx.Porosity, driftPerYear: 0.01, years: 3.0);
+        store.Age(Fx.Compartment, Fx.Porosity, driftPerYear: 0.01, years: 3.0);
 
         // Ageing walks the same list the projection reads. A store that widened
         // one copy and projected the other would show a host a certainty the

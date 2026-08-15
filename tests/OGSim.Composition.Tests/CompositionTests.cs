@@ -199,6 +199,12 @@ public sealed class ShippedSetTests
     /// the meter. Both are slots design 03 §6 has always had and nothing filled —
     /// stage 5 now iterates a plan instead of assuming the month, and stage 8
     /// prices a metered delivery instead of whatever the wells produced.</para>
+    ///
+    /// <para>R20d.28 added <b>Information</b>, the eleventh slot, where beliefs go
+    /// stale on what the field produced. It is the first stage in this list that
+    /// exists to make what the company KNOWS decay rather than to move fluid or
+    /// money — and this test is why adding it was a visible edit rather than a
+    /// silent one (SDD-008 §2d.3, finding 200).</para>
     /// </summary>
     [Fact]
     public void The_shipped_engine_runs_the_stages_its_modules_declared()
@@ -208,7 +214,7 @@ public sealed class ShippedSetTests
         Assert.Equal(
             [StageId.Operations, StageId.Availability, StageId.SolveFlow,
              StageId.MaterialBalance, StageId.Custody, StageId.Economics,
-             StageId.Objectives, StageId.Close],
+             StageId.Information, StageId.Objectives, StageId.Close],
             built.Engine.Pipeline.DeclaredOrder());
     }
 

@@ -120,6 +120,13 @@ public interface IBeliefStore
     void Apply(Observation observation);                        // §2.1's conjugate update
     Belief? Get(EntityRef subject, ContentId propertyKind);     // null: nothing known yet
     IReadOnlyList<HeldBelief> Held { get; }                     // §8's projection walks this
+
+    // §2d's staleness, per SUBJECT because drift is charged to the compartment
+    // that produced. ON THE CONTRACT rather than on the store, because the stage
+    // that calls it is a dependency and law L1 admits no concrete type as one —
+    // an Age that lived only on `BeliefStore` would force the caller to name the
+    // implementation (R20d.28.2).
+    void Age(EntityRef subject, ContentId propertyKind, double driftPerYear, double years);
 }
 ```
 
@@ -363,9 +370,30 @@ on a timer rather than when something changed. Charging it to production ties
 the cost of information to the activity that invalidates it, which is the same
 principle §2.1 already applies to evidence.
 
-**So the drift term is scaled by whether the compartment produced this tick**,
-and a shut-in field's beliefs hold. A compartment that produced for half a month
-drifts by half a month — the segment grid already measures that (SDD-002 §9).
+**So the drift term is charged for a tick in which the compartment produced**,
+and a shut-in field's beliefs hold.
+
+> **Amended at implementation (R20d.28.2): the charge is PER TICK, not
+> pro-rata.** This section first said a compartment producing for half a month
+> drifts by half a month, on the grounds that the segment grid already measures
+> that. It does — but the grid's answer does not reach here: a
+> `CompartmentWithdrawal` carries VOLUMES and not the duration they came out
+> over, so the stage can see that something was produced and not for how long.
+>
+> Charging the whole tick is the honest coarse model rather than a shortcut. A
+> compartment that flowed for a fortnight did have its pressure moved, and the
+> drift rate is a per-kind content number tuned against whole months in the first
+> place; a half-month refinement inside a figure that granular would be precision
+> the model does not have. **The pro-rata version needs the withdrawal to carry
+> its segment share**, which is a change to what stage 6 commits and is worth
+> making for its own reasons or not at all.
+>
+> **Zero is not production, and that had to be said in code.** Being in the
+> withdrawals list means a compartment was SOLVED, not that anything came out of
+> it — shutting every well on a field leaves it there with a withdrawal of
+> nothing. The first implementation treated the list as self-filtering and aged a
+> shut-in field at the full rate, which is precisely the calendar-charged drift
+> this section decided against. V16 caught it.
 
 > **Implementation note, from reading the code before writing any (R20d.28.1).**
 > Two details above are not free, and both were found by checking rather than by

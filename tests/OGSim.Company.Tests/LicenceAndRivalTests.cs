@@ -199,6 +199,15 @@ public class RivalTests
             throw new NotSupportedException(
                 "these tests never discover a field, so nothing should re-key");
 
+        /// <summary>
+        /// Nor does anything here produce, so nothing goes stale. It faults for
+        /// the same reason the re-key above does: a double that quietly did
+        /// nothing would let a test pass against behaviour it never exercised.
+        /// </summary>
+        public void Age(EntityRef subject, ContentId kind, double driftPerYear, double years) =>
+            throw new NotSupportedException(
+                "these tests produce nothing, so no belief should go stale");
+
         public void Apply(Observation observation)
         {
             var entry = new HeldBelief(

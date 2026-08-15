@@ -625,6 +625,16 @@ internal sealed class FieldModule() : EngineModule(Declare(
         new StageParticipation(StageId.SolveFlow, Order: 0),
         new StageParticipation(StageId.Custody, Order: 0),
         new StageParticipation(StageId.Economics, Order: 0),
+
+        // STALENESS (SDD-008 §2d.3). Declared by THIS module rather than by the
+        // information one, and the choice is worth stating: what fixes the
+        // ordering is the stage ID, and drift is charged to the compartments
+        // that produced — which only the field knows, because it is the module
+        // holding the tick's withdrawals. The information module would have had
+        // to require the production loop to declare it, which is a dependency
+        // pointing the wrong way for one line of wiring.
+        new StageParticipation(StageId.Information, Order: 0),
+
         new StageParticipation(StageId.Objectives, Order: 0),
         new StageParticipation(StageId.Close, Order: 0),
     ],
@@ -773,6 +783,19 @@ internal sealed class FieldModule() : EngineModule(Declare(
         composition.Contribute(order: 0, new SegmentationStage(
             network, composition.Require<OGSim.Integrity.AssetIntegrity>(), loop));
         composition.Contribute(order: 0, new SolveFlowStage(loop));
+
+        // Beliefs go stale on what was PRODUCED FROM, so this reads the tick's
+        // withdrawals rather than asking each compartment whether it was open —
+        // a compartment that gave up nothing is simply not in that list
+        // (SDD-008 §2d.2, finding 200).
+        composition.Contribute(order: 0, new StalenessStage(
+            composition.Require<IBeliefStore>(),
+            composition.Require<TickProduction>(),
+            Defaults.DriftPerYearFor,
+
+            // The kinds production moves. Pressure is the only one this engine
+            // files beliefs about today; §2d.1's table is the rule for the rest.
+            [Defaults.PressureKind]));
         composition.Contribute(order: 0, new CustodyStage(loop));
         composition.Contribute(order: 0, new EconomicsStage(loop, bank));
 

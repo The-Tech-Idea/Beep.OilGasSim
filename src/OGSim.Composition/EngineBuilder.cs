@@ -424,6 +424,43 @@ internal static class Defaults
     /// same compartment ten times and becomes certain of a rock nobody can be
     /// certain of.</para>
     /// </summary>
+    /// <summary>
+    /// SDD-008 §2d.1 — how fast a belief about this kind goes stale, per year of
+    /// PRODUCTION (not of calendar: §2d.2).
+    ///
+    /// <para>The test for any kind is one question: does production change it? A
+    /// reservoir's pressure moves as fluid is withdrawn and its contacts rise and
+    /// fall with it. The porosity of a rock does not, nor does how much oil the
+    /// structure held to begin with — so those are ZERO, and zero is the answer
+    /// rather than the absence of one. A player must never have to re-log a well
+    /// to learn what its core already told them.</para>
+    ///
+    /// <para>Beside <see cref="SigmaFloorFor"/> because it is the same kind of
+    /// fact — content about a property kind, reaching the store as a lookup — and
+    /// the two are read together often enough that separating them would invite
+    /// a kind that has a floor and no drift by oversight.</para>
+    /// </summary>
+    public static double DriftPerYearFor(ContentId kind) =>
+        kind.Value switch
+        {
+            // Pascals per year. A gauge read two years ago is still a reading;
+            // it is a reading of a reservoir that has since been produced.
+            "reservoir-pressure" => 2.0e5,
+
+            // CONTACTS BELONG HERE AND ARE NOT LISTED, because they are not a
+            // belief kind yet: the five kinds this engine files beliefs under are
+            // pressure, porosity, permeability, oil-in-place and
+            // structure-capacity. §2d.1's table names GOC and OWC as drifting,
+            // and they join this switch the day something delivers an
+            // observation of one — listing them now would be content for a kind
+            // nothing can produce.
+
+            // AND EVERYTHING ELSE IS ZERO, deliberately. Rock properties, volumes
+            // in place and structure capacity are facts about a thing that is not
+            // changing — a company that stops looking at them does not know less.
+            _ => 0.0,
+        };
+
     public static double SigmaFloorFor(ContentId kind) =>
         kind.Value switch
         {

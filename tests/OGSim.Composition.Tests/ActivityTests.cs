@@ -187,6 +187,88 @@ public sealed class ActivityTests
         Assert.True(OGSim.Information.Quantiles.P50(learned.Value) > 0.0);
     }
 
+    // ------------------------------------------------------------- staleness
+
+    /// <summary>
+    /// R14-V15 (SDD-008 §2d). A BELIEF GOES STALE ON WHAT THE FIELD PRODUCED.
+    ///
+    /// <para><c>BeliefStore.Age</c> implemented §2's staleness from the day R14
+    /// landed, had a unit test, and was called by NOTHING — so a pressure
+    /// reading from month four was exactly as trustworthy in month four
+    /// hundred, and the reason a player re-tests a well was missing
+    /// (finding 200). Not an L3 breach, which is why nothing caught it: the
+    /// member had behaviour and coverage and lacked only a caller.</para>
+    ///
+    /// <para>Porosity is asserted alongside because it is the half that must NOT
+    /// move: rock does not become less certain by being ignored, and a player
+    /// must never have to re-log a well to learn what its core already told
+    /// them. A test that only watched sigma grow would pass just as well against
+    /// a drift applied to everything.</para>
+    /// </summary>
+    [Fact]
+    public void R14V15_a_producing_fields_pressure_belief_widens_and_its_rock_does_not()
+    {
+        (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Drilled();
+
+        Belief pressure = Learn(
+            engine, target, "reservoir-pressure", () => new WellTestCommand(target));
+
+        Belief porosity = Learn(
+            engine, target, "porosity", () => new WirelineLogCommand(target));
+
+        // A YEAR OF PRODUCTION. The field is drilled and flowing, so every tick
+        // withdraws from this compartment and every tick ages what is believed
+        // about its pressure.
+        Fixture.Run(engine, months: 12);
+
+        Belief aged = Assert.NotNull(BeliefAbout(engine, target, "reservoir-pressure"));
+
+        Assert.True(aged.Sigma > pressure.Sigma,
+            $"a year of production left the pressure belief at sigma {aged.Sigma}, no wider " +
+            $"than the {pressure.Sigma} it was measured at — nothing is ageing it");
+
+        // AND THE ROCK IS UNTOUCHED, to the last bit.
+        Assert.Equal(
+            porosity.Sigma,
+            Assert.NotNull(BeliefAbout(engine, target, "porosity")).Sigma);
+    }
+
+    /// <summary>
+    /// R14-V16 (SDD-008 §2d.2, closing S008-2). AND A SHUT-IN FIELD'S BELIEFS
+    /// HOLD — drift is charged to PRODUCTION, not to the calendar.
+    ///
+    /// <para>A pressure belief goes stale because the pressure MOVED, and what
+    /// moves it is withdrawal. Charging drift to the clock instead would make
+    /// waiting a source of uncertainty, so the optimal play would become
+    /// re-testing on a timer rather than when something changed — which is the
+    /// opposite of what an information game should reward.</para>
+    ///
+    /// <para>The same twelve months as V15, with the wells shut. This is the
+    /// decision stated as a test rather than as a preference.</para>
+    /// </summary>
+    [Fact]
+    public void R14V16_a_shut_in_fields_pressure_belief_does_not_go_stale()
+    {
+        (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Drilled();
+
+        Belief measured = Learn(
+            engine, target, "reservoir-pressure", () => new WellTestCommand(target));
+
+        // SHUT EVERYTHING. A compartment nothing is drawing from gives up no
+        // volume, so it never reaches the withdrawals stage 11 reads.
+        IReadOnlyList<WellStatusView> wells = engine.ReadModel!.Wellbores;
+
+        for (var i = 0; i < wells.Count; i++)
+            Assert.IsType<Accepted>(engine.Commands.Submit(
+                new SetWellChokeCommand(new EntityId<ICompletion>(wells[i].Well.Value), Open: false)));
+
+        Fixture.Run(engine, months: 12);
+
+        Assert.Equal(
+            measured.Sigma,
+            Assert.NotNull(BeliefAbout(engine, target, "reservoir-pressure")).Sigma);
+    }
+
     /// <summary>
     /// AND IT IS DATED WHEN IT WAS LEARNED — SDD-008 §2.1's update rule ends
     /// "AsOf = now", and until R20d.12.11 the store was built with a literal
