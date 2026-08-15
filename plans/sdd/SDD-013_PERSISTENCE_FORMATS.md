@@ -240,6 +240,55 @@ A module attempting to register a state key for any of these fails the
 this table (a new mechanical check for [22](../design/22_DESIGN_COHERENCE.md)
 §6.1: every never-save row names its rebuild source).
 
+> **R20d.12.33 amendment (finding 210): the borrowing base is derived and the
+> COVENANT IS NOT, and the row above hides the difference.** "Reserves, RRR,
+> borrowing base" is right — `Bank.Settle` recomputes `Terms` from today's
+> proved reserves, today's debt and today's ESG standing before it does anything
+> else with them, so nothing about the facility's PRICE survives a tick. But
+> `Bank.Covenant` is assessed as `_lender.Assess(Terms, Drawn, Covenant)` —
+> **it takes its own previous value** — and that makes it a clock rather than a
+> quantity: a breach opens a cure window and the months elapsed are what the
+> window counts.
+>
+> Read as one line, the row invites exactly the mistake that was made: the
+> facility looked derived end to end and no block carried any of it, so a
+> reloaded company came back `Clear` with zero months however deep in breach it
+> was. **A player could cure a covenant breach by saving and loading** — the same
+> class as the abandonment obligation §2b is careful not to hand back.
+>
+> **`company.facility` — `Bank` is the owner**, holding `covenant-state` and
+> `covenant-ticks-remaining` and nothing else. Not folded into `company.ledger`:
+> the ledger owns money that has moved and the facility owns the company's
+> standing with its lender, and one fact has one owner (L5). `RestoreAfter` is
+> empty — two scalars depend on nothing.
+>
+> **`Terms` is deliberately NOT in the block.** It is recomputed at the top of
+> the first `Settle` after a load, from state that is itself restored, so saving
+> it would be storing a value beside the inputs that produce it — the shadowing
+> trap this very section warns about, and the one that produced finding 206.
+
+> **R20d.12.34 amendment (finding 208): the same cut, one row up — RRR is
+> derived and its HISTORY is not.** "Reserves, RRR, borrowing base" is right
+> about the ratio: it is computed from reserves the belief store already carries
+> and production the loop already counts, so no block writes the number. But the
+> ratio is defined over a TRAILING TWELVE MONTHS (SDD-009 §4), and *what proved
+> reserves stood at a year ago* is not recoverable from anything the save holds
+> — beliefs restore as they are TODAY, and a reloaded company would have no
+> history to measure against.
+>
+> **`company.reserve-history` — two rings of twelve, and a counter**, on the
+> pattern `company.market` already uses for prices: proved reserves and
+> cumulative production as they stood at each of the last twelve month-ends. A
+> forty-year game is 480 ticks and nothing needs the other 468.
+>
+> **The indicator reads UNDEFINED until the ring fills**, which is deliberate and
+> is not the same as reading zero: a company nine months old has no twelve-month
+> window, and a projection that answered 1.0 would be reporting a replacement
+> that was never measured. This is the second time in one phase that the
+> never-save list has needed a carve-out for the STATE BEHIND a derived value,
+> after the covenant clock — the pattern is that a quantity recomputed each tick
+> is derived, while a quantity recomputed each tick *from its own past* is not.
+
 > **R20d.12 note (finding 196) — pressure was suspected of being
 > path-dependent, and it is not. §4 stands as written.**
 >

@@ -218,6 +218,46 @@ RRR(year) = Σ additions(2P) / Σ production        (integer volumes, exact)
 Price sensitivity (SC6) needs no extra code: step 3's truncation moves with
 price, so a crash mechanically writes reserves down.
 
+> **R20d.12.34 amendment (finding 208, and an F-4 stop): RRR is reported on
+> PROVED, not 2P.** The line above said 2P and finding 208 recorded the decision
+> as Proved without either noticing the other — the finding argued from the code
+> and the SDD was never opened. That is the conflict F-4 exists for, so it is
+> settled here before anything is implemented rather than in the implementation.
+>
+> **Proved wins on three counts.** `Lending.Redetermine` takes a parameter named
+> `provedReserves` and `Bank.Settle` passes `Remaining(...).Proved`, so the
+> borrowing base already moves on 1P — an RRR on 2P would score a company on a
+> measure its own lender ignores, in the one indicator IR2 names for the
+> LIQUIDATION SPIRAL, which is a credit phenomenon before it is a geological one.
+> It is also the convention every reporting company follows, which is why the
+> lender was written that way. And 2P includes volumes a bank will not lend
+> against, so a company could show replacement above one while its facility
+> shrank every quarter — the exact false comfort a standing indicator must not
+> give.
+>
+> **The formula is unchanged**, because "additions" already means what the
+> implementation computes: additions over a period are the change in booked
+> reserves plus what was produced from them, so
+>
+> ```text
+> RRR = (proved_now − proved_then + produced_between) / produced_between
+> ```
+>
+> is the same statement with the identity substituted, and is the form to
+> implement because a period's ADDITIONS are not separately recorded anywhere.
+>
+> **Period: a trailing twelve months** (finding 208). IR2 calls RRR a *standing*
+> indicator, and a since-inception ratio converges and stops moving — a company
+> sliding into the spiral would watch it drift by thousandths. Twelve months is
+> also the rhythm the bank already redetermines on.
+>
+> **`produced_between` of zero leaves RRR UNDEFINED, and it is published as
+> undefined.** A field that produced nothing replaced nothing, and the ratio's
+> denominator is what it did not do; reporting 0.0 would state a replacement
+> failure that did not happen, and reporting 1.0 would state a success. The
+> projection carries `double?` and a host shows "—", which is the same rule §5's
+> refusals follow: a fallback answers "unknown" and never invents a number.
+
 ## 5. Reserve-based lending
 
 ```text

@@ -236,6 +236,117 @@ public sealed class SaveGameTests
     }
 
     /// <summary>
+    /// A COMPANY IN BREACH IS STILL IN BREACH AFTER A RELOAD (finding 210).
+    ///
+    /// <para>`Bank.Covenant` is assessed as <c>Assess(Terms, Drawn, Covenant)</c>
+    /// — it takes its own previous value, so it is a clock rather than a
+    /// quantity. No block carried it, so a reload returned a company that was
+    /// <c>Clear</c> with zero months however deep in breach it was: **a breach
+    /// curable by saving and loading**, which is the same class as the
+    /// abandonment obligation SDD-013 §2b is careful not to hand back.</para>
+    ///
+    /// <para>THE FIXTURE IS THE HALF THAT MATTERS. PV2 already compared
+    /// `Covenant` and passed, because it never submits a `BorrowCommand`: with
+    /// nothing drawn the covenant is Clear on both sides forever and the check
+    /// confirms nothing. That is `Beliefs` before finding 198 exactly, and it is
+    /// why this test BORROWS and then produces until the base crosses under the
+    /// debt rather than asserting on a company that owes nothing.</para>
+    ///
+    /// <para>No command can force a breach: the validator will not lend past the
+    /// base. So the breach is earned the way a player would earn one — draw the
+    /// whole facility while the field is young, then let depletion take the
+    /// proved reserves the base is redetermined from (SDD-009 §5).</para>
+    /// </summary>
+    [Fact]
+    [Trait("Speed", "Slow")]
+    public void A_company_in_breach_is_still_in_breach_after_a_reload()
+    {
+        (Engine engine, _) = Played(months: 12);
+
+        // A BANK SECURES ON RESERVES, AND RESERVES COME FROM BELIEFS. The shared
+        // fixture drills through `FieldControl` directly, which puts steel in the
+        // ground without the company learning anything: the oil-in-place belief
+        // `ReservesBook` reads is delivered by the DRILL COMMAND's discovery
+        // branch (SDD-008 §3), so a field drilled the short way supports no
+        // borrowing at all. Drilled here through the real door for that reason.
+        WorldState world = engine.Provided.Resolve<WorldState>();
+
+        // AND THE HOLE IS RETRIED, because most of them are lost. The outcome
+        // table decides whether a well was drilled at all, and a lost job teaches
+        // the company nothing — three went down before one landed here. Bounded
+        // rather than looped forever: if a discovery cannot be made, the failure
+        // below says so instead of the suite hanging.
+        var attempts = 0;
+        while (attempts < DiscoveryAttempts
+            && engine.ReadModel!.Borrowing.BorrowingBase == Money.Zero)
+        {
+            engine.Commands.Submit(
+                new DrillWellCommand(world.Prospects[0], new Length(2000.0)));
+
+            Fixture.Run(engine, months: 12);
+            attempts++;
+        }
+
+        Money cap = engine.ReadModel!.Borrowing.BorrowingBase;
+        Assert.True(cap > Money.Zero,
+            "the fixture has no borrowing base to draw against, so nothing below " +
+            "can breach and this test would be as vacuous as the check it replaces");
+
+        engine.Commands.Submit(new BorrowCommand(cap));
+        engine.Pipeline.AdvanceTick();
+
+        Assert.True(engine.ReadModel!.Debt > Money.Zero,
+            $"the draw was refused: base {cap.Cents}, debt {engine.ReadModel!.Debt.Cents}");
+
+        // Produce until depletion pulls the base under the debt. The distance is
+        // not calculable from the content — it is a race between the decline
+        // curve and a base redetermined from what is left — so the bound is
+        // generous and the failure reports where it got to.
+        var month = 0;
+        while (month < BreachSearchMonths
+            && engine.ReadModel!.Covenant.State == CovenantState.Clear)
+        {
+            Fixture.Repair(engine);
+            engine.Pipeline.AdvanceTick();
+            month++;
+        }
+
+        Assert.True(engine.ReadModel!.Covenant.State != CovenantState.Clear,
+            $"after {month} months the company is still Clear: debt " +
+            $"{engine.ReadModel!.Debt.Cents} against a base of " +
+            $"{engine.ReadModel!.Borrowing.BorrowingBase.Cents}. A test that cannot " +
+            $"reach a breach cannot tell whether the breach survives a reload");
+
+        CovenantStatus breached = engine.ReadModel!.Covenant;
+
+        using MemoryStream container = Saved(engine);
+
+        Engine reloaded = Assert.IsType<Built>(
+            SaveGame.Load(container, Fixture.Settings())).Engine;
+
+        reloaded.Pipeline.AdvanceTick();
+        engine.Pipeline.AdvanceTick();
+
+        // Both halves, and the clock is why. A company handed back Curing with a
+        // fresh window has had its cure period silently extended, which the state
+        // alone cannot show.
+        Assert.Equal(engine.ReadModel!.Covenant.State, reloaded.ReadModel!.Covenant.State);
+        Assert.Equal(
+            engine.ReadModel!.Covenant.TicksRemaining,
+            reloaded.ReadModel!.Covenant.TicksRemaining);
+
+        Assert.NotEqual(CovenantState.Clear, breached.State);
+    }
+
+    /// <summary>How long the search above will run before giving up. Not a
+    /// model constant — a bound on a measurement.</summary>
+    private const int BreachSearchMonths = 300;
+
+    /// <summary>How many wells the test will spend before concluding that no
+    /// discovery is reachable. Measured: the fourth one landed.</summary>
+    private const int DiscoveryAttempts = 8;
+
+    /// <summary>
     /// PV2, WHICH DESIGN 11 §4 CALLS THE ONE THAT MATTERS MOST: "save at tick N,
     /// load, run to N+100 — identical to running straight through". Round-trip
     /// equality proves the bytes match; only continuation equality proves the
@@ -653,4 +764,6 @@ public sealed class SaveGameTests
         Assert.Contains(refused.Reasons,
             reason => reason.Contains("manifest", StringComparison.Ordinal));
     }
+
+
 }

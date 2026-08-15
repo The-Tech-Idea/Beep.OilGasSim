@@ -617,7 +617,9 @@ internal sealed class FieldModule() : EngineModule(Declare(
     // Provided here because the field is where an asset is CREATED, and
     // registration is unconditional at creation (SDD-007 §6).
 
-    ownsState: ["field.activities", "company.obligations", "field.flood", "field.export"],
+    ownsState: [
+        "field.activities", "company.obligations", "field.flood", "field.export",
+        "company.facility"],
     stages:
     [
         new StageParticipation(StageId.Operations, Order: 0),
@@ -778,6 +780,12 @@ internal sealed class FieldModule() : EngineModule(Declare(
         // on the surface chain are `facilities.units`, and one fact has one
         // owner (SDD-006 §8b).
         composition.Own(new FacilitiesState.ExportState(terminal));
+
+        // AND THE FACILITY'S OWN STANDING. The base is re-derived every settle,
+        // but the covenant is a clock that reads its own previous value, so a
+        // reloaded company was coming back Clear however deep in breach it was
+        // — a breach curable by saving and loading (finding 210).
+        composition.Own(bank);
 
         composition.Provide(bank);
         composition.Contribute(order: 0, new SegmentationStage(

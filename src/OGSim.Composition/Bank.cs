@@ -15,11 +15,12 @@
 using OGSim.Company;
 using OGSim.Contracts;
 using OGSim.Kernel;
+using OGSim.Persistence;
 
 namespace OGSim.Composition;
 
 /// <summary>The company's borrowing facility.</summary>
-public sealed class Bank
+public sealed class Bank : IStateOwner
 {
     private readonly IReserveBasedLending _lender;
     private readonly ReservesBook _reserves;
@@ -104,4 +105,40 @@ public sealed class Bank
     }
 
     private const double MonthsPerYear = 12.0;
+
+    // ------------------------------------------------------- SDD-013 §4
+
+    /// <summary>The company's standing with its lender (SDD-013 §4's R20d.12.33
+    /// amendment). <see cref="Terms"/> is NOT here: `Settle` recomputes it from
+    /// restored state before reading it, so saving it would shadow its own
+    /// inputs.</summary>
+    public StateKey Key { get; } = new("company.facility");
+
+    public int SchemaVersion => 1;
+
+    /// <summary>Nothing: two scalars that depend on no other owner.</summary>
+    public IReadOnlyList<StateKey> RestoreAfter => [];
+
+    public void Capture(IStateWriter writer)
+    {
+        ArgumentNullException.ThrowIfNull(writer);
+
+        writer.WriteInt64("covenant-state", (long)Covenant.State);
+        writer.WriteInt64("covenant-ticks-remaining", Covenant.TicksRemaining);
+    }
+
+    /// <summary>
+    /// A breach is a CLOCK, so both halves restore together or the clock resets:
+    /// `Assess` reads its own previous value, and a company handed back
+    /// <c>Curing</c> with a fresh window has had its cure period silently
+    /// extended (finding 210).
+    /// </summary>
+    public void Restore(IStateReader reader)
+    {
+        ArgumentNullException.ThrowIfNull(reader);
+
+        Covenant = new CovenantStatus(
+            (CovenantState)reader.ReadInt64("covenant-state"),
+            (int)reader.ReadInt64("covenant-ticks-remaining"));
+    }
 }
