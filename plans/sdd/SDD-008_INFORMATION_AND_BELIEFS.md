@@ -367,6 +367,31 @@ principle §2.1 already applies to evidence.
 and a shut-in field's beliefs hold. A compartment that produced for half a month
 drifts by half a month — the segment grid already measures that (SDD-002 §9).
 
+> **Implementation note, from reading the code before writing any (R20d.28.1).**
+> Two details above are not free, and both were found by checking rather than by
+> assuming they would be:
+>
+> **`Age` must become per-SUBJECT.** Its signature is
+> `Age(ContentId kind, double drift, double years)` and it walks every belief of
+> that kind whatever it is about — which cannot express "this compartment
+> produced and that one did not". It becomes
+> `Age(EntityRef subject, ContentId kind, double drift, double years)`.
+> **Replaced rather than overloaded**: the per-kind form's only callers are its
+> own unit tests, so keeping it would leave exactly the uncalled member this
+> amendment exists to remove. The subject is available — a pressure belief is
+> filed against `EntityRef(EntityKind.Compartment, id)`, which `WellTestActivity`
+> already delivers against.
+>
+> **The stage needs to know which compartments produced, and only the production
+> loop does** — `_byCompartment` holds the tick's reservoir volume per
+> compartment and is private. So either the loop exposes it or the stage is
+> contributed by the module that owns the loop. §2d.3 says the information module
+> declares its first stage; that stays true of the STAGE ID, which is what fixes
+> the ordering, but the contributing module is a composition detail and the field
+> module is the one holding both halves. Decide it at implementation and say
+> which was chosen — the ordering guarantee is the part this section is
+> specifying.
+
 ### 2d.3 Where it runs
 
 **Stage 11 (Information), once per tick**, over the elapsed year fraction —
