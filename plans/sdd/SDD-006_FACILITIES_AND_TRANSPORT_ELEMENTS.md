@@ -700,11 +700,29 @@ under two months of the shipped field's production, which is what settles it:
 > route.
 
 **So the next attempt starts by deciding what the opening scenario should
-demand**, not by writing the berth. Either its target moves to account for
-working capital tied up in storage, or the objective stops being a pure cash
-threshold — and that is a game-design decision about how hard the first ten
-years should be, which is worth making deliberately rather than inferring from
-whichever number turns a test green.
+demand**, not by writing the berth. And the decision has a shape worth stating,
+because the obvious fix is the weak one:
+
+- **Move the target or the deadline.** Crude, and it hides the real point: it
+  would recalibrate a measure that has become wrong rather than fixing it.
+- **Value the oil.** A company holding a part-filled cargo is not POORER than
+  one that shipped yesterday — it is ILLIQUID. Cash alone mis-values a business
+  that has done the work and not yet been paid, and that is true of a real
+  operator whatever this scenario asks for.
+
+**The second is almost certainly right, and berths did not create the problem —
+they exposed it.** The objective measures cash because cash is what the read
+model publishes; finding 190 records the same gap from the other side (a balance
+and no operating cash flow, so no host can tell a month of investment from a
+month of decline). Storage inventory is one of the seventeen projections R21
+§2.4b requires and one of the eleven with no source.
+
+**So this is not really a scenario-balance task.** It is: publish what the field
+is worth as well as what it holds in cash, then let an objective measure
+performance rather than liquidity. Berths become safe to land the moment that
+exists — and until it does, ANY mechanic that defers revenue will read as a
+failure to the opening scenario, which is a trap the next such feature will walk
+into as well.
 
 **Order of work**, each landing green before the next:
 
