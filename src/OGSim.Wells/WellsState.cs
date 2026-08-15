@@ -60,12 +60,26 @@ public sealed class WellsState : IStateOwner
     /// records is reopened through the path that drilled it, and that path reads
     /// the rock it is drilled into and the distance from its field to the header.
     ///
-    /// <para>Neither number exists until the subsurface and the world are back.
-    /// The loader knew this as a hand-written phase and got the world half wrong
-    /// — the header arrived after the wells that measured against it, so every
-    /// reopened tieback fell to its floor (finding 201). Declared here, it is a
-    /// fact in the file that owns it rather than a line in a loader nobody
-    /// re-reads.</para>
+    /// <para>The SUBSURFACE half is load-bearing today — `Drill` builds a
+    /// completion from the permeability, net thickness and drainage area of the
+    /// compartment it is drilled into, and there is no rock to read before that
+    /// block is back.</para>
+    ///
+    /// <para>The WORLD half is a narrower claim than it first looks, and the
+    /// difference is worth stating because it was got wrong once. `OpenWell`
+    /// lays a tieback of `DistanceToHeaderOf(drains) ?? MinimumGatheringRun`, so
+    /// a header that had not arrived reads as no distance — but the same method
+    /// also calls `HeaderAt`, which is write-once, and the rebuild reopens wells
+    /// in the order the save lists them. So the FIRST reopened well re-places the
+    /// header at the field that placed it originally, and every tieback comes out
+    /// the same length whichever order the two blocks restore in.</para>
+    ///
+    /// <para>What the declaration buys is the case where those two disagree: the
+    /// well that sited the header is abandoned and gone from the save, so a
+    /// rebuild left to re-derive it would put the header at whatever field
+    /// happens to be reopened first and re-measure every gathering line in the
+    /// company against it. The save's header is the one that must stand, for the
+    /// same reason the save's obligations must (finding 201).</para>
     /// </summary>
     public IReadOnlyList<StateKey> RestoreAfter { get; } =
         [new StateKey("subsurface.compartments"), new StateKey("world.decisions")];

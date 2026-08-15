@@ -211,6 +211,80 @@ public sealed class NewGameTests
         // owns. The continuation claim belongs with S013-9 and lands when it does.
     }
 
+    /// <summary>Every pipe on the chain, by length, in registration order —
+    /// which is where a gathering line's length is observable from.</summary>
+    private static List<double> Pipes(Engine engine)
+    {
+        IReadOnlyList<IFlowElement> registered =
+            engine.Provided.Resolve<IFlowElementRegistry>().Registered;
+
+        var lengths = new List<double>();
+
+        for (var i = 0; i < registered.Count; i++)
+            if (registered[i] is IPipeline pipe) lengths.Add(pipe.PipeLength.Metres);
+
+        return lengths;
+    }
+
+    /// <summary>
+    /// A reloaded field keeps the gathering lines it laid — a tieback is a live
+    /// flow element built at reopen time and held in no block, so nothing else in
+    /// this suite looks at one.
+    ///
+    /// <para>IT TAKES TWO FIELDS TO MEAN ANYTHING. The header goes up at the
+    /// FIRST field a company develops, so a one-field game measures zero metres
+    /// to it and every tieback is the floor whatever happens. The second
+    /// discovery is away from the header and has a real distance to it, which the
+    /// assertion above the save checks rather than assumes.</para>
+    ///
+    /// <para><b>THIS DOES NOT PIN THE RESTORE ORDER, and finding 201 said it
+    /// would.</b> The claim was that restoring `world.decisions` after
+    /// `wells.completions` drops every reopened tieback to its floor, because the
+    /// header would not be back when the wells measured against it. It does not:
+    /// `OpenWell` also calls `HeaderAt`, which is write-once, and the rebuild
+    /// reopens wells in the order the save lists them — so the first one
+    /// re-places the header at the field that placed it originally and the
+    /// lengths come out identical either way. Verified by removing the declared
+    /// dependency and watching this pass.</para>
+    ///
+    /// <para>The declaration is still right, for the narrower reason now written
+    /// on it: the well that sited the header may have been abandoned since, and
+    /// then a re-derived header lands somewhere else entirely. Pinning THAT needs
+    /// a fixture that abandons the first well, which is the test to write next.</para>
+    /// </summary>
+    [Fact]
+    public void R20d12V1_a_reloaded_field_keeps_the_gathering_lines_it_laid()
+    {
+        ulong seed = SeedOfBasinWithSeveralProspects();
+
+        Engine original = NewGame(seed);
+        WorldState world = WorldOf(original);
+        FieldControl field = original.Provided.Resolve<FieldControl>();
+
+        field.Drill(world.Beneath(Discovery(world, 0))!.Value, new Length(2000.0));
+        field.Drill(world.Beneath(Discovery(world, 1))!.Value, new Length(2000.0));
+
+        Fixture.Run(original, months: 6);
+
+        List<double> before = Pipes(original);
+
+        // THE FIXTURE DID THE THING: two tiebacks of different lengths, so the
+        // comparison below can tell a restored header from a missing one. With
+        // one field they would both be the floor and this would pass on nothing.
+        Assert.True(before.Distinct().Count() > 1,
+            "every pipe on this chain is the same length, so the second field is not " +
+            "actually away from the header and the check proves nothing");
+
+        var container = new MemoryStream();
+        SaveGame.Write(original, seed, container);
+        container.Position = 0;
+
+        Engine reloaded = Assert.IsType<Built>(
+            SaveGame.Load(container, Fixture.Settings())).Engine;
+
+        Assert.Equal(before, Pipes(reloaded));
+    }
+
     /// <summary>
     /// THE FINDING, stated as its opposite. A new game has compartments nobody
     /// hand-built: they exist because the generator put them there.
