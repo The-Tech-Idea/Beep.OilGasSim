@@ -138,6 +138,22 @@ public interface IDriveMechanism
     ContentId Id { get; }
     Pressure SolveEndPressure(MaterialBalanceInput input, IFluidPropertyModel fluid);
 
+    /// <summary>
+    /// The whole history at once, for a RESTORE — no per-tick step limit,
+    /// because there is no step (SDD-003 §3.1's R20d.12.17 amendment).
+    ///
+    /// <para>§3.1's fraction exists because one-step monthly integration is not
+    /// honest at a large step size. A restore is not integrating a step: it is
+    /// evaluating the balance at a point the engine already reached one honest
+    /// month at a time, so measuring the whole depletion against a per-tick limit
+    /// refuses a state the engine itself produced — and did, for any compartment
+    /// past a quarter of its initial pressure (finding 205).</para>
+    ///
+    /// <para>A SEPARATE MEMBER rather than a flag: a boolean would put "skip the
+    /// guard" one wrong argument away from the per-tick path.</para>
+    /// </summary>
+    Pressure SolveFromInitial(MaterialBalanceInput input, IFluidPropertyModel fluid);
+
     /// <summary>SDD-003 §4.2b.</summary>
     AdmittedTerms Admits { get; }
     /// <summary>Which injectant materials this drive accepts (SDD-005 §4.0b — no identity branches).</summary>

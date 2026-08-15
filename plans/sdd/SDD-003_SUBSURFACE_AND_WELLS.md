@@ -168,6 +168,75 @@ VALIDITY LIMIT (05 §3.1), checked AFTER the solve:
       (content, default 0.25)  → MODEL FAULT
 ```
 
+> **R20d.12.18 open item (finding 206): connate water saturation has TWO
+> OWNERS, and they are not the same double.**
+>
+> `SubsurfaceState.Create` derives `Initial.ConnateWaterSaturation` as
+> `1.0 - generated.OilSaturation`; the rock's relative-permeability curve carries
+> its own `swc` from content (§3.1c). A basin generated at 0.7 oil saturation
+> against a curve declaring 0.30 produces `0.30000000000000004` and `0.3` — the
+> same number in decimal, two different doubles, describing one physical fact.
+> **That is law L5, breached in the subsurface's own initial conditions.**
+>
+> It surfaced through persistence rather than through physics: the save writes
+> one `swc` key and restores both from it, so a reloaded compartment has the two
+> agreeing where the original had them differing, and `krw`'s
+> `(Sw − swc)/(1 − swc − sor)` turns a last-bit change in the denominator's
+> origin into a large relative change in a near-zero water cut. That is PV2's
+> `Chain` exception and 3,644 kg of produced water against 233,955.
+>
+> **The fix is a decision about which owner keeps the fact, and it is not made
+> here.** The rock curve is the honest candidate — irreducible water saturation
+> is a property of the rock and belongs with the Corey endpoints that use it — in
+> which case `1.0 - OilSaturation` is the derivation to delete, and world
+> generation's oil saturation becomes something that must be RECONCILED with the
+> curve a compartment is given rather than an independent draw. That reaches
+> [SDD-010](SDD-010_WORLD_GENERATION.md) §2, so it is specified before it is
+> coded rather than patched at the point where the symptom showed.
+>
+> **Do not "fix" it by writing two keys into the save.** That would make the
+> reload faithful to a state that is itself wrong, and would freeze the breach
+> into the file format.
+
+> **R20d.12.17 amendment (finding 205): the limit is PER TICK and a restore is
+> not a tick — but the code applies it to one, and the effect is that a properly
+> depleted field cannot be reloaded.**
+>
+> `ReservoirCompartment.RestoreTo` re-solves the whole production history in a
+> single call and says so in its own comment: *"a restore is not a tick: the
+> whole history arrives at once, so the step is measured from initial conditions
+> and no per-tick limit applies to it."* The first half is implemented — it
+> passes `StartPressure: Initial.Pressure` and `WithdrawnThisTick: 0` — and the
+> second half is not. `SolveEndPressure` runs the check unconditionally, so the
+> restore measures the ENTIRE depletion as though it were one month and refuses
+> anything past the fraction.
+>
+> **A field that has given up more than a quarter of its initial pressure
+> therefore cannot be loaded at all.** Reproduced at 30 MPa → 16.47 MPa, a
+> fraction of 0.451, refused by `AssertStepIsHonest` inside `RestoreTo`. The
+> original reached that pressure legitimately, one honest month at a time.
+>
+> **Why nothing caught it**: every fixture that saves and reloads uses a
+> compartment large enough that sixty months do not deplete it a quarter — PV2's
+> is 100×10⁶ m³ of pore volume. The defect is invisible until a field is either
+> small or old, which is to say until a game is played properly.
+>
+> **The rule is right and only its application is wrong**, so this is a code fix
+> and not a specification change: the limit exists because *one-step monthly
+> integration is not honest at that step size*, and a restore is not integrating
+> a step — it is evaluating the balance at a point the engine has already reached
+> by honest steps. The drive gains a member for that case, distinct from the
+> per-tick solve rather than a flag on it, so the two callers cannot be confused
+> and the per-tick guard cannot be disabled by accident:
+>
+> ```csharp
+> // The whole history at once. No step limit — there is no step.
+> Pressure SolveFromInitial(MaterialBalanceInput input, IFluidPropertyModel fluid);
+> ```
+>
+> `AssertCoherent` still runs: a compartment carrying influx its drive does not
+> admit is wrong however it got there (§4.2b).
+
 > **R5.0 amendment (finding 106): "a fraction of expansion capacity" has no
 > well-defined value.** The limit was stated against the expansion capacity the
 > compartment has left, and there is no pressure at which to evaluate that: taken

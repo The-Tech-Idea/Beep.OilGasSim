@@ -281,10 +281,18 @@ internal sealed class ReservoirCompartment : IReservoirCompartment
             // The step limit is a statement about ONE tick, and a restore is not
             // a tick: the whole history arrives at once, so the step is measured
             // from initial conditions and no per-tick limit applies to it.
+            //
+            // THE SECOND HALF OF THAT WAS NOT IMPLEMENTED until R20d.12.17. The
+            // start pressure was set here correctly and the limit ran anyway, so
+            // a restore measured the ENTIRE depletion as one month and refused
+            // it — a compartment past a quarter of its initial pressure could not
+            // be loaded at all, which is every field that is small or old
+            // (finding 205). `SolveFromInitial` below is the half that was
+            // missing.
             StartPressure: Initial.Pressure,
             WithdrawnThisTick: new ReservoirVolume(0.0));
 
-        Pr = Drive.SolveEndPressure(input, fluid);
+        Pr = Drive.SolveFromInitial(input, fluid);
     }
 
     /// <summary>Where the contacts move to as volume is replaced (SDD-003 §3.2).</summary>
