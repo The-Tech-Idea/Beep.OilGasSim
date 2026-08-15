@@ -144,6 +144,14 @@ anything: `wells.completions` after the subsurface and the world,
 the owners — it is what restoring `wells.completions` MEANS, so it runs when that
 key comes up.
 
+**The trail is saved too, and restored** (S013-4): `audit/trail.jsonl`, excluded
+from the digest, ids verbatim so a `Cause` written before a save still resolves
+after one. `TickPipeline` prunes it at every tick boundary, so it stays bounded.
+**`Prune` and `RestoreFrom` are on the concrete `AuditTrail`, never on
+`IAuditTrail`** — a module records and queries and cannot rewrite history —
+exactly as `Advance` is on `SimulationClock` alone. `DiagnosticsModule` provides
+both concrete and interface for each.
+
 **To find out which subsystem failed a reload, diff the digests.** Save the
 reloaded engine at the same tick and compare `Header.ModuleDigests` per module,
 **and `Header.RngPositions`** — the positions are on the header rather than in
@@ -154,14 +162,27 @@ a fact NO owner captures produces identical digests trivially — neither side
 writes it. Matching digests therefore prove state is captured *correctly*, never
 that it is captured *at all*, and they say nothing about objects the loader
 reconstructs (a `Completion` is rebuilt by `Drill` from four saved fields plus
-the rock). When everything matches and the game still diverges, that is the
-answer, not a dead end: the state is outside the container entirely, and the
-search moves to live objects and to design 03 §6.1's one-tick lag — a freshly
-loaded engine's first tick has no previous tick to read (finding 201, S013-9). **A reloaded game continues identically for two years** on EVERY read-model
+the rock).
+
+**And when everything matches and the game still diverges, suspect TWO OWNERS
+before you suspect a missing field.** That is how S013-9 actually ended: connate
+water saturation was derived on the compartment AND declared on the rock curve,
+the two differed in the last bit, and the save wrote one key that the restore
+read into both. The container never lost a value — it UNIFIED two that were
+never equal, which no digest can show, because the block is a faithful record of
+one of them (finding 206). Six families of hypothesis were eliminated by
+measurement before a twenty-line subsurface unit test found it, along with a
+second defect that made any field depleted past a quarter of its initial
+pressure unloadable (finding 205).
+
+**The cheapest decisive test is self-consistency.** Save, load, save the LOAD,
+load again: if the two reloads agree bit for bit and the original differs from
+both, the reload is stable and the save is lossy — which eliminates
+non-determinism, iteration order and floating-point precision in one
+measurement. Run it first, not sixth.
+
+**A reloaded game continues identically for two years** on EVERY read-model
 field, with no exception admitted (`PV2_a_saved_game_reloaded_continues_identically`).
-`Chain` was allowed to differ until R20d.12.18, and the cause was never the
-save: connate water saturation had two owners disagreeing in the last bit and
-the container faithfully recorded one of them (finding 206).
 Building it found **twenty-two facts that no block carried** — a compartment's
 drive and aquifer, the market price, the voidage set point and flood shares,
 well depth and chokes, six fitted tiers, tank contents, linefill, cumulative
