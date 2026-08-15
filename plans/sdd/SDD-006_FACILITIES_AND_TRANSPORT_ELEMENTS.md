@@ -671,6 +671,41 @@ lift every month**, because that is the continuous rate again with extra state.
 simply broken by it**, and that is a content judgement to make with the numbers
 above in hand rather than a default to pick and discover later.
 
+### 7a.2 Built, measured, REVERTED — what the attempt established
+
+R20d.5.1 was implemented end to end and backed out. It is worth recording
+because the blocker is not where §7a.1 predicted, and the next attempt should
+start from the decision rather than from the code.
+
+**The code was not the problem.** A berth with occupancy, cargo-sized lifting,
+laytime and demurrage, and the part-loaded cargo saved with its days alongside,
+came to roughly 150 lines across four files and built clean. The non-slow suite
+went from green to two failures, both in `GameplayTests`.
+
+**A parcel-sized float sits permanently unsold.** §7a.1 predicted that
+*cumulative oil sold over a long run holds* — it does not, and this is the
+prediction that was wrong. With parcel lifting the tank always holds up to one
+parcel that has not shipped, so lifetime revenue is permanently short by that
+much plus the timing of everything before it.
+
+**And the shipped scenario's win condition was calibrated on continuous
+lifting.** `first-field`'s objective is a CASH TARGET with a deadline, so
+deferring revenue is exactly what it measures. `A_player_who_develops_the_field_wins`
+went from `Met` to `Expired` at a 50×10⁶ kg parcel — and again at 20×10⁶ kg,
+under two months of the shipped field's production, which is what settles it:
+
+> **The size is not the problem. Any parcel-based lifting breaks a cash target
+> tuned against a continuous tap.** Shrinking the parcel until the old assertion
+> passes would be the shim this plan already forbids, arrived at by a third
+> route.
+
+**So the next attempt starts by deciding what the opening scenario should
+demand**, not by writing the berth. Either its target moves to account for
+working capital tied up in storage, or the objective stops being a pure cash
+threshold — and that is a game-design decision about how hard the first ten
+years should be, which is worth making deliberately rather than inferring from
+whichever number turns a test green.
+
 **Order of work**, each landing green before the next:
 
 1. The berth carries the rate (§7a's L5 decision), with no schedule yet —
