@@ -212,7 +212,7 @@ public sealed class SubsurfaceStateTests
     /// 60-fold difference in produced water.</para>
     /// </summary>
     [Fact]
-    public void S013V9_a_restored_compartment_holds_the_same_water_as_the_one_it_copied()
+    public void A_restored_compartment_holds_the_same_water_as_the_one_it_copied()
     {
         SubsurfaceState captured = Fresh();
         EntityId<IReservoirCompartmentEntity> id = Add(captured);

@@ -452,7 +452,7 @@ public sealed class SaveGameTests
     /// </summary>
     [Fact]
     [Trait("Speed", "Slow")]
-    public void S013V6_a_reloaded_game_keeps_its_own_calendar()
+    public void A_reloaded_game_keeps_its_own_calendar()
     {
         (Engine original, _) = Played(months: 24);
 
@@ -493,7 +493,7 @@ public sealed class SaveGameTests
     /// </summary>
     [Fact]
     [Trait("Speed", "Slow")]
-    public void S013V4_a_reloaded_game_remembers_why()
+    public void A_reloaded_game_remembers_why()
     {
         (Engine original, _) = Played(months: 24);
 

@@ -136,4 +136,4 @@ have no truth access path (the Information `internal` boundary covers them).
 |---|---|---|
 | S011-1 | Rival belief coarseness (full per-prospect vs play-level only) — start play-level + per-bid prospect sampling; measure cost | R16.4 |
 | S011-2 | Whether rivals participate in the same licence's working interests as partners (farm-in TO the player) | post-R20; the data model (WorkingInterest) already permits it |
-| S011-3 | ~~`ILicence` is declared in the wrong file~~ **Closed at R16.** It lives in `OGSim.Contracts/CompanyContracts.cs`, where the tests that cover it are. The type was always right; only its address was wrong | closed |
+| S011-3 | ~~`ILicence` is declared in the wrong file~~ **Closed at R16.** It lives in `OGSim.Contracts/CompanyContracts.cs`, where the tests that cover it are. The type was always right; only its address was wrong | ✅ |

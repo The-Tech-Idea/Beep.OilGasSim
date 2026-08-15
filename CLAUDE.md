@@ -235,11 +235,22 @@ through `Observation` — the same door every in-game measurement uses.
 ## Rules that will trip you up
 
 These are not style preferences; each is a law. **`tests/OGSim.Architecture.Tests`
-enforces most of them by reflection and source scan** — 24 tests covering L1–L4,
+enforces most of them by reflection and source scan** — 29 tests covering L1–L4,
 layering (both directions, including the read model), naming N3, determinism
 D2/D3/D5/D6/D7/D8, F2's citations, F6's identity rule, the subsurface truth
 boundary and the event bus's missing `Subscribe`. Breaking one of those fails the
 build, so read the failure rather than working around it.
+
+**Four of those assert on the RECORD rather than the code** (`RecordRules.cs`):
+every open item an SDD raises is registered in `MASTER_TRACKER.md`, closure
+agrees in both directions, the headline counts match what the SDDs actually
+raise, and every item row is well formed. They exist because R20d.12 closed
+eight S013 items and propagated none of them, leaving the register advertising
+`S013-10` — "the largest gap left" — as outstanding after it had been built
+(finding 212). **The last of the four is the one to keep**: `S013-6` was
+invisible to every count, mine included, because its row had lost the newline
+joining it to `S013-5`, and a rule that compares two lists cannot see an item
+missing from both.
 
 **What genuinely holds by hand is L5 (one owner per fact) and the F-1/F-3/F-4
 process rules** — no test can tell that a value was mirrored rather than derived,

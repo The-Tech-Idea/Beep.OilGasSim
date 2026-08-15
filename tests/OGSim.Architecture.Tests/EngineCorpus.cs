@@ -122,7 +122,7 @@ internal static class EngineCorpus
 
     /// <summary>Anchored to this file's own compile-time path, so the suite finds
     /// the tree from any working directory and any test runner.</summary>
-    private static string RepositoryRoot([CallerFilePath] string thisFile = "")
+    internal static string RepositoryRoot([CallerFilePath] string thisFile = "")
     {
         DirectoryInfo directory = new FileInfo(thisFile).Directory!;   // .../tests/OGSim.Architecture.Tests
         return directory.Parent!.Parent!.FullName;                     // .../
