@@ -78,6 +78,16 @@ public static class SaveGame
 
     private const string StateSuffix = ".json";
 
+    /// <summary>
+    /// §1's audit sidecar — ONE file since R20d.12.22, because the pipeline
+    /// prunes at every tick and the engine therefore holds no complete trail to
+    /// write beside the retained one.
+    /// </summary>
+    private const string TrailEntry = "audit/trail.jsonl";
+
+    /// <summary>LF (10), as §3 requires of every byte this writes.</summary>
+    private const char Newline = (char)10;
+
     // ------------------------------------------------------------- writing
 
     /// <summary>
@@ -129,6 +139,70 @@ public static class SaveGame
             WriteEntry(archive,
                 StatePrefix + blocks[i].Module + StateSuffix,
                 CanonicalJson.Write(blocks[i].State));
+
+        // THE TRAIL, and it is NOT in the digest (§1b). It is diagnostic rather
+        // than simulation state: a container whose trail was truncated is still
+        // a playable game, and refusing to load one would be refusing over a
+        // record. Digesting it would also make PV1 depend on a file that
+        // retention rewrites as the game runs.
+        WriteEntry(archive, TrailEntry, Trail(engine));
+    }
+
+    /// <summary>
+    /// The retained trail as JSONL — one entry per line, each the canonical form
+    /// of the same flat object shape the state blocks use.
+    ///
+    /// <para>Line-per-entry rather than one array, because a trail is appended to
+    /// and read in ranges: a reader wanting month 214 should not have to parse
+    /// forty years to reach it, and a truncated file should lose its tail rather
+    /// than fail to parse at all.</para>
+    /// </summary>
+    private static string Trail(Engine engine)
+    {
+        // Everything the trail still holds — retention has already decided what
+        // that is (09 §4.4), and asking for a range here would be a second
+        // policy competing with it.
+        IReadOnlyList<AuditEntry> entries =
+            engine.Audit.Query(new AuditQuery(null, null, null, null));
+
+        var text = new System.Text.StringBuilder();
+
+        for (int i = 0; i < entries.Count; i++)
+        {
+            text.Append(CanonicalJson.Write(Written(entries[i])));
+            text.Append(Newline);
+        }
+
+        return text.ToString();
+    }
+
+    private static JsonValue Written(AuditEntry entry)
+    {
+        var data = new Dictionary<string, JsonValue>(StringComparer.Ordinal);
+
+        foreach (KeyValuePair<string, AuditValue> pair in entry.Data)
+            data[pair.Key] = new JsonString(pair.Value.Value);
+
+        var members = new Dictionary<string, JsonValue>(StringComparer.Ordinal)
+        {
+            ["id"] = new JsonString(Text(entry.Id.Value)),
+            ["tick"] = new JsonInteger(entry.Tick.Value),
+            ["category"] = new JsonString(entry.Category.ToString()),
+            ["data"] = new JsonObject(data),
+        };
+
+        // ABSENT RATHER THAN NULL for the two optionals: a subject-less entry and
+        // one whose subject is "nothing" are different claims, and the reader
+        // below distinguishes them by the key being there at all.
+        if (entry.Subject is EntityRef subject)
+        {
+            members["subject-kind"] = new JsonString(subject.Kind.ToString());
+            members["subject-id"] = new JsonString(Text(subject.Value));
+        }
+
+        if (entry.Cause is AuditId cause) members["cause"] = new JsonString(Text(cause.Value));
+
+        return new JsonObject(members);
     }
 
     /// <summary>
@@ -258,6 +332,13 @@ public static class SaveGame
 
         Restore(ready.Engine, loaded);
 
+        // THE TRAIL, after the state. It is not an owner and not in the digest,
+        // so it is restored beside the blocks rather than among them — and after
+        // them, because a fresh engine records nothing while being restored and
+        // the ids in the file must land in an empty trail (SDD-001 §5).
+        source.Position = 0;
+        RestoreTrail(ready.Engine, source);
+
         return ready;
     }
 
@@ -337,6 +418,86 @@ public static class SaveGame
             random.Stream(Streams[i]).Seek(position);
         }
     }
+
+    /// <summary>
+    /// Puts the saved trail back, so 09 §4.3's "why?" can still be asked about a
+    /// month that preceded the save (SDD-013 §1b, S013-4).
+    ///
+    /// <para>Ids restore verbatim and the counter resumes above the highest, so a
+    /// `Cause` written before the save still resolves after it. A container with
+    /// no trail loads with none: the sidecar is excluded from the digest
+    /// precisely so a truncated or absent trail is a lost record rather than an
+    /// unplayable game.</para>
+    /// </summary>
+    private static void RestoreTrail(Engine engine, Stream source)
+    {
+        using var archive = new ZipArchive(source, ZipArchiveMode.Read, leaveOpen: true);
+
+        if (archive.GetEntry(TrailEntry) is not ZipArchiveEntry found) return;
+
+        var entries = new List<AuditEntry>();
+
+        foreach (string line in Text(found).Split(Newline))
+        {
+            if (line.Length == 0) continue;
+
+            entries.Add(EntryFrom(CanonicalJson.Read(line)));
+        }
+
+        engine.Provided.Resolve<AuditTrail>().RestoreFrom(entries);
+    }
+
+    private static AuditEntry EntryFrom(JsonValue value)
+    {
+        JsonObject json = Object(value, "an audit entry");
+
+        EntityRef? subject = json.Members.ContainsKey("subject-kind")
+            ? new EntityRef(
+                Kind(String(Member(json, "subject-kind"), "subject-kind")),
+                Seed(String(Member(json, "subject-id"), "subject-id")))
+            : null;
+
+        AuditId? cause = json.Members.ContainsKey("cause")
+            ? new AuditId(Seed(String(Member(json, "cause"), "cause")))
+            : null;
+
+        var data = new Dictionary<string, AuditValue>(StringComparer.Ordinal);
+        JsonObject payload = Object(Member(json, "data"), "an audit entry's data");
+
+        foreach (KeyValuePair<string, JsonValue> pair in payload.Members)
+            data[pair.Key] = new AuditValue(String(pair.Value, pair.Key));
+
+        return new AuditEntry(
+            new AuditId(Seed(String(Member(json, "id"), "id"))),
+            new Tick((int)Integer(Member(json, "tick"), "tick")),
+            Category(String(Member(json, "category"), "category")),
+            subject,
+            cause,
+            data);
+    }
+
+    /// <summary>
+    /// Enum members by NAME both ways, as the era is (SDD-010 §4c.1): an ordinal
+    /// would re-key silently the day a member is inserted, and a trail is the one
+    /// artefact a player is invited to check against the engine's own arithmetic.
+    /// </summary>
+    private static AuditCategory Category(string name) =>
+        System.Enum.GetValues<AuditCategory>() is var all
+        && System.Array.Find(all, c => string.Equals(c.ToString(), name, StringComparison.Ordinal))
+            is AuditCategory found
+        && string.Equals(found.ToString(), name, StringComparison.Ordinal)
+            ? found
+            : throw new SaveDataFault("SDD-013 §1b", null,
+                $"the trail names audit category '{name}', which this build does not declare");
+
+    private static EntityKind Kind(string name) =>
+        System.Enum.GetValues<EntityKind>() is var all
+        && System.Array.Find(all, k => string.Equals(k.ToString(), name, StringComparison.Ordinal))
+            is EntityKind found
+        && string.Equals(found.ToString(), name, StringComparison.Ordinal)
+            ? found
+            : throw new SaveDataFault("SDD-013 §1b", null,
+                $"the trail names entity kind '{name}', which this build does not declare");
 
     /// <summary>
     /// Draws the basin again, from the seed and the parameters the save carries

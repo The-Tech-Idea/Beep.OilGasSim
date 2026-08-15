@@ -1313,14 +1313,23 @@ internal sealed class MaterialsModule(RealityProfile profile) : EngineModule(Dec
 /// it.
 /// </summary>
 internal sealed class DiagnosticsModule(
-    IAuditTrail audit, SimulationClock clock, IRandomSource random) : EngineModule(Declare(
+    AuditTrail audit, SimulationClock clock, IRandomSource random) : EngineModule(Declare(
     "diagnostics",
 
     // The clock and the RNG join the trail here for the same reason it is here:
     // they are kernel facilities every module may need and none may own, and
     // composing them makes them declared dependencies rather than the ambient
     // singletons law L2 forbids.
-    provides: [typeof(IAuditTrail), typeof(SimulationClock), typeof(IRandomSource)],
+    // THE CONCRETE TRAIL BESIDE THE INTERFACE, exactly as the clock is. `Prune`
+    // and `RestoreFrom` are on `AuditTrail` and not on `IAuditTrail`, so a module
+    // that takes the interface can record and query and cannot rewrite history —
+    // and the two things entitled to (the pipeline, and a load) ask for the
+    // concrete by name (SDD-001 §5).
+    provides:
+    [
+        typeof(IAuditTrail), typeof(AuditTrail),
+        typeof(SimulationClock), typeof(IRandomSource),
+    ],
     requires: [],
     ownsState: NothingOwnedYet,
     stages: NoStagesYet))
@@ -1329,6 +1338,7 @@ internal sealed class DiagnosticsModule(
     {
         ArgumentNullException.ThrowIfNull(composition);
 
+        composition.Provide<IAuditTrail>(audit);
         composition.Provide(audit);
         composition.Provide(clock);
         composition.Provide(random);

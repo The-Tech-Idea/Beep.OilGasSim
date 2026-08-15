@@ -1579,7 +1579,7 @@ public static class EngineBuilder
     /// (SDD-001 §9, finding 126).</para>
     /// </summary>
     internal static IReadOnlyList<IModule> ShippedModules(
-        IAuditTrail audit, SimulationClock clock, IRandomSource random,
+        AuditTrail audit, SimulationClock clock, IRandomSource random,
         RealityProfile profile) =>
     [
         new SubsurfaceModule(),

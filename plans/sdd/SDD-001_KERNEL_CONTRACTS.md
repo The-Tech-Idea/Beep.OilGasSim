@@ -432,6 +432,25 @@ public sealed record AuditQuery(
 
 public interface IAuditTrail
 {
+    // R20d.12.23 — the trail comes back from a save (SDD-013 §1b/S013-4).
+    //
+    // ON THE CONCRETE `AuditTrail`, NOT ON `IAuditTrail`, exactly as `Prune` and
+    // `SimulationClock.Advance` are: a module that holds the interface must be
+    // able to record and query and must not be able to rewrite history. The one
+    // thing loading a save can.
+    //
+    // NOT VIA `Record`. That assigns the next id and refuses a cause it cannot
+    // resolve — both correct for a live entry and both wrong for a restore,
+    // which must reproduce the ids the save carries or every `Cause` in it
+    // points at the wrong entry. Ids restore verbatim and the counter resumes
+    // above the highest.
+    //
+    //   void RestoreFrom(IReadOnlyList<AuditEntry> entries);   // on AuditTrail
+    //
+    // Refuses a set whose causes do not resolve WITHIN it, because a chain that
+    // dangles after a load is 09 §4.3's "why?" stopping halfway with nothing to
+    // say it stopped — the same failure INV12 refuses at write time.
+
     AuditId Record(AuditCategory category, EntityRef? subject, AuditId? cause,
                    IReadOnlyDictionary<string, AuditValue> data);
     IReadOnlyList<AuditEntry> Query(AuditQuery query);     // entity / range / category / cause-walk

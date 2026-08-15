@@ -65,6 +65,66 @@ public sealed class AuditTrail : IAuditTrail
         return entry.Id;
     }
 
+    /// <summary>
+    /// Puts a saved trail back (SDD-001 §5's R20d.12.23 amendment, SDD-013 §1b).
+    ///
+    /// <para>NOT VIA <see cref="Record"/>, which assigns the next id and refuses
+    /// a cause it cannot resolve — both right for a live entry and both wrong
+    /// here. Ids restore VERBATIM: a save's `Cause` values point at the ids the
+    /// save carried, so renumbering would leave every chain in it aimed at the
+    /// wrong entry. The counter resumes above the highest restored, so an entry
+    /// written after the load cannot collide with one written before it.</para>
+    ///
+    /// <para>REPLACES whatever is there, and the reason is the same one
+    /// <c>BeliefStore</c> restores by replacement (SDD-008 §4b.1): a load
+    /// REGENERATES the world before restoring it, and regeneration records as it
+    /// goes — belief updates, chiefly. Those entries are the reload's own account
+    /// of work the save already describes, so keeping them beside the restored
+    /// trail would file every generation event twice under two numberings.</para>
+    ///
+    /// <para>This refused a non-empty trail until the guard met a generated
+    /// world and was right to fire: the assumption behind it — that a fresh
+    /// engine records nothing while being loaded — is false for any save that
+    /// regenerates.</para>
+    /// </summary>
+    public void RestoreFrom(IReadOnlyList<AuditEntry> entries)
+    {
+        ArgumentNullException.ThrowIfNull(entries);
+
+        _entries.Clear();
+        _bySubject.Clear();
+        _byCategory.Clear();
+
+        ulong highest = 0;
+
+        for (int i = 0; i < entries.Count; i++)
+        {
+            AuditEntry entry = entries[i];
+
+            if (!_entries.TryAdd(entry.Id, entry))
+                throw new SaveDataFault("SDD-013 §1b", entry.Subject,
+                    $"the trail carries audit id {entry.Id.Value} twice; ids are the chain's " +
+                    "own references, so a duplicate makes every cause pointing at it ambiguous");
+
+            if (entry.Id.Value > highest) highest = entry.Id.Value;
+        }
+
+        // EVERY CAUSE MUST RESOLVE WITHIN THE SET, checked after the whole trail
+        // is in rather than entry by entry: a save lists entries in id order and
+        // a cause always precedes its effect, but that is a property of how it
+        // was written and not something a loader should rely on a file to have.
+        foreach (KeyValuePair<AuditId, AuditEntry> pair in _entries)
+            if (pair.Value.Cause is AuditId cause && !_entries.ContainsKey(cause))
+                throw new SaveDataFault("INV12", pair.Value.Subject,
+                    $"audit entry {pair.Key.Value} is caused by {cause.Value}, which the trail " +
+                    "does not contain; 09 §4.3's \"why?\" would stop halfway with nothing to " +
+                    "say that it had");
+
+        _nextId = highest + 1;
+
+        RebuildIndices();
+    }
+
     public IReadOnlyList<AuditEntry> Query(AuditQuery query)
     {
         ArgumentNullException.ThrowIfNull(query);

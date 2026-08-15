@@ -468,6 +468,65 @@ public sealed class SaveGameTests
     }
 
     /// <summary>
+    /// S013-4. THE TRAIL SURVIVES A RELOAD, ids and cause chains intact.
+    ///
+    /// <para>Design 09 §4.3 promises a player can ask "why?" of the current
+    /// state, and §4.4 promises that nothing explaining the current state is
+    /// discarded — guarantees about the STATE, not the session. A trail that
+    /// began again at every load could not answer why a well is shut in today if
+    /// the failure that shut it predates the save, which is finding 198's shape:
+    /// a company that reloads and has forgotten (SDD-013 §1b).</para>
+    ///
+    /// <para>IDS RESTORE VERBATIM, which is the whole of it. A `Cause` in a saved
+    /// entry points at the id the save carried, so renumbering on load would aim
+    /// every chain in the file at the wrong entry — and the counter resumes above
+    /// the highest, so an entry written after the load cannot collide with one
+    /// written before it.</para>
+    /// </summary>
+    [Fact]
+    [Trait("Speed", "Slow")]
+    public void S013V4_a_reloaded_game_remembers_why()
+    {
+        (Engine original, _) = Played(months: 24);
+
+        IReadOnlyList<AuditEntry> before =
+            original.Audit.Query(new AuditQuery(null, null, null, null));
+
+        Assert.NotEmpty(before);
+
+        using MemoryStream container = Saved(original);
+
+        Engine reloaded = Assert.IsType<Built>(
+            SaveGame.Load(container, Fixture.Settings())).Engine;
+
+        IReadOnlyList<AuditEntry> after =
+            reloaded.Audit.Query(new AuditQuery(null, null, null, null));
+
+        Assert.Equal(before.Count, after.Count);
+
+        for (var i = 0; i < before.Count; i++)
+        {
+            Assert.Equal(before[i].Id, after[i].Id);
+            Assert.Equal(before[i].Tick, after[i].Tick);
+            Assert.Equal(before[i].Category, after[i].Category);
+            Assert.Equal(before[i].Subject, after[i].Subject);
+            Assert.Equal(before[i].Cause, after[i].Cause);
+            Assert.True(Structural.Equal(before[i].Data, after[i].Data));
+        }
+
+        // AND THE COUNTER RESUMED, so the next entry cannot collide with one the
+        // save carried. Ticking on is what writes it.
+        reloaded.Pipeline.AdvanceTick();
+
+        IReadOnlyList<AuditEntry> grown =
+            reloaded.Audit.Query(new AuditQuery(null, null, null, null));
+
+        Assert.All(grown, entry => Assert.True(
+            entry.Cause is not AuditId cause || grown.Any(e => e.Id == cause),
+            $"entry {entry.Id.Value} cites a cause the trail no longer holds"));
+    }
+
+    /// <summary>
     /// EVERY OWNER CAPTURES TOGETHER, which had never been true before: one block
     /// each, stamped with its own schema version, digested as a set.
     ///
