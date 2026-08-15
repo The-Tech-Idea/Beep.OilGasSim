@@ -247,6 +247,22 @@ public sealed record FieldReadModel(
     ReservesEstimate Reserves,
 
     /// <summary>
+    /// Additions over the trailing twelve months against what was produced in
+    /// them — IR2's standing indicator for the liquidation spiral (SDD-009 §4).
+    ///
+    /// <para>Reported on PROVED, because that is what the company's own lender
+    /// redetermines the borrowing base from: a ratio on 2P would include volumes
+    /// no bank will lend against, so a company could show replacement above one
+    /// while its facility shrank every quarter.</para>
+    ///
+    /// <para>NULL means not defined rather than zero — under twelve months of
+    /// history there is no window to measure, and a company that produced
+    /// nothing has an empty denominator. Reporting 0.0 in either case would
+    /// state a replacement failure that did not happen.</para>
+    /// </summary>
+    double? ReserveReplacementRatio,
+
+    /// <summary>
     /// What the bank will lend and at what price (SDD-009 §5). A company that
     /// could not see its own borrowing base could not tell whether a development
     /// was fundable, which is the decision the facility exists to enable.
@@ -393,7 +409,8 @@ internal sealed class FieldProjection(
     WorldState world,
     OGSim.Information.ProspectRisks risks,
     ReservesBook reserves,
-    Bank bank)
+    Bank bank,
+    ReserveHistory history)
 {
     public FieldPosition Take(Tick tick, GameDate date, bool insolvent) =>
         new(tick, date, company.Ledger.Cash, field.WellCount, activities.InProgress,
@@ -405,6 +422,9 @@ internal sealed class FieldProjection(
             progress, Project(beliefs), loop.Chain(), field.Wells(), Prospects(),
             loop.Market.OilPrice, loop.Market.CostIndex,
             reserves.Remaining(loop.CumulativeProduced),
+            history.Ratio(
+                reserves.Remaining(loop.CumulativeProduced).Proved,
+                loop.CumulativeProduced),
             bank.Terms, bank.Covenant, bank.Drawn,
             loop.CumulativeFlared,
             Defaults.Record.Standing(loop.CumulativeFlared, loop.CumulativeProduced),

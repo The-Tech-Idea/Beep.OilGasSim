@@ -2082,7 +2082,9 @@ internal sealed class CustodyStage(ProductionLoop loop) : ITickStage
     }
 }
 
-internal sealed class EconomicsStage(ProductionLoop loop, Bank bank) : ITickStage
+internal sealed class EconomicsStage(
+    ProductionLoop loop, Bank bank, ReservesBook reserves, ReserveHistory history)
+    : ITickStage
 {
 
     public StageId Id => StageId.Economics;
@@ -2104,5 +2106,14 @@ internal sealed class EconomicsStage(ProductionLoop loop, Bank bank) : ITickStag
         bank.Settle(
             context.Tick,
             Defaults.Record.Standing(loop.CumulativeFlared, loop.CumulativeProduced));
+
+        // AND WHERE THE COMPANY STOOD THIS MONTH, so a year from now there is
+        // something to measure replacement against (SDD-009 §4). Recorded AFTER
+        // the settle, on the same reserves the bank was just re-priced against:
+        // taking them before would compare a month's additions to a base struck
+        // at a different moment, which is the kind of half-tick skew that reads
+        // as a real movement in the indicator.
+        history.Record(
+            reserves.Remaining(loop.CumulativeProduced).Proved, loop.CumulativeProduced);
     }
 }

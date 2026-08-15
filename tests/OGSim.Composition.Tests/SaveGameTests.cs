@@ -338,6 +338,87 @@ public sealed class SaveGameTests
         Assert.NotEqual(CovenantState.Clear, breached.State);
     }
 
+    /// <summary>
+    /// A RELOADED COMPANY CAN STILL MEASURE ITS OWN REPLACEMENT (finding 208).
+    ///
+    /// <para>RRR is derived — it is computed from reserves the belief store
+    /// carries and production the loop counts — but it is defined over a
+    /// TRAILING TWELVE MONTHS, and what proved reserves stood at a year ago is
+    /// recoverable from nothing else in the save. Beliefs restore as they are
+    /// TODAY.</para>
+    ///
+    /// <para>The check is sharp because the indicator has a NULL: a company
+    /// without twelve months of history reports "not measured" rather than a
+    /// number, so an unsaved ring shows up as a reloaded company that has
+    /// forgotten how to answer at all — not as a value that is slightly
+    /// off.</para>
+    /// </summary>
+    [Fact]
+    [Trait("Speed", "Slow")]
+    public void A_reloaded_company_still_knows_what_it_replaced()
+    {
+        (Engine engine, _) = Played(months: 12);
+
+        // A COMPANY WITH NO BOOKED RESERVES CANNOT BE ASKED THIS. The shared
+        // fixture drills through `FieldControl`, which never books an
+        // oil-in-place belief, so proved stays at zero and the ratio is
+        // deliberately undefined however long it produces. Asserting on that
+        // company would have been the same vacuum as comparing an empty belief
+        // store (finding 198) — so a discovery is MADE first, and the hole is
+        // retried because most of them are lost.
+        WorldState world = engine.Provided.Resolve<WorldState>();
+
+        var attempts = 0;
+        while (attempts < DiscoveryAttempts
+            && engine.ReadModel!.Reserves.Proved.CubicMetres <= 0.0)
+        {
+            engine.Commands.Submit(
+                new DrillWellCommand(world.Prospects[0], new Length(2000.0)));
+
+            Fixture.Run(engine, months: 12);
+            attempts++;
+        }
+
+        Assert.True(engine.ReadModel!.Reserves.Proved.CubicMetres > 0.0,
+            "no discovery was made, so proved reserves are zero and the ratio is " +
+            "undefined by design — this test would assert nothing");
+
+        Fixture.Run(engine, months: 13);
+
+        Assert.NotNull(engine.ReadModel!.ReserveReplacementRatio);
+
+        double measured = engine.ReadModel!.ReserveReplacementRatio!.Value;
+
+        using MemoryStream container = Saved(engine);
+
+        Engine reloaded = Assert.IsType<Built>(
+            SaveGame.Load(container, Fixture.Settings())).Engine;
+
+        reloaded.Pipeline.AdvanceTick();
+        engine.Pipeline.AdvanceTick();
+
+        Assert.Equal(
+            engine.ReadModel!.ReserveReplacementRatio,
+            reloaded.ReadModel!.ReserveReplacementRatio);
+
+        // AND THE RING IS WHAT CARRIED IT, asserted rather than assumed: a
+        // reloaded engine with an empty history would answer null, and null
+        // equals null, so a test that only compared the two would pass against
+        // a save that wrote nothing at all.
+        Assert.NotNull(reloaded.ReadModel!.ReserveReplacementRatio);
+
+        // AND IT WAS MEASURING SOMETHING, which is the assertion that stops the
+        // two above being satisfied by a pair of zeroes. A ratio of 0.76 says
+        // this company replaced roughly three quarters of what it produced.
+        //
+        // NOT compared against the value taken before the save: RRR moves every
+        // month by construction — the window slides — so an equality there would
+        // have been asserting that a standing indicator stands still.
+        Assert.True(measured > 0.0,
+            $"the ratio measured {measured}, so the fixture never replaced anything " +
+            "and the comparison above would hold for a company that did nothing");
+    }
+
     /// <summary>How long the search above will run before giving up. Not a
     /// model constant — a bound on a measurement.</summary>
     private const int BreachSearchMonths = 300;

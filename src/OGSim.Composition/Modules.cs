@@ -590,7 +590,7 @@ internal sealed class FieldModule() : EngineModule(Declare(
     provides:
     [
         typeof(FieldControl), typeof(CloseStage), typeof(IObligationRegistry),
-        typeof(Bank),
+        typeof(Bank), typeof(ReserveHistory),
     ],
     requires:
     [
@@ -619,7 +619,7 @@ internal sealed class FieldModule() : EngineModule(Declare(
 
     ownsState: [
         "field.activities", "company.obligations", "field.flood", "field.export",
-        "company.facility"],
+        "company.facility", "company.reserve-history"],
     stages:
     [
         new StageParticipation(StageId.Operations, Order: 0),
@@ -787,6 +787,14 @@ internal sealed class FieldModule() : EngineModule(Declare(
         // — a breach curable by saving and loading (finding 210).
         composition.Own(bank);
 
+        // THE RESERVE RECORD, which is what makes RRR measurable at all: the
+        // ratio is derived, but "what proved reserves stood at a year ago" is
+        // recoverable from nothing else in a save (finding 208).
+        var history = new ReserveHistory();
+
+        composition.Own(history);
+        composition.Provide(history);
+
         composition.Provide(bank);
         composition.Contribute(order: 0, new SegmentationStage(
             network, composition.Require<OGSim.Integrity.AssetIntegrity>(), loop));
@@ -805,7 +813,8 @@ internal sealed class FieldModule() : EngineModule(Declare(
             // files beliefs about today; §2d.1's table is the rule for the rest.
             [Defaults.PressureKind]));
         composition.Contribute(order: 0, new CustodyStage(loop));
-        composition.Contribute(order: 0, new EconomicsStage(loop, bank));
+        composition.Contribute(order: 0, new EconomicsStage(
+            loop, bank, composition.Require<ReservesBook>(), history));
 
         // The scenario's door onto the field. Provided rather than reachable, so
         // building a field is something composition hands out deliberately.
@@ -951,7 +960,8 @@ internal sealed class FieldModule() : EngineModule(Declare(
             composition.Require<WorldState>(),
             composition.Require<OGSim.Information.ProspectRisks>(),
             composition.Require<ReservesBook>(),
-            bank);
+            bank,
+            composition.Require<ReserveHistory>());
 
         // The scenario is CONTENT (design 03 §3.3): the win condition is an
         // objective over a read-model path, not a comparison compiled into a
