@@ -129,10 +129,19 @@ gathering line measured to the header, which lives in that block. S013-5 replace
 this list with design 11 §2.1's declared topological order.
 
 **To find out which subsystem failed a reload, diff the digests.** Save the
-reloaded engine at the same tick and compare `Header.ModuleDigests` per module —
-the container already digests each block separately, so it names the culprit in
-one comparison. If they all match and the game still diverges, the state is in
-no owner at all and the search moves to live objects (finding 201). **A reloaded game continues identically for two years** on every read-
+reloaded engine at the same tick and compare `Header.ModuleDigests` per module,
+**and `Header.RngPositions`** — the positions are on the header rather than in
+any block, so the digests alone are blind to a stream left astray.
+
+**Know what that method cannot find.** It compares what each block *writes*, so
+a fact NO owner captures produces identical digests trivially — neither side
+writes it. Matching digests therefore prove state is captured *correctly*, never
+that it is captured *at all*, and they say nothing about objects the loader
+reconstructs (a `Completion` is rebuilt by `Drill` from four saved fields plus
+the rock). When everything matches and the game still diverges, that is the
+answer, not a dead end: the state is outside the container entirely, and the
+search moves to live objects and to design 03 §6.1's one-tick lag — a freshly
+loaded engine's first tick has no previous tick to read (finding 201, S013-9). **A reloaded game continues identically for two years** on every read-
 model field but `Chain` (`PV2_a_saved_game_reloaded_continues_identically`).
 Building it found **twenty-two facts that no block carried** — a compartment's
 drive and aquifer, the market price, the voidage set point and flood shares,
