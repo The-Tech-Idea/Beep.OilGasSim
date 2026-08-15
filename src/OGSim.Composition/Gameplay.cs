@@ -322,7 +322,20 @@ public sealed record FieldReadModel(
     /// absent row would be indistinguishable from a cause that does not
     /// exist.</para>
     /// </summary>
-    IReadOnlyList<Money> CashByCause)
+    IReadOnlyList<Money> CashByCause,
+
+    /// <summary>
+    /// WHAT THE COMPANY IS DOING — R21 §2.4b row 15, using SDD-017 §2's
+    /// `OperationView`, which has been specified since that document was written
+    /// and filled by nothing (R21.6).
+    ///
+    /// <para>`ActivitiesRunning` counted them. A count cannot answer the question
+    /// the row exists for — WHICH operations, how far along, and what each has
+    /// cost so far — so a player could see the rig was busy and not whether a
+    /// well was nearly down or barely started, and could not tell an operation
+    /// that had stalled from one progressing normally.</para>
+    /// </summary>
+    IReadOnlyList<OperationView> Operations)
 {
     /// <summary>Where the chain is jammed, if anywhere — the elements that
     /// refused production this tick.</summary>
@@ -353,7 +366,8 @@ public sealed record FieldReadModel(
         && Structural.Equal(Beliefs, other.Beliefs)
         && Structural.Equal(Chain, other.Chain)
         && Structural.Equal(Wellbores, other.Wellbores)
-        && Structural.Equal(CashByCause, other.CashByCause);
+        && Structural.Equal(CashByCause, other.CashByCause)
+        && Structural.Equal(Operations, other.Operations);
 
     public override int GetHashCode() =>
         HashCode.Combine(Tick, Date, Cash, Wells, ActivitiesRunning, ProducedThisTick,
@@ -398,7 +412,8 @@ internal sealed class FieldProjection(
                 loop.VoidageReplacement, loop.ImportedThisTick, loop.InjectionHeadroom,
                 loop.SourFraction),
             loop.Storage,
-            company.Ledger.CashByCause(position.Tick));
+            company.Ledger.CashByCause(position.Tick),
+            activities.Operations());
 
     /// <summary>
     /// The undrilled structures, in the order the world placed them (D-5).

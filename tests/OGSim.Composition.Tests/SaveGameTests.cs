@@ -163,6 +163,7 @@ public sealed class SaveGameTests
         // (finding 198).
         Check("Storage", a.Storage == b.Storage);
         Check("CashByCause", Structural.Equal(a.CashByCause, b.CashByCause));
+        Check("Operations", Structural.Equal(a.Operations, b.Operations));
 
         return apart.Count == 0
             ? "no named field differs"

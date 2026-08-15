@@ -808,4 +808,48 @@ public sealed class GameplayTests
 
         throw new InvalidOperationException($"{cause} is not a declared cause");
     }
+
+    /// <summary>
+    /// R21 §2.4b row 15, using SDD-017 §2's `OperationView` — WHICH operations
+    /// are running, how far along, and what each has cost.
+    ///
+    /// <para>The read model published a COUNT. "Two activities running" cannot
+    /// answer "what is my company doing?": a player could see the rig was busy
+    /// and not whether a well was nearly down or barely started, and could not
+    /// tell a stalled operation from one progressing normally.</para>
+    ///
+    /// <para>Asserted as MOVEMENT rather than against a figure: an operation
+    /// under way has progress inside its own effective duration and has accrued
+    /// something, and after a month it has progressed further. Numbers copied
+    /// from a run would pin whatever the engine happens to do.</para>
+    /// </summary>
+    [Fact]
+    public void R21V6_the_read_model_says_what_each_operation_is_doing()
+    {
+        (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled();
+
+        engine.Commands.Submit(Drill(engine, target));
+        engine.Pipeline.AdvanceTick();
+
+        OperationView drilling = Assert.Single(engine.ReadModel!.Operations);
+
+        Assert.Equal(EntityKind.Operation, drilling.Operation.Kind);
+        Assert.True(drilling.EffectiveDurationDays > 0);
+        Assert.InRange(drilling.ProgressDays, 1, drilling.EffectiveDurationDays);
+
+        Assert.True(drilling.Accrued != Money.Zero,
+            "a month of drilling accrued nothing, so the cost column says nothing about " +
+            "what the rig has already committed");
+
+        // A MONTH LATER IT HAS MOVED, which is what distinguishes progress from
+        // a stalled operation — the whole reason the row is progress and not a
+        // running flag.
+        engine.Pipeline.AdvanceTick();
+
+        if (engine.ReadModel!.Operations.Count == 0) return;   // it finished, which is progress too
+
+        Assert.True(
+            engine.ReadModel!.Operations[0].ProgressDays > drilling.ProgressDays,
+            "a second month left the operation exactly where it was");
+    }
 }

@@ -238,6 +238,39 @@ internal sealed class ActivityState : IStateOwner
     public IReadOnlyList<InFlight> Running => _running;
 
     /// <summary>
+    /// WHAT THE COMPANY IS DOING — R21 §2.4b row 15, and the view SDD-017 §2 has
+    /// specified as `OperationView` since it was written (R21.6).
+    ///
+    /// <para>The read model published a COUNT. "Two activities running" cannot
+    /// answer the question the row exists for — which two, how far along, and
+    /// how much has been spent — so a player could see that the rig was busy and
+    /// not whether the well was nearly down or barely started.</para>
+    ///
+    /// <para>In the order they began, which is `_running`'s own order: two runs
+    /// of one save render the same list (D-5), and "what did I start first" is
+    /// the order a player thinks in.</para>
+    /// </summary>
+    public IReadOnlyList<OperationView> Operations()
+    {
+        var seen = new List<OperationView>(_running.Count);
+
+        for (int i = 0; i < _running.Count; i++)
+        {
+            InFlight flight = _running[i];
+
+            seen.Add(new OperationView(
+                new EntityRef(EntityKind.Operation, flight.Operation.Id.Value),
+                flight.Operation.Spec.Template.Value,
+                flight.Operation.State,
+                flight.Operation.ProgressDays,
+                flight.Operation.Outcome.EffectiveDurationDays,
+                flight.Operation.Accrued));
+        }
+
+        return seen;
+    }
+
+    /// <summary>
     /// An activity by template id. A command naming one that is not composed is a
     /// composition defect rather than a player error — the command could not have
     /// been declared without it.
