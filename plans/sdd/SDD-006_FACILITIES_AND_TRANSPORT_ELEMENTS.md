@@ -606,6 +606,56 @@ reason berths are worth building rather than a bigger pipe.
 > berth; it also makes `ExpandExportCommand` a berth upgrade rather than a pipe
 > one, which is a content change and not only a code change.
 
+### 7a.1 What makes R20d.5.1 expensive is not the code
+
+The draw itself is ONE LINE — `_tank.Draw(Tier.Offtake · tickSeconds)` in
+`StoreAndExport`. Replacing it with a cargo rhythm is a small edit. **What is
+expensive is that it moves the economics of every long-running test**, and this
+section exists so the next attempt expects that rather than discovering it.
+
+**Twenty-nine tests carry `Speed=Slow` in the composition suite** — fourteen in
+`ChainTests`, five each in `NewGameTests` and `SaveGameTests`, three in
+`ReferenceClientTests`, two in `ProductionLoopTests` — and the ones that play a
+whole field life all price a field that lifts continuously. Three files reach
+export directly (`ChainTests`, `RealityProfileTests`, `SaveGameTests`), and the
+rest reach it through cash. A gate cycle is about fifteen minutes.
+
+**Do NOT tune the cargo size to reproduce today's behaviour.** A parcel small
+enough to lift every tick is a continuous rate wearing a schedule's name, and a
+setting chosen to keep tests green is a compatibility shim — which this
+repository forbids by name. The behaviour is meant to change.
+
+**So the test movements must be predicted, not explained afterwards.** The
+invariant that should survive is the one the physics has not changed:
+
+```text
+holds     cumulative oil sold over a long run — a rhythm changes WHEN oil
+          leaves, not how much the field can ultimately sell
+holds     everything upstream of the tank: rates, pressures, water cut,
+          equipment condition, obligations
+MOVES     tank level and ullage, tick by tick
+MOVES     how often the tank binds and shuts wells in (R8-V5's subject)
+MOVES     cash TIMING, and therefore the covenant and borrowing tests that
+          sample it at a particular month
+```
+
+A movement outside that list is a defect and should be treated as one. A
+movement inside it is the feature, and the test that measured the old rhythm
+should be re-stated in terms of the new one rather than re-tuned to pass.
+
+**Order of work**, each landing green before the next:
+
+1. The berth carries the rate (§7a's L5 decision), with no schedule yet —
+   behaviour identical, tests unmoved, and the duplicate-rate hazard closed
+   before anything can depend on it.
+2. Cargoes and occupancy: the tank fills between liftings. **This is where the
+   slow suite moves**, and where the predictions above are checked.
+3. Laytime and demurrage — a cost, so it touches the ledger and the ESG/covenant
+   tests but not the flow.
+4. `ConstraintKind.BerthOccupancy` emitted, and `LogisticsView` populated
+   (finding 203's three dangling declarations, joined at the point where they
+   finally have a source).
+
 ## 7b. Export capacity — a socket, not a constant
 
 > **R20d.8 amendment (finding 165). The offtake rate was a constant and the
