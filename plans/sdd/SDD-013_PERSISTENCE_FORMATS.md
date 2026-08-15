@@ -26,7 +26,7 @@ stateDigest` — digest = SHA-256 over the canonical module blocks concatenated
 in module-name order; per-module digests localise PV divergence (R19 risk
 note).
 
-## 2b. The restore order is DECLARED — S013-5, specified (R20d.12.14)
+## 2b. The restore order is DECLARED — S013-5 (specified R20d.12.14, built R20d.12.15)
 
 Capture walks owners in **state-key order**, and that is right for capture: it
 makes the bytes independent of the order modules happened to compose, which is
@@ -35,12 +35,20 @@ not symmetric with capturing — an owner's `Restore` may need facts another own
 holds, and key order says nothing about which. Design 11 §2.1 asks for declared
 dependencies, topologically sorted.
 
-**Today the order is three phases hand-written in `SaveGame.Restore`.** That is
-not merely inelegant; it has already failed once in a way nothing could catch.
-`world.decisions` sorts after `wells.completions`, so the field rebuild measured
-each reopened well's gathering line against a header that had not been restored
-and every tieback fell to its floor. The correction is a line in the loader that
-no test pins and no rule protects (finding 201).
+**It was three phases hand-written in `SaveGame.Restore`**, and that had already
+failed once in a way nothing could catch: `world.decisions` sorts after
+`wells.completions`, so the field rebuild measured each reopened well's gathering
+line against a header that had not been restored and every tieback fell to its
+floor (finding 201).
+
+**And a second constraint existed only as a sentence in that loader's docstring**
+— "obligations land in the third phase ON PURPOSE", because reopening a well
+registers an abandonment obligation exactly as drilling one does and the save's
+record has to win, or a company gets back an obligation it had discharged. Key
+order disagrees. The first walk of the declared order faulted on it immediately,
+which is the whole argument for the change demonstrated rather than asserted:
+prose the loader happened to implement correctly became a claim a sort enforces,
+and the one place it was wrong said so at once.
 
 ### 2b.1 What is declared
 
@@ -76,8 +84,9 @@ subsurface and the world and precede the wells' own block.
 owner's loader. The order therefore stays purely over owners:
 
 ```text
-wells.completions   RestoreAfter = [subsurface.compartments, world.decisions]
-everything else     RestoreAfter = []          → key order among themselves
+wells.completions     RestoreAfter = [subsurface.compartments, world.decisions]
+company.obligations   RestoreAfter = [wells.completions]
+everything else       RestoreAfter = []        → key order among themselves
 ```
 
 and restoring `wells.completions` means *rebuild, then restore* — one unit,
@@ -95,8 +104,14 @@ its own file and cannot be silently mis-ordered by an edit to the loader.
 
 **PV4b** — the declared order is a topological extension of key order: for any
 two owners with no declared dependency, `RestoreOrder` agrees with `Owners`.
-**PV4c** — a module set declaring a cycle is refused at composition, naming
-every key in it. Both are cheap and neither needs a save.
+**PV4c** — a module set declaring a cycle, or a key nobody owns, is refused at
+composition, naming every key involved and attributing each to the module that
+declared it. Both are cheap and neither needs a save.
+
+**A dangling key must not also report a cycle.** An owner naming a missing key
+never becomes ready, so a naive sweep names it twice — once truthfully and once
+as part of a loop that does not exist, sending the reader to look for one. A
+refusal that invents a second, wrong cause is worse than a longer one.
 
 ## 3. Canonical JSON — the PV1 rules
 
@@ -275,8 +290,7 @@ PV8 (digest sensitivity) · R19-V9..V15 as specified in the phase doc.
 | S013-2 | Save-diff tool (R19-V15) — ships as a dev utility over the canonical form; scope | R19.5 |
 | S013-3 | `engineVersion` / `contentVersion` stamped from a release process rather than declared as constants | a build pipeline |
 | S013-4 | The audit sidecar (§1's `audit/`) — the container ships state and header first; the trail is its own task with its own retention policy | R19.4 |
-| S013-5 | **The rebuild + declared restore order** — reopen saved completions through `FieldControl` with their saved ids, and give `StateRegistry` design 11 §2.1's topologically sorted restore order beside its key-ordered capture. The two land together; neither is useful alone | R20d.12 |
-| S013-6 | The EPOCH is not in the header, so a save's dates depend on the `EngineSettings` it is loaded with. Harmless while one scenario ships; a relabelling bug the moment two do | a second scenario |
+| S013-5 | ~~**The rebuild + declared restore order**~~ **DONE** (R20d.12 / R20d.12.15). The rebuild reopens saved completions through `FieldControl` with their saved ids; `IStateOwner.RestoreAfter` and `StateRegistry.RestoreOrder` give §2b's topological order beside the key-ordered capture. **It proved itself on the first run**: `company.obligations` sorts before `wells.completions` and must be restored after it — reopening a well registers an abandonment obligation, so the save's record has to win or a company gets back one it had discharged. That had been a sentence in the loader's docstring; the declared order turned it into a claim a sort enforces and the one place it was wrong faulted immediately. **Cycles and dangling keys refuse at COMPOSITION**, attributed to the module that declared the key | ✅ || S013-6 | The EPOCH is not in the header, so a save's dates depend on the `EngineSettings` it is loaded with. Harmless while one scenario ships; a relabelling bug the moment two do | a second scenario |
 | S013-7 | ~~Reservoir pressure is path-dependent and must be stored~~ **Withdrawn** — built, measured, reverted: every tick already re-solves from Pi, so there is no path, and storing it would break the hand-edit guarantee `The_save_carries_no_pressure` exists for (see §4's note) | — |
 | S013-8 | **The flood residual, narrowed by measurement.** Probed over three ticks: a reloaded field imports **0 in the first month and 43,904 m³ in the second** against the original's steady 35,495 → 35,527 → 35,558. It skips exactly one month and then OVER-imports. So the intake and the injector are wired correctly by the rebuild and the cause is a stale first-tick input to `CommandTheIntake` — `target = VRR·voidageLastTick − producedWaterLastTick`, of which the set point demonstrably restores and the other two are the suspects. **Both of those were then eliminated by printing the block**: `field.flood` is in the container carrying `voidage-last-tick 43909.35`, `produced-water-last-tick 4.40`, `voidage-replacement 1.0` — the flood's own bookkeeping survives intact. **So the zero is the OTHER input**: `ReservoirRoom()` multiplies by the room the reservoir has left to its ceiling, and that room is 0 in the reloaded engine's first month and 62,419 m³ in its second. It is compartment state, and it is not the pressure (built, measured, reverted — finding 196). **Closed by reading `ReservoirRoom()` rather than theorising about it a fourth time**: it walks `_floodShares`, a FOURTH cross-tick list on the production loop, and an empty one leaves the cap at infinity and returns exactly 0. Saved with the other three. **A reloaded game now continues identically for two years — production to the cubic metre and cash to the cent, every month, with every account balance agreeing.** The measurements that led here cost minutes each; the one theory that was built instead cost a great deal more | ✅ |
 | S013-10 | **A facilities state block — the category sweep, and the largest gap left** (finding 197). Six fitted tiers (`Manifold`, `Separator`, `Tank`, `GasCapture`, `Treater`, `ExportTerminal`) plus a tank's contents, provenance and promised mass, a pipeline's linefill and an intake's commanded rate. Every tier is a ladder bought with money, so a reload today returns the starting equipment and keeps the spending. **The fixture blind spot ships with it**: PV2 drills and floods but never installs, so it passes while this is broken — whatever owner lands must come with a fixture that BUYS something | R20d.12 |
