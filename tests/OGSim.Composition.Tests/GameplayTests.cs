@@ -852,4 +852,64 @@ public sealed class GameplayTests
             engine.ReadModel!.Operations[0].ProgressDays > drilling.ProgressDays,
             "a second month left the operation exactly where it was");
     }
+
+    /// <summary>
+    /// R21-V1, the first verification R21 declares and the last of its thirteen
+    /// to be written: THE READ MODEL CANNOT BE MUTATED, AND NO LIVE REFERENCE
+    /// ESCAPES.
+    ///
+    /// <para>A snapshot is a statement about a month. If any of its collections
+    /// were the engine's own, a host that held last month's snapshot would watch
+    /// it change under it — and worse, an objective judged at stage 12 and a
+    /// host rendering at stage 13 could disagree about the same tick while both
+    /// read "the read model".</para>
+    ///
+    /// <para>Tested by ADVANCING rather than by reflection over the type. What
+    /// matters is not whether a field is declared read-only but whether the
+    /// values behind it move, and the only thing that moves them is the engine
+    /// running. So: take a snapshot, run a year, and require the snapshot to
+    /// still describe the month it was taken in.</para>
+    /// </summary>
+    [Fact]
+    public void R21V1_a_published_snapshot_does_not_change_when_the_engine_runs_on()
+    {
+        (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled();
+
+        for (var well = 0; well < 3; well++)
+        {
+            while (engine.ReadModel is null || engine.ReadModel.ActivitiesRunning > 0)
+                engine.Pipeline.AdvanceTick();
+
+            engine.Commands.Submit(Drill(engine, target));
+        }
+
+        Fixture.Run(engine, months: 12);
+
+        FieldReadModel taken = engine.ReadModel!;
+
+        // Everything a later tick could reach into: the lists are the ones a
+        // projection builds each month, and a live reference would show up here
+        // as a count or a value that moved.
+        Tick tick = taken.Tick;
+        int chain = taken.Chain.Count;
+        int wells = taken.Wellbores.Count;
+        int beliefs = taken.Beliefs.Count;
+        Money cash = taken.Cash;
+        Mass held = taken.Storage.Held;
+        IReadOnlyList<Money> byCause = [.. taken.CashByCause];
+
+        Fixture.Run(engine, months: 12);
+
+        Assert.NotEqual(tick, engine.ReadModel!.Tick);   // the engine really did move on
+
+        Assert.Equal(tick, taken.Tick);
+        Assert.Equal(chain, taken.Chain.Count);
+        Assert.Equal(wells, taken.Wellbores.Count);
+        Assert.Equal(beliefs, taken.Beliefs.Count);
+        Assert.Equal(cash, taken.Cash);
+        Assert.Equal(held, taken.Storage.Held);
+        Assert.True(Structural.Equal(byCause, taken.CashByCause),
+            "the cash-by-cause row moved after it was published, so the snapshot is holding " +
+            "the ledger's own working state rather than a statement about its month");
+    }
 }
