@@ -14,9 +14,30 @@ derived state that must never be saved.**
 save.ogsim = ZIP (deflate):
   manifest.json          header (§2)
   state/<module>.json    one canonical block per registered module, module-name order
-  audit/summary.json     the retained trail (09 §4.4 policy)
-  audit/full.jsonl       sidecar: the complete trail (DGD1 (c)) — excluded from digest
+  audit/trail.jsonl      the retained trail (09 §4.4) — excluded from digest
 ```
+
+> **R20d.12.22 amendment: ONE audit file, not two — and the reason is that
+> R20d.12.21 removed the second.** This listed `audit/summary.json` (the
+> retained trail) beside `audit/full.jsonl` (the complete one), which is only
+> writable by an engine that KEEPS everything and summarises on the way out.
+>
+> The engine no longer keeps everything. `TickPipeline` prunes at every tick
+> boundary (finding 207), so what it holds IS the retained trail and there is no
+> complete one to write. Shipping both files would mean either keeping the full
+> trail in memory for forty years — which is the unbounded growth 207 was about —
+> or writing the same content twice under two names.
+>
+> **This is a consequence of a fix rather than a change of intent.** DGD1 (c)
+> asks that the trail leave the engine in a form a player or a developer can
+> read afterwards, and one JSONL file does that. What is lost is the ability to
+> recover detail that retention has already discarded, and that was never
+> recoverable from a save — it was gone from memory the tick it aged out.
+>
+> **Excluded from the digest**, as `full.jsonl` always was: the trail is
+> diagnostic rather than simulation state, so a container whose trail was
+> truncated is still a playable game and refusing it would be refusing over a
+> record (§1b).
 
 ## 2. Header
 
