@@ -118,9 +118,14 @@ nothing implements it (finding 188). What a host actually holds is the
 `Events`, `State`, `Provided`, `ReadModel` — which is most of the same surface
 under different names and is what every test and both clients use. `IEngine`
 stays unimplemented for a reason that has nothing to do with saving: its
-`ReadModel` is SDD-017 §2's fifteen-projection record and eleven of those have
-no source until R20d wires their subsystems in, so adopting it today would mean
-fabricating them (R20d.12.0). It waits on R21.6.
+`ReadModel` is SDD-017 §2's record — thirteen views plus tick and date — and
+most of those have no source until R20d wires their subsystems in, so adopting
+it today would mean fabricating them (R20d.12.0). It waits on R21.6.
+
+**Three files gave three different numbers for that requirement**: this one said
+fifteen, `MASTER_TRACKER.md` said sixteen, and R21 §2.4b's table — which both
+were describing — has seventeen rows. The table is the source; the other two
+were quoting it from memory.
 
 **The save is `SaveGame` in composition, not `WriteSave`** (R20d.12). It walks
 every `IStateOwner` in state-key order, writes SDD-013 §1's container, and loads
