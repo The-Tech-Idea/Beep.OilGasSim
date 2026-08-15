@@ -91,6 +91,74 @@ public sealed class CostLedger
 
     public IReadOnlyList<Movement> Movements => _movements;
 
+    /// <summary>
+    /// Declared order, so a projection walks causes identically every run and
+    /// two runs of one save render the same rows (D-5). One list rather than
+    /// `Enum.GetValues` per tick, which allocates.
+    /// </summary>
+    public static IReadOnlyList<MovementCategory> Causes { get; } =
+    [
+        MovementCategory.Production, MovementCategory.Development,
+        MovementCategory.Exploration, MovementCategory.Operating,
+        MovementCategory.Financing, MovementCategory.Fiscal,
+        MovementCategory.Abandonment, MovementCategory.Insurance,
+        MovementCategory.Contractual,
+    ];
+
+    /// <summary>
+    /// WHERE THE MONEY WENT THIS TICK, by cause (R21 §2.4b, finding 190).
+    ///
+    /// <para>The surface published a cash BALANCE and nothing about the period,
+    /// so no host could tell a month of investment from a month of decline — the
+    /// reference client plugged fields for being under repair and could not have
+    /// known better. A balance answers "how much is left"; this answers "what
+    /// happened", and only the second is actionable.</para>
+    ///
+    /// <para>SIGNED CASH EFFECT, not gross postings. A movement that debits Cash
+    /// brings money in and one that crediting it takes money out; a movement
+    /// touching neither — a depreciation charge, an abandonment provision — moves
+    /// no cash and belongs in neither column, which is exactly the distinction a
+    /// player needs when the balance falls and nothing was spent.</para>
+    ///
+    /// <para>Walked BACKWARDS from the end and stopped at the first earlier tick:
+    /// movements are appended in tick order, so this costs what the tick posted
+    /// rather than what the company has ever posted. Forty years of history make
+    /// the naive scan quadratic.</para>
+    /// </summary>
+    public IReadOnlyList<Money> CashByCause(Tick tick)
+    {
+        var byCause = new Money[Causes.Count];
+
+        for (int i = _movements.Count - 1; i >= 0; i--)
+        {
+            Movement movement = _movements[i];
+
+            if (movement.Tick.Value > tick.Value) continue;
+            if (movement.Tick.Value < tick.Value) break;
+
+            int at = At(movement.Category);
+
+            if (movement.Debit == Account.Cash)
+                byCause[at] += movement.Amount;
+            else if (movement.Credit == Account.Cash)
+                byCause[at] -= movement.Amount;
+        }
+
+        return byCause;
+    }
+
+    /// <summary>The cause's slot in <see cref="Causes"/>. Walked rather than
+    /// cast from the enum's value: an ordinal would re-key silently the day a
+    /// category is inserted, and the nine are walked once per movement.</summary>
+    private static int At(MovementCategory cause)
+    {
+        for (int i = 0; i < Causes.Count; i++)
+            if (Causes[i] == cause) return i;
+
+        throw new InvariantFault("SDD-009 §1", null,
+            $"movement category {cause} is not in the declared cause order");
+    }
+
     public Money BalanceOf(Account account) =>
         new(_balances.GetValueOrDefault(account));
 

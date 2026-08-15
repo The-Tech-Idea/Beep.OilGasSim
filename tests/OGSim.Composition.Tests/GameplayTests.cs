@@ -5,6 +5,7 @@
 // the player's side of the wall on purpose: everything they assert is something
 // a host could render, and nothing they touch is truth.
 
+using OGSim.Company;
 using OGSim.Composition;
 using OGSim.Contracts;
 using OGSim.Kernel;
@@ -751,5 +752,60 @@ public sealed class GameplayTests
             Defaults.TankTier.Capacity.Kilograms,
             storage.Held.Kilograms + storage.Ullage.Kilograms,
             precision: 6);
+    }
+
+    /// <summary>
+    /// R21 §2.4b's "cost and revenue by cause for the period", and finding 190's
+    /// complaint stated as a test: A MONTH OF INVESTMENT AND A MONTH OF DECLINE
+    /// MUST NOT LOOK THE SAME.
+    ///
+    /// <para>The surface published a cash BALANCE and nothing about the period,
+    /// so falling cash read identically whether a company was building or dying.
+    /// The reference client plugged fields for being under repair and could not
+    /// have known better — there was nothing in the read model that would have
+    /// told it.</para>
+    ///
+    /// <para>Asserted on the SHAPE rather than on amounts: a month that drills
+    /// spends on Development, and a producing month takes money in on
+    /// Production. Amounts copied from a run would pin whatever the engine
+    /// happens to do; these two facts are what the row exists to make
+    /// visible.</para>
+    /// </summary>
+    [Fact]
+    public void R21V6_a_month_of_investment_does_not_look_like_a_month_of_decline()
+    {
+        (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled();
+
+        // A month that INVESTS: the drilling contract is signed and paid for.
+        engine.Commands.Submit(Drill(engine, target));
+        engine.Pipeline.AdvanceTick();
+
+        Money spentDeveloping = engine.ReadModel!.CashByCause[
+            IndexOf(MovementCategory.Development)];
+
+        Assert.True(spentDeveloping < Money.Zero,
+            $"a month that started a well shows {spentDeveloping.Cents} cents against " +
+            "Development; drilling is not free and the period has to show it");
+
+        // And a month that EARNS, once the well is in and flowing.
+        while (engine.ReadModel!.ProducedThisTick.CubicMetres <= 0.0)
+            engine.Pipeline.AdvanceTick();
+
+        Assert.True(
+            engine.ReadModel!.CashByCause[IndexOf(MovementCategory.Production)] > Money.Zero,
+            "a producing month brings nothing in against Production, so the row cannot " +
+            "distinguish earning from spending");
+
+        // One entry per declared cause, zeroes included: an absent row and a
+        // cause that did nothing this month are different claims.
+        Assert.Equal(CostLedger.Causes.Count, engine.ReadModel!.CashByCause.Count);
+    }
+
+    private static int IndexOf(MovementCategory cause)
+    {
+        for (var i = 0; i < CostLedger.Causes.Count; i++)
+            if (CostLedger.Causes[i] == cause) return i;
+
+        throw new InvalidOperationException($"{cause} is not a declared cause");
     }
 }

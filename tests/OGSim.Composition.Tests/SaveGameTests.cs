@@ -162,6 +162,7 @@ public sealed class SaveGameTests
         // `Beliefs` agreed for two years while both sides were empty
         // (finding 198).
         Check("Storage", a.Storage == b.Storage);
+        Check("CashByCause", Structural.Equal(a.CashByCause, b.CashByCause));
 
         return apart.Count == 0
             ? "no named field differs"

@@ -305,7 +305,24 @@ public sealed record FieldReadModel(
     /// room left: a tank at 90% and a tank at 10% of a vessel ten times the size
     /// hold the same oil and are in completely different trouble.</para>
     /// </summary>
-    StorageView Storage)
+    StorageView Storage,
+
+    /// <summary>
+    /// WHERE THE MONEY WENT THIS MONTH, by cause — R21 §2.4b's "cost and revenue
+    /// by cause for the period", and finding 190's other half.
+    ///
+    /// <para>The surface published a cash BALANCE and nothing about the period,
+    /// so nothing could tell a month of investment from a month of decline. The
+    /// reference client plugged fields for being under repair, and could not
+    /// have known better: falling cash looks the same whether a company is
+    /// dying or building.</para>
+    ///
+    /// <para>In `CostLedger.Causes` order, one entry per cause including the
+    /// zeroes — a host renders a row that reads nothing this month, and an
+    /// absent row would be indistinguishable from a cause that does not
+    /// exist.</para>
+    /// </summary>
+    IReadOnlyList<Money> CashByCause)
 {
     /// <summary>Where the chain is jammed, if anywhere — the elements that
     /// refused production this tick.</summary>
@@ -335,7 +352,8 @@ public sealed record FieldReadModel(
         && Insolvent == other.Insolvent && Progress == other.Progress
         && Structural.Equal(Beliefs, other.Beliefs)
         && Structural.Equal(Chain, other.Chain)
-        && Structural.Equal(Wellbores, other.Wellbores);
+        && Structural.Equal(Wellbores, other.Wellbores)
+        && Structural.Equal(CashByCause, other.CashByCause);
 
     public override int GetHashCode() =>
         HashCode.Combine(Tick, Date, Cash, Wells, ActivitiesRunning, ProducedThisTick,
@@ -379,7 +397,8 @@ internal sealed class FieldProjection(
             new WaterFloodView(
                 loop.VoidageReplacement, loop.ImportedThisTick, loop.InjectionHeadroom,
                 loop.SourFraction),
-            loop.Storage);
+            loop.Storage,
+            company.Ledger.CashByCause(position.Tick));
 
     /// <summary>
     /// The undrilled structures, in the order the world placed them (D-5).
