@@ -37,13 +37,13 @@ dotnet build OGSim.slnx                 # must be 0 warnings — warnings are er
 dotnet test  OGSim.slnx                 # xUnit — the gate, and the only complete answer
 dotnet test  OGSim.slnx --no-build --filter "FullyQualifiedName~Money_rounds_half_even"
 
-# While iterating: skip the forty-year runs (16m23s -> 1m6s, 141 of 164)
+# While iterating: skip the forty-year runs (~15m -> ~1m, 151 of 180)
 dotnet test tests/OGSim.Composition.Tests --no-build --filter "Speed!=Slow"
 ```
 
-**`Speed=Slow` is a convenience, never a gate.** Twenty-three tests in the
+**`Speed=Slow` is a convenience, never a gate.** Twenty-nine tests in the
 composition suite play a whole field life — 480 ticks, sometimes twice — and
-they carry about fifteen of the suite's sixteen minutes. They are also where
+they carry about fourteen of the suite's fifteen minutes. They are also where
 almost every finding in this project came from, because a mechanic that works
 in a unit test and not over forty years is the defect this codebase keeps
 producing. So the filter exists to make iteration bearable and **the unfiltered
@@ -129,11 +129,15 @@ parameters in `world.decisions` (SDD-010 §4c.1 — the surface is a function of
 the seed and is never stored), rebuilding the field from the save, and restoring
 into it.
 
-**The restore ORDER is not the capture order and is hand-maintained** in
-`SaveGame.Restore`: regenerate → subsurface → world → rebuild the wells → every
-remaining owner in key order. The world is early because reopening a well lays a
-gathering line measured to the header, which lives in that block. S013-5 replaces
-this list with design 11 §2.1's declared topological order.
+**The restore ORDER is not the capture order, and it is DECLARED** (S013-5,
+R20d.12.15). Capture walks state-key order so the bytes cannot depend on how
+modules composed; restore follows `IStateOwner.RestoreAfter`, topologically
+sorted with key order as the tie-break, and a cycle or a key nobody owns is a
+composition-time refusal naming the module that declared it. Two owners declare
+anything: `wells.completions` after the subsurface and the world,
+`company.obligations` after the wells. Rebuilding the field is not a phase beside
+the owners — it is what restoring `wells.completions` MEANS, so it runs when that
+key comes up.
 
 **To find out which subsystem failed a reload, diff the digests.** Save the
 reloaded engine at the same tick and compare `Header.ModuleDigests` per module,
