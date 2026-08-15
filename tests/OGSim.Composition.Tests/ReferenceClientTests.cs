@@ -73,6 +73,59 @@ public sealed class ReferenceClientTests
     }
 
     /// <summary>
+    /// R21-V10. DETERMINISM THROUGH THE SURFACE: the same seed and the same
+    /// policy produce the same game, decision for decision.
+    ///
+    /// <para>Every determinism rule in SDD-000 §3 — the eight named streams, no
+    /// transcendentals, no hash-ordered enumeration, no clock — exists so this
+    /// is true. But they are all asserted from INSIDE, and a host does not see
+    /// the inside: it submits commands and reads a projection, and a client that
+    /// branched on something unstable would still be a client whose replay
+    /// diverged. This is the only check that runs the whole loop twice and
+    /// compares what a host would actually have seen.</para>
+    ///
+    /// <para>The Operator is the right instrument precisely because it DECIDES —
+    /// it drills, debottlenecks, services and shuts in based on the read model,
+    /// so an unstable projection changes its choices and not merely its report.
+    /// Comparing two passive runs would prove far less.</para>
+    /// </summary>
+    [Fact]
+    [Trait("Speed", "Slow")]
+    public void R21V10_the_same_seed_and_the_same_policy_play_the_same_game()
+    {
+        (Engine first, EntityId<IProspect> firstProspect) = Field();
+        (Engine second, EntityId<IProspect> secondProspect) = Field();
+
+        Session one = new Operator(first, firstProspect, wellTarget: 6, hurdle: Money.Zero)
+            .Play(months: 120);
+
+        Session two = new Operator(second, secondProspect, wellTarget: 6, hurdle: Money.Zero)
+            .Play(months: 120);
+
+        // The whole session record, which is the client's own account of what it
+        // did: the verdict, the month it ended, the cash it finished with, and
+        // every decision it took along the way.
+        Assert.Equal(one, two);
+
+        // And the projection they finished on, field for field — the session
+        // summarises, and two runs could agree on a summary while disagreeing
+        // about the month that produced it.
+        Assert.Equal(first.ReadModel!.Tick, second.ReadModel!.Tick);
+        Assert.Equal(first.ReadModel!.Cash, second.ReadModel!.Cash);
+        Assert.Equal(first.ReadModel!.ProducedThisTick, second.ReadModel!.ProducedThisTick);
+        Assert.Equal(first.ReadModel!.Storage, second.ReadModel!.Storage);
+
+        Assert.True(
+            Structural.Equal(first.ReadModel!.Chain, second.ReadModel!.Chain),
+            "two runs of one seed finished with different chains, so something the client " +
+            "reads is not a function of the seed");
+
+        Assert.True(
+            Structural.Equal(first.ReadModel!.CashByCause, second.ReadModel!.CashByCause),
+            "the two runs spent differently in their final month");
+    }
+
+    /// <summary>
     /// The whole arc, played out: a client left running past the decade watches
     /// the field drown, and closes it.
     ///
