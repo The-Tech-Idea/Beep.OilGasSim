@@ -65,22 +65,27 @@ public sealed class WellsState : IStateOwner
     /// compartment it is drilled into, and there is no rock to read before that
     /// block is back.</para>
     ///
-    /// <para>The WORLD half is a narrower claim than it first looks, and the
-    /// difference is worth stating because it was got wrong once. `OpenWell`
-    /// lays a tieback of `DistanceToHeaderOf(drains) ?? MinimumGatheringRun`, so
-    /// a header that had not arrived reads as no distance — but the same method
-    /// also calls `HeaderAt`, which is write-once, and the rebuild reopens wells
-    /// in the order the save lists them. So the FIRST reopened well re-places the
-    /// header at the field that placed it originally, and every tieback comes out
-    /// the same length whichever order the two blocks restore in.</para>
+    /// <para>The WORLD half is REAL BUT NOT CURRENTLY LOAD-BEARING, and the
+    /// difference is worth writing down because it was got wrong twice.
+    /// `OpenWell` reads four things from the world — `DistanceToMarketOf`,
+    /// `ProspectFor`, `PositionOf` and `DistanceToHeaderOf` — so a rebuild does
+    /// depend on that block. What it does NOT do is fail without it today:
+    /// `HeaderAt` is write-once and the first reopened well re-places the header
+    /// at the field that placed it originally (the save lists wells in the order
+    /// they were opened, and abandoning one leaves it in the list), so the
+    /// re-derived header matches the saved one. And for a GENERATED basin the
+    /// prospects are redrawn before any block is restored, so the lookups
+    /// succeed whenever the world block arrives.</para>
     ///
-    /// <para>What the declaration buys is the case where those two disagree: the
-    /// well that sited the header is abandoned and gone from the save, so a
-    /// rebuild left to re-derive it would put the header at whatever field
-    /// happens to be reopened first and re-measure every gathering line in the
-    /// company against it. The save's header is the one that must stand, for the
-    /// same reason the save's obligations must (finding 201).</para>
-    /// </summary>
+    /// <para>It is declared anyway, and not as insurance: two mechanisms compute
+    /// the header — the save, which owns it, and the rebuild, which re-derives it
+    /// — and they agree by a coincidence of ordering rather than by construction.
+    /// Declaring the dependency makes what every reopened well measures against
+    /// the OWNER's value rather than a recomputation that happens to match, which
+    /// is law L5 rather than a defensive habit. It becomes load-bearing the day a
+    /// scenario declares a field as a decision inside a basin that has harbours,
+    /// because then the flowline route depends on placements only this block
+    /// carries.</para>
     public IReadOnlyList<StateKey> RestoreAfter { get; } =
         [new StateKey("subsurface.compartments"), new StateKey("world.decisions")];
 
