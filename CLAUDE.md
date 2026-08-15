@@ -104,8 +104,8 @@ There is no partially-composed engine and no degraded mode.
 **The tick is 14 stages in one declared order** (03 §6):
 Open → Commands → Environment → Operations → Availability/Hazards/Segmentation →
 SolveFlow (once per segment) → MaterialBalance → Custody → Economics → HSE →
-Information → Company → Objectives → Close. `StageId` in `Modules.cs` pins the
-numbering. Stage 4 deliberately reads the *previous* tick's solved values (a
+Information → Company → Objectives → Close. `StageId` in `OGSim.Kernel/Events.cs`
+pins the numbering (fourteen members, 0–13 — checked). Stage 4 deliberately reads the *previous* tick's solved values (a
 defined one-tick lag, not a circular dependency).
 
 **Commands in, read model out.** The read model is rebuilt each tick from
