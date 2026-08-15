@@ -45,6 +45,51 @@ moduleDigests{name: sha256}, stateDigest`
 in module-name order; per-module digests localise PV divergence (R19 risk
 note).
 
+## 1b. The trail is RESTORED, not archived — S013-4/finding 202 decided (R20d.12.20)
+
+Both items were blocked on one question nobody had asked out loud: **is an
+`AuditId` engine-local or save-durable?** S013-4 could not decide whether a
+reloaded trail is an archive or state; finding 202 could not chain a deferral to
+the failure behind it because an id does not survive a load. **They are the same
+question and it is answered here once.**
+
+**The trail is RESTORED, ids and all.** Design 09 §4.3 promises a player can ask
+"why?" of the current state, and §4.4 promises that *nothing which explains the
+current state is ever discarded* — a guarantee about the STATE, not about the
+session. A chain that stops at the last reload cannot answer why a well is shut
+in today if the failure that shut it happened before the player saved, which is
+the same shape as finding 198: a company that reloads and has forgotten what it
+paid to learn.
+
+**The digest exclusion is not evidence for the other answer.** §1 leaves
+`audit/full.jsonl` out of the digest because the trail is diagnostic rather than
+simulation state: a container whose trail was truncated is still a playable
+game, and refusing to load one would be refusing over a record. That is a
+statement about INTEGRITY CHECKING, not about lifetime, and it was being read as
+though it settled lifetime.
+
+**What follows from it:**
+
+```text
+· AuditId is save-durable. Entries restore with their own ids, and the next-id
+  counter resumes above the highest restored — so a Cause written before a save
+  still resolves after one.
+· The sidecar is written from the RETAINED trail (09 §4.4), not the raw one.
+  Retention already bounds a forty-year game and already computes the cause
+  closure that keeps a prunable entry alive when something durable depends on
+  it; a save writing the unpruned trail would be a second retention policy.
+· PV1 and PV2 are untouched. The trail is outside the digest, so byte-identity
+  is unaffected; it is outside the read model, so continuation identity is too.
+```
+
+**And it unblocks finding 202 without a route-law change**, which is worth
+saying because that is what the finding currently names as its blocker: with
+durable ids, a `ConstraintBinding` can cite a failure recorded in an earlier
+tick, and only the WITHIN-tick link still needs stage 4 to hand stage 5 what it
+learned. The route law still has to report *why* an element became unreachable
+before the chain is complete — but the id problem, which looked like the harder
+half, is a decision rather than a feature.
+
 ## 2b. The restore order is DECLARED — S013-5 (specified R20d.12.14, built R20d.12.15)
 
 Capture walks owners in **state-key order**, and that is right for capture: it
