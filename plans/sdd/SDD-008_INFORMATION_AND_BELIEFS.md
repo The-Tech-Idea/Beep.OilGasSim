@@ -310,6 +310,87 @@ entity), and appraisal continues updating them through §2.1. Nothing is thrown
 away and nothing double-counts — one belief line per fact, before and after
 the strike.
 
+## 2d. Staleness has never run — R20d.28 amendment (finding 200)
+
+§2 specifies that σ grows for DYNAMIC kinds only, by a per-kind drift per year.
+`BeliefStore.Age` implements it exactly, has a unit test, and **is called by
+nothing in `src/`** — verified across the whole tree, where the only callers are
+its own tests. So no belief has ever gone stale in a game.
+
+**It is not an L3 breach, which is why nothing flags it.** The member has real
+behaviour and real coverage; what is missing is a caller. L3 catches a member
+with no behaviour and has nothing to say about behaviour with no caller, and
+this is the fourth instance in this repository — `ProspectRisk` unused for four
+phases, `ObservationSampler` provided by nobody, the flow solver bypassed by a
+second production path, and now this. **A rule cannot catch it; only a sweep or
+a tracker row can.**
+
+### 2d.1 What drifts, and how fast
+
+Drift is content, exactly as the sigma floor is, and reaches the engine the same
+way — a per-kind lookup beside `SigmaFloorFor`:
+
+```csharp
+/// Per-year sigma growth for a kind. ZERO IS THE DEFAULT AND IS LEGAL:
+/// a static property does not become less certain by being ignored.
+double DriftPerYearFor(ContentId kind);
+```
+
+| Kind | Drift/yr | Why |
+|---|---|---|
+| `reservoir-pressure` | > 0 | production moves it, continuously |
+| contacts (GOC/OWC) | > 0 | they rise and fall as fluids are withdrawn |
+| `porosity`, `permeability` | 0 | rock does not change because nobody looked |
+| `oil-in-place`, `structure-capacity` | 0 | the accumulation is the size it is |
+
+**A player must never have to re-log a well to learn what its core already told
+them.** That is the whole reason drift is per-kind rather than global, and the
+table above is the test of any future kind: does *production* change it?
+
+### 2d.2 S008-2, decided: drift is charged to PRODUCTION, not to the calendar
+
+S008-2 asked whether drift should pause while a compartment is shut in, and
+suggested starting with "drift only while it produces". **That is the right
+answer and the reason is physical rather than balance-driven.** A belief about
+reservoir pressure goes stale because the pressure MOVED, and what moves it is
+withdrawal. A shut-in compartment's pressure does drift — it re-equilibrates —
+but slowly, and a company that shuts a field in and returns two years later does
+not know less about it than the day it stopped in any way the player can act on.
+
+Charging drift to the calendar has a specific bad consequence worth naming: it
+makes *waiting* a source of uncertainty, so the optimal play becomes re-measuring
+on a timer rather than when something changed. Charging it to production ties
+the cost of information to the activity that invalidates it, which is the same
+principle §2.1 already applies to evidence.
+
+**So the drift term is scaled by whether the compartment produced this tick**,
+and a shut-in field's beliefs hold. A compartment that produced for half a month
+drifts by half a month — the segment grid already measures that (SDD-002 §9).
+
+### 2d.3 Where it runs
+
+**Stage 11 (Information), once per tick**, over the elapsed year fraction —
+`Duration.DaysPerTick / DaysPerYear`, from the 30/360 clock so every month is
+exactly a twelfth.
+
+`InformationModule` declares no stage today; this is its first. It must run
+AFTER material balance and custody, because whether a compartment produced is
+the thing being asked, and stage 11 already sits after both.
+
+**Not in the projection.** The read model is rebuilt from state each tick and
+must stay a pure function of it (design 03 §6); ageing beliefs from inside a
+projection would mutate what it is meant only to report — the same trap the
+constraint-binding record avoided at R20d.27.
+
+### 2d.4 Verification
+
+**R14-V15** — a belief about a producing compartment's pressure has a wider σ
+after two years than after one, and one about its porosity has exactly the σ it
+started with. **R14-V16** — a SHUT-IN compartment's pressure belief does not
+drift, which is §2d.2 stated as a test rather than as a preference. Neither
+needs a save; both need a fixture that produces, because a fixture that only
+holds a belief will pass either way (the lesson §4b.4 records).
+
 ## 4b. What a save carries — R20d.12.10 amendment (finding 198)
 
 Everything §2–§4 accumulates is **bought**. A survey, a well test, a log, a
@@ -494,12 +575,14 @@ Beta correlation) · V7 (diagnosis hard-update) · V8 (five-factor product) ·
 V9 (log-normal product moments exact) · V10 (VOI vs hand-computed two-action
 case) · V11 (`p/Z` WLS recovers G within fit σ) · V12 (BIC compartment) ·
 V13/MB4 end-to-end · V14 (detectability nothing) · R15-V10 (leak) ·
-**PV2-B** (§4b.4 — a company that surveys, reloads and still knows it).
+**PV2-B** (§4b.4 — a company that surveys, reloads and still knows it) ·
+**V15/V16** (§2d.4 — a producing compartment's pressure belief widens and a
+shut-in one's does not).
 
 ## 11. Open items
 
 | # | Item | Trigger |
 |---|---|---|
 | S008-1 | Beta visualisation for the host (factor confidence, not just mean) | R21 read-model review |
-| S008-2 | Whether staleness drift should pause while shut-in (no production ⇒ less change) | R14 model tests — start: drift only while the compartment produces |
+| S008-2 | ~~Whether staleness drift should pause while shut-in~~ **DECIDED** (§2d.2, R20d.28): drift is charged to PRODUCTION, not to the calendar. A pressure belief goes stale because the pressure moved, and withdrawal is what moves it. Charging it to the calendar would make *waiting* a source of uncertainty and re-measuring on a timer the optimal play; charging it to production ties the cost of information to the activity that invalidates it, which is what §2.1 already does for evidence | ✅ |
 | S008-3 | Bounded Linear kinds (porosity, saturation ∈ [0,1]): Normal quantiles can exceed the bounds near the edges — start with clamped display quantiles; move the kind to logit space only if MB-band tests object | R14 model tests |
