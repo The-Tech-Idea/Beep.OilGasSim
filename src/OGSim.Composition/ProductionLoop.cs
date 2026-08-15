@@ -554,16 +554,6 @@ internal sealed class ProductionLoop : IStateOwner
     private double _importedThisTick;
 
     /// <summary>
-    /// A number as the trail carries it: round-trip ("R"), invariant, never
-    /// rounded for display. An audit value is evidence a player checks against
-    /// the formula (design 09 §4.2), and a figure formatted for reading is one
-    /// they cannot — which is the same rule the canonical save form applies for
-    /// the same reason.
-    /// </summary>
-    private static string Recorded(double value) =>
-        value.ToString("R", System.Globalization.CultureInfo.InvariantCulture);
-
-    /// <summary>
     /// What the injector will still take this month once the produced water has
     /// had its share.
     ///
@@ -793,8 +783,8 @@ internal sealed class ProductionLoop : IStateOwner
                 {
                     ["element"] = new(_names(report.Deferrals[i].Element)),
                     ["kind"] = new(report.Deferrals[i].Kind.ToString()),
-                    ["deferred-kg"] = new(Recorded(report.Deferrals[i].Deferred.Kilograms)),
-                    ["segment-seconds"] = new(Recorded(seconds)),
+                    ["deferred-kg"] = new(Format(report.Deferrals[i].Deferred.Kilograms)),
+                    ["segment-seconds"] = new(Format(seconds)),
                 });
         }
 
@@ -1273,6 +1263,13 @@ internal sealed class ProductionLoop : IStateOwner
 
     private AuditId? _sale;
 
+    /// <summary>
+    /// A number as the trail carries it: round-trip ("R"), invariant, never
+    /// rounded for display. An audit value is evidence a player checks against
+    /// the formula (design 09 §4.2), and a figure formatted for reading is one
+    /// they cannot — the same rule the canonical save form applies, for the same
+    /// reason.
+    /// </summary>
     private static string Format(double value) =>
         value.ToString("R", System.Globalization.CultureInfo.InvariantCulture);
 
