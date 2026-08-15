@@ -75,9 +75,15 @@ though it settled lifetime.
   counter resumes above the highest restored — so a Cause written before a save
   still resolves after one.
 · The sidecar is written from the RETAINED trail (09 §4.4), not the raw one.
-  Retention already bounds a forty-year game and already computes the cause
-  closure that keeps a prunable entry alive when something durable depends on
-  it; a save writing the unpruned trail would be a second retention policy.
+  Retention computes the cause closure that keeps a prunable entry alive when
+  something durable depends on it; a save writing the unpruned trail would be a
+  second retention policy.
+    ⚠ AND THERE IS NO RETAINED TRAIL YET. `AuditTrail.Prune()` is called by
+      nothing in the engine (finding 207), so retention is configured and inert
+      and the trail is unbounded. S013-4 depends on that caller existing —
+      written here because this line, as first drafted, assumed a bound that
+      does not exist and would have sent an implementer to write a sidecar from
+      a trail nobody had pruned.
 · PV1 and PV2 are untouched. The trail is outside the digest, so byte-identity
   is unaffected; it is outside the read model, so continuation identity is too.
 ```
