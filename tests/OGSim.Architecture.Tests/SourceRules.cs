@@ -215,6 +215,66 @@ public class SourceRules
         EngineCorpus.AssertNone(violations, "D-5 — hash-ordered collections are never enumerated");
     }
 
+    // ------------------------------------------------------------- R21-V5
+
+    [Fact] // R21-V5. A rejection is the ONE engine string a player reads verbatim
+           // (design 09 §5.1: a command refusal is not a fault). It must say what
+           // is wrong in domain terms — so a `Detail` that is empty, or that
+           // leaks a type name or an exception, is a refusal a host has to
+           // rewrite before it can show it, which is exactly what this surface
+           // exists to make unnecessary.
+    public void R21V5_every_rejection_reads_as_something_a_player_can_act_on()
+    {
+        var violations = new List<string>();
+
+        foreach (EngineCorpus.SourceFile file in Sources)
+            foreach (ObjectCreationExpressionSyntax creation in
+                     EngineCorpus.NodesOf<ObjectCreationExpressionSyntax>(file))
+            {
+                if (creation.Type.ToString() != "RejectionReason") continue;
+                if (creation.ArgumentList is not { Arguments.Count: 2 } arguments) continue;
+
+                string locId = arguments.Arguments[0].ToString();
+
+                // ONLY TEXT THIS SCAN CAN SEE. A detail built from a variable is
+                // a refusal authored somewhere else and passed through — the
+                // operations engine's own reasons are re-wrapped this way — and
+                // judging its length or wording here would flag the wrapper for
+                // the wrapped text's sins. That leaves a real blind spot: a
+                // refusal composed at runtime is unchecked, and the only thing
+                // that would catch it is a test that submits the command.
+                if (arguments.Arguments[1].Expression is not LiteralExpressionSyntax
+                    and not InterpolatedStringExpressionSyntax) continue;
+
+                string detail = arguments.Arguments[1].ToString();
+
+                // The localisation key is what a host swaps for translated text,
+                // so a missing one makes the English the only version there will
+                // ever be.
+                if (!locId.Contains("$loc:", StringComparison.Ordinal))
+                    violations.Add($"{EngineCorpus.Where(file, creation)} rejection has no " +
+                                   $"$loc key: {locId}");
+
+                // A DOMAIN sentence, not a diagnostic. The three words below are
+                // what leaks when a refusal is written from the code's point of
+                // view rather than the player's.
+                foreach (string leak in (string[])["Exception", "NullReference", "nameof("])
+                    if (detail.Contains(leak, StringComparison.Ordinal))
+                        violations.Add($"{EngineCorpus.Where(file, creation)} rejection text " +
+                                       $"leaks '{leak}', so a host cannot show it as written");
+
+                // Long enough to be a reason. A three-word refusal names the rule
+                // it broke and never why, which is the difference between "no"
+                // and an answer a player can do something about.
+                if (detail.Length < 25)
+                    violations.Add($"{EngineCorpus.Where(file, creation)} rejection text is " +
+                                   $"too short to be a reason: {detail}");
+            }
+
+        EngineCorpus.AssertNone(
+            violations, "R21-V5 — every rejection is player-facing text");
+    }
+
     // ------------------------------------------------------------- D-8
 
     [Fact] // Culture-sensitive formatting turns a decimal point into a comma and a
