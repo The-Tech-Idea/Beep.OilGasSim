@@ -562,6 +562,50 @@ public interface ICustodyTransferPoint : IFlowElement
 property with a band**, because a sales-gas contract sets them independently and
 a stream can fail either end — rich gas is off-spec as surely as lean.
 
+### 7a. R20d.5.0 review — what §7 specifies and what exists
+
+The phase's first task is its SDD review, and §7 survives it: nothing below is
+wrong. What follows is the gap, because half of §7 is built and the half that is
+not has surface declared for it in three places.
+
+**Built and in the loop.** The custody meter meters, the spec gate gates and
+routes failures to Reject in full, the tank stores and binds (R8-V5), and an
+export terminal lifts. **Absent entirely: the berth, the cargo, laytime and
+demurrage.** Export is a RATE — `ExportTier.Offtake`, drawn against every tick —
+where §7 specifies a SCHEDULE: a berth occupied by one cargo at a time on the
+/30ths grid, loading at `min(loadingRate_berth, tankDrawCapacity)` over active
+days, with demurrage on the overrun.
+
+**Three declarations already point at the missing half, and each is joined to
+nothing** — the shape findings 200 and 202 both took:
+
+| Declared | Where | Produced by |
+|---|---|---|
+| `ConstraintKind.BerthOccupancy` | `FlowContracts.cs` | nothing, not even a test |
+| `LogisticsView.Berths` | SDD-017 §2's projection | nothing |
+| `LogisticsView.Nominations` | same | nothing |
+
+A constraint kind nothing produces is a case the read model can render and the
+engine can never reach; it costs nothing today and will quietly become wrong the
+day someone assumes it is populated.
+
+**The change is what the TANK is for.** Today it buffers a continuous draw, so
+ullage binds against a rate. With liftings it buffers *between* them, and ullage
+binds against a rhythm — a field that out-produces its lifting schedule fills
+and shuts in even though its average export capacity is ample. R8-V5 already
+proves the tank binds; this changes what it binds against, which is the whole
+reason berths are worth building rather than a bigger pipe.
+
+> **One L5 hazard to settle before any code.** `ExportTerminal.Tier` is
+> documented as *"the one fact about export capacity there is (law L5)"*. A berth
+> with a loading rate would be a second one, and the two would drift the first
+> time either was tuned. Either the berth's rate IS the terminal's tier — the
+> socket becomes the berth — or the terminal stops carrying a rate and becomes
+> the thing a berth is attached to. **The second is the honest reading of §7**,
+> which lists Terminal and Berth as separate nouns and gives the RATE to the
+> berth; it also makes `ExpandExportCommand` a berth upgrade rather than a pipe
+> one, which is a content change and not only a code change.
+
 ## 7b. Export capacity — a socket, not a constant
 
 > **R20d.8 amendment (finding 165). The offtake rate was a constant and the
