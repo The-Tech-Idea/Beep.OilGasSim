@@ -157,8 +157,18 @@ public sealed class NewGameTests
                 || !string.Equals(digest.Value, theirs, StringComparison.Ordinal))
                 blocksApart.Add(digest.Key);
 
+        // AND THE STREAM POSITIONS, which are on the header rather than in any
+        // block — so the digest comparison above cannot see them. A reload that
+        // restored every block and left one stream astray would diverge on its
+        // first draw and agree on everything up to it, which is the failure PV2's
+        // own note warns about.
+        foreach (KeyValuePair<string, ulong> position in one.Header.RngPositions)
+            if (!two.Header.RngPositions.TryGetValue(position.Key, out ulong theirs)
+                || position.Value != theirs)
+                blocksApart.Add($"stream {position.Key} {position.Value}/{theirs}");
+
         Assert.True(blocksApart.Count == 0,
-            "blocks that did not survive the reload: " + string.Join(", ", blocksApart));
+            "what did not survive the reload: " + string.Join(", ", blocksApart));
 
         WorldState after = WorldOf(reloaded);
 
