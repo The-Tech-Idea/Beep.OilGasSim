@@ -938,10 +938,31 @@ public interface IStateOwner
 {
     StateKey Key { get; }
     int SchemaVersion { get; }       // starts at 1, so an unset field cannot pass for valid
+
+    // R20d.12.14 — the keys this owner must be restored AFTER
+    // (SDD-013 §2b, design 11 §2.1). Empty for most owners, and empty is a
+    // STATEMENT: "nothing else has to be back before I am".
+    //
+    // Capture order and restore order are different orders and only one of them
+    // can be the key's. Capture walks keys so the bytes do not depend on how
+    // modules composed — that is what PV1 rests on. Restore has to follow
+    // dependencies, and key order says nothing about them: `world.decisions`
+    // sorts after `wells.completions` and must be restored before it, which the
+    // loader knew only as a hand-written phase until this member existed.
+    IReadOnlyList<StateKey> RestoreAfter { get; }
+
     void Capture(IStateWriter w);
     void Restore(IStateReader r);
 }
 ```
+
+`StateRegistry` exposes `RestoreOrder` beside `Owners`: the same set,
+topologically sorted, **with key order as the tie-break** so the result is total
+and deterministic (D-5) and adds an order only where a dependency states one. A
+cycle, or a key naming no owner, is a **composition-time refusal** naming every
+key involved — it is a fact about the module set, knowable when the set is
+validated, and §12b already refuses a set it cannot build rather than starting a
+degraded engine.
 
 Canonical writer (sorted keys, invariant formatting, no floats-as-strings
 ambiguity: doubles as 17-digit round-trip) is what makes the PV1 byte-identity

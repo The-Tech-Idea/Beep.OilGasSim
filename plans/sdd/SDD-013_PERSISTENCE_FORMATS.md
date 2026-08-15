@@ -26,6 +26,78 @@ stateDigest` — digest = SHA-256 over the canonical module blocks concatenated
 in module-name order; per-module digests localise PV divergence (R19 risk
 note).
 
+## 2b. The restore order is DECLARED — S013-5, specified (R20d.12.14)
+
+Capture walks owners in **state-key order**, and that is right for capture: it
+makes the bytes independent of the order modules happened to compose, which is
+what PV1 rests on. **Restore cannot use the same order**, because restoring is
+not symmetric with capturing — an owner's `Restore` may need facts another owner
+holds, and key order says nothing about which. Design 11 §2.1 asks for declared
+dependencies, topologically sorted.
+
+**Today the order is three phases hand-written in `SaveGame.Restore`.** That is
+not merely inelegant; it has already failed once in a way nothing could catch.
+`world.decisions` sorts after `wells.completions`, so the field rebuild measured
+each reopened well's gathering line against a header that had not been restored
+and every tieback fell to its floor. The correction is a line in the loader that
+no test pins and no rule protects (finding 201).
+
+### 2b.1 What is declared
+
+`IStateOwner` gains one member:
+
+```csharp
+/// The keys this owner must be restored AFTER. Empty for most owners,
+/// and empty is a statement rather than an omission.
+IReadOnlyList<StateKey> RestoreAfter { get; }
+```
+
+`StateRegistry` gains `RestoreOrder` beside `Owners`: the same set, sorted so
+every owner follows everything it names. **Key order is the tie-break**, so the
+result is total and deterministic (rule D-5) — two owners with no dependency
+between them are ordered by key exactly as capture orders them, and the sort
+adds an order only where a dependency states one.
+
+A cycle is a **composition-time refusal** naming the whole cycle, not a
+load-time fault. It is a fact about the module set, so it is knowable when the
+set is validated, and `IModuleRegistry` already refuses a set it cannot build
+rather than starting a degraded engine (design 03 §3.1). A key naming a
+non-existent owner is refused the same way and for the same reason.
+
+### 2b.2 The rebuild is not a step beside the owners — it is part of one
+
+The loader has an action that is not an owner: rebuilding the field by reopening
+every completion the save records. A naive ordering cannot place it, because it
+is neither before nor after "the owners" as a group — it must follow the
+subsurface and the world and precede the wells' own block.
+
+**So it is not placed separately.** Rebuilding is what materialises the things
+`wells.completions` describes, and design 11 §2.1's own wording makes it that
+owner's loader. The order therefore stays purely over owners:
+
+```text
+wells.completions   RestoreAfter = [subsurface.compartments, world.decisions]
+everything else     RestoreAfter = []          → key order among themselves
+```
+
+and restoring `wells.completions` means *rebuild, then restore* — one unit,
+because the check the owner performs is a check on what the rebuild just did.
+This is why the two halves of S013-5 "land together and neither is useful
+alone": the rebuild needs the order to know when to run, and the order needs the
+rebuild to have anything non-trivial to sequence.
+
+**What this buys beyond tidiness** is that finding 201's correction stops being
+a comment. `world.decisions` before `wells.completions` becomes a declaration
+the sort enforces, so the next owner whose restore depends on another says so in
+its own file and cannot be silently mis-ordered by an edit to the loader.
+
+### 2b.3 Verification
+
+**PV4b** — the declared order is a topological extension of key order: for any
+two owners with no declared dependency, `RestoreOrder` agrees with `Owners`.
+**PV4c** — a module set declaring a cycle is refused at composition, naming
+every key in it. Both are cheap and neither needs a save.
+
 ## 3. Canonical JSON — the PV1 rules
 
 ```text
