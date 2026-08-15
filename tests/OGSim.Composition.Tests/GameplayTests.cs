@@ -728,7 +728,7 @@ public sealed class GameplayTests
     /// line that cannot keep up must be holding something.</para>
     /// </summary>
     [Fact]
-    public void R21V6_the_read_model_publishes_what_the_tank_holds_and_its_ullage()
+    public void R21V11_the_read_model_publishes_what_the_tank_holds_and_its_ullage()
     {
         (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled();
 
@@ -772,7 +772,7 @@ public sealed class GameplayTests
     /// visible.</para>
     /// </summary>
     [Fact]
-    public void R21V6_a_month_of_investment_does_not_look_like_a_month_of_decline()
+    public void R21V11_a_month_of_investment_does_not_look_like_a_month_of_decline()
     {
         (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled();
 
@@ -824,7 +824,7 @@ public sealed class GameplayTests
     /// from a run would pin whatever the engine happens to do.</para>
     /// </summary>
     [Fact]
-    public void R21V6_the_read_model_says_what_each_operation_is_doing()
+    public void R21V11_the_read_model_says_what_each_operation_is_doing()
     {
         (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled();
 
