@@ -427,6 +427,47 @@ public sealed class SaveGameTests
     }
 
     /// <summary>
+    /// S013-6. A SAVE KNOWS WHAT MONTH IT IS, whatever the host says.
+    ///
+    /// <para>A container records a tick COUNT, and a count is only a date against
+    /// an epoch. That epoch lived in `EngineSettings` alone, so a save opened
+    /// with different settings had its whole history relabelled — every audit
+    /// entry, every belief's as-of, every objective deadline shifted — with the
+    /// simulation itself identical and nothing to indicate anything had moved.
+    /// Every number right and every date wrong is the worst shape a defect can
+    /// take, because nothing looks broken.</para>
+    ///
+    /// <para>Loaded here with a DELIBERATELY WRONG epoch, which is what a second
+    /// scenario would have supplied. The date must come back as the saved game's
+    /// and not the caller's — the same rule the world seed has followed since
+    /// R20d.12.</para>
+    /// </summary>
+    [Fact]
+    [Trait("Speed", "Slow")]
+    public void S013V6_a_reloaded_game_keeps_its_own_calendar()
+    {
+        (Engine original, _) = Played(months: 24);
+
+        GameDate expected = original.ReadModel!.Date;
+
+        using MemoryStream container = Saved(original);
+
+        Engine reloaded = Assert.IsType<Built>(SaveGame.Load(
+            container,
+            Fixture.Settings() with { Epoch = new GameDate(1990, 7) })).Engine;
+
+        reloaded.Pipeline.AdvanceTick();
+        original.Pipeline.AdvanceTick();
+
+        Assert.Equal(original.ReadModel!.Date, reloaded.ReadModel!.Date);
+
+        // And it is the SAVED game's calendar rather than a coincidence: the
+        // month after a 24-month run is not July 1990.
+        Assert.NotEqual(new GameDate(1990, 7), reloaded.ReadModel!.Date);
+        Assert.Equal(expected.AddMonths(1), reloaded.ReadModel!.Date);
+    }
+
+    /// <summary>
     /// EVERY OWNER CAPTURES TOGETHER, which had never been true before: one block
     /// each, stamped with its own schema version, digested as a set.
     ///

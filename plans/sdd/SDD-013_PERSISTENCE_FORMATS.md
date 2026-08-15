@@ -21,8 +21,27 @@ save.ogsim = ZIP (deflate):
 ## 2. Header
 
 `schemaVersion, engineVersion, contentVersion, activeMods[{id, version, order}],
-worldSeed, tick, rngPositions{stream: ulong × 8}, moduleDigests{name: sha256},
-stateDigest` — digest = SHA-256 over the canonical module blocks concatenated
+worldSeed, epoch{year, month}, tick, rngPositions{stream: ulong × 8},
+moduleDigests{name: sha256}, stateDigest`
+
+> **R20d.12.19 amendment (S013-6): the EPOCH joins the header.** A `Tick` is a
+> count and a `GameDate` is a label; the clock turns one into the other using the
+> epoch it was built with, and that epoch lived only in `EngineSettings`. So a
+> save carried tick 240 and nothing about what month that was, and a host that
+> loaded it with different settings got a game whose entire history was
+> relabelled — every audit entry, every belief's as-of, every objective deadline
+> shifted by the difference, with the simulation itself unchanged and no
+> indication anything had moved.
+>
+> Harmless while exactly one scenario ships, which is why it has sat here as an
+> open item rather than a finding. It stops being harmless at the SECOND
+> scenario, and the failure is a bad one to debug because the numbers are all
+> right — only the dates are wrong.
+>
+> **The epoch is the saved game's, not the loader's**, on the same principle as
+> the seed one line above it: a host asked to supply the epoch of a game it has
+> not opened yet would be guessing, and `Load` already overrides
+> `settings.WorldSeed` from the header for exactly this reason. — digest = SHA-256 over the canonical module blocks concatenated
 in module-name order; per-module digests localise PV divergence (R19 risk
 note).
 
@@ -290,7 +309,7 @@ PV8 (digest sensitivity) · R19-V9..V15 as specified in the phase doc.
 | S013-2 | Save-diff tool (R19-V15) — ships as a dev utility over the canonical form; scope | R19.5 |
 | S013-3 | `engineVersion` / `contentVersion` stamped from a release process rather than declared as constants | a build pipeline |
 | S013-4 | The audit sidecar (§1's `audit/`) — the container ships state and header first; the trail is its own task with its own retention policy | R19.4 |
-| S013-5 | ~~**The rebuild + declared restore order**~~ **DONE** (R20d.12 / R20d.12.15). The rebuild reopens saved completions through `FieldControl` with their saved ids; `IStateOwner.RestoreAfter` and `StateRegistry.RestoreOrder` give §2b's topological order beside the key-ordered capture. **It proved itself on the first run**: `company.obligations` sorts before `wells.completions` and must be restored after it — reopening a well registers an abandonment obligation, so the save's record has to win or a company gets back one it had discharged. That had been a sentence in the loader's docstring; the declared order turned it into a claim a sort enforces and the one place it was wrong faulted immediately. **Cycles and dangling keys refuse at COMPOSITION**, attributed to the module that declared the key | ✅ || S013-6 | The EPOCH is not in the header, so a save's dates depend on the `EngineSettings` it is loaded with. Harmless while one scenario ships; a relabelling bug the moment two do | a second scenario |
+| S013-5 | ~~**The rebuild + declared restore order**~~ **DONE** (R20d.12 / R20d.12.15). The rebuild reopens saved completions through `FieldControl` with their saved ids; `IStateOwner.RestoreAfter` and `StateRegistry.RestoreOrder` give §2b's topological order beside the key-ordered capture. **It proved itself on the first run**: `company.obligations` sorts before `wells.completions` and must be restored after it — reopening a well registers an abandonment obligation, so the save's record has to win or a company gets back one it had discharged. That had been a sentence in the loader's docstring; the declared order turned it into a claim a sort enforces and the one place it was wrong faulted immediately. **Cycles and dangling keys refuse at COMPOSITION**, attributed to the module that declared the key | ✅ || S013-6 | ~~The EPOCH is not in the header~~ **CLOSED** (R20d.12.19, specified at §2 first). The header carries `epoch{year, month}` and `Load` takes it from the save alongside the world seed, on the same stated principle: a host asked to supply either for a game it has not opened yet would be guessing. Asked of the CLOCK rather than a caller's settings, since the clock is what turns a tick count into months — and `SimulationClock.Epoch` is deliberately NOT on `ISimulationClock`, because a module needs to know what month it is while only the thing writing a save needs to know where counting started. **Verified by disabling it**: a save made in March 1967 reloaded as September 1992, a twenty-five-year relabelling with the simulation bit-identical. That is why this waited as an open item rather than a finding — every number right and every date wrong is the worst shape a defect can take, because nothing looks broken | ✅ |
 | S013-7 | ~~Reservoir pressure is path-dependent and must be stored~~ **Withdrawn** — built, measured, reverted: every tick already re-solves from Pi, so there is no path, and storing it would break the hand-edit guarantee `The_save_carries_no_pressure` exists for (see §4's note) | — |
 | S013-8 | **The flood residual, narrowed by measurement.** Probed over three ticks: a reloaded field imports **0 in the first month and 43,904 m³ in the second** against the original's steady 35,495 → 35,527 → 35,558. It skips exactly one month and then OVER-imports. So the intake and the injector are wired correctly by the rebuild and the cause is a stale first-tick input to `CommandTheIntake` — `target = VRR·voidageLastTick − producedWaterLastTick`, of which the set point demonstrably restores and the other two are the suspects. **Both of those were then eliminated by printing the block**: `field.flood` is in the container carrying `voidage-last-tick 43909.35`, `produced-water-last-tick 4.40`, `voidage-replacement 1.0` — the flood's own bookkeeping survives intact. **So the zero is the OTHER input**: `ReservoirRoom()` multiplies by the room the reservoir has left to its ceiling, and that room is 0 in the reloaded engine's first month and 62,419 m³ in its second. It is compartment state, and it is not the pressure (built, measured, reverted — finding 196). **Closed by reading `ReservoirRoom()` rather than theorising about it a fourth time**: it walks `_floodShares`, a FOURTH cross-tick list on the production loop, and an empty one leaves the cap at infinity and returns exactly 0. Saved with the other three. **A reloaded game now continues identically for two years — production to the cubic metre and cash to the cent, every month, with every account balance agreeing.** The measurements that led here cost minutes each; the one theory that was built instead cost a great deal more | ✅ |
 | S013-10 | **A facilities state block — the category sweep, and the largest gap left** (finding 197). Six fitted tiers (`Manifold`, `Separator`, `Tank`, `GasCapture`, `Treater`, `ExportTerminal`) plus a tank's contents, provenance and promised mass, a pipeline's linefill and an intake's commanded rate. Every tier is a ladder bought with money, so a reload today returns the starting equipment and keeps the spending. **The fixture blind spot ships with it**: PV2 drills and floods but never installs, so it passes while this is broken — whatever owner lands must come with a fixture that BUYS something | R20d.12 |

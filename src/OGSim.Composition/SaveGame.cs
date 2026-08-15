@@ -108,6 +108,14 @@ public static class SaveGame
             ActiveMods: [],
 
             worldSeed,
+
+            // The date tick zero was, asked of the CLOCK rather than taken from
+            // a caller's settings: the clock is what turns this save's tick count
+            // into months, so it is the thing that knows. Without it a reload
+            // relabels the whole history from whatever epoch a host passed
+            // (S013-6).
+            engine.Provided.Resolve<SimulationClock>().Epoch,
+
             engine.Pipeline.CurrentTick,
             RngPositions(engine),
             perModule,
@@ -233,8 +241,18 @@ public static class SaveGame
             throw new SaveDataFault("SDD-013 §6", null,
                 "the container did not validate; call Read first and report its reasons");
 
+        // THE SEED AND THE EPOCH ARE THE SAVED GAME'S, not the loader's. A host
+        // asked to supply either for a game it has not opened yet would be
+        // guessing — and getting the epoch wrong relabels the entire history
+        // while leaving the simulation identical, which is the worst shape a
+        // defect can take: every number right and every date wrong (S013-6).
         BuildResult built = EngineBuilder.BuildAt(
-            settings with { WorldSeed = loaded.Header.WorldSeed }, loaded.Header.Tick);
+            settings with
+            {
+                WorldSeed = loaded.Header.WorldSeed,
+                Epoch = loaded.Header.Epoch,
+            },
+            loaded.Header.Tick);
 
         if (built is not Built ready) return built;
 
@@ -439,6 +457,15 @@ public static class SaveGame
             ["contentVersion"] = new JsonString(header.ContentVersion),
             ["activeMods"] = new JsonArray(mods),
             ["worldSeed"] = new JsonString(Text(header.WorldSeed)),
+
+            // A (year, month) record rather than a date string: §3 bans a format
+            // nobody can parse unambiguously twice.
+            ["epoch"] = new JsonObject(new Dictionary<string, JsonValue>(StringComparer.Ordinal)
+            {
+                ["year"] = new JsonInteger(header.Epoch.Year),
+                ["month"] = new JsonInteger(header.Epoch.Month),
+            }),
+
             ["tick"] = new JsonInteger(header.Tick.Value),
             ["rngPositions"] = Map(header.RngPositions),
             ["moduleDigests"] = Map(header.ModuleDigests),
@@ -469,6 +496,7 @@ public static class SaveGame
             String(Member(json, "contentVersion"), "contentVersion"),
             mods,
             Seed(String(Member(json, "worldSeed"), "worldSeed")),
+            EpochFrom(Member(json, "epoch")),
             new Tick((int)Integer(Member(json, "tick"), "tick")),
             Positions(Member(json, "rngPositions")),
             Digests(Member(json, "moduleDigests")),
@@ -489,6 +517,20 @@ public static class SaveGame
             ? seed
             : throw new SaveDataFault("SDD-013 §2", null,
                 $"the manifest's world seed '{text}' is not a number");
+
+    /// <summary>
+    /// The epoch, validated by `GameDate` itself — a month outside 1–12 is a
+    /// corrupt header and says so here rather than surfacing as a date nobody
+    /// can explain forty ticks later.
+    /// </summary>
+    private static GameDate EpochFrom(JsonValue value)
+    {
+        JsonObject json = Object(value, "epoch");
+
+        return new GameDate(
+            (int)Integer(Member(json, "year"), "epoch.year"),
+            (int)Integer(Member(json, "month"), "epoch.month"));
+    }
 
     private static JsonValue Map(IReadOnlyDictionary<string, ulong> values)
     {

@@ -26,6 +26,20 @@ public sealed record SaveHeader(
     string ContentVersion,
     IReadOnlyList<ModReference> ActiveMods,
     ulong WorldSeed,
+
+    /// <summary>
+    /// The date tick zero was, so a reload can turn this save's tick count back
+    /// into the months it was played in (SDD-013 §2's R20d.12.19 amendment).
+    ///
+    /// <para>A `Tick` is a count and a `GameDate` is a label; the clock converts
+    /// using the epoch it was built with. Without this the epoch came from
+    /// whatever `EngineSettings` the host happened to load with, so a save opened
+    /// under different settings had its entire history relabelled — every audit
+    /// entry, every belief's as-of, every deadline — with the simulation
+    /// unchanged and nothing to show that anything had moved.</para>
+    /// </summary>
+    GameDate Epoch,
+
     Tick Tick,
     IReadOnlyDictionary<string, ulong> RngPositions,
     IReadOnlyDictionary<string, string> ModuleDigests,
@@ -35,6 +49,7 @@ public sealed record SaveHeader(
     public bool Equals(SaveHeader? other) =>
         other is not null && SchemaVersion == other.SchemaVersion
         && string.Equals(EngineVersion, other.EngineVersion, StringComparison.Ordinal)
+        && Epoch == other.Epoch
         && string.Equals(ContentVersion, other.ContentVersion, StringComparison.Ordinal)
         && WorldSeed == other.WorldSeed && Tick == other.Tick
         && string.Equals(StateDigest, other.StateDigest, StringComparison.Ordinal)
@@ -43,9 +58,12 @@ public sealed record SaveHeader(
         && Structural.Equal(ModuleDigests, other.ModuleDigests);
 
     public override int GetHashCode() =>
-        HashCode.Combine(SchemaVersion, EngineVersion, ContentVersion, WorldSeed, Tick,
-            StateDigest, Structural.HashOf(ActiveMods),
-            HashCode.Combine(Structural.HashOf(RngPositions), Structural.HashOf(ModuleDigests)));
+        HashCode.Combine(SchemaVersion, EngineVersion, ContentVersion, WorldSeed, Epoch, Tick,
+            StateDigest,
+            HashCode.Combine(
+                Structural.HashOf(ActiveMods),
+                Structural.HashOf(RngPositions),
+                Structural.HashOf(ModuleDigests)));
 }
 
 public sealed record ModReference(string Id, string Version, int Order);
