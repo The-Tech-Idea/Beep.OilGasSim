@@ -643,6 +643,34 @@ A movement outside that list is a defect and should be treated as one. A
 movement inside it is the feature, and the test that measured the old rhythm
 should be re-stated in terms of the new one rather than re-tuned to pass.
 
+**The sizing is the design work, and here are the numbers it starts from**
+(measured, R20d.5.0b):
+
+```text
+tank capacity        150.0e6 kg          (E1 tier)
+export offtake       20.0 kg/s  = 51.84e6 kg per 30-day tick
+tank holds           ~2.9 ticks of export capacity
+shipped field makes  ~12.1e6 kg per tick   (14,278 m³ at ~850 kg/m³)
+                     = 23% of export capacity, so export does not bind today
+time to fill tank    ~12 ticks
+```
+
+**A cargo sized at tank capacity ships once a year; one sized at a month's
+production ships monthly.** Those are very different games, and the choice is
+not a tuning constant — it decides whether storage is a buffer or the whole
+problem.
+
+**A fixed content size is the realistic answer and the interesting one.** Ships
+come in standard parcels; a field too small to fill one has a real decision to
+make — take worse terms on a part cargo, build more storage, or drill more —
+which is exactly the kind of pressure §7's laytime and demurrage exist to
+create. **What it must not be is a size chosen so the shipped field happens to
+lift every month**, because that is the continuous rate again with extra state.
+
+**So the shipped E1 parcel has to be small enough that the shipped field is not
+simply broken by it**, and that is a content judgement to make with the numbers
+above in hand rather than a default to pick and discover later.
+
 **Order of work**, each landing green before the next:
 
 1. The berth carries the rate (§7a's L5 decision), with no schedule yet —
