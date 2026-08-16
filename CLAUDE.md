@@ -73,6 +73,19 @@ quietly stops being evidence, which is the same failure in a new place.
 > untested because an exclusion changes the machine's security posture.
 > **Try a reboot, then a Defender exclusion for the repo and the .NET
 > toolchain.**
+>
+> **Until then the REDUCED GATE is what can be trusted**, and it does complete:
+>
+> ```bash
+> dotnet test OGSim.slnx --filter "Speed!=Slow"     # 989 of 1023, exit 0, ~3 min
+> ```
+>
+> Every suite, every test except the 34 forty-year runs. **It is not a
+> substitute and must not be described as one**: the excluded 34 are precisely
+> where almost every finding in this project came from, so a reduced-gate green
+> says a change did not break anything cheap to check, and says nothing about
+> whether it survives forty years. Use it to keep working; do not use it to
+> judge a commit.
 
 Requires the .NET 10 SDK (`.slnx` solution format).
 
