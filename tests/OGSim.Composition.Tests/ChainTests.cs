@@ -1452,6 +1452,84 @@ public sealed class ChainTests
     /// — the kit changes what is PUBLISHED, not what is true — so a test asking
     /// whether equipment ages has to fit one to be able to ask.</para>
     /// </summary>
+    /// <summary>
+    /// Design 09 §4.3's "why?", answered for the PRODUCTION path (finding 202).
+    ///
+    /// <para>An element goes down because something DOWNSTREAM of it went, and
+    /// until R22.4 the route law returned only what survived — so a deferral was
+    /// recorded with <c>cause: null</c> and a player asking why a well stopped
+    /// got a list of things that were binding, with nothing saying which one
+    /// started it.</para>
+    ///
+    /// <para>THE CHAIN IS THE ASSERTION, not the entries. One record per shut-in
+    /// element would be a list; what makes it an explanation is that each cites
+    /// the entry for the element that shut it, so a four-deep outage walks back
+    /// to the thing that actually failed. A test that only counted entries would
+    /// pass against a version that wrote <c>cause: null</c> on every one — which
+    /// is precisely the state this closes.</para>
+    ///
+    /// <para>Run WITHOUT repairs, because a repaired field never holds an outage
+    /// long enough to cascade: the chain needs something to stay broken.</para>
+    /// </summary>
+    [Fact]
+    [Trait("Speed", "Slow")]
+    public void An_outage_records_what_shut_each_element_in()
+    {
+        (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled();
+        Produce(engine, target);
+
+        FieldControl field = engine.Provided.Resolve<FieldControl>();
+        field.Drill(target, new Length(2000.0));
+
+        // ASKED WHILE THE OUTAGE IS LIVE, which the retention window requires and
+        // the first version of this test got wrong in an instructive way. These
+        // entries are per-tick per-element detail and are pruned beyond twelve
+        // ticks (design 09 §4.4) — the test passed originally only because they
+        // were recorded as DURABLE, so running two hundred months and querying at
+        // the end was reading the very defect it should have caught.
+        AuditEntry[] shutIn = [];
+
+        for (var month = 0; month < 480 && shutIn.Length == 0; month++)
+        {
+            engine.Pipeline.AdvanceTick();
+
+            shutIn = [.. engine.Audit
+                .Query(new AuditQuery(null, AuditCategory.ConstraintBinding, null, null))
+                .Where(e => e.Data.ContainsKey("shut-in-by"))];
+        }
+
+        Assert.True(shutIn.Length > 0,
+            "nothing was ever shut in by the route law in forty unmaintained years, " +
+            "so this test measured nothing at all");
+
+        // THE LINK, which is the whole point, and asked through the CAUSE-CHAIN
+        // QUERY rather than by looking an id up directly — that is the surface a
+        // host walks a "why?" with, so this exercises the mechanism instead of
+        // reimplementing it beside the thing it checks.
+        var chained = 0;
+
+        foreach (AuditEntry entry in shutIn)
+        {
+            if (entry.Cause is not AuditId cause) continue;
+
+            IReadOnlyList<AuditEntry> chain = engine.Audit.Query(
+                new AuditQuery(null, null, null, cause));
+
+            Assert.NotEmpty(chain);
+
+            // The element this one blames must be the one the chain leads to.
+            Assert.Contains(chain, behind =>
+                behind.Data.TryGetValue("element", out AuditValue named)
+                && named.Value == entry.Data["shut-in-by"].Value);
+
+            chained++;
+        }
+
+        Assert.True(chained > 0,
+            $"{shutIn.Length} elements were shut in and not one cited what shut it; " +
+            "the entries are a list rather than a chain and 09 §4.3 cannot walk them");
+    }
+
     [Fact]
     [Trait("Speed", "Slow")]
     public void R20d22V2_equipment_wears_out_as_the_field_runs()

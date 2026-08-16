@@ -69,6 +69,50 @@ public interface IFlowElementRegistry
     /// player buys.</para>
     /// </summary>
     IReadOnlyList<EntityRef> Routed(IReadOnlyCollection<EntityRef> available);
+
+    /// <summary>
+    /// The same law, answering what it REMOVED as well as what survived
+    /// (SDD-002 §5's R22.4 amendment). <see cref="Routed"/> is this without the
+    /// casualties — one fixed point, not two.
+    /// </summary>
+    RouteClosure Close(IReadOnlyCollection<EntityRef> available);
+}
+
+/// <summary>
+/// Why one element left the available set: the connection that removed it
+/// (SDD-002 §5, finding 202).
+///
+/// <para><c>Because</c> is the element downstream whose absence shut this one
+/// in — the IMMEDIATE reason. An element removed late in the closure names one
+/// removed earlier, and following the entries walks the outage back to the
+/// thing that actually failed.</para>
+/// </summary>
+public sealed record RouteExclusion(EntityRef Element, EntityRef Because);
+
+/// <summary>
+/// What the route law found: the fixed point, and every element it shut in
+/// getting there, in the order the outage spread.
+///
+/// <para>Elements absent from <c>available</c> on entry are NOT in
+/// <see cref="Excluded"/>. They are the roots — a hazard draw or an operation
+/// took them out and audited that with its own reason — so the two records meet
+/// rather than overlap.</para>
+/// </summary>
+public sealed record RouteClosure(
+    IReadOnlyList<EntityRef> Routed,
+    IReadOnlyList<RouteExclusion> Excluded)
+{
+    // Finding 131: the compiler's record equality is reference equality for a
+    // collection member, so two closures with identical contents would compare
+    // unequal — and a projection that carried one would report a difference
+    // every tick.
+    public bool Equals(RouteClosure? other) =>
+        other is not null
+        && Structural.Equal(Routed, other.Routed)
+        && Structural.Equal(Excluded, other.Excluded);
+
+    public override int GetHashCode() =>
+        HashCode.Combine(Structural.HashOf(Routed), Structural.HashOf(Excluded));
 }
 
 /// <summary>The shipped registry. Concrete because there is nothing to vary:
@@ -161,7 +205,24 @@ public sealed class FlowElementRegistry : IFlowElementRegistry
     /// as repeated passes rather than a reverse walk because the connection list
     /// is the only index there is and this needs no second one (law L5).</para>
     /// </summary>
-    public IReadOnlyList<EntityRef> Routed(IReadOnlyCollection<EntityRef> available)
+    public IReadOnlyList<EntityRef> Routed(IReadOnlyCollection<EntityRef> available) =>
+        Close(available).Routed;
+
+    /// <summary>
+    /// The law's full answer: what survived, and what each casualty was removed
+    /// BY (SDD-002 §5's R22.4 amendment, finding 202).
+    ///
+    /// <para>Every removal happens at one connection — <c>c.From</c> goes because
+    /// <c>c.To</c> is absent — so the causal edge is already in hand here and was
+    /// simply discarded. It is what lets a deferral cite the failure behind it
+    /// instead of recording <c>cause: null</c>.</para>
+    ///
+    /// <para><c>Because</c> is the IMMEDIATE reason: an element removed in the
+    /// third pass names the one removed in the second, which names the one that
+    /// failed. Following the entries walks the outage back; recording a root here
+    /// would flatten the path a player is asking about.</para>
+    /// </summary>
+    public RouteClosure Close(IReadOnlyCollection<EntityRef> available)
     {
         ArgumentNullException.ThrowIfNull(available);
 
@@ -169,6 +230,12 @@ public sealed class FlowElementRegistry : IFlowElementRegistry
         foreach (EntityRef reference in available)
             if (reference.Kind == EntityKind.FlowElement)
                 present.Add(new EntityId<IFlowElement>(reference.Value));
+
+        // Kept in removal order, which is the order the outage SPREAD: the first
+        // entry names what the failure took directly. A set keyed by element
+        // would lose that, and the order is the half of the record that reads
+        // like an explanation.
+        var excluded = new List<RouteExclusion>();
 
         bool removedSomething = true;
 
@@ -189,6 +256,10 @@ public sealed class FlowElementRegistry : IFlowElementRegistry
                 {
                     present.Remove(connection.From);
                     removedSomething = true;
+
+                    excluded.Add(new RouteExclusion(
+                        new EntityRef(EntityKind.FlowElement, connection.From.Value),
+                        new EntityRef(EntityKind.FlowElement, connection.To.Value)));
                 }
             }
         }
@@ -200,7 +271,7 @@ public sealed class FlowElementRegistry : IFlowElementRegistry
         for (int i = 0; i < _elements.Count; i++)
             if (present.Contains(_elements[i].Id)) routed.Add(ReferenceTo(_elements[i]));
 
-        return routed;
+        return new RouteClosure(routed, excluded);
     }
 
     public IReadOnlyList<IFlowElement> Registered => _elements;

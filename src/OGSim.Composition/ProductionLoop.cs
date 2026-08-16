@@ -221,6 +221,13 @@ internal sealed class ProductionLoop : IStateOwner
     private readonly List<ChainElement> _chain = [];
 
     private readonly Func<EntityId<IFlowElement>, string> _names;
+
+    /// <summary>What an element is called, for a record a person will read.
+    /// The loop owns the naming function, so asking it is one owner rather than
+    /// a second copy handed to every stage that needs a label (law L5).</summary>
+    public string NameOf(EntityRef element) =>
+        _names(new EntityId<IFlowElement>(element.Value));
+
     private readonly OGSim.Integrity.AssetIntegrity _integrity;
 
     private readonly OGSim.Facilities.Tank _tank;
@@ -1973,7 +1980,8 @@ public sealed class FieldControl
 internal sealed class SegmentationStage(
     IFlowElementRegistry network,
     OGSim.Integrity.AssetIntegrity integrity,
-    ProductionLoop loop) : ITickStage
+    ProductionLoop loop,
+    IAuditTrail audit) : ITickStage
 {
     public StageId Id => StageId.Availability;
 
@@ -1995,7 +2003,17 @@ internal sealed class SegmentationStage(
             if (!integrity.HasFailed(registered[i].Id))
                 standing.Add(FlowElementRegistry.ReferenceTo(registered[i]));
 
-        IReadOnlyList<EntityRef> after = network.Routed(standing);
+        RouteClosure closure = network.Close(standing);
+        IReadOnlyList<EntityRef> after = closure.Routed;
+
+        // WHY EACH ELEMENT WENT DOWN, recorded where the law decided it
+        // (SDD-002 §5, design 09 §4.3, finding 202). A deferral used to be
+        // written with `cause: null` because nothing named the element behind
+        // it; these entries are what a "why?" walks. Recorded here rather than
+        // in the publish loop, because that loop rebuilds the READ MODEL and a
+        // side effect inside a pure projection would double-record the moment
+        // anything asked twice.
+        RecordOutage(closure, context.Tick);
 
         int day = failures.Count == 0
             ? (int)Duration.DaysPerTick
@@ -2036,6 +2054,65 @@ internal sealed class SegmentationStage(
             new Segment(StartDay: 0, DurationDays: day, network.Routed(before)),
             new Segment(StartDay: day, DurationDays: (int)Duration.DaysPerTick - day, after),
         ]);
+    }
+
+    /// <summary>
+    /// One entry per element the route law shut in, each CITING the entry for
+    /// the element that shut it (design 09 §4.3, finding 202).
+    ///
+    /// <para>The chain is what makes this more than a list. An outage four
+    /// elements deep records four entries, and the last one's cause walks back
+    /// to the first — so "why is this well shut in" is answered by following
+    /// ids rather than by re-deriving the topology at read time, which is what
+    /// `CauseChainLeaf` exists to do.</para>
+    ///
+    /// <para>The first entry in a chain cites nothing: its `Because` element is
+    /// absent from the available set, which means something else — a hazard
+    /// draw, an operation — took it out and audited that with its own reason.
+    /// The two records meet there rather than overlapping.</para>
+    /// </summary>
+    private void RecordOutage(RouteClosure closure, Tick tick)
+    {
+        if (closure.Excluded.Count == 0) return;
+
+        // Written in removal order, so an element's cause has always been
+        // recorded before the element that names it — the entries can only chain
+        // backwards, which is what makes the walk terminate.
+        var idOf = new Dictionary<ulong, AuditId>();
+
+        for (int i = 0; i < closure.Excluded.Count; i++)
+        {
+            RouteExclusion exclusion = closure.Excluded[i];
+
+            AuditId? cause = idOf.TryGetValue(exclusion.Because.Value, out AuditId behind)
+                ? behind
+                : null;
+
+            AuditId recorded = audit.Record(
+                // PER-TICK PER-ELEMENT DETAIL, and the category is what says so
+                // (design 09 §4.4, SDD-001 §5). `StateTransition` is DURABLE —
+                // never pruned — and one of those per shut-in element per tick
+                // is thousands of permanently retained entries in a forty-year
+                // run, which grows until the process dies. It did: four host
+                // crashes on a clean build before the category was the suspect.
+                //
+                // A route shut-in is the same KIND of fact as the deferral it
+                // causes, and the retention partition already places that here.
+                // The cause closure still protects any of these that a durable
+                // entry depends on, which is the guarantee §4.4 actually makes.
+                AuditCategory.ConstraintBinding,
+                exclusion.Element,
+                cause,
+                new Dictionary<string, AuditValue>(StringComparer.Ordinal)
+                {
+                    ["element"] = new(loop.NameOf(exclusion.Element)),
+                    ["shut-in-by"] = new(loop.NameOf(exclusion.Because)),
+                    ["tick"] = new(tick.Value.ToString(
+                        System.Globalization.CultureInfo.InvariantCulture)),
+                });
+
+            idOf[exclusion.Element.Value] = recorded;
+        }
     }
 
     private static int EarliestDay(IReadOnlyList<OGSim.Integrity.FailureOutcome> failures)

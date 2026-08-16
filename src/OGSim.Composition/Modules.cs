@@ -803,7 +803,8 @@ internal sealed class FieldModule() : EngineModule(Declare(
 
         composition.Provide(bank);
         composition.Contribute(order: 0, new SegmentationStage(
-            network, composition.Require<OGSim.Integrity.AssetIntegrity>(), loop));
+            network, composition.Require<OGSim.Integrity.AssetIntegrity>(), loop,
+            composition.Require<IAuditTrail>()));
         composition.Contribute(order: 0, new SolveFlowStage(loop));
 
         // Beliefs go stale on what was PRODUCED FROM, so this reads the tick's
