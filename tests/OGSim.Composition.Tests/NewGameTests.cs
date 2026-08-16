@@ -1262,6 +1262,71 @@ public sealed class NewGameTests
     // ------------------------------- borrowing against the ground (R20d.15)
 
     /// <summary>
+    /// R21-V13. THE STANDING INDICATORS ARE IN EVERY SNAPSHOT, not fetched on
+    /// request (IR2, SDD-009 §4).
+    ///
+    /// <para>Both are what a player watches to see a liquidation spiral coming,
+    /// and an indicator that has to be asked for is one nobody looks at. So the
+    /// requirement is about the PROJECTION carrying them every month, which is
+    /// asserted by advancing rather than by reflecting over the type: a field
+    /// declared read-only tells you nothing about whether it is populated.</para>
+    ///
+    /// <para>RRR IS NULLABLE AND THAT IS NOT AN ESCAPE. `null` means not
+    /// measured — under twelve months of history, nothing produced, or nothing
+    /// booked (SDD-009 §4's R20d.12.34 amendment) — so a field that were
+    /// PERMANENTLY null would satisfy "present" while reporting nothing, which
+    /// is the vacuum this suite has been caught by before. The test therefore
+    /// requires it to become a real number once the company has a producing
+    /// discovery and a year of history behind it.</para>
+    /// </summary>
+    [Fact]
+    public void R21V13_the_standing_indicators_are_in_every_snapshot()
+    {
+        Engine engine = NewGame(7UL);
+        WorldState world = WorldOf(engine);
+
+        engine.Pipeline.AdvanceTick();
+
+        // Drill until something is found, because an indicator measured on a
+        // company with no reserves is the vacuous case.
+        var measured = false;
+
+        for (var attempt = 0; attempt < 8 && !measured; attempt++)
+        {
+            for (int i = 0; i < world.Prospects.Count; i++)
+                if (engine.Commands.Submit(
+                        new DrillWellCommand(world.Prospects[i], new Length(2000.0)))
+                    is Accepted) break;
+
+            for (var month = 0; month < 24; month++)
+            {
+                engine.Pipeline.AdvanceTick();
+
+                FieldReadModel seen = engine.ReadModel!;
+
+                // EVERY snapshot, not the last one: ESG standing is a real
+                // number the month a game starts and every month after.
+                Assert.True(double.IsFinite(seen.EsgStanding),
+                    $"ESG standing read {seen.EsgStanding} in month {seen.Tick.Value}; a " +
+                    "standing indicator cannot be absent from a snapshot");
+
+                if (seen.ReserveReplacementRatio is double rrr)
+                {
+                    Assert.True(double.IsFinite(rrr),
+                        $"RRR read {rrr}; not measured is null, never a non-finite number");
+
+                    measured = true;
+                }
+            }
+        }
+
+        Assert.True(measured,
+            "RRR was null in every snapshot of a company that drilled for eight " +
+            "attempts, so the field is present and reports nothing — which is what " +
+            "IR2 asks this test to rule out");
+    }
+
+    /// <summary>
     /// A COMPANY CAN FUND A DEVELOPMENT OUT OF WHAT IT FOUND. A field pays for
     /// itself and not before it is built, so a company that could only spend
     /// what it had would develop at the speed of its smallest discovery.
