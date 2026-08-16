@@ -667,7 +667,7 @@ internal static class Defaults
     /// is a scenario that cannot be lost rather than a compile error. The same
     /// trap the activity terms above carry a note about.</para>
     /// </summary>
-    private static Money TargetCash { get; } = Money.FromMillions(600.0);
+    private static Money TargetCash { get; } = Money.FromMillions(360.0);
 
     /// <summary>
     /// The scenario this composition ships (SDD-014 §5). Content in a finished

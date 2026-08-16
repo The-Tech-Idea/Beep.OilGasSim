@@ -146,6 +146,16 @@ public sealed class ProductionLoopTests
     /// months when something else is binding would be asserting that the cap does
     /// not work.</para>
     /// </summary>
+    /// <summary>What the company's cash did over a run of months.</summary>
+    private static Money Earned(Engine engine, CompanyState company, int months)
+    {
+        Money before = company.Ledger.Cash;
+
+        for (var month = 0; month < months; month++) engine.Pipeline.AdvanceTick();
+
+        return company.Ledger.Cash - before;
+    }
+
     [Fact]
     [Trait("Speed", "Slow")]
     public void Earnings_decline_as_the_reservoir_depletes()
@@ -166,17 +176,18 @@ public sealed class ProductionLoopTests
 
         Assert.Empty(engine.ReadModel!.Bottlenecks);
 
-        Money before = company.Ledger.Cash;
-        engine.Pipeline.AdvanceTick();
-        Money firstMonth = company.Ledger.Cash - before;
+        // A YEAR AGAINST THE NEXT YEAR, not a month against the month after it.
+        // Weather is SEASONAL (SDD-016 §1): a January loses days a July does not,
+        // so two adjacent months differ by which months they are as well as by
+        // how depleted the reservoir is, and the pair can invert without decline
+        // having stopped. Twelve months contain one of each, so the comparison is
+        // of reservoirs rather than of calendars (finding 214).
+        Money firstYear = Earned(engine, company, months: 12);
+        Money secondYear = Earned(engine, company, months: 12);
 
-        before = company.Ledger.Cash;
-        engine.Pipeline.AdvanceTick();
-        Money secondMonth = company.Ledger.Cash - before;
-
-        Assert.True(secondMonth < firstMonth,
-            $"month two ({secondMonth.Cents}c) must earn less than month one " +
-            $"({firstMonth.Cents}c) — a well whose reservoir has fallen produces less");
+        Assert.True(secondYear < firstYear,
+            $"the second year ({secondYear.Cents}c) must earn less than the first " +
+            $"({firstYear.Cents}c) — a well whose reservoir has fallen produces less");
     }
 
     /// <summary>

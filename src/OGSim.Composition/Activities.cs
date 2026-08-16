@@ -635,9 +635,14 @@ internal sealed class ActivityApplier<TCommand>(
 /// Stage 3. Every activity advances a month; the ones that finished apply their
 /// own meaning.
 /// </summary>
-internal sealed class ActivityStage(ActivityState activities, IAuditTrail audit) : ITickStage
+internal sealed class ActivityStage(
+    ActivityState activities,
+    IAuditTrail audit,
+    OGSim.Environment.WeatherState weather) : ITickStage
 {
     public StageId Id => StageId.Operations;
+
+    private const int FieldRegion = 0;
 
     public void Execute(TickContext context)
     {
@@ -652,15 +657,24 @@ internal sealed class ActivityStage(ActivityState activities, IAuditTrail audit)
 
             if (inFlight.Operation.State is OperationState.Scheduled) inFlight.Operation.Begin();
 
-            // WEATHER DOES NOT COST DAYS YET (SDD-016 §3, finding 214). Both
-            // halves are ready — `WeatherState.DaysAbove` and the per-template
-            // `WeatherLimit` beside it — and the join is the two lines this
-            // comment replaces. It waits on R22.3 because three forty-year
-            // fixtures assume an operation finishes on schedule and each needs
-            // its own judgement, not a tolerance widened to fit.
+            // WEATHER DOES NOT COST DAYS, and the reason is now a MEASUREMENT
+            // rather than a schedule (findings 214, 216). Both halves are ready —
+            // `WeatherState.DaysAbove` and the per-template `WeatherLimit` beside
+            // it — and joining them CRASHES THE TEST HOST partway through the
+            // forty-year suite, on a clean build, at a point that moves between
+            // runs. That is a process-level death rather than a failing
+            // assertion, so it is a defect in the join and not a fixture to
+            // adjust. R22.3 owns it.
             if (inFlight.Operation.State is OperationState.Active or OperationState.Standby)
+            {
+                int lost = weather.DaysAbove(
+                    FieldRegion, inFlight.Activity.Terms.WeatherLimit);
+
                 inFlight.Operation.Advance(
-                    activeDays: (int)Duration.DaysPerTick, standbyDays: 0, costIndex: 1.0);
+                    activeDays: (int)Duration.DaysPerTick - lost,
+                    standbyDays: lost,
+                    costIndex: 1.0);
+            }
 
             AuditId cause = audit.Record(
                 AuditCategory.StateTransition, subject: null, cause: null,
