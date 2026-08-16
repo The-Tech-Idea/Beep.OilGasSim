@@ -115,3 +115,35 @@ end-to-end checks live in `OGSim.Composition.Tests`: the loop tests
 (`ProductionLoopTests`, `GameplayTests`) grow one scenario per step, and the
 stage list assertion (`The_shipped_engine_runs_the_stages_its_modules_declared`)
 is updated per step so an unclaimed stage cannot arrive silently.
+
+### 5.1 The verifications, declared (finding 213)
+
+**Written down after the fact, which is the defect being closed rather than a
+style note.** This phase and R12b shipped 29 tests carrying ids — `R20dV1`,
+`R12bV10` and the rest — against a phase document that declared none of them, so
+every one cited a verification that did not exist. The convention is that a
+verification id appears verbatim in a test name *so the mapping can be trusted*;
+an id pointing at nothing is worse than no id, for the same reason finding 209
+gave when three tests carried the wrong one.
+
+Nothing here is new scope. Each row states what its tests already assert, so the
+table is a record of the phase as built and the ids resolve from today.
+
+| # | Verification | What it asserts |
+|---|---|---|
+| R20d-V1 | The surface chain is real and visible | The read model carries the chain in FLOW ORDER and every element on a flowing leg reports what crossed it; a header sums its inlets, has no pressure drop, reports no constraint of its own and declares its slots as inlet ports; a second well commingles rather than being refused; a facility-limited field produces its capacity rather than its potential; provenance blends by MASS and not by well count, so a well producing nothing takes no share of the sale. Refusals: a well with no slot is refused *before it is paid for*, a slot beyond the header is an invariant fault, and a header with no slots is a model fault |
+| R20d-V3 | Gas leaves the separator | A well produces gas, the separator sends it to the flare, and flared gas earns nothing |
+| R20d-V4 | The water leg exists before it carries anything | The leg is present and DRY before breakthrough — the absence of water is modelled rather than the leg being absent |
+| R20d-V5 | Revenue is caused by a metered delivery | A sale cites a custody transfer (SDD-009 §1), and a month with no delivery records no transfer |
+| R12b-V2 | The header a full field needs can be installed | The ladder reaches the size a developed field requires, so the refusal in R20d-V1 is a decision rather than a dead end |
+| R12b-V8 | Capacity is a purchase with a price | A player sees the jam, pays for a bigger vessel and the field flows; a vessel is CAPITALISED and a survey is not; the top of the ladder is refused with a reason |
+| R12b-V10 | An abandonment obligation is carried, not conjured | A well carries its obligation from the day it opens; shutting a well in does not discharge it; abandoning a plugged well is refused; abandoning the last well closes the field |
+
+**`R24V4` was not one of these and is renamed rather than declared.** Its two
+tests assert that objectives read the snapshot and touch nothing after stage 12,
+which is R24-V18 — *"stage placement (I-V4, I-V5)"* — so the id was a phase
+prefix welded onto an INVARIANT id, producing `R24-V4`, which R24 does not have
+(it declares V14–V18). Renamed to `R24V18_*`.
+
+`Record_EveryVerificationIdInATestNameIsDeclared` fails when a test cites an id
+no document declares, so this cannot silently recur.

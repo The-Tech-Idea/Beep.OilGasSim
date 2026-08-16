@@ -147,6 +147,128 @@ public class RecordRules
             $"opening sentence and this count together — they are three statements of one fact");
     }
 
+    // -------------------------------------------------- verification ids
+
+    [Fact] // A verification id in a test name is a CLAIM that the design set asks
+           // for this check. The convention exists so the mapping can be trusted,
+           // which makes an id pointing at nothing worse than no id at all —
+           // finding 209 caught three tests carrying the WRONG one, and finding
+           // 213 caught 32 carrying ids no document declared.
+    public void Record_EveryVerificationIdInATestNameIsDeclared()
+    {
+        HashSet<string> declared = DeclaredVerificationIds();
+        var violations = new List<string>();
+
+        foreach ((string path, string[] lines) in TestFiles())
+            for (int i = 0; i < lines.Length; i++)
+            {
+                string? id = VerificationIdIn(lines[i]);
+
+                if (id is null) continue;
+
+                // Declared as `R20d-V1`; written in a method name as `R20dV1`,
+                // because a hyphen is not an identifier character. The hyphen is
+                // put back rather than searched for both ways — one spelling of
+                // one rule (finding 212's lesson about three status markers).
+                string cited = Hyphenate(id);
+
+                if (!declared.Contains(cited))
+                    violations.Add(
+                        $"{Path.GetFileName(path)}:{i + 1} cites {cited}, which no " +
+                        $"document in plans/ declares. Either the phase never wrote its " +
+                        $"verification table, or the id is a transcription of another " +
+                        $"one — both make the test report a coverage that does not exist");
+            }
+
+        EngineCorpus.AssertNone(violations,
+            "Every verification id a test name claims is declared in the design set");
+    }
+
+    /// <summary>The id a test method name opens with, or null. Only the
+    /// PHASE-PREFIXED family is judged (<c>R20dV1</c>, <c>R24V18</c>): the domain
+    /// suites — FV, MX, MB, PV, IR, CAL — are declared in design documents under
+    /// their own conventions, and treating one namespace's spelling as the rule
+    /// for all of them is what produced <c>R24V4</c> in the first place.</summary>
+    private static string? VerificationIdIn(string line)
+    {
+        const string marker = "public void R";
+
+        int at = line.IndexOf(marker, StringComparison.Ordinal);
+        if (at < 0) return null;
+
+        int start = at + marker.Length - 1;          // the 'R'
+        int i = start + 1;
+
+        while (i < line.Length && char.IsAsciiDigit(line[i])) i++;
+        if (i == start + 1) return null;             // no phase number
+
+        while (i < line.Length && char.IsAsciiLetterLower(line[i])) i++;   // R20d, R12b
+        if (i >= line.Length || line[i] != 'V') return null;
+
+        int digits = ++i;
+        while (i < line.Length && char.IsAsciiDigit(line[i])) i++;
+
+        return i == digits ? null : line[start..i];
+    }
+
+    /// <summary><c>R20dV1</c> becomes <c>R20d-V1</c>.</summary>
+    private static string Hyphenate(string id)
+    {
+        int v = id.LastIndexOf('V');
+
+        return id[..v] + "-" + id[v..];
+    }
+
+    /// <summary>
+    /// Every id the design set DECLARES, read as the opening cell of a table row
+    /// — <c>| R6-V14 | Commingling backpressure | … |</c> — which is how every
+    /// phase document states one.
+    ///
+    /// <para>A prose mention deliberately does NOT count. The first version of
+    /// this rule searched the concatenated documents for the id as a substring,
+    /// and two things were wrong with it at once: <c>R20d-V1</c> matched inside
+    /// <c>R20d-V13</c>, the same prefix trap as finding 212's `S013-1`; and one
+    /// row's sentence *"the refusal in R20d-V1 is a decision rather than a dead
+    /// end"* was enough to declare V1, so a cross-reference could satisfy the
+    /// check for an id nothing defined. A declaration is a row, so the rule reads
+    /// rows.</para>
+    /// </summary>
+    private static HashSet<string> DeclaredVerificationIds()
+    {
+        var found = new HashSet<string>(StringComparer.Ordinal);
+
+        foreach (string path in Directory.EnumerateFiles(
+            Plans(), "*.md", SearchOption.AllDirectories))
+            foreach (string line in File.ReadAllLines(path))
+            {
+                if (!line.StartsWith("| ", StringComparison.Ordinal)) continue;
+
+                int end = line.IndexOf('|', 1);
+                if (end < 0) continue;
+
+                string cell = line[1..end].Trim();
+
+                if (cell.Length > 0 && cell[0] == 'R' && cell.Contains("-V", StringComparison.Ordinal))
+                    found.Add(cell);
+            }
+
+        return found;
+    }
+
+    private static IEnumerable<(string Path, string[] Lines)> TestFiles()
+    {
+        string tests = Path.Combine(EngineCorpus.RepositoryRoot(), "tests");
+
+        foreach (string path in Directory.EnumerateFiles(tests, "*.cs", SearchOption.AllDirectories)
+                                         .OrderBy(p => p, StringComparer.Ordinal))
+        {
+            string normalised = path.Replace('\\', '/');
+            if (normalised.Contains("/bin/") || normalised.Contains("/obj/")) continue;
+
+            yield return (path, File.ReadAllLines(path));
+        }
+    }
+
     // ---------------------------------------------------------------- read
 
     private static IEnumerable<OpenItem> Items()

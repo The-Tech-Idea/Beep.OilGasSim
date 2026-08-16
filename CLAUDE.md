@@ -14,8 +14,8 @@ code and is still authoritative. **The engine now runs.** Sixteen projects under
 `src/` compose into a playable field — a world is generated, prospects are
 drilled, a chain of surface equipment moves the fluid, a market moves under it, a
 bank lends against reserves, equipment wears out and breaks, and two headless
-clients play the whole arc through `ReadModel` + `Commands` alone. Around 995
-tests across sixteen suites, 0 warnings.
+clients play the whole arc through `ReadModel` + `Commands` alone. 1012 tests
+across sixteen suites, 0 warnings.
 
 **Treat every count in this file as stale until you have checked it.** Three
 were wrong when last verified — this one, and two in `MASTER_TRACKER.md` that
@@ -235,22 +235,28 @@ through `Observation` — the same door every in-game measurement uses.
 ## Rules that will trip you up
 
 These are not style preferences; each is a law. **`tests/OGSim.Architecture.Tests`
-enforces most of them by reflection and source scan** — 29 tests covering L1–L4,
+enforces most of them by reflection and source scan** — 30 tests covering L1–L4,
 layering (both directions, including the read model), naming N3, determinism
 D2/D3/D5/D6/D7/D8, F2's citations, F6's identity rule, the subsurface truth
 boundary and the event bus's missing `Subscribe`. Breaking one of those fails the
 build, so read the failure rather than working around it.
 
-**Four of those assert on the RECORD rather than the code** (`RecordRules.cs`):
+**Five of those assert on the RECORD rather than the code** (`RecordRules.cs`):
 every open item an SDD raises is registered in `MASTER_TRACKER.md`, closure
 agrees in both directions, the headline counts match what the SDDs actually
-raise, and every item row is well formed. They exist because R20d.12 closed
-eight S013 items and propagated none of them, leaving the register advertising
-`S013-10` — "the largest gap left" — as outstanding after it had been built
-(finding 212). **The last of the four is the one to keep**: `S013-6` was
-invisible to every count, mine included, because its row had lost the newline
-joining it to `S013-5`, and a rule that compares two lists cannot see an item
-missing from both.
+raise, every item row is well formed, and **every verification id a test name
+claims is declared**. They exist because R20d.12 closed eight S013 items and
+propagated none of them, leaving the register advertising `S013-10` — "the
+largest gap left" — as outstanding after it had been built (finding 212), and
+because 32 tests cited verification ids no document declared (finding 213).
+
+**Two of the five are the ones to keep.** `S013-6` was invisible to every count,
+mine included, because its row had lost the newline joining it to `S013-5` — and
+a rule that compares two lists cannot see an item missing from both, which is why
+the shape rule exists. And the id rule reads TABLE ROWS rather than searching the
+documents, because a declaration is written two ways — a row and bold prose — so
+a substring search accepted a passing cross-reference as a declaration and let
+two undeclared ids through. **A declaration is a row; prose is the argument.**
 
 **What genuinely holds by hand is L5 (one owner per fact) and the F-1/F-3/F-4
 process rules** — no test can tell that a value was mirrored rather than derived,
