@@ -50,6 +50,30 @@ producing. So the filter exists to make iteration bearable and **the unfiltered
 run is what a commit is judged on**: a test excluded by default is a test that
 quietly stops being evidence, which is the same failure in a new place.
 
+> **READ THIS BEFORE TRUSTING ANY SLOW-TEST RESULT (finding 217).** On this
+> machine, since 2026-08-16, a long test's host process is killed silently
+> partway — no exception, no dump even with `DOTNET_DbgEnableMiniDump=1`, and
+> the run reports `Passed!` on every suite line while only the exit code
+> dissents. **Measured: `R20d21V1` aborted 5 times in 10 consecutive runs with
+> nothing changing.** At that rate the unfiltered gate essentially cannot
+> complete, and nine in a row did not.
+>
+> **The consequence is a rule about EVIDENCE, not about the gate.** One run
+> against one run is a coin flip. Five wrong diagnoses were committed in a
+> single session by reading such flips as signal — including a change reverted
+> on the strength of "three tests failed with it in and passed with it out",
+> which has a one-in-eight chance of arising from noise and whose failing half
+> was selected for having failed. **Ten runs per arm is the minimum**, and until
+> the fault is fixed no slow-suite experiment is interpretable at all.
+>
+> Diagnosis so far: the host is HEALTHY when sampled (a live `dotnet-dump` shows
+> it computing in the flow solver at ~185 MB, 64-bit, no deadlock), so it is
+> killed from outside rather than faulting. Defender updated its definitions at
+> 17:20:56 that day and every gate before was green; that correlation is
+> untested because an exclusion changes the machine's security posture.
+> **Try a reboot, then a Defender exclusion for the repo and the .NET
+> toolchain.**
+
 Requires the .NET 10 SDK (`.slnx` solution format).
 
 The Bash tool here runs Git Bash, not cmd. `> nul` creates a literal file named
