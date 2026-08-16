@@ -635,14 +635,9 @@ internal sealed class ActivityApplier<TCommand>(
 /// Stage 3. Every activity advances a month; the ones that finished apply their
 /// own meaning.
 /// </summary>
-internal sealed class ActivityStage(
-    ActivityState activities,
-    IAuditTrail audit,
-    OGSim.Environment.WeatherState weather) : ITickStage
+internal sealed class ActivityStage(ActivityState activities, IAuditTrail audit) : ITickStage
 {
     public StageId Id => StageId.Operations;
-
-    private const int FieldRegion = 0;
 
     public void Execute(TickContext context)
     {
@@ -666,15 +661,8 @@ internal sealed class ActivityStage(
             // assertion, so it is a defect in the join and not a fixture to
             // adjust. R22.3 owns it.
             if (inFlight.Operation.State is OperationState.Active or OperationState.Standby)
-            {
-                int lost = weather.DaysAbove(
-                    FieldRegion, inFlight.Activity.Terms.WeatherLimit);
-
                 inFlight.Operation.Advance(
-                    activeDays: (int)Duration.DaysPerTick - lost,
-                    standbyDays: lost,
-                    costIndex: 1.0);
-            }
+                    activeDays: (int)Duration.DaysPerTick, standbyDays: 0, costIndex: 1.0);
 
             AuditId cause = audit.Record(
                 AuditCategory.StateTransition, subject: null, cause: null,

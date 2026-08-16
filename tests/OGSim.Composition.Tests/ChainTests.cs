@@ -1953,7 +1953,7 @@ public sealed class ChainTests
         // rather than a leak. Measured at 1.099 (17,824,739 m³ against
         // 16,219,881). Restated against what the ceiling actually forbids:
         // doubling the target must not come close to doubling the water.
-        Assert.True(atTwo < atOne * 1.25,
+        Assert.True(atTwo < atOne * 1.05,
             $"VRR 2 bought {atTwo:F0} m³ against VRR 1's {atOne:F0}; the reservoir ceiling " +
             "is not holding and the balance will fault the first time it is exceeded");
     }
