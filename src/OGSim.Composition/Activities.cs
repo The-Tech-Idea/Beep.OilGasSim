@@ -32,6 +32,20 @@ public sealed record ActivityTerms(
     Money Cost,
     int DurationTicks,
     EntityId<IRig>? Rig,
+
+    /// <summary>
+    /// The severity this work can be done in (SDD-016 §3's weatherClass). Days
+    /// rougher than this are STANDBY: committed, paid for, and buying no
+    /// progress.
+    ///
+    /// <para>PER TEMPLATE and required, with no default. A single engine-wide
+    /// limit was built and measured first, and it stops a seismic survey for the
+    /// same sea that stops a subsea lift — which is both wrong and expensive
+    /// (finding 214). A default would have hidden the same mistake behind a
+    /// number nobody chose.</para>
+    /// </summary>
+    double WeatherLimit,
+
     OutcomeTable Outcomes)
 {
     /// <summary>
@@ -376,6 +390,12 @@ internal sealed class ActivityState : IStateOwner
 
         writer.WriteInt64("count", _running.Count);
 
+        // The identity sequence, which Reinstate can only partly rebuild:
+        // a finished operation leaves no id to restore, so the counter has
+        // to be carried or a reloaded game reissues ids the original had
+        // already spent (finding 215).
+        writer.WriteInt64("next-operation-id", (long)_scheduler.NextOperationId);
+
         for (int i = 0; i < _running.Count; i++)
         {
             InFlight activity = _running[i];
@@ -390,6 +410,16 @@ internal sealed class ActivityState : IStateOwner
             writer.WriteInt64(at + "progress-days", activity.Operation.ProgressDays);
             writer.WriteInt64(at + "accrued", activity.Operation.Accrued.Cents);
             writer.WriteInt64(at + "posted", activity.Posted.Cents);
+
+            // THE PRICE IT WAS CONTRACTED AT (finding 215). `SpecFor` quotes at
+            // TODAY's rates, which is right when the work is scheduled and wrong
+            // on a reload: rebuilding the spec re-priced a running job at
+            // whatever the market had moved to since, so a reloaded operation
+            // accrued a different cost per day than the one it had signed for.
+            writer.WriteInt64(at + "cost-mobilisation", activity.Operation.Spec.Costs.Mobilisation.Cents);
+            writer.WriteInt64(at + "cost-active-day", activity.Operation.Spec.Costs.PerActiveDay.Cents);
+            writer.WriteInt64(at + "cost-standby-day", activity.Operation.Spec.Costs.PerStandbyDay.Cents);
+            writer.WriteInt64(at + "cost-completion", activity.Operation.Spec.Costs.Completion.Cents);
             writer.WriteInt64(at + "state", (long)activity.Operation.State);
 
             // The OUTCOME, saved. It was drawn when the activity began
@@ -409,6 +439,8 @@ internal sealed class ActivityState : IStateOwner
 
         long count = reader.ReadInt64("count");
 
+        _scheduler.ResumeIdsFrom((ulong)reader.ReadInt64("next-operation-id"));
+
         for (long i = 0; i < count; i++)
         {
             string at = Prefix(i);
@@ -422,7 +454,18 @@ internal sealed class ActivityState : IStateOwner
             var startDay = (int)reader.ReadInt64(at + "start-day");
 
             IActivity activity = Of(template);
-            OperationSpec spec = SpecFor(template, target, depth);
+
+            // Quoted once, when the work was scheduled, and restored as quoted:
+            // a company contracts at the rate it was given and a boom that
+            // arrives mid-well is the contractor's problem (finding 215).
+            OperationSpec spec = SpecFor(template, target, depth) with
+            {
+                Costs = new CostProfile(
+                    Mobilisation: new Money(reader.ReadInt64(at + "cost-mobilisation")),
+                    PerActiveDay: new Money(reader.ReadInt64(at + "cost-active-day")),
+                    PerStandbyDay: new Money(reader.ReadInt64(at + "cost-standby-day")),
+                    Completion: new Money(reader.ReadInt64(at + "cost-completion"))),
+            };
             OutcomeRow row = RowFor(activity, (OutcomeGrade)reader.ReadInt64(at + "grade"));
 
             Operation operation = _scheduler.Reinstate(
@@ -609,6 +652,12 @@ internal sealed class ActivityStage(ActivityState activities, IAuditTrail audit)
 
             if (inFlight.Operation.State is OperationState.Scheduled) inFlight.Operation.Begin();
 
+            // WEATHER DOES NOT COST DAYS YET (SDD-016 §3, finding 214). Both
+            // halves are ready — `WeatherState.DaysAbove` and the per-template
+            // `WeatherLimit` beside it — and the join is the two lines this
+            // comment replaces. It waits on R22.3 because three forty-year
+            // fixtures assume an operation finishes on schedule and each needs
+            // its own judgement, not a tolerance widened to fit.
             if (inFlight.Operation.State is OperationState.Active or OperationState.Standby)
                 inFlight.Operation.Advance(
                     activeDays: (int)Duration.DaysPerTick, standbyDays: 0, costIndex: 1.0);

@@ -135,8 +135,8 @@ internal static class EngineCorpus
     {
         string[] found = [.. violations.OrderBy(v => v, StringComparer.Ordinal)];
         Assert.True(found.Length == 0,
-            $"{rule} — {found.Length} violation(s):{Environment.NewLine}  " +
-            string.Join(Environment.NewLine + "  ", found));
+            $"{rule} — {found.Length} violation(s):{System.Environment.NewLine}  " +
+            string.Join(System.Environment.NewLine + "  ", found));
     }
 
     public static string Where(SourceFile file, SyntaxNode node) =>

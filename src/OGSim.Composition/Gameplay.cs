@@ -138,6 +138,23 @@ public sealed record FieldPosition(
 /// asking for more than that is being clamped and the answer is to unplug the
 /// well rather than to raise the target.</para>
 /// </summary>
+/// <summary>
+/// The weather a region just had, and what the process says about the week
+/// ahead (SDD-016 §1, §4).
+///
+/// <para>Severity and temperature are two content curves over ONE state, which
+/// is why a rough day is also a cold one here rather than by coincidence.</para>
+///
+/// <para><c>Forecast</c> is the analytic predictive distribution of the same
+/// AR(1) — <c>Expected</c> is ρ^h·x and <c>Sigma</c> grows with the horizon
+/// because ρ^h falls. There is no second forecast model to drift from the
+/// generator, so a host cannot show an optimism the engine does not share.</para>
+/// </summary>
+public sealed record WeatherView(
+    double Severity,
+    Temperature Ambient,
+    OGSim.Environment.Forecast Forecast);
+
 public sealed record WaterFloodView(
     double Target,
     ReservoirVolume Imported,
@@ -244,6 +261,17 @@ public sealed record FieldReadModel(
     /// the tail of the decline falls below it, and the barrels beyond stop being
     /// reserves without having gone anywhere.</para>
     /// </summary>
+    /// <summary>
+    /// What the weather is doing, and what it is expected to do (SDD-016 §1, §4).
+    ///
+    /// <para>Published rather than held, because a player deciding whether to
+    /// start a month-long job in November needs the same number the engine will
+    /// use. The forecast is the analytic predictive distribution of the same
+    /// process, so a host cannot be shown an optimism the engine does not
+    /// share.</para>
+    /// </summary>
+    WeatherView Weather,
+
     ReservesEstimate Reserves,
 
     /// <summary>
@@ -410,8 +438,20 @@ internal sealed class FieldProjection(
     OGSim.Information.ProspectRisks risks,
     ReservesBook reserves,
     Bank bank,
-    ReserveHistory history)
+    ReserveHistory history,
+    OGSim.Environment.WeatherState weather)
 {
+    /// <summary>The one region this world has (SDD-016 §1).</summary>
+    private const int FieldRegion = 0;
+
+    /// <summary>The last day of the month just closed: the projection is built at
+    /// the close, so "today" is day 29 of the thirty just simulated.</summary>
+    private const int DayJustEnded = (int)Duration.DaysPerTick - 1;
+
+    /// <summary>A week ahead — long enough to matter to a decision about starting
+    /// a job, short enough that ρ^h has not collapsed to the seasonal mean.</summary>
+    private const int ForecastHorizonDays = 7;
+
     public FieldPosition Take(Tick tick, GameDate date, bool insolvent) =>
         new(tick, date, company.Ledger.Cash, field.WellCount, activities.InProgress,
             loop.ProducedThisTick, insolvent);
@@ -421,6 +461,10 @@ internal sealed class FieldProjection(
             position.ActivitiesRunning, position.ProducedThisTick, position.Insolvent,
             progress, Project(beliefs), loop.Chain(), field.Wells(), Prospects(),
             loop.Market.OilPrice, loop.Market.CostIndex,
+            new WeatherView(
+                weather.SeverityOn(FieldRegion, DayJustEnded),
+                weather.TemperatureOn(FieldRegion, DayJustEnded),
+                weather.Look(FieldRegion, ForecastHorizonDays)),
             reserves.Remaining(loop.CumulativeProduced),
             history.Ratio(
                 reserves.Remaining(loop.CumulativeProduced).Proved,

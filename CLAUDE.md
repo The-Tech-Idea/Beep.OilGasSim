@@ -10,12 +10,12 @@ export. Turn-based engine (one tick = one month), real-time-with-pause game.
 The engine is headless; a host renders it.
 
 The repository is **design-first**: `plans/` holds ~90 documents settled before
-code and is still authoritative. **The engine now runs.** Sixteen projects under
+code and is still authoritative. **The engine now runs.** Seventeen projects under
 `src/` compose into a playable field — a world is generated, prospects are
 drilled, a chain of surface equipment moves the fluid, a market moves under it, a
 bank lends against reserves, equipment wears out and breaks, and two headless
-clients play the whole arc through `ReadModel` + `Commands` alone. 1012 tests
-across sixteen suites, 0 warnings.
+clients play the whole arc through `ReadModel` + `Commands` alone. 1022 tests
+across seventeen suites, 0 warnings.
 
 **Treat every count in this file as stale until you have checked it.** Three
 were wrong when last verified — this one, and two in `MASTER_TRACKER.md` that
@@ -82,10 +82,11 @@ missing project reference, not a review comment.
 
 Projects that exist: `OGSim.Kernel`, `OGSim.Contracts`, `Subsurface`, `Wells`,
 `Facilities`, `Flow`, `Information`, `Company`, `Operations`, `World`,
-`Capabilities`, `Integrity`, `Objectives`, `Persistence`, `Composition`, and
+`Capabilities`, `Integrity`, `Objectives`, `Persistence`, `Environment`,
+`Composition`, and
 `ReferenceClient` (a headless client, outside the engine — it holds no module
 reference and an architecture test says so). Still unbuilt from 03 §8:
-`Environment`, `Transport`, `Hse`, `Advisor`. There is **no shared
+`Transport`, `Hse`, `Advisor`. There is **no shared
 `Common`/`Utils` project, ever** — a type two modules need is either a kernel
 type or a design smell.
 

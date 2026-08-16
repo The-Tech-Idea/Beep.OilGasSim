@@ -13,6 +13,7 @@
     <Project Path="src/OGSim.Capabilities/OGSim.Capabilities.csproj" />
     <Project Path="src/OGSim.Integrity/OGSim.Integrity.csproj" />
     <Project Path="src/OGSim.Persistence/OGSim.Persistence.csproj" />
+    <Project Path="src/OGSim.Environment/OGSim.Environment.csproj" />
     <Project Path="src/OGSim.Objectives/OGSim.Objectives.csproj" />
     <Project Path="src/OGSim.Composition/OGSim.Composition.csproj" />
     <Project Path="src/OGSim.ReferenceClient/OGSim.ReferenceClient.csproj" />
@@ -31,6 +32,7 @@
     <Project Path="tests/OGSim.World.Tests/OGSim.World.Tests.csproj" />
     <Project Path="tests/OGSim.Capabilities.Tests/OGSim.Capabilities.Tests.csproj" />
     <Project Path="tests/OGSim.Integrity.Tests/OGSim.Integrity.Tests.csproj" />
+    <Project Path="tests/OGSim.Environment.Tests/OGSim.Environment.Tests.csproj" />
     <Project Path="tests/OGSim.Persistence.Tests/OGSim.Persistence.Tests.csproj" />
     <Project Path="tests/OGSim.Objectives.Tests/OGSim.Objectives.Tests.csproj" />
     <Project Path="tests/OGSim.Composition.Tests/OGSim.Composition.Tests.csproj" />

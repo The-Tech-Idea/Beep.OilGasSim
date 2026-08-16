@@ -502,6 +502,7 @@ internal static class Defaults
         Cost: Money.FromMillions(8.0),
         DurationTicks: 4,
         Rig: TheRig,
+        WeatherLimit: 6.0,   // a rig on location: heave stops tripping pipe long before it stops the platform
         Outcomes: DrillingOutcomes);
 
     public static ActivityTerms WellTestTerms { get; } = new(
@@ -509,6 +510,7 @@ internal static class Defaults
         Cost: Money.FromMillions(0.4),
         DurationTicks: 1,
         Rig: TheRig,
+        WeatherLimit: 7.5,   // the well is shut in and a gauge is reading; little to do on deck
         Outcomes: WellTestOutcomes);
 
     /// <summary>Cheap, quick, and run on the rig that is already there.</summary>
@@ -517,6 +519,7 @@ internal static class Defaults
         Cost: Money.FromMillions(0.15),
         DurationTicks: 1,
         Rig: TheRig,
+        WeatherLimit: 6.5,   // a wireline unit needs a stable deck to run tools on a thin cable
         Outcomes: WellTestOutcomes);
 
     /// <summary>Several times the price of a log for the same two properties,
@@ -526,6 +529,7 @@ internal static class Defaults
         Cost: Money.FromMillions(0.9),
         DurationTicks: 1,
         Rig: TheRig,
+        WeatherLimit: 6.0,   // coring is drilling, and slower
         Outcomes: WellTestOutcomes);
 
     /// <summary>
@@ -540,6 +544,7 @@ internal static class Defaults
         Cost: Money.FromMillions(2.5),
         DurationTicks: 2,
         Rig: null,
+        WeatherLimit: 5.5,   // streamers in the water are the most weather-limited thing offshore
         Outcomes: SurveyOutcomes);
 
     /// <summary>
@@ -640,6 +645,21 @@ internal static class Defaults
     /// <para>It was $100M — met in month six by a field that had not been
     /// developed at all, which made every decision after the first one
     /// decoration (R20.4's first measurement).</para>
+    ///
+    /// <para>AND IT WAS $600M UNTIL WEATHER COST DAYS (R22.2, finding 214). That
+    /// number was calibrated in a world where an operation never stood down: the
+    /// developed decade earned $918M against a bottlenecked $449M, and $600M sat
+    /// between them. With standby days the same two runs earn <b>$553.9M and
+    /// $271.1M</b> — so $600M stopped discriminating and simply always failed,
+    /// which is a scenario that cannot be won rather than one that is hard.</para>
+    ///
+    /// <para>Re-struck at the SAME GEOMETRY rather than at whatever made the test
+    /// pass: 65% of the developed run and about 134% of the bottlenecked one, the
+    /// proportions $600M held before. That keeps the property the target exists
+    /// for — answering the constraint wins, ignoring it loses — and it is the
+    /// only honest reason to move a goal. Both numbers above are measured, and
+    /// the comparison test beside this one asserts the ordering directly rather
+    /// than trusting either.</para>
     ///
     /// <para>Declared BEFORE the scenario that reads it: static initialisers run
     /// in declaration order, so a target declared below would be zero when the
@@ -798,6 +818,7 @@ internal static class Defaults
         Cost: Money.FromMillions(45.0),
         DurationTicks: 9,
         Rig: null,
+        WeatherLimit: 5.0,   // pipeline and terminal work is heavy lift
         Outcomes: SurveyOutcomes);
 
     /// <summary>
@@ -974,6 +995,7 @@ internal static class Defaults
         Cost: Money.FromMillions(3.0),
         DurationTicks: 2,
         Rig: null,
+        WeatherLimit: 6.0,   // rig-based, like the drilling it undoes
         Outcomes: SurveyOutcomes);
 
     /// <summary>
@@ -998,6 +1020,7 @@ internal static class Defaults
         Cost: Money.FromMillions(18.0),
         DurationTicks: 5,
         Rig: null,
+        WeatherLimit: 5.0,   // heavy lift
         Outcomes: SurveyOutcomes);
 
     /// <summary>
@@ -1049,6 +1072,7 @@ internal static class Defaults
         Cost: Money.FromMillions(7.0),
         DurationTicks: 6,
         Rig: null,
+        WeatherLimit: 5.0,   // heavy lift
         Outcomes: SurveyOutcomes);
 
     /// <summary>
@@ -1076,6 +1100,7 @@ internal static class Defaults
         Cost: Money.FromMillions(9.0),
         DurationTicks: 4,
         Rig: null,
+        WeatherLimit: 4.5,   // a subsea lift is the least tolerant work in the catalogue
         Outcomes: SurveyOutcomes);
 
     /// <summary>What a treater costs and how long it takes.</summary>
@@ -1084,6 +1109,7 @@ internal static class Defaults
         Cost: Money.FromMillions(5.0),
         DurationTicks: 3,
         Rig: null,
+        WeatherLimit: 5.0,   // heavy lift
         Outcomes: SurveyOutcomes);
 
     /// <summary>
@@ -1097,6 +1123,7 @@ internal static class Defaults
         Cost: Money.FromMillions(1.2),
         DurationTicks: 1,
         Rig: null,
+        WeatherLimit: 6.5,   // a wellsite intervention, lighter than a rig job
         Outcomes: SurveyOutcomes);
 
     /// <summary>
@@ -1114,6 +1141,7 @@ internal static class Defaults
         Cost: Money.FromMillions(0.8),
         DurationTicks: 1,
         Rig: null,
+        WeatherLimit: 8.0,   // planned maintenance happens inside the module it maintains
         Outcomes: SurveyOutcomes);
 
     /// <summary>
@@ -1132,6 +1160,7 @@ internal static class Defaults
         Cost: Money.FromMillions(0.2),
         DurationTicks: 1,
         Rig: null,
+        WeatherLimit: 8.0,   // fitting a kit to equipment already in place, under cover
         Outcomes: SurveyOutcomes);
 
     /// <summary>
@@ -1152,6 +1181,7 @@ internal static class Defaults
         Cost: Money.FromMillions(2.4),
         DurationTicks: 1,
         Rig: null,
+        WeatherLimit: 7.5,   // emergency work is done in weather planned work would wait out
         Outcomes: SurveyOutcomes);
 
     public static ActivityTerms InstallSeparatorTerms { get; } = new(
@@ -1159,6 +1189,7 @@ internal static class Defaults
         Cost: Money.FromMillions(6.0),
         DurationTicks: 3,
         Rig: null,
+        WeatherLimit: 5.0,   // heavy lift
         Outcomes: SurveyOutcomes);
 
     /// <summary>
@@ -1397,6 +1428,35 @@ internal static class Defaults
     public static Integrity.DegradationCoefficients Decay { get; } =
         new(BaseRatePerYear: 0.05, WaterCutFactor: 1.0, SourFactor: 2.0,
             DutyFactor: 0.5, TemperatureFactor: 1.5, ServiceIntervalFactor: 0.2);
+
+    /// <summary>
+    /// The one climate this world has (SDD-016 §1). A temperate offshore basin:
+    /// rough winters, workable summers, and a temperature curve that runs the
+    /// other way — the amplitude is NEGATIVE because a rough day is a cold one,
+    /// which is what makes the two curves over one x describe real weather
+    /// rather than two independent noises.
+    /// </summary>
+    public static Environment.ClimateProfile Climate { get; } =
+        new(new ContentId("temperate-offshore"),
+            Persistence: 0.75,
+            Baseline: [5.2, 5.0, 4.4, 3.6, 2.9, 2.4, 2.2, 2.5, 3.2, 4.1, 4.8, 5.1],
+            Amplitude: [1.6, 1.6, 1.4, 1.2, 1.0, 0.9, 0.9, 1.0, 1.2, 1.4, 1.5, 1.6],
+            TemperatureBaseline: [6.0, 5.6, 6.4, 8.2, 10.8, 13.4,
+                                  15.1, 15.4, 14.0, 11.6, 9.0, 7.0],
+            TemperatureAmplitude: -1.8);
+
+    /// <summary>
+    /// The severity an operation can work through (SDD-016 §3). ONE limit for
+    /// every template, which is a simplification the SDD names: §3 puts a
+    /// `weatherClass` on each template and each weather-exposed element, and that
+    /// arrives with the content pipeline (R20c.9). Until then a single limit is
+    /// honest about being one number rather than pretending to be a table.
+    ///
+    /// <para>Set at 6.0 against the climate above: a winter month averages 5.2
+    /// with an amplitude of 1.6, so roughly a third of January is lost and a
+    /// July is not — which is the seasonality the mechanic exists to create.</para>
+    /// </summary>
+    public const double OperationWeatherLimit = 6.0;
 }
 
 /// <summary>
@@ -1592,6 +1652,7 @@ public static class EngineBuilder
         new WorldModule(),
         new CapabilitiesModule(),
         new IntegrityModule(),
+        new EnvironmentModule(),
         new HseModule(),
         new ObjectivesModule(),
         new MaterialsModule(profile),

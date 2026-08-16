@@ -87,6 +87,56 @@ the effect list is not rebuilt for an unchanged day. Settlement slow growth
 (H9): population drifts toward an employment-driven target at a content rate
 per year — evaluated annually, P5-slow by construction.
 
+## 5b. The runtime types (R22.1 amendment)
+
+§1 pins the algorithm and the one replaceable method; these are the members that
+carry it, declared here before implementation (F-1).
+
+```csharp
+// OGSim.Contracts — the plugin seam, exactly as §1 states it.
+public interface IWeatherModel
+{
+    ContentId Id { get; }
+    double NextState(double x, IRandomStream weather);
+}
+
+// OGSim.Environment — content, and the state the process lives in.
+public sealed record ClimateProfile(
+    ContentId Id,
+    double Persistence,                    // ρ ∈ [0, 1)
+    IReadOnlyList<double> Baseline,        // 12 months, severity
+    IReadOnlyList<double> Amplitude,       // 12 months, severity
+    IReadOnlyList<double> TemperatureBaseline,   // 12 months, °C
+    double TemperatureAmplitude);
+
+public sealed class WeatherState : IStateOwner        // "environment.weather"
+{
+    void Advance(GameDate month, IWeatherModel model, IRandomStream weather);
+    double SeverityOn(int region, int day);           // day ∈ [0, 30)
+    Temperature TemperatureOn(int region, int day);
+    int DaysAbove(int region, double limit);          // §3's day-lost count
+    Forecast Look(int region, int horizonDays);       // §4, consumes no draws
+}
+
+public readonly record struct Forecast(double Expected, double Sigma);
+```
+
+**`x` is STATE and is saved.** The AR(1) recursion reads its own previous value,
+which is the same shape as the covenant clock and the reserve ring (SDD-013 §4):
+a quantity recomputed each tick *from its own past*. A reload that resumed from
+`x = 0` would restart every region at its seasonal mean — the weather would
+visibly calm at the moment a game was loaded, and the RNG position alone cannot
+carry it (finding 192's lesson: the right dice from the wrong place).
+
+**Thirty draws per region per tick, region order then day order**, so adding a
+region cannot shift an existing one's stream position (§8's EN8).
+
+**`DaysAbove` is the whole of §3's operation coupling.** An operation's template
+declares a severity limit; the days above it are STANDBY days, which
+`Operation.Advance(activeDays, standbyDays, …)` already prices — cost without
+progress. Nothing new is needed in the scheduler, and the 30/0 split it passes
+today is exactly the "no weather" case.
+
 ## 6. Test mapping
 
 EN3/EN4 (windows as calendar facts) · EN5/EN6 (the shared x(d) into derating

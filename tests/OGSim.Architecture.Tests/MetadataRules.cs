@@ -141,6 +141,13 @@ public class MetadataRules
                 // module like every other name here — composition may reference
                 // it, and it may not reference composition.
                 "OGSim.Persistence",
+
+                // Environment joins at R22.1 on exactly the same terms: a Layer 3
+                // module that composition may reference and which may not
+                // reference composition. Its absence here was the same accurate
+                // record — the project did not exist, and stage 2 had sat in the
+                // declared tick order since R1 with no participant.
+                "OGSim.Environment",
             ],
         };
 

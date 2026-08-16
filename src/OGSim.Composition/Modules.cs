@@ -597,6 +597,12 @@ internal sealed class FieldModule() : EngineModule(Declare(
         typeof(OGSim.Subsurface.SubsurfaceState),
         typeof(OGSim.Wells.WellsState),
         typeof(OGSim.Company.CompanyState),
+
+        // The weather stage 3 loses days to (SDD-016 §3). Declared as well as
+        // required, because the manifest is what the composer ORDERS modules by:
+        // requiring it in code alone leaves the graph without the edge and the
+        // environment module composes after the field that reads it.
+        typeof(OGSim.Environment.WeatherState),
         typeof(TickProduction),
         typeof(IFluidPropertyModel),
         typeof(IAuditTrail),
@@ -961,7 +967,8 @@ internal sealed class FieldModule() : EngineModule(Declare(
             composition.Require<OGSim.Information.ProspectRisks>(),
             composition.Require<ReservesBook>(),
             bank,
-            composition.Require<ReserveHistory>());
+            composition.Require<ReserveHistory>(),
+            composition.Require<OGSim.Environment.WeatherState>());
 
         // The scenario is CONTENT (design 03 §3.3): the win condition is an
         // objective over a read-model path, not a comparison compiled into a
@@ -1165,6 +1172,56 @@ internal sealed class CapabilitiesModule() : EngineModule(Declare(
         composition.Provide<ICapabilitySet>(new OGSim.Capabilities.AllCapabilities());
         composition.Provide<IEffectState>(new OGSim.Capabilities.EffectState(
             new Dictionary<EnvelopeKind, double>()));
+    }
+}
+
+// -------------------------------------------------------------- environment
+
+/// <summary>
+/// Stage 2 (SDD-016 §1). Thirty days of weather per region, before anything
+/// decides what it can do this month.
+/// </summary>
+internal sealed class WeatherStage(
+    OGSim.Environment.WeatherState weather,
+    IWeatherModel model,
+    IRandomStream stream) : ITickStage
+{
+    public StageId Id => StageId.Environment;
+
+    public void Execute(TickContext context)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+
+        weather.Advance(context.Date, model, stream);
+    }
+}
+
+internal sealed class EnvironmentModule() : EngineModule(Declare(
+    "environment",
+    provides: [typeof(IWeatherModel), typeof(OGSim.Environment.WeatherState)],
+    requires: [typeof(IRandomSource)],
+
+    // THE CARRY, which is the one value that crosses a tick. `StreamId.Weather`
+    // has existed since R1 and was drawn by nothing until now — the ninth
+    // declared-and-unjoined mechanism this project has found, and the first
+    // whose consumer is a stage that was in the declared tick order from the
+    // start and had no participant.
+    ownsState: ["environment.weather"],
+    stages: [new StageParticipation(StageId.Environment, Order: 0)]))
+{
+    public override void Compose(IModuleComposition composition)
+    {
+        ArgumentNullException.ThrowIfNull(composition);
+
+        var model = new OGSim.Environment.Ar1Weather(Defaults.Climate.Persistence);
+        var weather = new OGSim.Environment.WeatherState([Defaults.Climate]);
+
+        composition.Own(weather);
+        composition.Provide<IWeatherModel>(model);
+        composition.Provide(weather);
+
+        composition.Contribute(order: 0, new WeatherStage(
+            weather, model, composition.Require<IRandomSource>().Stream(StreamId.Weather)));
     }
 }
 
