@@ -17,14 +17,6 @@
 using OGSim.Contracts;
 using OGSim.Kernel;
 
-// SDD-003 §3's `InPlace` IS the kernel's mass-per-material type. It lived here
-// as its own struct until R8.0's finding 113: the tank's inventory is the same
-// concept, `InPlace` was internal to this assembly, and two copies of
-// "kilograms by ordinal" is exactly the duplication CLAUDE.md's rule about
-// kernel types exists to prevent. The alias keeps the domain name at the call
-// sites while the arithmetic lives in one place.
-using InPlace = OGSim.Kernel.MaterialInventory;
-
 namespace OGSim.Subsurface;
 
 /// <summary>Fluid contacts, at datum TVD. They move as volume is replaced.</summary>
@@ -81,8 +73,7 @@ internal sealed record InitialConditions(
     StandardGasVolume GasInPlace,           // G (free gas cap)
     double GasCapRatio,                     // m
     double ConnateWaterSaturation,          // Swc
-    double WaterCompressibility,            // cw, 1/Pa
-    InPlace Mass);
+    double WaterCompressibility);
 
 /// <summary>
 /// SDD-003 §3. The hydraulically connected volume on which material balance is
@@ -97,7 +88,6 @@ internal interface IReservoirCompartment
 {
     EntityId<IReservoirCompartmentEntity> Id { get; }
     Pressure Pr { get; }
-    InPlace InPlace { get; }
     ContactSet Contacts { get; }
     RockTruth Rock { get; }
     IDriveMechanism Drive { get; }

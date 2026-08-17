@@ -65,7 +65,6 @@ internal interface IReservoirCompartment
 {
     EntityId<IReservoirCompartmentEntity> Id { get; }
     Pressure Pr { get; }                             // average pressure, Pa
-    InPlace InPlace { get; }                         // mass per material, kg
     ContactSet Contacts { get; }
     RockTruth Rock { get; }
     IDriveMechanism Drive { get; }
@@ -78,6 +77,39 @@ internal interface IReservoirCompartment
 // be committed as an inventory, which is the one arithmetic error the volume
 // families were split up to prevent.
 internal readonly record struct InPlace(ImmutableArray<double> KilogramsByOrdinal);
+
+> **R22.13 amendment (finding 204): `IReservoirCompartment.InPlace` is REMOVED,
+> and what would bring it back is written down here so the intent is not lost
+> with it.**
+>
+> It was specified as mass per material — a COMPOSITIONAL inventory. This
+> engine's material balance is volumetric black oil (§3.1): it tracks N, G and W
+> as volumes and derives everything else, and no phase in the plan introduces
+> per-material tracking of the rock's contents. The member was therefore fed
+> `InPlace.Empty(materialCount: 0)` by every construction path since the first
+> one, read by nothing, and had never carried a value in any engine this
+> repository has built.
+>
+> **Leaving it was the one option NOT available.** Law L3 forbids a member with
+> no behaviour, and a constant standing in for work is exactly what it names; a
+> comment beside a getter that keeps returning a fabricated empty inventory
+> would have been a note rather than an implementation, and making the getter
+> fault is the `NotImplementedException` the same law forbids. So the choice was
+> populate or remove, and populating is a FEATURE rather than a fix: the
+> inventory would have to be filled at construction AND maintained by the
+> balance every tick, because a value correct only at t=0 is worse than an empty
+> one — it would be believed.
+>
+> **What brings it back.** Compositional tracking is a real capability this
+> design may want: it is what a gas cap re-solution, a condensate bank or an
+> H2S-as-material sales spec would need (§5, SDD-012 §5's second destination).
+> The day the balance tracks materials rather than volumes, this member returns
+> with a source — and until then its absence is honest, where its presence read
+> to any implementer as though in-place mass were already tracked.
+>
+> `InPlace` the TYPE stays: it is the kernel's `MaterialInventory` under a
+> local alias and is used by facilities and flow for streams that genuinely are
+> per-material. Only the compartment's unread property goes.
 
 internal readonly record struct ContactSet(
     Length GasOilContact,                            // datum TVD

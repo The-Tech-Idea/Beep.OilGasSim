@@ -211,8 +211,7 @@ internal sealed class SubsurfaceState : IStateOwner
             GasInPlace: new StandardGasVolume(0.0),
             GasCapRatio: 0.0,
             ConnateWaterSaturation: wettability.ConnateWaterSaturation,
-            WaterCompressibility: WaterCompressibility,
-            Mass: InPlace.Empty(materialCount: 0));
+            WaterCompressibility: WaterCompressibility);
 
         var compartment = new ReservoirCompartment(
             id, initial, contacts, rock, DriveNamed(drive), []);
@@ -578,8 +577,7 @@ internal sealed class SubsurfaceState : IStateOwner
                 GasCapRatio: reader.ReadDouble(at + "gas-cap-ratio"),
                 ConnateWaterSaturation: reader.ReadDouble(at + "swc"),
                 WaterCompressibility: reader.ReadDouble(at + "cw"),
-                PoreVolume: new ReservoirVolume(reader.ReadDouble(at + "pv")),
-                Mass: InPlace.Empty(materialCount: 0));
+                PoreVolume: new ReservoirVolume(reader.ReadDouble(at + "pv")));
 
             var rock = new RockTruth(
                 reader.ReadDouble(at + "porosity"),
@@ -618,7 +616,6 @@ internal sealed class SubsurfaceState : IStateOwner
                     new ReservoirVolume(reader.ReadDouble(at + "vinj")),
                     new ReservoirVolume(reader.ReadDouble(at + "vimp"))),
                 contacts,
-                initial.Mass,
                 _fluid);
 
             _compartments.Add(compartment);

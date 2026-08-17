@@ -18,7 +18,6 @@
 using OGSim.Contracts;
 using OGSim.Kernel;
 
-using InPlace = OGSim.Kernel.MaterialInventory;
 
 namespace OGSim.Subsurface;
 
@@ -49,7 +48,6 @@ internal sealed class ReservoirCompartment : IReservoirCompartment
         // nothing has been produced, so §3.1's solve at zero withdrawal returns
         // Pi and this is that answer without running it.
         Pr = initial.Pressure;
-        InPlace = initial.Mass;
         Cumulative = CumulativeProduction.None;
     }
 
@@ -57,7 +55,6 @@ internal sealed class ReservoirCompartment : IReservoirCompartment
 
     public Pressure Pr { get; private set; }
 
-    public InPlace InPlace { get; private set; }
 
     public ContactSet Contacts { get; private set; }
 
@@ -256,14 +253,12 @@ internal sealed class ReservoirCompartment : IReservoirCompartment
     public void RestoreTo(
         CumulativeProduction cumulative,
         ContactSet contacts,
-        InPlace inPlace,
         IFluidPropertyModel fluid)
     {
         ArgumentNullException.ThrowIfNull(fluid);
 
         Cumulative = cumulative;
         Contacts = contacts;
-        InPlace = inPlace;
 
         var input = new MaterialBalanceInput(
             InitialPressure: Initial.Pressure,
