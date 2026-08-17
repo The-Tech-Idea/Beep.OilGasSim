@@ -989,7 +989,8 @@ internal sealed class FieldModule() : EngineModule(Declare(
         // Stage 3: rigs that finished this month hand over a well or a dry hole,
         // BEFORE stage 5 solves — so a well completed in January produces in
         // January rather than waiting a month for the tick to come round again.
-        composition.Contribute(order: 0, new ActivityStage(activities, audit));
+        composition.Contribute(order: 0, new ActivityStage(
+            activities, audit, composition.Require<OGSim.Environment.WeatherState>()));
 
         // Every activity wires its own command pair, because only the activity
         // knows its command's type. The manifest above lists the same five, and
