@@ -16,6 +16,7 @@
 
 using OGSim.Contracts;
 using OGSim.Kernel;
+using OGSim.Company;
 
 namespace OGSim.Composition;
 
@@ -33,6 +34,9 @@ internal sealed class RemediateInjectorActivity(
     /// with the sign of the outcome reversed.
     /// </summary>
     public override bool LeavesAnAsset => false;
+
+    /// <summary>An intervention that restores what was already there (finding 225).</summary>
+    public override MovementCategory Spend => MovementCategory.Operating;
 
     public override bool OnePerTarget => true;
 

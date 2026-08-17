@@ -9,6 +9,7 @@
 
 using OGSim.Contracts;
 using OGSim.Kernel;
+using OGSim.Company;
 
 namespace OGSim.Composition;
 
@@ -27,6 +28,9 @@ internal sealed class WirelineLogActivity(
 {
     /// <summary>Knowledge is not PP&amp;E (SDD-009 §1).</summary>
     public override bool LeavesAnAsset => false;
+
+    /// <summary>Logging buys knowledge about the hole (finding 225).</summary>
+    public override MovementCategory Spend => MovementCategory.Exploration;
 
     public override bool OnePerTarget => true;
 

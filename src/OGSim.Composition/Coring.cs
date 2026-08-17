@@ -10,6 +10,7 @@
 
 using OGSim.Contracts;
 using OGSim.Kernel;
+using OGSim.Company;
 
 namespace OGSim.Composition;
 
@@ -29,6 +30,9 @@ internal sealed class CoringActivity(
     /// <summary>Knowledge is not PP&amp;E (SDD-009 §1) — the core itself is a box
     /// of rock in a store, not a producing asset.</summary>
     public override bool LeavesAnAsset => false;
+
+    /// <summary>Cutting core buys knowledge about the rock (finding 225).</summary>
+    public override MovementCategory Spend => MovementCategory.Exploration;
 
     public override bool OnePerTarget => true;
 

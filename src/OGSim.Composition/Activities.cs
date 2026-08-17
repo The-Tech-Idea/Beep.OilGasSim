@@ -106,6 +106,20 @@ internal interface IActivity
     /// </summary>
     bool OnePerTarget { get; }
 
+    /// <summary>
+    /// Which line of the cash report this activity's spend belongs on
+    /// (R21 §2.4b).
+    ///
+    /// <para>DECLARED PER ACTIVITY, because it was inferred from
+    /// <see cref="LeavesAnAsset"/> and that inference was wrong: everything
+    /// leaving no asset was booked as EXPLORATION, so repairs, services, well
+    /// tests and monitoring kit all appeared in a player's report as money spent
+    /// looking for oil (finding 225). Capex-versus-opex and
+    /// exploration-versus-operating are two different questions and one boolean
+    /// cannot answer both.</para>
+    /// </summary>
+    MovementCategory Spend { get; }
+
     /// <summary>What it means that it finished. SDD-007 §5, executed.</summary>
     void Complete(CompletedActivity done, Tick tick);
 
@@ -137,6 +151,8 @@ internal abstract class Activity<TCommand> : IActivity
     public abstract bool LeavesAnAsset { get; }
 
     public abstract bool OnePerTarget { get; }
+
+    public abstract MovementCategory Spend { get; }
 
     /// <summary>What the order is aimed at, read off the command.</summary>
     public abstract (EntityRef Target, Length Depth) Aim(TCommand command);
@@ -370,6 +386,9 @@ internal sealed class ActivityState : IStateOwner
         Money increment = activity.Operation.Accrued - activity.Posted;
         if (increment.Cents == 0) return;
 
+        // TWO QUESTIONS, TWO SOURCES. Whether the money bought an asset decides
+        // the ACCOUNT; what kind of work it was decides the CAUSE. Inferring the
+        // second from the first booked every repair as exploration (finding 225).
         bool capital = activity.Activity.LeavesAnAsset;
 
         _company.Ledger.Post(new Movement(
@@ -377,7 +396,7 @@ internal sealed class ActivityState : IStateOwner
             capital ? Account.Capex_PPE : Account.Opex,
             Account.Cash,
             increment,
-            capital ? MovementCategory.Development : MovementCategory.Exploration,
+            activity.Activity.Spend,
             Asset: null,
             Cause: cause));
 

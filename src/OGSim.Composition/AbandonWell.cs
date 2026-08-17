@@ -39,6 +39,9 @@ internal sealed class AbandonWellActivity(
     /// </summary>
     public override bool LeavesAnAsset => false;
 
+    /// <summary>Plugging a well is the liability it discharges, not operating cost (finding 225).</summary>
+    public override MovementCategory Spend => MovementCategory.Abandonment;
+
     public override bool OnePerTarget => true;
 
     public override (EntityRef Target, Length Depth) Aim(AbandonWellCommand command)

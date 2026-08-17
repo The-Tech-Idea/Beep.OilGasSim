@@ -18,6 +18,7 @@
 
 using OGSim.Contracts;
 using OGSim.Kernel;
+using OGSim.Company;
 
 namespace OGSim.Composition;
 
@@ -40,6 +41,9 @@ internal sealed class InstallSeparatorActivity(
 {
     /// <summary>A vessel is PP&amp;E: the money buys something the company still
     /// owns next month (SDD-009 §1).</summary>
+    /// <summary>A rung on the surface ladder (finding 225).</summary>
+    public override MovementCategory Spend => MovementCategory.Development;
+
     public override bool LeavesAnAsset => true;
 
     /// <summary>
@@ -114,6 +118,9 @@ internal sealed class InstallGasPlantActivity(
 {
     /// <summary>A plant is PP&amp;E (SDD-009 §1) — and it now depreciates by the
     /// barrel like everything else the company owns.</summary>
+    /// <summary>A rung on the surface ladder (finding 225).</summary>
+    public override MovementCategory Spend => MovementCategory.Development;
+
     public override bool LeavesAnAsset => true;
 
     public override bool OnePerTarget => true;
@@ -171,6 +178,9 @@ internal sealed class InstallManifoldActivity(
     IReadOnlyList<OGSim.Facilities.ManifoldTier> ladder) : Activity<InstallManifoldCommand>(terms)
 {
     /// <summary>Steel on a site: PP&amp;E (SDD-009 §1).</summary>
+    /// <summary>A rung on the surface ladder (finding 225).</summary>
+    public override MovementCategory Spend => MovementCategory.Development;
+
     public override bool LeavesAnAsset => true;
 
     public override bool OnePerTarget => true;
@@ -232,6 +242,9 @@ internal sealed class InstallTankActivity(
 {
     /// <summary>Civil work a company still owns next month: PP&amp;E
     /// (SDD-009 §1).</summary>
+    /// <summary>A rung on the surface ladder (finding 225).</summary>
+    public override MovementCategory Spend => MovementCategory.Development;
+
     public override bool LeavesAnAsset => true;
 
     public override bool OnePerTarget => true;
@@ -287,6 +300,9 @@ internal sealed class InstallTreaterActivity(
     OGSim.Facilities.Treater treater,
     IReadOnlyList<OGSim.Facilities.TreaterTier> ladder) : Activity<InstallTreaterCommand>(terms)
 {
+    /// <summary>A rung on the surface ladder (finding 225).</summary>
+    public override MovementCategory Spend => MovementCategory.Development;
+
     public override bool LeavesAnAsset => true;
 
     public override bool OnePerTarget => true;

@@ -27,6 +27,7 @@
 
 using OGSim.Contracts;
 using OGSim.Kernel;
+using OGSim.Company;
 
 namespace OGSim.Composition;
 
@@ -45,6 +46,9 @@ internal sealed class RepairEquipmentActivity(
     /// letting things break and mending them.
     /// </summary>
     public override bool LeavesAnAsset => false;
+
+    /// <summary>Emergency maintenance is the clearest case the old inference got wrong (finding 225).</summary>
+    public override MovementCategory Spend => MovementCategory.Operating;
 
     public override bool OnePerTarget => true;
 

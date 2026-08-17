@@ -30,6 +30,7 @@
 
 using OGSim.Contracts;
 using OGSim.Kernel;
+using OGSim.Company;
 
 namespace OGSim.Composition;
 
@@ -45,6 +46,9 @@ internal sealed class InstallMonitoringActivity(
     /// it is PP&amp;E and not a survey consumed in the buying (SDD-009 §1) — the
     /// same answer as any other installed hardware.</summary>
     public override bool LeavesAnAsset => true;
+
+    /// <summary>Kit fitted to equipment already owned (finding 225).</summary>
+    public override MovementCategory Spend => MovementCategory.Development;
 
     public override bool OnePerTarget => true;
 

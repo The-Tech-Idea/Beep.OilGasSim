@@ -6,6 +6,7 @@
 
 using OGSim.Contracts;
 using OGSim.Kernel;
+using OGSim.Company;
 
 namespace OGSim.Composition;
 
@@ -61,6 +62,9 @@ internal sealed class DrillWellActivity(
     /// the company owns one rig, which is a decision about equipment rather than
     /// a rule about drilling.
     /// </summary>
+    /// <summary>A well is the asset a field is developed with (finding 225).</summary>
+    public override MovementCategory Spend => MovementCategory.Development;
+
     public override bool OnePerTarget => false;
 
     public override (EntityRef Target, Length Depth) Aim(DrillWellCommand command)

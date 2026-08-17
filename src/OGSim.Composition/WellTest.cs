@@ -8,6 +8,7 @@
 
 using OGSim.Contracts;
 using OGSim.Kernel;
+using OGSim.Company;
 
 namespace OGSim.Composition;
 
@@ -26,6 +27,9 @@ internal sealed class WellTestActivity(
 {
     /// <summary>Knowledge is not PP&amp;E (SDD-009 §1).</summary>
     public override bool LeavesAnAsset => false;
+
+    /// <summary>A build-up survey is bought information (finding 225).</summary>
+    public override MovementCategory Spend => MovementCategory.Exploration;
 
     public override bool OnePerTarget => true;
 

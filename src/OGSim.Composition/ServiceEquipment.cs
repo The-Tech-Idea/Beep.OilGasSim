@@ -22,6 +22,7 @@
 
 using OGSim.Contracts;
 using OGSim.Kernel;
+using OGSim.Company;
 
 namespace OGSim.Composition;
 
@@ -39,6 +40,9 @@ internal sealed class ServiceEquipmentActivity(
     /// because scheduling the work does not change what the work is.
     /// </summary>
     public override bool LeavesAnAsset => false;
+
+    /// <summary>Planned maintenance (finding 225).</summary>
+    public override MovementCategory Spend => MovementCategory.Operating;
 
     public override bool OnePerTarget => true;
 
