@@ -1313,7 +1313,11 @@ internal sealed class HseModule() : EngineModule(Declare(
     // The incident record decays, so it is a quantity recomputed from its own
     // past — state, on the same argument as the covenant clock (finding 210).
     ownsState: ["integrity.esg"],
-    stages: [new StageParticipation(StageId.HseRegulation, Order: 0)]))
+    stages:
+    [
+        new StageParticipation(StageId.Availability, Order: 1),
+        new StageParticipation(StageId.HseRegulation, Order: 0),
+    ]))
 {
     public override void Compose(IModuleComposition composition)
     {
@@ -1326,6 +1330,13 @@ internal sealed class HseModule() : EngineModule(Declare(
         var assessment = new EsgAssessment(standing, Defaults.Record);
 
         composition.Provide(assessment);
+        composition.Contribute(order: 1, new ThreatStage(
+            new OGSim.Integrity.BowTie(
+                composition.Require<IRandomSource>().Stream(StreamId.Hazard),
+                composition.Require<IAuditTrail>()),
+            composition.Require<OGSim.Integrity.AssetIntegrity>(),
+            standing));
+
         composition.Contribute(order: 0, new EsgStage(standing));
     }
 }
@@ -1354,6 +1365,49 @@ public sealed class EsgAssessment(
     /// the full hundred points §4b's formula distributes across intensities.
     /// Emissions and methane join it when equipment vents rather than burns.</summary>
     private const double FlaringWeight = 100.0;
+}
+
+/// <summary>
+/// Stage 4 (SDD-012 §4b). A threat materialises and the barriers decide whether
+/// the field hears a warning or an incident. The rate is driven by CONDITION, so
+/// a maintained field is not merely safer — it is not being asked to roll.
+/// </summary>
+internal sealed class ThreatStage(
+    OGSim.Integrity.BowTie bowTie,
+    OGSim.Integrity.AssetIntegrity integrity,
+    OGSim.Integrity.EsgStanding standing) : ITickStage
+{
+    public StageId Id => StageId.Availability;
+
+    public void Execute(TickContext context)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+
+        double worst = 1.0;
+        for (int i = 0; i < Defaults.Barriers.Count; i++)
+        {
+            IReadOnlyList<EntityId<IFlowElement>> elements = Defaults.Barriers[i].Elements;
+
+            for (int e = 0; e < elements.Count; e++)
+            {
+                double condition = integrity.ConditionOf(elements[e]);
+                if (condition < worst) worst = condition;
+            }
+        }
+
+        if (worst >= 1.0) return;
+
+        if (!bowTie.Materialises(Defaults.ThreatRateAtFailure * (1.0 - worst))) return;
+
+        OGSim.Integrity.ThreatResolution resolved = bowTie.Resolve(
+            Defaults.ContainmentThreat,
+            Defaults.Barriers,
+            barrier => barrier.StrengthGiven(
+                integrity.ConditionOf, Defaults.CrewCompetency, Defaults.ProcedureCompliance));
+
+        if (resolved.Outcome == OGSim.Integrity.ThreatOutcome.TopEvent)
+            standing.RecordIncident(Defaults.TopEventPoints);
+    }
 }
 
 /// <summary>Stage 9: the record ages, which is the rehabilitation §4b promises

@@ -76,9 +76,10 @@ internal static class Fixture
     /// specifies rather than the simplified one (design 18 §5b).
     /// </summary>
     public static EngineSettings Settings(
-        FaultHandling handling = FaultHandling.Strict, string profile = "simulation") =>
+        FaultHandling handling = FaultHandling.Strict, string profile = "simulation",
+        ulong seed = 20260806UL) =>
         new(new GameDate(1965, 1),
-            WorldSeed: 20260806UL,
+            WorldSeed: seed,
             new AuditRetention(DetailWindowTicks: 12),
             new RecordingSink(),
             LogLevel.Info,
@@ -205,6 +206,13 @@ public sealed class ShippedSetTests
     /// exists to make what the company KNOWS decay rather than to move fluid or
     /// money — and this test is why adding it was a visible edit rather than a
     /// silent one (SDD-008 §2d.3, finding 200).</para>
+    ///
+    /// <para>R22.17 made <b>Availability</b> appear TWICE, which is a slot with two
+    /// contributors rather than a stage declared twice: the bow-tie's threat pass
+    /// runs first and may take an element out, and the hazard/segmentation pass
+    /// then plans the month around whatever survived. A stage is a point in the
+    /// tick, not a monopoly — this list is of contributions in execution order, so
+    /// a second one at an existing point is exactly as visible as a new point.</para>
     /// </summary>
     [Fact]
     public void The_shipped_engine_runs_the_stages_its_modules_declared()
@@ -212,7 +220,8 @@ public sealed class ShippedSetTests
         Built built = Assert.IsType<Built>(EngineBuilder.Build(Fixture.Settings()));
 
         Assert.Equal(
-            [StageId.Environment, StageId.Operations, StageId.Availability,
+            [StageId.Environment, StageId.Operations,
+             StageId.Availability, StageId.Availability,
              StageId.SolveFlow, StageId.MaterialBalance, StageId.Custody,
              StageId.Economics, StageId.HseRegulation, StageId.Information,
              StageId.Objectives, StageId.Close],

@@ -136,6 +136,17 @@ public sealed class BowTie
     /// <para>Barrier independence is a stated simplification (design 14): the
     /// bow-tie carries the decision, not the correlation structure.</para>
     /// </summary>
+    /// <summary>Whether a threat materialises this tick (SDD-012 §4). One draw,
+    /// from the `hazard` stream, before any barrier is sampled.</summary>
+    public bool Materialises(double ratePerTick)
+    {
+        if (!double.IsFinite(ratePerTick) || ratePerTick <= 0.0 || ratePerTick > 1.0)
+            throw new ModelFault("SDD-012 §4", null,
+                $"a threat rate is a probability in (0, 1]; got {ratePerTick}");
+
+        return _hazard.NextUnit() < ratePerTick;
+    }
+
     public ThreatResolution Resolve(
         ContentId threat,
         IReadOnlyList<Barrier> barriers,

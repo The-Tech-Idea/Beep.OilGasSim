@@ -1425,6 +1425,23 @@ internal static class Defaults
     /// </summary>
     public const double SouringReferencePpm = 1_000.0;
 
+    public static IReadOnlyList<Integrity.Barrier> Barriers { get; } =
+    [
+        new(new ContentId("containment"), [TheSeparator, TheTank], IsPreventive: true),
+        new(new ContentId("shutdown"), [TheManifold], IsPreventive: true),
+        new(new ContentId("response"), [TheTreater, TheGasPlant], IsPreventive: false),
+    ];
+
+    public static ContentId ContainmentThreat { get; } = new("loss-of-containment");
+
+    public const double ThreatRateAtFailure = 0.15;
+
+    public const double TopEventPoints = 25.0;
+
+    public const double CrewCompetency = 0.9;
+
+    public const double ProcedureCompliance = 0.9;
+
     /// <summary>
     /// How long an incident stays on the record (SDD-012 §4b). Three years, so a
     /// company that hurts someone carries it across several borrowing

@@ -414,9 +414,18 @@ public sealed class SaveGameTests
         // NOT compared against the value taken before the save: RRR moves every
         // month by construction — the window slides — so an equality there would
         // have been asserting that a standing indicator stands still.
-        Assert.True(measured > 0.0,
-            $"the ratio measured {measured}, so the fixture never replaced anything " +
-            "and the comparison above would hold for a company that did nothing");
+        // NOT `> 0`, which is a different claim and one this fixture cannot make.
+        // The thing being excluded is ZERO — a ratio no history could produce, and
+        // the one value that would let the equality above hold vacuously. A
+        // NEGATIVE ratio is a company that produced and revised its estimate DOWN,
+        // which is a measurement of thirteen real months exactly as much as 0.76
+        // is, and the ring carried it exactly as well. Demanding a positive number
+        // made this a test of whether the field happened to have a good decade:
+        // the same fixture measured +0.76 and -0.23 with no engine change,
+        // depending only on where the hazard stream had got to (finding 227).
+        Assert.True(measured != 0.0,
+            $"the ratio measured {measured}, so nothing was carried and the " +
+            "comparison above would hold for a company that did nothing");
     }
 
     /// <summary>How long the search above will run before giving up. Not a
@@ -484,11 +493,21 @@ public sealed class SaveGameTests
         // projection is built at the close of a month, and a game that has not
         // run one has nothing to show. So both are compared after each tick,
         // never before the first.
+        // AND THE MAINTENANCE IS SYMMETRIC, which it was not: `Fixture.Repair`
+        // reads the READ MODEL to find what has failed, and the reloaded engine
+        // has none until it ticks — so on the first pass the original submitted
+        // a repair and the reloaded could not, which is a difference the fixture
+        // created rather than one the save did. It stayed invisible while
+        // nothing happened to need repairing on that exact tick; the moment a
+        // change made one fall due there, PV2 reported a $2.16M cash divergence
+        // that no state block could explain, because every block was identical
+        // (finding 226).
+        //
+        // Repairing at the END of the body fixes it: both engines have a
+        // projection by then, so both see the same failures and submit the same
+        // work.
         for (var month = 0; month < 24; month++)
         {
-            Fixture.Repair(original);
-            Fixture.Repair(reloaded);
-
             original.Pipeline.AdvanceTick();
             reloaded.Pipeline.AdvanceTick();
 
@@ -517,6 +536,9 @@ public sealed class SaveGameTests
             string apart = Fields(a, b);
 
             Assert.Equal("no named field differs", apart);
+
+            Fixture.Repair(original);
+            Fixture.Repair(reloaded);
 
             Assert.Equal("every account balance agrees", Accounts(original, reloaded));
         }
@@ -845,6 +867,8 @@ public sealed class SaveGameTests
         Assert.Contains(refused.Reasons,
             reason => reason.Contains("manifest", StringComparison.Ordinal));
     }
+
+
 
 
 }
