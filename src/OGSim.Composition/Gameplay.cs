@@ -439,7 +439,8 @@ internal sealed class FieldProjection(
     ReservesBook reserves,
     Bank bank,
     ReserveHistory history,
-    OGSim.Environment.WeatherState weather)
+    OGSim.Environment.WeatherState weather,
+    EsgAssessment esg)
 {
     /// <summary>The one region this world has (SDD-016 §1).</summary>
     private const int FieldRegion = 0;
@@ -471,7 +472,7 @@ internal sealed class FieldProjection(
                 loop.CumulativeProduced),
             bank.Terms, bank.Covenant, bank.Drawn,
             loop.CumulativeFlared,
-            Defaults.Record.Standing(loop.CumulativeFlared, loop.CumulativeProduced),
+            esg.Of(loop.CumulativeFlared, loop.CumulativeProduced),
             new WaterFloodView(
                 loop.VoidageReplacement, loop.ImportedThisTick, loop.InjectionHeadroom,
                 loop.SourFraction),

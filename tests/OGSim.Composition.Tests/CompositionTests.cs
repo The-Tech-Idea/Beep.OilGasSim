@@ -214,8 +214,8 @@ public sealed class ShippedSetTests
         Assert.Equal(
             [StageId.Environment, StageId.Operations, StageId.Availability,
              StageId.SolveFlow, StageId.MaterialBalance, StageId.Custody,
-             StageId.Economics, StageId.Information, StageId.Objectives,
-             StageId.Close],
+             StageId.Economics, StageId.HseRegulation, StageId.Information,
+             StageId.Objectives, StageId.Close],
             built.Engine.Pipeline.DeclaredOrder());
     }
 

@@ -237,7 +237,7 @@ public sealed class BowTie
 /// rehabilitates. Without the decay, one bad year would price a company's debt
 /// forever and the loop would have no exit, which design rule CI4 forbids.</para>
 /// </summary>
-public sealed class EsgStanding
+public sealed class EsgStanding : IStateOwner
 {
     private readonly double _halfLifeTicks;
     private double _incidentPoints;
@@ -289,5 +289,36 @@ public sealed class EsgStanding
             penalty += intensities[i].Weight * intensities[i].BandScore;
 
         return Math.Clamp(100.0 - penalty - _incidentPoints, 0.0, 100.0);
+    }
+
+    // ------------------------------------------------------- SDD-013 §4
+
+    /// <summary>
+    /// The incident record, which is STATE and not a derivation: `Age` multiplies
+    /// it by its own previous value, so it is the same shape as the covenant
+    /// clock and the reserve ring (findings 210, 208). A reload that resumed
+    /// from zero would hand back a spotless company however recently it had hurt
+    /// someone — and the rehabilitation this decay models is the whole point of
+    /// keeping the number.
+    /// </summary>
+    public StateKey Key { get; } = new("integrity.esg");
+
+    public int SchemaVersion => 1;
+
+    /// <summary>Nothing: one scalar that depends on no other owner.</summary>
+    public IReadOnlyList<StateKey> RestoreAfter => [];
+
+    public void Capture(IStateWriter writer)
+    {
+        ArgumentNullException.ThrowIfNull(writer);
+
+        writer.WriteDouble("incident-points", _incidentPoints);
+    }
+
+    public void Restore(IStateReader reader)
+    {
+        ArgumentNullException.ThrowIfNull(reader);
+
+        _incidentPoints = reader.ReadDouble("incident-points");
     }
 }

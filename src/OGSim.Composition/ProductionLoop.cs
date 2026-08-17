@@ -2160,7 +2160,8 @@ internal sealed class CustodyStage(ProductionLoop loop) : ITickStage
 }
 
 internal sealed class EconomicsStage(
-    ProductionLoop loop, Bank bank, ReservesBook reserves, ReserveHistory history)
+    ProductionLoop loop, Bank bank, ReservesBook reserves, ReserveHistory history,
+    EsgAssessment esg)
     : ITickStage
 {
 
@@ -2182,7 +2183,7 @@ internal sealed class EconomicsStage(
         // borrows at, for years, which is design 08 §5's slowest loop.
         bank.Settle(
             context.Tick,
-            Defaults.Record.Standing(loop.CumulativeFlared, loop.CumulativeProduced));
+            esg.Of(loop.CumulativeFlared, loop.CumulativeProduced));
 
         // AND WHERE THE COMPANY STOOD THIS MONTH, so a year from now there is
         // something to measure replacement against (SDD-009 §4). Recorded AFTER

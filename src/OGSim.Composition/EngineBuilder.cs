@@ -1425,6 +1425,14 @@ internal static class Defaults
     /// </summary>
     public const double SouringReferencePpm = 1_000.0;
 
+    /// <summary>
+    /// How long an incident stays on the record (SDD-012 §4b). Three years, so a
+    /// company that hurts someone carries it across several borrowing
+    /// redeterminations and a clean decade genuinely rehabilitates — the two
+    /// exits CI4 asks for, rather than a punishment with no way out.
+    /// </summary>
+    public const double EsgIncidentHalfLifeTicks = 36.0;
+
     public static Integrity.DegradationCoefficients Decay { get; } =
         new(BaseRatePerYear: 0.05, WaterCutFactor: 1.0, SourFactor: 2.0,
             DutyFactor: 0.5, TemperatureFactor: 1.5, ServiceIntervalFactor: 0.2);

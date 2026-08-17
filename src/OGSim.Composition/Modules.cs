@@ -603,6 +603,12 @@ internal sealed class FieldModule() : EngineModule(Declare(
         // requiring it in code alone leaves the graph without the edge and the
         // environment module composes after the field that reads it.
         typeof(OGSim.Environment.WeatherState),
+
+        // The one standing (finding 222). Declared as well as required, for the
+        // reason the weather state above carries: the manifest is what the
+        // composer orders modules by, and requiring in code alone leaves the
+        // graph without the edge.
+        typeof(EsgAssessment),
         typeof(TickProduction),
         typeof(IFluidPropertyModel),
         typeof(IAuditTrail),
@@ -821,7 +827,8 @@ internal sealed class FieldModule() : EngineModule(Declare(
             [Defaults.PressureKind]));
         composition.Contribute(order: 0, new CustodyStage(loop));
         composition.Contribute(order: 0, new EconomicsStage(
-            loop, bank, composition.Require<ReservesBook>(), history));
+            loop, bank, composition.Require<ReservesBook>(), history,
+            composition.Require<EsgAssessment>()));
 
         // The scenario's door onto the field. Provided rather than reachable, so
         // building a field is something composition hands out deliberately.
@@ -969,7 +976,8 @@ internal sealed class FieldModule() : EngineModule(Declare(
             composition.Require<ReservesBook>(),
             bank,
             composition.Require<ReserveHistory>(),
-            composition.Require<OGSim.Environment.WeatherState>());
+            composition.Require<OGSim.Environment.WeatherState>(),
+            composition.Require<EsgAssessment>());
 
         // The scenario is CONTENT (design 03 §3.3): the win condition is an
         // objective over a read-model path, not a comparison compiled into a
@@ -1286,15 +1294,80 @@ internal sealed class IntegrityModule() : EngineModule(Declare(
 /// different stage — the bow-tie reads conditions integrity owns, and reading is
 /// not owning (law L5).
 /// </summary>
+/// <summary>
+/// Stage 9 (SDD-012 §4b). The company's standing with the world, and the one
+/// place it is computed.
+///
+/// <para>THE MODULE WAS AN EMPTY SHELL: it declared two requirements it never
+/// resolved, owned nothing, filled no stage, and its `Compose` was a null check
+/// — while §4b's `EsgStanding`, incident points and decay sat built and uncalled
+/// in `OGSim.Integrity`, and the engine priced its borrowing against a
+/// FLARING-ONLY standing in `OGSim.Company` (finding 222). Two owners of one
+/// fact, and the one that could see an incident was the one nobody called.</para>
+/// </summary>
 internal sealed class HseModule() : EngineModule(Declare(
     "hse",
-    provides: [],
+    provides: [typeof(EsgAssessment)],
     requires: [typeof(IHazardModel), typeof(IAuditTrail)],
-    ownsState: NothingOwnedYet,
-    stages: NoStagesYet))
+
+    // The incident record decays, so it is a quantity recomputed from its own
+    // past — state, on the same argument as the covenant clock (finding 210).
+    ownsState: ["integrity.esg"],
+    stages: [new StageParticipation(StageId.HseRegulation, Order: 0)]))
 {
-    public override void Compose(IModuleComposition composition) =>
+    public override void Compose(IModuleComposition composition)
+    {
         ArgumentNullException.ThrowIfNull(composition);
+
+        var standing = new OGSim.Integrity.EsgStanding(Defaults.EsgIncidentHalfLifeTicks);
+
+        composition.Own(standing);
+
+        var assessment = new EsgAssessment(standing, Defaults.Record);
+
+        composition.Provide(assessment);
+        composition.Contribute(order: 0, new EsgStage(standing));
+    }
+}
+
+/// <summary>
+/// ONE OWNER OF THE STANDING (law L5, finding 222). The flaring term and the
+/// incident term were separate implementations returning separate answers on
+/// separate scales; this is the single place they combine.
+///
+/// <para>Identical to the old flaring-only number while nothing has happened:
+/// `EsgRecord` gives a 0–1 score, the weight turns it into §4b's penalty out of
+/// a hundred, and with no incident points the quotient is what the bank read
+/// before. That is deliberate — the join is a refactor today and becomes a
+/// mechanic the day the bow-tie is wired to it.</para>
+/// </summary>
+public sealed class EsgAssessment(
+    OGSim.Integrity.EsgStanding standing, OGSim.Company.EsgRecord record)
+{
+    /// <summary>The 0–1 fraction a contract takes (SDD-012 §4b's R20d.16
+    /// amendment: 0–100 is the presentation scale, 0–1 crosses the wire).</summary>
+    public double Of(Mass flared, SurfaceVolume produced) =>
+        standing.Standing([(FlaringWeight, 1.0 - record.Standing(flared, produced))])
+        / FlaringWeight;
+
+    /// <summary>Flaring is the whole of the intensity term today, so it carries
+    /// the full hundred points §4b's formula distributes across intensities.
+    /// Emissions and methane join it when equipment vents rather than burns.</summary>
+    private const double FlaringWeight = 100.0;
+}
+
+/// <summary>Stage 9: the record ages, which is the rehabilitation §4b promises
+/// and the only thing that happens to it when nothing goes wrong.</summary>
+internal sealed class EsgStage(OGSim.Integrity.EsgStanding standing) : ITickStage
+{
+    public StageId Id => StageId.HseRegulation;
+
+    public void Execute(TickContext context)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+
+        standing.Age(Duration.FromTicks(1.0));
+    }
 }
 
 // ---------------------------------------------------------------- objectives
