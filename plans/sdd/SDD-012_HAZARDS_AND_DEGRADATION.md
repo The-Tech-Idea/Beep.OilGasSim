@@ -347,6 +347,49 @@ so a clean decade genuinely rehabilitates. The lender spread table (SDD-009
 > may be the better-run of the two, and a lender charging it more for that would
 > be pricing size instead of behaviour.
 
+> **R23.1 amendment. The intensity window is FINITE, because one of the two
+> exits this section promises did not exist.**
+>
+> The standing was implemented against LIFETIME cumulative flaring over LIFETIME
+> cumulative production — deliberately, and for a stated reason: a record is what
+> a lender has watched, and one bad month should no more re-price a facility than
+> one good month should clear it. The reason is right and the memory was wrong.
+>
+> **A lifetime average cannot fall.** By the time a field has produced for a
+> decade, a month of perfect behaviour moves the ratio by about a hundredth of
+> what a month of bad behaviour moved it on the way up, and nothing a player can
+> buy moves it at all. `EsgStanding` documents two exits per design rule CI4 —
+> *reduce the intensities, or let the incident record decay* — and only the
+> second was reachable. A loop with one exit is a trap, which is precisely what
+> CI4 forbids, and the code asserting otherwise in a comment did not make it so.
+>
+> Three things followed, and they were read as three separate balance problems
+> before they were recognised as one arithmetic one. The shipped field reports
+> standing 0.0000 after twenty maintained years, so SDD-009 §5's lender spread
+> table has exactly one reachable row. A player who buys a gas plant to stop
+> flaring sees no improvement, so the mechanic meant to reward the purchase
+> rewards nothing. And `incidentPoints` is subtracted from a number already
+> clamped at zero, so an incident that genuinely happened is invisible to
+> everyone — which is what made R23's bow-tie look unjoinable.
+>
+> **So intensity is measured over a decaying window, on the SAME half-life the
+> incident term already uses.** Numerator and denominator are each aged by
+> `0.5^(ticks / halfLife)` before the month's own flaring and production are
+> added, which is an exponentially weighted ratio: O(1) state, no ring buffer,
+> and no window edge for a player to game by timing a shutdown.
+>
+> This KEEPS the original reasoning rather than reversing it. It is still per
+> unit produced, so size is still not priced; a single month still barely moves a
+> number whose half-life is measured in years. What changes is only that the
+> record forgets at the same rate the incident record does — one clock for both
+> terms, and the rehabilitation §4b promises is now a property of the whole
+> formula rather than of half of it (finding 228).
+>
+> **The band edges are NOT changed by this amendment**, and the alternative of
+> re-expressing the term per unit of gas HANDLED is not adopted. Both were
+> candidates while the diagnosis was "the scale is mis-calibrated"; neither was
+> the defect. A scale that cannot move is not mis-calibrated.
+
 **Social licence** (0–100): `SL += Σ driver deltas` per tick, clamped;
 driver deltas are content per event class (visible flaring near settlements,
 spills scaled by sensitivity, local employment, community investment).
