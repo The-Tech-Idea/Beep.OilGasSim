@@ -334,4 +334,122 @@ public sealed class ProductionLoopTests
             $"the standing recovered to {cleaned} after a clean decade; a record " +
             "that cannot rise is a punishment rather than a decision (CI4)");
     }
+
+    /// <summary>
+    /// R21-V6. <b>All seven audit-backed features of design 09 §7 are
+    /// answerable</b> — asked of one field that produced, jammed, learned,
+    /// broke and refused a command, because a feature is answerable only if a
+    /// game that DID the thing can be asked about it.
+    ///
+    /// <para>Seven, not eleven: §7's table has eleven rows and four of them name
+    /// something other than an audit entry as their backing — barrier status from
+    /// the integrity model, standing indicators from the read model, and the
+    /// weather account from the segment plan. This is the audit trail's share of
+    /// that table, which is what the verification row means by seven.</para>
+    ///
+    /// <para><b>Asserted on the DATA rather than on the count</b>, which is the
+    /// whole difference between this test and a green one. *Where did my money go
+    /// this quarter?* was backed by two hundred and forty entries a month apart
+    /// over twenty years, and every one of them carried an empty dictionary: the
+    /// operating cost added its three components together inside the method and
+    /// audited the sum as nothing at all. A test counting entries would have
+    /// passed against that (finding 230).</para>
+    /// </summary>
+    [Fact]
+    [Trait("Speed", "Slow")]
+    public void R21V6_every_audit_backed_feature_of_the_diagnostics_design_is_answerable()
+    {
+        (Engine engine, _) = Field();
+
+        // A command that cannot be honoured, so there is something to have got
+        // wrong: no element carries this id.
+        engine.Commands.Submit(new RepairEquipmentCommand(
+            new EntityRef(EntityKind.FlowElement, 999_999)));
+
+        engine.Commands.Submit(new InstallSeparatorCommand());
+
+        Fixture.Run(engine, months: 8);
+
+        // And something learned, which costs money and takes months.
+        engine.Commands.Submit(new WellTestCommand(new EntityId<IReservoirCompartmentEntity>(1)));
+
+        Fixture.Run(engine, months: 4);
+
+        // 1 — "Why is this well shut in?" and
+        // 3 — "Production loss report": the same entries, read two ways. The
+        // element names what refused and the deferred mass is what it cost.
+        AuditEntry binding = First(engine, AuditCategory.ConstraintBinding);
+
+        Assert.True(binding.Data.ContainsKey("element"), "a binding must name what bound");
+        Assert.True(binding.Data.ContainsKey("kind"), "and which limit it hit");
+        Assert.True(binding.Data.ContainsKey("deferred-kg"),
+            "and what it cost, or the loss report has nothing to attribute");
+        Assert.NotNull(binding.Subject);
+
+        // 2 — "Where did my money go this quarter?"
+        AuditEntry spend = Find(engine, AuditCategory.Financial, "spend", "field-operating");
+
+        Assert.True(spend.Data.ContainsKey("standing"), "the charge abandonment ends");
+        Assert.True(spend.Data.ContainsKey("lifting"), "what the barrels cost to lift");
+        Assert.True(spend.Data.ContainsKey("injection-water"), "and what the flood is drinking");
+
+        // 4 — "What did I learn from this well?"
+        AuditEntry learned = First(engine, AuditCategory.BeliefUpdate);
+
+        Assert.True(learned.Data.ContainsKey("subject"), "a belief is about something");
+        Assert.True(learned.Data.ContainsKey("posteriorMu"), "and it moved to somewhere");
+        Assert.True(learned.Data.ContainsKey("posteriorSigma"),
+            "with a confidence, or the company cannot tell a survey from a guess");
+
+        // 5 — "Field history timeline"
+        AuditEntry moved = First(engine, AuditCategory.StateTransition);
+
+        Assert.True(moved.Data.ContainsKey("state"), "a transition is to a state");
+
+        // 6 — "Was that fair?"
+        AuditEntry drawn = First(engine, AuditCategory.StochasticOutcome);
+
+        Assert.True(drawn.Data.ContainsKey("stream"), "which of the eight streams");
+        Assert.True(drawn.Data.ContainsKey("draw"), "what came up");
+        Assert.True(drawn.Data.ContainsKey("threshold"),
+            "and what it had to beat — all three, or 'was that fair' is unanswerable");
+
+        // 7 — "What did I do wrong?"
+        AuditEntry refused = First(engine, AuditCategory.Rejection);
+
+        Assert.True(refused.Data.ContainsKey("command"), "a refusal names the command");
+        Assert.True(refused.Data.ContainsKey("reason.0"),
+            "and gives a domain reason, not a status code");
+    }
+
+    /// <summary>The first entry of a category, with a failure that says which
+    /// feature went dark rather than "sequence contains no elements".</summary>
+    private static AuditEntry First(Engine engine, AuditCategory category)
+    {
+        IReadOnlyList<AuditEntry> found =
+            engine.Audit.Query(new AuditQuery(null, category, null, null));
+
+        Assert.True(found.Count > 0,
+            $"nothing in the trail is a {category} entry, so the design 09 §7 " +
+            "feature it backs cannot be answered at all");
+
+        return found[0];
+    }
+
+    /// <summary>The first entry of a category carrying a given field, for the
+    /// categories several different events share.</summary>
+    private static AuditEntry Find(
+        Engine engine, AuditCategory category, string key, string value)
+    {
+        IReadOnlyList<AuditEntry> found =
+            engine.Audit.Query(new AuditQuery(null, category, null, null));
+
+        for (int i = 0; i < found.Count; i++)
+            if (found[i].Data.TryGetValue(key, out AuditValue carried)
+                && carried.Value == value)
+                return found[i];
+
+        Assert.Fail($"no {category} entry carries {key}={value}");
+        return found[0];
+    }
 }

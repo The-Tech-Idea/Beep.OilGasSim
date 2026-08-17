@@ -1450,7 +1450,8 @@ internal sealed class ProductionLoop : IStateOwner
         // and oil that failed the spec gate is oil the company has and cannot
         // sell.
         // The month's OPEX first, because the fiscal assessment deducts it.
-        Money opex = OperatingCost();
+        OperatingCosts costs = OperatingCost();
+        Money opex = costs.Total;
 
         CumulativeProduced = new SurfaceVolume(
             CumulativeProduced.CubicMetres + ProducedThisTick.CubicMetres);
@@ -1522,9 +1523,20 @@ internal sealed class ProductionLoop : IStateOwner
         // The field costs money to run whether or not it produced — which is the
         // whole shape of the late-life decision, and it must not be conditional
         // on production or a shut-in field would be free to keep.
+        // ITEMISED, because design 09 §7's money report is one of the two the
+        // trail exists for and an empty entry answers nothing. The three lines
+        // are what a player can act on: the standing charge is what abandonment
+        // ends, the lifting cost is what a shut-in well stops, and the water bill
+        // is what a flood is costing to run.
         AuditId operating = _audit.Record(
             AuditCategory.Financial, subject: null, cause: null,
-            new Dictionary<string, AuditValue>(StringComparer.Ordinal));
+            new Dictionary<string, AuditValue>(StringComparer.Ordinal)
+            {
+                ["spend"] = new("field-operating"),
+                ["standing"] = new(Format(costs.Standing.Cents)),
+                ["lifting"] = new(Format(costs.Lifting.Cents)),
+                ["injection-water"] = new(Format(costs.InjectionWater.Cents)),
+            });
 
         _company.Ledger.Post(new Movement(
             tick, Account.Opex, Account.Cash, opex,
@@ -1555,7 +1567,22 @@ internal sealed class ProductionLoop : IStateOwner
     /// the decision late life is made of — and without it watering out would be
     /// something a player watches rather than something they answer.</para>
     /// </summary>
-    private Money OperatingCost()
+    /// <summary>
+    /// What a month of running the field cost, ITEMISED (design 09 §7).
+    ///
+    /// <para>The three components were computed and then added together inside
+    /// the method, so the audit entry that recorded the spend had nothing to say
+    /// and recorded an empty dictionary — 240 of them in a twenty-year game, one
+    /// every month, backing the report design 09 §7 calls *where did my money go
+    /// this quarter?* with no answer at all (finding 230).</para>
+    /// </summary>
+    private readonly record struct OperatingCosts(
+        Money Standing, Money Lifting, Money InjectionWater)
+    {
+        public Money Total => Standing + Lifting + InjectionWater;
+    }
+
+    private OperatingCosts OperatingCost()
     {
         // A FIELD THAT HAS BEEN ABANDONED COSTS NOTHING. The standing charge is
         // the people, the power and the road, and none of them is there once the
@@ -1567,7 +1594,7 @@ internal sealed class ProductionLoop : IStateOwner
         // and a field whose wells are shut IN still has the site, the staff and
         // the licence, having only stopped lifting. Pausing is not leaving, and
         // the difference is what abandonment's price buys.
-        if (_isAbandoned()) return Money.Zero;
+        if (_isAbandoned()) return default;
 
         var liquid = 0.0;
         for (int i = 0; i < _liquidOrdinals.Count; i++)
@@ -1577,9 +1604,10 @@ internal sealed class ProductionLoop : IStateOwner
         // Charged in the month it is lifted, against a recovery that arrives
         // years later — which is what makes the flood a decision rather than a
         // slider every player pushes to its limit on day one.
-        return _economics.FixedOperatingCostPerTick
-             + Scale(_economics.LiftingCostPerTonne, liquid / KilogramsPerTonne)
-             + Scale(_economics.InjectionWaterCostPerCubicMetre, _importedThisTick);
+        return new OperatingCosts(
+            _economics.FixedOperatingCostPerTick,
+            Scale(_economics.LiftingCostPerTonne, liquid / KilogramsPerTonne),
+            Scale(_economics.InjectionWaterCostPerCubicMetre, _importedThisTick));
     }
 
     private const double KilogramsPerTonne = 1000.0;
