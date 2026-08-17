@@ -295,7 +295,26 @@ public class EsgStandingTests
         Assert.True(standing.IncidentPoints < 0.01);
     }
 
-    [Fact] // TWO EXITS, per CI4: clean up, or wait out the record
+    /// <summary>
+    /// TWO EXITS, per CI4: clean up, or wait out the record.
+    ///
+    /// <para><b>What this proves is that <c>Standing</c> is MONOTONIC in its
+    /// argument, and that is all it ever proved.</b> Exit one is demonstrated by
+    /// handing the method a clean intensity list — which says nothing about
+    /// whether any history a company can have produces one. For as long as the
+    /// caller fed a LIFETIME cumulative ratio, no history could: this test was
+    /// green throughout the whole period in which exit one did not exist, which
+    /// is what let three separate symptoms be read as balance problems
+    /// (findings 223, 228).</para>
+    ///
+    /// <para>The reachability half is
+    /// <c>R23V16_a_company_that_stops_flaring_recovers_its_standing</c>, which
+    /// plays a field into the ruined state and buys its way out. Kept beside this
+    /// one rather than replacing it: the function being monotonic is a real
+    /// property and worth a fast test, and the lesson is that it is HALF the
+    /// claim its name makes.</para>
+    /// </summary>
+    [Fact]
     public void HS12_the_loop_has_two_exits()
     {
         var byCleaning = new EsgStanding(36.0);
@@ -329,5 +348,117 @@ public class EsgStandingTests
     {
         Assert.Throws<ModelFault>(() => new EsgStanding(halfLifeTicks: 0.0));
         Assert.Throws<ModelFault>(() => new EsgStanding(36.0).RecordIncident(-5.0));
+    }
+}
+
+/// <summary>
+/// SDD-012 §4b's R23.1 amendment — the intensity window, which is the arithmetic
+/// that makes CI4's first exit reachable.
+/// </summary>
+public sealed class EsgWindowTests
+{
+    private const double HalfLifeTicks = 36.0;
+
+    private static EsgStanding Standing() => new(HalfLifeTicks);
+
+    /// <summary>
+    /// A company that changes nothing keeps the intensity it had. Numerator and
+    /// denominator age by the SAME factor, so the ratio is invariant under decay
+    /// — which is the property that stops the window forgiving a company for
+    /// continuing to flare.
+    /// </summary>
+    [Fact]
+    public void MX23_1_a_company_that_changes_nothing_keeps_its_intensity()
+    {
+        EsgStanding standing = Standing();
+
+        for (var month = 0; month < 240; month++)
+        {
+            standing.Observe(new Mass(300.0), new SurfaceVolume(10.0));
+            standing.Age(Duration.FromTicks(1.0));
+        }
+
+        // 30 kg burned per cubic metre produced, every month, for twenty years.
+        Assert.Equal(
+            30.0,
+            standing.WindowedFlared.Kilograms / standing.WindowedProduced.CubicMetres,
+            precision: 9);
+    }
+
+    /// <summary>
+    /// And one that stops sees the record fall on the declared half-life.
+    ///
+    /// <para>Independently computed (F-3). After a single observation of 100 kg,
+    /// n ticks of aging leave <c>100 · 0.5^(n/36)</c>. At n = 36 that is exactly
+    /// 50 kg — the half-life, which is what the constant means.</para>
+    /// </summary>
+    [Fact]
+    public void MX23_2_a_record_halves_over_the_declared_half_life()
+    {
+        EsgStanding standing = Standing();
+
+        standing.Observe(new Mass(100.0), new SurfaceVolume(1.0));
+
+        for (var month = 0; month < 36; month++) standing.Age(Duration.FromTicks(1.0));
+
+        Assert.Equal(50.0, standing.WindowedFlared.Kilograms, precision: 9);
+        Assert.Equal(0.5, standing.WindowedProduced.CubicMetres, precision: 9);
+    }
+
+    /// <summary>
+    /// THE EXIT ITSELF, in arithmetic: a decade of heavy flaring followed by a
+    /// decade of clean production leaves an intensity a tenth of what it was.
+    /// Against a lifetime cumulative record the same history gives
+    /// 120 000 / 2400 = 50 kg per cubic metre and never moves again.
+    /// </summary>
+    [Fact]
+    public void MX23_3_a_clean_decade_outweighs_the_dirty_one_before_it()
+    {
+        EsgStanding standing = Standing();
+
+        for (var month = 0; month < 120; month++)
+        {
+            standing.Observe(new Mass(1000.0), new SurfaceVolume(10.0));
+            standing.Age(Duration.FromTicks(1.0));
+        }
+
+        double dirty = standing.WindowedFlared.Kilograms / standing.WindowedProduced.CubicMetres;
+
+        Assert.Equal(100.0, dirty, precision: 6);
+
+        for (var month = 0; month < 120; month++)
+        {
+            standing.Observe(new Mass(0.0), new SurfaceVolume(10.0));
+            standing.Age(Duration.FromTicks(1.0));
+        }
+
+        double cleaned = standing.WindowedFlared.Kilograms / standing.WindowedProduced.CubicMetres;
+
+        // INDEPENDENTLY COMPUTED (F-3). With r = 0.5^(1/36) per tick, the
+        // numerator decays untouched across the clean decade by r^120 =
+        // 0.5^(120/36) = 0.099213, while the denominator returns to the same
+        // steady state it held before, production being unchanged. So the
+        // intensity falls to very nearly that factor — 9.025785 against 100,
+        // marginally below r^120 because the denominator never paused.
+        //
+        // Asserted as a NUMBER rather than as an inequality: "it went down" would
+        // pass against a record that forgot everything in a month, which is the
+        // opposite defect and just as wrong.
+        Assert.Equal(9.025785, cleaned, precision: 6);
+
+        Assert.True(cleaned < dirty / 10.0,
+            $"a clean decade left the intensity at {cleaned} against {dirty}; the " +
+            "record has to forget or there is no way back");
+    }
+
+    /// <summary>A month cannot un-burn gas — the accumulator has no negative
+    /// arm, so a caller cannot repair a record by handing it a credit.</summary>
+    [Fact]
+    public void A_negative_observation_is_refused()
+    {
+        EsgStanding standing = Standing();
+
+        Assert.Throws<ModelFault>(() =>
+            standing.Observe(new Mass(-1.0), new SurfaceVolume(1.0)));
     }
 }

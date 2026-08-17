@@ -282,4 +282,56 @@ public sealed class ProductionLoopTests
         Assert.Contains(transfers, entry => entry.Id == revenue!.Cause);
     }
 
+
+    /// <summary>
+    /// R23-V16, the reachability half. SDD-012 §4b's R23.1 amendment, and
+    /// <b>a company can clean up.</b> A
+    /// field that flares everything it produces is Ruined, buys the gas plant
+    /// that stops it, and its ESG standing RECOVERS — which is CI4's first exit
+    /// existing rather than being claimed in a comment.
+    ///
+    /// <para>Against the lifetime-cumulative record this test cannot pass, and
+    /// that is the point of it: a ratio of everything ever burned to everything
+    /// ever produced does not move for anything a player buys in year ten, so the
+    /// lender charged the worst spread to every company always, the gas plant
+    /// rewarded nothing, and an incident was subtracted from a number already
+    /// clamped at zero. One arithmetic defect wearing three faces
+    /// (findings 223, 228).</para>
+    ///
+    /// <para><c>HS12_the_loop_has_two_exits</c> claimed this row and proved only
+    /// that <c>Standing</c> is monotonic in its argument — true, and green for
+    /// the whole time the exit was unreachable. This is the half that was
+    /// missing: not that a clean record scores better, but that a company which
+    /// has been dirty can BECOME one.</para>
+    ///
+    /// <para>The recovery is SLOW on purpose — a decade of clean operation, not a
+    /// quarter — because the half-life is three years and the record is what a
+    /// lender has watched. Twenty-four clean months still measure 0.0000 here;
+    /// it is the tenth year that reaches 0.79. A standing that could be repaired
+    /// in a quarter would price behaviour nobody had to sustain.</para>
+    /// </summary>
+    [Fact]
+    [Trait("Speed", "Slow")]
+    public void R23V16_a_company_that_stops_flaring_recovers_its_standing()
+    {
+        (Engine engine, _) = Field();
+        engine.Commands.Submit(new InstallSeparatorCommand());
+
+        // A decade of burning everything the separator's gas leg produces.
+        Fixture.Run(engine, months: 120);
+
+        double ruined = engine.ReadModel!.EsgStanding;
+
+        Assert.Equal(0.0, ruined);
+
+        // The purchase the mechanic is supposed to reward.
+        engine.Commands.Submit(new InstallGasPlantCommand());
+        Fixture.Run(engine, months: 120);
+
+        double cleaned = engine.ReadModel!.EsgStanding;
+
+        Assert.True(cleaned > 0.5,
+            $"the standing recovered to {cleaned} after a clean decade; a record " +
+            "that cannot rise is a punishment rather than a decision (CI4)");
+    }
 }

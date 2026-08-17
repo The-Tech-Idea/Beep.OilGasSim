@@ -472,7 +472,7 @@ internal sealed class FieldProjection(
                 loop.CumulativeProduced),
             bank.Terms, bank.Covenant, bank.Drawn,
             loop.CumulativeFlared,
-            esg.Of(loop.CumulativeFlared, loop.CumulativeProduced),
+            esg.Of(),
             new WaterFloodView(
                 loop.VoidageReplacement, loop.ImportedThisTick, loop.InjectionHeadroom,
                 loop.SourFraction),

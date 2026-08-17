@@ -362,4 +362,108 @@ public class SourceRules
         Assert.True(checkedCount > 0, "PhysicalConstants is empty — the rule has nothing to guard");
         EngineCorpus.AssertNone(violations, "F-2 — every physical constant is cited");
     }
+
+    // ------------------------------------------------- the manifest, checked
+
+    [Fact] // Every contract a module RESOLVES is a contract it DECLARES. The
+           // manifest is what the composer orders modules by and what a refusal
+           // names, so a Require<T>() the manifest does not mention leaves the
+           // dependency graph without that edge — and the engine composes only
+           // because the list happened to be in a workable order. Nine of these
+           // were in the tree across four modules when this rule was written
+           // (finding 229), including one whose absence had already been
+           // diagnosed and commented twice in the same file.
+    public void The_manifest_declares_every_contract_a_module_resolves()
+    {
+        var violations = new List<string>();
+
+        foreach (EngineCorpus.SourceFile file in Sources)
+        {
+            foreach (ClassDeclarationSyntax type in
+                     EngineCorpus.NodesOf<ClassDeclarationSyntax>(file))
+            {
+                string declaration = type.ToString();
+
+                // A module is a type whose base list runs its manifest through
+                // Declare — which is the only way a manifest is built, so this
+                // cannot miss one by naming.
+                if (type.BaseList is null
+                    || !type.BaseList.ToString().Contains("Declare(", StringComparison.Ordinal))
+                    continue;
+
+                // PROVIDES counts as declared. A module that resolves its own
+                // provision takes no dependency on anything — there is no edge to
+                // record, and requiring it would be a self-loop the composer would
+                // rightly refuse.
+                var declared = new HashSet<string>(StringComparer.Ordinal);
+
+                foreach (string name in ListAfter(declaration, "provides:"))
+                    declared.Add(name);
+
+                foreach (string name in ListAfter(declaration, "requires:"))
+                    declared.Add(name);
+                foreach (GenericNameSyntax generic in
+                         EngineCorpus.NodesOf<GenericNameSyntax>(file))
+                {
+                    if (generic.Identifier.Text != "Require") continue;
+                    if (!type.Span.Contains(generic.Span)) continue;
+
+                    string resolved = Last(generic.TypeArgumentList.Arguments[0].ToString());
+
+                    if (!declared.Contains(resolved))
+                        violations.Add(
+                            $"{EngineCorpus.Where(file, generic)} {type.Identifier.Text} " +
+                            $"resolves {resolved} without declaring it in its manifest");
+                }
+            }
+        }
+
+        EngineCorpus.AssertNone(violations,
+            "every Require<T>() is declared in the module's manifest");
+    }
+
+    /// <summary>The types in one named manifest list, to its matching close
+    /// bracket — the lists nest, so depth is counted rather than the first
+    /// bracket taken.</summary>
+    private static IEnumerable<string> ListAfter(string declaration, string label)
+    {
+        int start = declaration.IndexOf(label, StringComparison.Ordinal);
+        if (start < 0) return [];
+
+        int open = declaration.IndexOf('[', start);
+        if (open < 0) return [];
+
+        var depth = 0;
+        for (int i = open; i < declaration.Length; i++)
+        {
+            if (declaration[i] == '[') depth++;
+            else if (declaration[i] == ']' && --depth == 0)
+                return Simple(declaration[open..i]);
+        }
+
+        return [];
+    }
+
+    /// <summary>Every <c>typeof(...)</c> in a fragment, by simple name — the
+    /// manifest qualifies some and not others, and the two spellings mean one
+    /// type.</summary>
+    private static IEnumerable<string> Simple(string fragment)
+    {
+        const string Marker = "typeof(";
+
+        for (int i = fragment.IndexOf(Marker, StringComparison.Ordinal); i >= 0;
+             i = fragment.IndexOf(Marker, i + 1, StringComparison.Ordinal))
+        {
+            int close = fragment.IndexOf(')', i);
+            if (close < 0) yield break;
+
+            yield return Last(fragment[(i + Marker.Length)..close]);
+        }
+    }
+
+    private static string Last(string name)
+    {
+        int dot = name.LastIndexOf('.');
+        return dot < 0 ? name.Trim() : name[(dot + 1)..].Trim();
+    }
 }

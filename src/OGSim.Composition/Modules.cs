@@ -154,7 +154,10 @@ internal sealed class WellsModule() : EngineModule(Declare(
 
     // The registry is required now, because there is finally something to
     // register: a completion is a source element and stage 5 must see it.
-    requires: [typeof(IFluidPropertyModel), typeof(IFlowElementRegistry)],
+    requires:
+    [
+        typeof(IFluidPropertyModel), typeof(IFlowElementRegistry),
+    ],
     ownsState: ["wells.completions"],
     stages: NoStagesYet))
 {
@@ -496,7 +499,11 @@ internal sealed class CompanyModule() : EngineModule(Declare(
     // is also what puts this module after the one that owns beliefs — the
     // composer refused outright until it was said, which is the ordering rule
     // doing its job rather than a coincidence of registration order.
-    requires: [typeof(IAuditTrail), typeof(IBeliefStore)],
+    requires:
+    [
+        typeof(IAuditTrail), typeof(IBeliefStore),
+        typeof(OGSim.Company.MarketState),   // finding 229
+    ],
     ownsState: ["company.ledger", "company.market"],
     stages: NoStagesYet))
 {
@@ -625,6 +632,13 @@ internal sealed class FieldModule() : EngineModule(Declare(
         typeof(WorldState),
         typeof(OGSim.Information.ProspectRisks),
         typeof(OGSim.Integrity.AssetIntegrity),
+
+        // finding 229 — required in code and not in the manifest until the
+        // scan found them.
+        typeof(IHydraulicModel),
+        typeof(IReserveBasedLending),
+        typeof(ReserveHistory),
+        typeof(ReservesBook),
     ],
     // Provided here because the field is where an asset is CREATED, and
     // registration is unconditional at creation (SDD-007 §6).
@@ -1308,7 +1322,15 @@ internal sealed class IntegrityModule() : EngineModule(Declare(
 internal sealed class HseModule() : EngineModule(Declare(
     "hse",
     provides: [typeof(EsgAssessment)],
-    requires: [typeof(IHazardModel), typeof(IAuditTrail)],
+    requires:
+    [
+        typeof(IHazardModel), typeof(IAuditTrail),
+
+        // finding 229. The threat stage draws from the hazard stream and reads
+        // the condition of the elements the barriers are defined over.
+        typeof(IRandomSource),
+        typeof(OGSim.Integrity.AssetIntegrity),
+    ],
 
     // The incident record decays, so it is a quantity recomputed from its own
     // past — state, on the same argument as the covenant clock (finding 210).
@@ -1357,8 +1379,31 @@ public sealed class EsgAssessment(
 {
     /// <summary>The 0–1 fraction a contract takes (SDD-012 §4b's R20d.16
     /// amendment: 0–100 is the presentation scale, 0–1 crosses the wire).</summary>
-    public double Of(Mass flared, SurfaceVolume produced) =>
-        standing.Standing([(FlaringWeight, 1.0 - record.Standing(flared, produced))])
+    /// <para>Takes NOTHING, since SDD-012 §4b's R23.1 amendment: the flaring the
+    /// record is scored on is the aged window <c>EsgStanding</c> owns, not a
+    /// lifetime tally a caller happens to hold. A parameter here would have been
+    /// a second place the answer could come from, and it was — the caller passed
+    /// cumulative totals and the standing could never fall (finding 228).</para>
+    /// <summary>
+    /// One month enters the record (SDD-012 §4b's R23.1 amendment).
+    ///
+    /// <para>Called from stage 8, where the month's flaring and production are
+    /// both final, and BEFORE <see cref="Of"/> is read there — a lender prices
+    /// against the month that has just happened. Stage 9 then ages the window,
+    /// so the declared order within a tick is OBSERVE then AGE.</para>
+    ///
+    /// <para>Here rather than on the stage that ages, because the loop that
+    /// accounts the flaring is owned by the field module and the standing by the
+    /// HSE module, and the field already requires this contract. Reaching the
+    /// other way would put a cycle in the manifest graph.</para>
+    /// </summary>
+    public void Observe(Mass flared, SurfaceVolume produced) =>
+        standing.Observe(flared, produced);
+
+    public double Of() =>
+        standing.Standing(
+            [(FlaringWeight,
+              1.0 - record.Standing(standing.WindowedFlared, standing.WindowedProduced))])
         / FlaringWeight;
 
     /// <summary>Flaring is the whole of the intensity term today, so it carries

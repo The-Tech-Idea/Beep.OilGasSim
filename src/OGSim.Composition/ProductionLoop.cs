@@ -660,6 +660,7 @@ internal sealed class ProductionLoop : IStateOwner
         _byCompartment.Clear();
         _chain.Clear();
         _importedThisTick = 0.0;
+        FlaredThisTick = new Mass(0.0);
         _stored = OGSim.Kernel.Composition.Zero(_materialCount);
         _tank.ForgetPromises();
         Array.Clear(_handled);
@@ -740,9 +741,10 @@ internal sealed class ProductionLoop : IStateOwner
                     converged.Sourced.Total.KgPerSecond * seconds
                     / PhysicalConstants.WaterDensityKgPerM3;
 
-            CumulativeFlared = new Mass(
-                CumulativeFlared.Kilograms
-                + (converged.Disposed.Flared.Total.KgPerSecond * seconds));
+            double burned = converged.Disposed.Flared.Total.KgPerSecond * seconds;
+
+            CumulativeFlared = new Mass(CumulativeFlared.Kilograms + burned);
+            FlaredThisTick = new Mass(FlaredThisTick.Kilograms + burned);
 
             double throughput =
                 converged.FuelConsumed.Total.KgPerSecond
@@ -1257,6 +1259,17 @@ internal sealed class ProductionLoop : IStateOwner
 
     /// <summary>Everything this company has ever flared (SDD-012 §4).</summary>
     public Mass CumulativeFlared { get; private set; }
+
+    /// <summary>
+    /// What this month burned — the ESG record's observation (SDD-012 §4b's
+    /// R23.1 amendment), read at stage 9 after the solve has closed.
+    ///
+    /// <para>Beside <see cref="CumulativeFlared"/> and not instead of it: the
+    /// tally is what a player is shown and the month is what the record ages,
+    /// and they are two different questions about one accounted quantity rather
+    /// than two accounts of it (law L5).</para>
+    /// </summary>
+    public Mass FlaredThisTick { get; private set; }
 
     /// <summary>What left for market this tick. What the tank could not hold
     /// stays in it, and what it could not take never left the field.</summary>
@@ -2170,6 +2183,12 @@ internal sealed class EconomicsStage(
     public void Execute(TickContext context)
     {
         ArgumentNullException.ThrowIfNull(context);
+
+        // THE MONTH ENTERS THE ESG RECORD FIRST (SDD-012 §4b's R23.1 amendment),
+        // because the rate charged below is priced against a record that includes
+        // the month being charged for. Stage 9 ages the window afterwards.
+        esg.Observe(loop.FlaredThisTick, loop.ProducedThisTick);
+
         // The market moves before anything is sold, so every barrel in a month
         // crosses at one price (SDD-009 §6).
         loop.AdvancePrices();
@@ -2183,7 +2202,7 @@ internal sealed class EconomicsStage(
         // borrows at, for years, which is design 08 §5's slowest loop.
         bank.Settle(
             context.Tick,
-            esg.Of(loop.CumulativeFlared, loop.CumulativeProduced));
+            esg.Of());
 
         // AND WHERE THE COMPANY STOOD THIS MONTH, so a year from now there is
         // something to measure replacement against (SDD-009 §4). Recorded AFTER
