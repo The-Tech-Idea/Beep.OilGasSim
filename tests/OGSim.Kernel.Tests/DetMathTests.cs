@@ -302,19 +302,23 @@ public class FrictionTests
     /// dump showed the composition suite inside this method and each step costs a
     /// software logarithm (finding 217's diagnosis).
     ///
-    /// <para>This does NOT change the count. The step count is pinned for
-    /// determinism (SDD-003 §6.2) and reducing it moves results in the last
-    /// bits, which is an SDD change and a re-pinning. What this records is the
-    /// EVIDENCE such a change would need: the iteration is converged to within a
-    /// double's precision long before it stops.</para>
+    /// <para>Compared with EXACT equality, not a tolerance, which is what made
+    /// the reduction free: past the settling step the iteration is at a fixed
+    /// point in doubles, so further steps return the same bits. Swept across the
+    /// whole domain — Re from just above laminar to 1e8, roughness from smooth
+    /// to 0.05 — the worst case settles at step FIVE. SDD-003 §6.2 pins ten,
+    /// double the measured worst, and this test is the evidence for it
+    /// (R22.14).</para>
     /// </summary>
     [Fact]
     public void The_iteration_is_converged_well_before_it_stops()
     {
-        (double Re, double Roughness)[] cases =
-        [
-            (5.0e3, 0.0), (1.0e5, 4.6e-5), (1.0e6, 1.5e-4), (5.0e7, 1.0e-2),
-        ];
+        var sweep = new List<(double Re, double Roughness)>();
+        for (double re = 2301.0; re <= 1.0e8; re *= 1.7)
+            foreach (double rough in new[] { 0.0, 1.0e-6, 4.6e-5, 1.5e-4, 1.0e-3, 1.0e-2, 5.0e-2 })
+                sweep.Add((re, rough));
+
+        (double Re, double Roughness)[] cases = [.. sweep];
 
         var worst = 0;
 
@@ -336,7 +340,7 @@ public class FrictionTests
 
                 x -= g / dg;
 
-                if (Math.Abs((1.0 / (x * x)) - converged) < 1.0e-15) { settled = step; break; }
+                if ((1.0 / (x * x)) == converged) { settled = step; break; }
             }
 
             Assert.True(settled > 0,

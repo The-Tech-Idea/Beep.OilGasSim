@@ -1272,8 +1272,28 @@ Pwf_required(q) = Pwh + ΔP_hydro + ΔP_friction
                                        and bottomhole estimates, ONE re-evaluation
                                        (fixed two-pass, not iterated — pinned)
 ΔP_friction = f · (MD/D) · ρ_mix · v² / 2
-              f: Colebrook-White, solved by EXACTLY 20 Newton steps from
-              f₀ = 0.02 (deterministic; converged long before 20)
+              f: Colebrook-White, solved by EXACTLY 10 Newton steps from
+              f₀ = 0.02 (deterministic; see the R22.14 amendment)
+> **R22.14 amendment: twenty Newton steps become TEN, and the change is
+> BIT-IDENTICAL rather than a re-balance.** This line already said "converged
+> long before 20"; nobody had measured how long. Swept across the domain — Re
+> from just above the laminar limit to 1e8, roughness from smooth to 0.05, some
+> 175 cases — the iteration reaches a FIXED POINT IN DOUBLES at worst by step
+> five, compared with exact equality rather than a tolerance. Past that, every
+> further step returns the same bits, so steps six to twenty were recomputing an
+> answer that could not change.
+>
+> **Ten is double the measured worst**, which is margin for inputs outside a
+> swept range rather than a guess. The pinned-count property §3.1 and this
+> section both rest on is untouched: the count is still FIXED and still
+> deterministic — it is simply the right fixed number.
+>
+> **Why it was worth doing at all.** A live dump of the composition suite found
+> the solver inside this function and `DetMath.Ln`: it runs per well, per solver
+> iteration, per segment, per tick, and each step costs a software logarithm.
+> Halving the steps halves that. `FrictionTests` in the kernel suite is the
+> evidence and fails if the settling step ever exceeds eight.
+
 Lift hooks (R7): ESP adds ΔP_pump(q) from its TIER's catalogue curve —
   piecewise-linear head-vs-rate at reference density 1000 kg/m³, scaled by
   ρ_mix/ρ_ref; power curve likewise per tier; gas tolerance and temperature

@@ -391,7 +391,7 @@ public static class DetMath
 /// </summary>
 public static class Friction
 {
-    private const int NewtonSteps = 20;
+    private const int NewtonSteps = 10;   // SDD-003 §6.2's R22.14 amendment
     private const double Seed = 0.02;
 
     // COMPUTED ONCE, and it is a measurement that put them here. A live dump of
