@@ -14,7 +14,7 @@ code and is still authoritative. **The engine now runs.** Seventeen projects und
 `src/` compose into a playable field — a world is generated, prospects are
 drilled, a chain of surface equipment moves the fluid, a market moves under it, a
 bank lends against reserves, equipment wears out and breaks, and two headless
-clients play the whole arc through `ReadModel` + `Commands` alone. 1022 tests
+clients play the whole arc through `ReadModel` + `Commands` alone. 1027 tests
 across seventeen suites, 0 warnings.
 
 **Treat every count in this file as stale until you have checked it.** Three
@@ -77,7 +77,7 @@ quietly stops being evidence, which is the same failure in a new place.
 > **Until then the REDUCED GATE is what can be trusted**, and it does complete:
 >
 > ```bash
-> dotnet test OGSim.slnx --filter "Speed!=Slow"     # 989 of 1023, exit 0, ~3 min
+> dotnet test OGSim.slnx --filter "Speed!=Slow"     # 993 of 1027, exit 0, ~3 min
 > ```
 >
 > Every suite, every test except the 34 forty-year runs. **It is not a
