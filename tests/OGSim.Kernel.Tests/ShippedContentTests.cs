@@ -227,10 +227,10 @@ public class ShippedContentTests
     /// TRANSCRIPTION and a transcription's only real risk is a digit.
     ///
     /// <para>Pinned against the literals rather than against
-    /// <c>Defaults.SeparatorLadder</c>: comparing content to the thing it
-    /// replaces passes trivially once the ladder is built FROM the content, and
-    /// then stops being evidence about anything. These are the values as they
-    /// stood before the move, written out here so that a later rebalance is a
+    /// the <c>Defaults.SeparatorLadder</c> it replaced (since deleted): comparing
+    /// content to the thing it replaces passes trivially once the ladder is built
+    /// FROM the content, and then stops being evidence about anything. These are
+    /// the values as they stood before the move, written out here so a rebalance is a
     /// visible edit to this test as well as to the sheet.</para>
     ///
     /// <para><b>No verification id in the name, deliberately.</b> R20c has no

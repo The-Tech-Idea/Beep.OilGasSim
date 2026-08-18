@@ -214,7 +214,7 @@ internal sealed class FlowModule() : EngineModule(Declare(
 
 // ---------------------------------------------------------------- facilities
 
-internal sealed class FacilitiesModule() : EngineModule(Declare(
+internal sealed class FacilitiesModule(FacilityLadders ladders) : EngineModule(Declare(
     "facilities",
 
     // The chain, as the elements every barrel crosses between the wellhead and
@@ -222,7 +222,16 @@ internal sealed class FacilitiesModule() : EngineModule(Declare(
     // two things above need to name them: a well has to be tied into the header,
     // and stage 5 has to know which element METERS — and asking an element what
     // it is would be the type switch design 04 §1 exists to prevent.
-    provides: [typeof(ISeparationModel), typeof(IHydraulicModel), typeof(SurfaceChain)],
+    provides:
+    [
+        typeof(ISeparationModel), typeof(IHydraulicModel), typeof(SurfaceChain),
+
+        // What a company can buy, read from content (SDD-004 §6's R20c.9
+        // amendment). Provided rather than reached for as a static: a static
+        // would have to load from somewhere, and law L2 gives no dependency a
+        // default.
+        typeof(FacilityLadders),
+    ],
     requires: [typeof(IFluidPropertyModel), typeof(IFlowElementRegistry)],
     ownsState: ["facilities.units"],
     stages: NoStagesYet))
@@ -240,10 +249,10 @@ internal sealed class FacilitiesModule() : EngineModule(Declare(
         IFlowElementRegistry network = composition.Require<IFlowElementRegistry>();
 
         var manifold = new OGSim.Facilities.Manifold(
-            Defaults.TheManifold, Defaults.ManifoldTier, Defaults.MaterialCount);
+            Defaults.TheManifold, ladders.Manifold[0], Defaults.MaterialCount);
 
         var separator = new OGSim.Facilities.Separator(
-            Defaults.TheSeparator, Defaults.SeparatorTier, separation,
+            Defaults.TheSeparator, ladders.Separator[0], separation,
             composition.Require<IFluidPropertyModel>(), Defaults.MaterialCount);
 
         var custody = new OGSim.Facilities.CustodyTransferPoint(
@@ -257,11 +266,11 @@ internal sealed class FacilitiesModule() : EngineModule(Declare(
         // would vanish from the tick's conservation terms silently, and a flare
         // accounts for it — combusted and unburnt, both reported as Disposed.
         var treater = new OGSim.Facilities.Treater(
-            Defaults.TheTreater, Defaults.TreaterLadder[0],
+            Defaults.TheTreater, ladders.Treater[0],
             Defaults.WaterOrdinal, Defaults.MaterialCount);
 
         var gasPlant = new OGSim.Facilities.GasCapture(
-            Defaults.TheGasPlant, Defaults.GasPlantLadder[0], Defaults.MaterialCount);
+            Defaults.TheGasPlant, ladders.GasPlant[0], Defaults.MaterialCount);
 
         var flare = new OGSim.Facilities.Flare(
             Defaults.TheFlare, Defaults.FlareCapacity, Defaults.FlareCombustionEfficiency,
@@ -325,7 +334,7 @@ internal sealed class FacilitiesModule() : EngineModule(Declare(
         // field produce above its export rate for a while instead of being
         // throttled the moment it does.
         var tank = new OGSim.Facilities.Tank(
-            Defaults.TheTank, Defaults.TankTier, Defaults.MaterialCount,
+            Defaults.TheTank, ladders.Tank[0], Defaults.MaterialCount,
             MaterialInventory.Empty(Defaults.MaterialCount),
 
             // Empty tanks hold nobody's oil, and an allocation must name at
@@ -398,7 +407,9 @@ internal sealed class FacilitiesModule() : EngineModule(Declare(
         // tier and facilities registered no owner, so a reload returned the
         // equipment a company started with and kept the money it had spent
         // (finding 197).
-        composition.Own(new FacilitiesState(chain));
+        composition.Own(new FacilitiesState(chain, ladders));
+
+        composition.Provide(ladders);
         composition.Provide(chain);
     }
 }
@@ -592,7 +603,7 @@ internal sealed class CompanyModule() : EngineModule(Declare(
 /// pay are three stages in design 03 §6's order rather than one function,
 /// because a failed solve must commit nothing.</para>
 /// </summary>
-internal sealed class FieldModule() : EngineModule(Declare(
+internal sealed class FieldModule(FacilityLadders ladders) : EngineModule(Declare(
     "field",
     provides:
     [
@@ -746,7 +757,7 @@ internal sealed class FieldModule() : EngineModule(Declare(
         // own — a company with two export lines has two fields, and that is
         // R20d.8's world rather than this composition's.
         var terminal = new OGSim.Facilities.ExportTerminal(
-            new EntityRef(EntityKind.Facility, 1), Defaults.ExportLadder[0]);
+            new EntityRef(EntityKind.Facility, 1), ladders.Export[0]);
 
         var loop = new ProductionLoop(
             composition.Require<OGSim.Subsurface.SubsurfaceState>(),
@@ -805,7 +816,7 @@ internal sealed class FieldModule() : EngineModule(Declare(
         // Owned here because this module composes the terminal; the five rungs
         // on the surface chain are `facilities.units`, and one fact has one
         // owner (SDD-006 §8b).
-        composition.Own(new FacilitiesState.ExportState(terminal));
+        composition.Own(new FacilitiesState.ExportState(terminal, ladders));
 
         // AND THE FACILITY'S OWN STANDING. The base is re-derived every settle,
         // but the covenant is a clock that reads its own previous value, so a
@@ -905,19 +916,19 @@ internal sealed class FieldModule() : EngineModule(Declare(
             // until the chain was wired: an installed vessel would have been
             // paid for and bypassed (finding 153).
             new InstallSeparatorActivity(
-                Defaults.InstallSeparatorTerms, chain.Separator, Defaults.SeparatorLadder),
+                Defaults.InstallSeparatorTerms, chain.Separator, ladders.Separator),
 
             // THE FIELD'S LAST CEILING (R20d.8). Debottleneck everything upstream
             // and a field still sells only what the export line takes — which is
             // why, until this, ten times the oil earned the same money.
             new ExpandExportActivity(
-                Defaults.ExpandExportTerms, terminal, Defaults.ExportLadder),
+                Defaults.ExpandExportTerms, terminal, ladders.Export),
 
             // THE ANSWER TO THE FLARING PENALTY (finding 172). Without it a
             // company charged for flaring could only respond by producing less
             // oil, which is a tax rather than a decision.
             new InstallGasPlantActivity(
-                Defaults.InstallGasPlantTerms, chain.GasPlant, Defaults.GasPlantLadder),
+                Defaults.InstallGasPlantTerms, chain.GasPlant, ladders.GasPlant),
 
             // THE ANSWER TO A BROKEN ANYTHING (SDD-012 §3). Stage 4 now takes
             // equipment out of the network and the route law shuts in whatever
@@ -956,19 +967,19 @@ internal sealed class FieldModule() : EngineModule(Declare(
             // has to be installed first" has been the reason a well is turned
             // away since R12b, and nothing could install one.
             new InstallManifoldActivity(
-                Defaults.InstallManifoldTerms, chain.Manifold, Defaults.ManifoldLadder),
+                Defaults.InstallManifoldTerms, chain.Manifold, ladders.Manifold),
 
             // THE THIRD ANSWER TO A FULL TANK. Stage 6 offers "more storage,
             // more export and less production"; the other two shipped and this
             // did not.
             new InstallTankActivity(
-                Defaults.InstallTankTerms, chain.Tank, Defaults.TankLadder),
+                Defaults.InstallTankTerms, chain.Tank, ladders.Tank),
 
             // THE ANSWER TO WET OIL (finding 173). A field that waters out sells
             // a stream the meter turns away, and without this that is a tax on
             // getting old rather than a decision.
             new InstallTreaterActivity(
-                Defaults.InstallTreaterTerms, chain.Treater, Defaults.TreaterLadder),
+                Defaults.InstallTreaterTerms, chain.Treater, ladders.Treater),
 
             // The ENDING (R12b.10). Finding 153's other reason is gone too: opex
             // scales with the liquid lifted, so a watered-out well genuinely

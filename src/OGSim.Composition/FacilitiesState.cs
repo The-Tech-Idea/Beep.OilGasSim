@@ -23,7 +23,8 @@ using OGSim.Kernel;
 
 namespace OGSim.Composition;
 
-internal sealed class FacilitiesState(SurfaceChain chain) : IStateOwner
+internal sealed class FacilitiesState(SurfaceChain chain, FacilityLadders ladders)
+    : IStateOwner
 {
     public StateKey Key { get; } = new("facilities.units");
 
@@ -78,23 +79,23 @@ internal sealed class FacilitiesState(SurfaceChain chain) : IStateOwner
         ArgumentNullException.ThrowIfNull(reader);
 
         chain.Manifold.Fit(
-            Rung(Defaults.ManifoldLadder, reader.ReadString("manifold-tier"), "manifold",
+            Rung(ladders.Manifold, reader.ReadString("manifold-tier"), "manifold",
                  tier => tier.Id));
 
         chain.Separator.Fit(
-            Rung(Defaults.SeparatorLadder, reader.ReadString("separator-tier"), "separator",
+            Rung(ladders.Separator, reader.ReadString("separator-tier"), "separator",
                  tier => tier.Id));
 
         chain.Tank.Fit(
-            Rung(Defaults.TankLadder, reader.ReadString("tank-tier"), "tank",
+            Rung(ladders.Tank, reader.ReadString("tank-tier"), "tank",
                  tier => tier.Id));
 
         chain.GasPlant.Fit(
-            Rung(Defaults.GasPlantLadder, reader.ReadString("gas-plant-tier"), "gas plant",
+            Rung(ladders.GasPlant, reader.ReadString("gas-plant-tier"), "gas plant",
                  tier => tier.Id));
 
         chain.Treater.Fit(
-            Rung(Defaults.TreaterLadder, reader.ReadString("treater-tier"), "treater",
+            Rung(ladders.Treater, reader.ReadString("treater-tier"), "treater",
                  tier => tier.Id));
 
         chain.Flowline.CommitLinefill(Inventory(reader, "linefill"));
@@ -167,7 +168,14 @@ internal sealed class FacilitiesState(SurfaceChain chain) : IStateOwner
     /// in the catalogue and shipping it unsaved while the restructure is designed
     /// would be the wrong order.</para>
     /// </summary>
-    internal sealed class ExportState(OGSim.Facilities.ExportTerminal terminal) : IStateOwner
+    /// <summary>
+    /// The export terminal's own owner, and it carries its OWN ladder reference
+    /// rather than the outer class's: a nested type is not an inner one here, so
+    /// there is no enclosing instance to read — and threading it explicitly is
+    /// what makes the dependency visible at the one place that constructs it.
+    /// </summary>
+    internal sealed class ExportState(
+        OGSim.Facilities.ExportTerminal terminal, FacilityLadders ladders) : IStateOwner
     {
         public StateKey Key { get; } = new("field.export");
 
@@ -188,7 +196,7 @@ internal sealed class FacilitiesState(SurfaceChain chain) : IStateOwner
             ArgumentNullException.ThrowIfNull(reader);
 
             terminal.Fit(
-                Rung(Defaults.ExportLadder, reader.ReadString("tier"), "export terminal",
+                Rung(ladders.Export, reader.ReadString("tier"), "export terminal",
                      tier => tier.Id));
         }
     }

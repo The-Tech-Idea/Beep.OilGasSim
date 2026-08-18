@@ -77,14 +77,72 @@ internal static class Fixture
     /// </summary>
     public static EngineSettings Settings(
         FaultHandling handling = FaultHandling.Strict, string profile = "simulation",
-        ulong seed = 20260806UL) =>
+        ulong seed = 20260806UL, IReadOnlyList<IContentSource>? content = null) =>
         new(new GameDate(1965, 1),
             WorldSeed: seed,
             new AuditRetention(DetailWindowTicks: 12),
             new RecordingSink(),
             LogLevel.Info,
             handling,
-            new ContentId(profile));
+            new ContentId(profile),
+            content ?? [ShippedContent()]);
+
+    /// <summary>
+    /// The repository's own <c>content/</c>, read from disk — which is what a
+    /// HOST does (SDD-004 §7). The engine never opens a file; a source hands it
+    /// text it has already read, so these tests exercise the same path a shipped
+    /// game takes rather than a fixture that hands over hand-built definitions.
+    ///
+    /// <para>Anchored on this file's compile-time path so the suite finds the
+    /// directory from any working directory or runner — the same trick
+    /// <c>EngineCorpus</c> and <c>ShippedContentTests</c> use.</para>
+    /// </summary>
+    public static IContentSource ShippedContent(
+        [System.Runtime.CompilerServices.CallerFilePath] string thisFile = "")
+    {
+        DirectoryInfo here = new FileInfo(thisFile).Directory!;   // tests/OGSim.Composition.Tests
+        string root = Path.Combine(here.Parent!.Parent!.FullName, "content", "facilities");
+
+        var files = new List<ContentFile>();
+
+        foreach (string path in Directory.EnumerateFiles(root, "*.json")
+                                         .OrderBy(p => p, StringComparer.Ordinal))
+            files.Add(new ContentFile("facilities/" + Path.GetFileName(path),
+                                      File.ReadAllText(path)));
+
+        return new DirectorySource(files);
+    }
+
+    /// <summary>The shipped ladders, for the two tests that build the module
+    /// list themselves rather than going through <c>EngineBuilder.Build</c>.</summary>
+    public static FacilityLadders Ladders()
+    {
+        var loader = new ContentLoader(
+            [
+                new SeparatorContentKind(), new TankContentKind(), new TreaterContentKind(),
+                new GasPlantContentKind(), new ExportLineContentKind(), new ManifoldContentKind(),
+            ],
+            new PluginRegistry());
+
+        ContentLoadResult result = loader.LoadAll([ShippedContent()]);
+
+        if (result is ContentFailures failed)
+            throw new InvalidOperationException(
+                "the shipped facility content does not load: " + string.Join(
+                    "; ", failed.Failures.Select(f => $"{f.File} {f.JsonPath} {f.Message}")));
+
+        return FacilityLadders.From(((ContentLoaded)result).Catalogues);
+    }
+
+    private sealed class DirectorySource(IReadOnlyList<ContentFile> files) : IContentSource
+    {
+        public string Name => "base";
+
+        /// <summary>Base content is 0; a mod declares higher (SDD-004 §7).</summary>
+        public int DeclaredOrder => 0;
+
+        public IReadOnlyList<ContentFile> Files => files;
+    }
 
     public static ModuleManifest Manifest(
         string name,
@@ -134,7 +192,7 @@ public sealed class ShippedSetTests
 
         IReadOnlyList<IModule> modules = EngineBuilder.ShippedModules(
             audit, new SimulationClock(new GameDate(1965, 1)), new RandomSource(1UL),
-            Defaults.Simulation);
+            Defaults.Simulation, Fixture.Ladders());
 
         var provided = new HashSet<Type>();
         foreach (IModule module in modules)
@@ -161,7 +219,7 @@ public sealed class ShippedSetTests
 
         var reversed = new List<IModule>(EngineBuilder.ShippedModules(
             audit, new SimulationClock(new GameDate(1965, 1)), new RandomSource(1UL),
-            Defaults.Simulation));
+            Defaults.Simulation, Fixture.Ladders()));
         reversed.Reverse();
 
         Built forward = Assert.IsType<Built>(EngineBuilder.Build(Fixture.Settings()));
@@ -532,5 +590,116 @@ public sealed class StageWiringTests
         public StageId Id => id;
 
         public void Execute(TickContext context) => ran.Add(name);
+    }
+}
+
+/// <summary>
+/// R20c.9.2 — the eleventh non-negotiable, as a run rather than an assertion in
+/// a design document: <b>rebalancing is a content edit.</b>
+/// </summary>
+public sealed class FacilityContentTests
+{
+    /// <summary>
+    /// The shipped sheets with one file's text replaced.
+    ///
+    /// <para>All fifteen, not just the edited one: a ladder with a missing kind
+    /// is a refusal, so handing over one sheet would test that refusal rather
+    /// than the edit. The point is a rebalance of a REAL game.</para>
+    /// </summary>
+    private static IContentSource Edited(string id, string find, string replace)
+    {
+        var files = new List<ContentFile>();
+
+        foreach (ContentFile file in Fixture.ShippedContent().Files)
+            files.Add(file.RelativePath.EndsWith(id + ".json", StringComparison.Ordinal)
+                ? file with { Json = Replaced(file.Json, find, replace) }
+                : file);
+
+        return new Many(files);
+    }
+
+    private static string Replaced(string json, string find, string replace)
+    {
+        Assert.Contains(find, json, StringComparison.Ordinal);
+        return json.Replace(find, replace, StringComparison.Ordinal);
+    }
+
+    private sealed class Many(IReadOnlyList<ContentFile> files) : IContentSource
+    {
+        public string Name => "base";
+        public int DeclaredOrder => 0;
+        public IReadOnlyList<ContentFile> Files => files;
+    }
+
+    /// <summary>
+    /// <b>A number moves in a JSON file and the composed engine is different</b> —
+    /// no engine assembly edited, no rebuild of anything but the test.
+    ///
+    /// <para>This is what R20c.9 was for. Until the join, the six ladders were C#
+    /// records in composition's <c>Defaults</c>, so design 03's eleventh
+    /// non-negotiable was false of the only equipment the game shipped: moving a
+    /// separator's capacity meant editing an engine assembly. The sheets existed
+    /// from R20c.9.1 and nothing read them, which is the same *built and joined to
+    /// nothing* shape as findings 164–177 — so this test, not the sheets, is what
+    /// closes the task.</para>
+    ///
+    /// <para>Asserted on the LIQUID leg because that is the one this chain jams
+    /// on: <c>R20dV1</c> proves the shipped vessel binds on liquid capacity, so
+    /// doubling it in content and reading it back through the engine's own
+    /// contract is a change a player would feel.</para>
+    /// </summary>
+    [Fact]
+    public void A_content_edit_changes_the_engine_with_no_code_edit()
+    {
+        Built shipped = Assert.IsType<Built>(EngineBuilder.Build(Fixture.Settings()));
+
+        Assert.Equal(
+            12.0,
+            shipped.Engine.Provided.Resolve<FacilityLadders>().Separator[0].LiquidCapacity.KgPerSecond,
+            precision: 9);
+
+        Built rebalanced = Assert.IsType<Built>(EngineBuilder.Build(Fixture.Settings(
+            content: [Edited("separator-3phase-e1", "\"liquidCapacity\": \"12 kg/s\"",
+                                                   "\"liquidCapacity\": \"24 kg/s\"")])));
+
+        Assert.Equal(
+            24.0,
+            rebalanced.Engine.Provided.Resolve<FacilityLadders>().Separator[0].LiquidCapacity.KgPerSecond,
+            precision: 9);
+    }
+
+    /// <summary>
+    /// Content that will not load is a REFUSAL to start, naming the file and the
+    /// stage (design 10 §3's G2). Not a warning and not a default vessel: a game
+    /// that cannot read its own equipment has nothing to start.
+    /// </summary>
+    [Fact]
+    public void Content_that_will_not_load_refuses_the_engine()
+    {
+        BuildResult result = EngineBuilder.Build(Fixture.Settings(
+            content: [Edited("separator-3phase-e1", "\"gasCapacity\": \"50 kg/s\"",
+                                                   "\"gasCapacity\": \"50 furlongs\"")]));
+
+        LoadFailure failure = Assert.Single(
+            Assert.IsType<BuildRefusedByContent>(result).Failures);
+
+        Assert.Contains("separator-3phase-e1", failure.File, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// And a ladder with a hole is refused too — this one at COMPOSITION rather
+    /// than at load, because a gap is a statement about a set and the loader's
+    /// consistency pass sees one definition at a time.
+    /// </summary>
+    [Fact]
+    public void A_ladder_with_a_missing_rung_is_refused()
+    {
+        ContentFault fault = Assert.Throws<ContentFault>(() => EngineBuilder.Build(
+            Fixture.Settings(content:
+            [
+                Edited("gas-plant-e1", "\"rung\": 1", "\"rung\": 3"),
+            ])));
+
+        Assert.Contains("gas-plant", fault.Message, StringComparison.Ordinal);
     }
 }

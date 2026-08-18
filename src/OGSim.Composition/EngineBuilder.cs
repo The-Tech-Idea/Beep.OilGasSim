@@ -160,22 +160,6 @@ internal static class Defaults
             (Economics.OilPricePerTonne.Cents - Economics.LiftingCostPerTonne.Cents)
             * SurfaceOilDensity.KgPerCubicMetre / 1000.0);
 
-    /// <summary>
-    /// The gas plant a company can buy (SDD-006 §3b, finding 172).
-    ///
-    /// <para>The first rung is NOTHING — a field ships with no gas handling and
-    /// flares everything, which is how a development actually starts and what
-    /// makes the first plant a decision rather than a formality. The rungs above
-    /// take 3 and 8 kg/s, against a shipped field's roughly 2 kg/s of associated
-    /// gas at plateau: enough that one plant covers a field and a second is
-    /// needed only by a company that has grown past it.</para>
-    /// </summary>
-    public static IReadOnlyList<Facilities.GasPlantTier> GasPlantLadder { get; } =
-    [
-        new(new ContentId("gas-plant-none"), new MassRate(0.0)),
-        new(new ContentId("gas-plant-e1"), new MassRate(3.0)),
-        new(new ContentId("gas-plant-e2"), new MassRate(8.0)),
-    ];
 
     /// <summary>
     /// What a tonne of sales gas fetches. Well below oil on an energy basis,
@@ -758,25 +742,6 @@ internal static class Defaults
     /// </summary>
     public const ulong FirstGatheringLine = 2_000_000UL;
 
-    /// <summary>
-    /// Storage at the terminal (SDD-006 §5, catalogue C12), 150,000 tonnes.
-    ///
-    /// <para><b>Sized against a MONTH, because the ullage constraint is a
-    /// rate.</b> A tank offers "remaining capacity ÷ the segment's seconds" as
-    /// the mass rate it can still accept, so a tank holding less than a tick's
-    /// throughput binds on the first tick whatever else is happening — which is
-    /// storage behaving like a restriction rather than a buffer. This is several
-    /// months of an E1 field, so it fills only when production genuinely runs
-    /// ahead of export.</para>
-    ///
-    /// <para>The boil-off is why storage is not free: oil sitting in a tank
-    /// evaporates slowly, so a field that stores rather than exports loses a
-    /// little of what it stored.</para>
-    /// </summary>
-    public static Facilities.TankTier TankTier { get; } = new(
-        new ContentId("tank-terminal-e1"),
-        Capacity: new Mass(150.0e6),
-        VapourLossRatePerTick: 0.001);
 
     /// <summary>
     /// What the export line contracts to take, kg/s.
@@ -791,21 +756,6 @@ internal static class Defaults
     /// </summary>
     public static MassRate ExportOfftake { get; } = new(20.0);
 
-    /// <summary>
-    /// The export ladder (SDD-006 §7b). The shipped line is what a company
-    /// signs for before it knows what it has found; the rungs above are what a
-    /// field earns the right to build.
-    ///
-    /// <para>DOUBLING, not creeping, because the decision has to be big enough
-    /// to be wrong. A rung that added a tenth would be an obvious yes at every
-    /// field size and therefore not a decision at all.</para>
-    /// </summary>
-    public static IReadOnlyList<Facilities.ExportTier> ExportLadder { get; } =
-    [
-        new(new ContentId("export-line-e1"), ExportOfftake),
-        new(new ContentId("export-line-e2"), new MassRate(40.0)),
-        new(new ContentId("export-line-e3"), new MassRate(80.0)),
-    ];
 
     /// <summary>
     /// What a bigger line costs and how long it takes. DEARER AND SLOWER than a
@@ -890,89 +840,8 @@ internal static class Defaults
     /// flaring an emissions problem rather than merely a waste one.</summary>
     public const double FlareCombustionEfficiency = 0.98;
 
-    /// <summary>
-    /// The field's header. Eight slots — a fixed manifold from catalogue C06's
-    /// bottom rung, which is a real limit on how many wells this field can carry
-    /// and the reason a ninth well is refused before it is paid for rather than
-    /// after.
-    /// </summary>
-    public static Facilities.ManifoldTier ManifoldTier { get; } =
-        new(new ContentId("manifold-fixed-8"), Slots: 8);
 
-    /// <summary>
-    /// The field's one vessel. 15 bar is the separator inlet pressure the loop
-    /// used to hard-code as a wellhead backpressure — the same number, now held
-    /// by the element that imposes it rather than by the stage that read it.
-    ///
-    /// <para><b>The liquid capacity BINDS, and that is the point.</b> A well on
-    /// this field delivers about 10 kg/s of liquid once it makes water as well
-    /// as oil, so the first vessel carries one well and is over capacity on the
-    /// second — the player sees the
-    /// separator refusing production on the read model and has to do something
-    /// about it. A vessel sized never to bind would make every downstream
-    /// mechanic — the throttle, the deferral attribution, the bottleneck report —
-    /// machinery that runs and is never felt.</para>
-    ///
-    /// <para>Which is the whole shape of an operations game: the constraint is
-    /// visible, it is nameable, and it is bought past. R20.4 owns where exactly
-    /// the number lands; that it binds at all is a design decision, not a balance
-    /// one.</para>
-    ///
-    /// <para>The efficiencies are perfect because there is one material and
-    /// nothing to carry over — a number below 1.0 would describe a separation
-    /// this content cannot express.</para>
-    /// </summary>
-    public static Facilities.SeparatorTier SeparatorTier { get; } = new(
-        new ContentId("separator-3phase-e1"),
-        GasCapacity: new MassRate(50.0),
-        LiquidCapacity: new MassRate(12.0),
-        Volume: new ReservoirVolume(30.0),
-        RatedEfficiency: new SeparationEfficiency(
-            LiquidFromGas: 0.0, GasFromLiquid: 0.0, WaterFromLiquid: 0.0,
 
-            // SOLVED AGAINST THE CHAIN, at the third attempt, and the first two
-            // are why this comment is long. BS&W = c·W/(O + c·W), so c is the
-            // fraction of produced water the vessel leaves in the oil leg.
-            //
-            // 0.005 came from a plausible sentence and produced a treater that
-            // removed 0.0003 kg/s (finding 178). 0.03 was solved from a W/O of
-            // 0.203 — a number that was never what this chain delivers: METERED
-            // at the treater's own inlet over forty years on six wells, the
-            // developed field reaches W/O = 0.127, so BS&W peaked at 0.379%
-            // against a 0.5% limit and the gate could not fire in 460 flowing
-            // months (finding 183). A mechanism composed, connected, priced and
-            // unreachable — twice.
-            //
-            // 0.07 is measured rather than solved backwards: BS&W crosses the
-            // limit in year 34 and reaches 0.88% by year forty, so a field sells
-            // on spec for two thirds of its life and cannot sell at all in the
-            // last third without a treater. It is also the more honest number on
-            // its own terms — crude off a three-phase separator carries 5–15%
-            // water before dehydration, and 0.03 sat below that band.
-            WaterIntoLiquid: 0.07),
-        DesignRate: new ReservoirRate(0.05),
-        OperatingPressure: Pressure.FromBar(15.0));
-
-    /// <summary>
-    /// The vessel ladder (catalogue C07), in the order a field climbs it.
-    ///
-    /// <para>DECLARED ORDER, not sorted by capacity: the rungs are a progression
-    /// a designer authored, and a bigger-is-later rule would silently reorder a
-    /// ladder whose rungs trade throughput against something else. The first rung
-    /// is what a field is built with.</para>
-    /// </summary>
-    public static IReadOnlyList<Facilities.SeparatorTier> SeparatorLadder { get; } =
-    [
-        SeparatorTier,
-        SeparatorTier with
-        {
-            Id = new ContentId("separator-3phase-e2"),
-            GasCapacity = new MassRate(150.0),
-            LiquidCapacity = new MassRate(40.0),
-            Volume = new ReservoirVolume(90.0),
-            DesignRate = new ReservoirRate(0.15),
-        },
-    ];
 
     /// <summary>
     /// What a bigger vessel costs and how long it takes. NO RIG (SDD-007 §1's
@@ -1023,44 +892,7 @@ internal static class Defaults
         WeatherLimit: 5.0,   // heavy lift
         Outcomes: SurveyOutcomes);
 
-    /// <summary>
-    /// The treating ladder (catalogue C08). The first rung takes NOTHING out — a
-    /// field ships without a treater, sells dry oil while it is young, and only
-    /// needs one when the water arrives.
-    ///
-    /// <para>Ninety per cent is what a heater-treater does and a desalter behind
-    /// it does more. Neither is perfect, which matters: a field far enough into
-    /// its water cut eventually sells wet oil whatever it buys, and that is the
-    /// end of a field rather than a failure to shop.</para>
-    /// </summary>
-    public static IReadOnlyList<Facilities.TreaterTier> TreaterLadder { get; } =
-    [
-        new(new ContentId("treater-none"), WaterRemoved: 0.0),
-        new(new ContentId("heater-treater"), WaterRemoved: 0.90),
-        new(new ContentId("heater-treater-desalter"), WaterRemoved: 0.98),
-    ];
 
-    /// <summary>
-    /// The storage ladder (catalogue C09). Stage 6 names three answers to a full
-    /// tank — "more storage, more export and less production" — and storage was
-    /// the one nothing could buy.
-    ///
-    /// <para>Doubling, like the export line and for the same reason: a rung that
-    /// added a tenth would be an obvious yes at every field size and therefore
-    /// not a decision. Storage buys TIME rather than throughput — it is what
-    /// keeps a field producing through a shipping gap, and what a company
-    /// chooses instead of a bigger pipeline when the constraint is lumpy rather
-    /// than steady.</para>
-    /// </summary>
-    public static IReadOnlyList<Facilities.TankTier> TankLadder { get; } =
-    [
-        TankTier,
-        TankTier with
-        {
-            Id = new ContentId("tank-farm-e2"),
-            Capacity = new Mass(TankTier.Capacity.Kilograms * 2.0),
-        },
-    ];
 
     /// <summary>
     /// What more storage costs and how long it takes. Cheap per tonne against a
@@ -1075,20 +907,6 @@ internal static class Defaults
         WeatherLimit: 5.0,   // heavy lift
         Outcomes: SurveyOutcomes);
 
-    /// <summary>
-    /// The header ladder (catalogue C06). Eight slots, then sixteen.
-    ///
-    /// <para>The drilling command has refused a well with "a bigger header has
-    /// to be installed first" since R12b, and until now nothing could install
-    /// one — a refusal that named an answer the engine did not have. Eight wells
-    /// is a long way into a field's life, which is exactly why it went
-    /// unnoticed.</para>
-    /// </summary>
-    public static IReadOnlyList<Facilities.ManifoldTier> ManifoldLadder { get; } =
-    [
-        ManifoldTier,
-        ManifoldTier with { Id = new ContentId("manifold-16slot"), Slots = 16 },
-    ];
 
     /// <summary>
     /// What a bigger header costs and how long it takes. A header is steel and
@@ -1596,7 +1414,47 @@ public sealed record EngineSettings(
     /// mid-game is a recompose, which is why 18 §5b.5 calls it "allowed and
     /// logged" rather than free.</para>
     /// </summary>
-    ContentId RealityProfile);
+    ContentId RealityProfile,
+
+    /// <summary>
+    /// Where the game's content comes from (SDD-004 §7, and §6's R20c.9
+    /// amendment).
+    ///
+    /// <para><b>A host supplies these and the engine never touches a disk.</b>
+    /// An <see cref="IContentSource"/> hands over files it has already read, so
+    /// the engine assemblies stay free of I/O and a host is free to ship content
+    /// from a directory, an archive or a download without composition knowing
+    /// which.</para>
+    ///
+    /// <para>Required, with no default: law L2, and the reason it matters here is
+    /// that a default would be an empty list, and an empty list is a game with no
+    /// equipment that composes anyway and fails later as a missing separator.
+    /// Content that will not load is a REFUSAL to start (design 10 §3, G2).</para>
+    ///
+    /// <para>Order fixes override precedence — base content is
+    /// <c>DeclaredOrder</c> 0 and a mod is higher (§7).</para>
+    /// </summary>
+    IReadOnlyList<IContentSource> Content)
+{
+    // Finding 131: the compiler compares a collection member by REFERENCE, so
+    // two settings naming the same sources would differ. Element equality is
+    // still reference equality here and correctly so — a source is a live object
+    // a host owns, not a value — but the LIST is compared by content, which is
+    // what the rule is about.
+    public bool Equals(EngineSettings? other) =>
+        other is not null
+        && Epoch == other.Epoch && WorldSeed == other.WorldSeed
+        && Retention == other.Retention && ReferenceEquals(LogSink, other.LogSink)
+        && MinimumLogLevel == other.MinimumLogLevel
+        && FaultHandling == other.FaultHandling
+        && RealityProfile == other.RealityProfile
+        && Structural.Equal(Content, other.Content);
+
+    public override int GetHashCode() =>
+        HashCode.Combine(
+            Epoch, WorldSeed, Retention, MinimumLogLevel, FaultHandling, RealityProfile,
+            Structural.HashOf(Content));
+}
 
 /// <summary>
 /// A composed engine: the validated module set, the tick it runs, and the two
@@ -1651,6 +1509,29 @@ public sealed record BuildRefused(EngineCompositionRefused Refusal) : BuildResul
     public IReadOnlyList<CompositionProblem> Problems => Refusal.Problems;
 }
 
+/// <summary>
+/// The content would not load, so there is no engine (design 10 §3's G2,
+/// SDD-004 §6's R20c.9 amendment).
+///
+/// <para>ITS OWN CASE rather than a <see cref="CompositionProblem"/>, because a
+/// <see cref="LoadFailure"/> names the file, the JSON path and the stage it
+/// failed at, and flattening that into a module-and-detail pair would throw away
+/// the half an author needs to fix it. A composition problem is about the module
+/// SET; this is about a datasheet.</para>
+///
+/// <para>Every failure, never just the first: §5's loader accumulates across all
+/// six stages and all files precisely so one broken sheet does not hide four
+/// more.</para>
+/// </summary>
+public sealed record BuildRefusedByContent(IReadOnlyList<LoadFailure> Failures) : BuildResult
+{
+    // Finding 131: a record carrying a collection compares it by reference.
+    public bool Equals(BuildRefusedByContent? other) =>
+        other is not null && Structural.Equal(Failures, other.Failures);
+
+    public override int GetHashCode() => Structural.HashOf(Failures);
+}
+
 /// <summary>Design 03 §8's Layer 4 — the one place that knows what implements what.</summary>
 public static class EngineBuilder
 {
@@ -1663,14 +1544,53 @@ public static class EngineBuilder
     /// same engine, which is the property that makes Requires worth declaring
     /// (SDD-001 §9, finding 126).</para>
     /// </summary>
+    /// <summary>
+    /// The facility catalogues, or null if the content will not load
+    /// (SDD-004 §6's R20c.9 amendment).
+    ///
+    /// <para>BEFORE THE MODULES, because a module's <c>Compose</c> fits its
+    /// equipment from a ladder and there is nothing to fit until the sheets are
+    /// read. <c>PluginRegistry</c>'s own header states the ordering the other way
+    /// round — a plugin must not be built during content load, "which happens
+    /// before the engine exists" — and this is that sentence's other half.</para>
+    /// </summary>
+    private static FacilityLadders? Ladders(EngineSettings settings)
+    {
+        ContentLoadResult result = FacilityContent(settings);
+
+        return result is ContentLoaded loaded ? FacilityLadders.From(loaded.Catalogues) : null;
+    }
+
+    /// <summary>Why it would not load, for the refusal to carry.</summary>
+    private static IReadOnlyList<LoadFailure> Failures(EngineSettings settings) =>
+        FacilityContent(settings) is ContentFailures failed ? failed.Failures : [];
+
+    /// <summary>
+    /// The six facility kinds over the host's sources.
+    ///
+    /// <para>No plugin binding: a facility datasheet names no model, so the
+    /// registry handed to the loader answers for nothing. It is still REQUIRED
+    /// rather than optional — stage 6 exists whether or not this content uses it,
+    /// and a loader that skipped a stage because today's content did not need it
+    /// would skip it tomorrow when the content did.</para>
+    /// </summary>
+    private static ContentLoadResult FacilityContent(EngineSettings settings) =>
+        new ContentLoader(
+            [
+                new SeparatorContentKind(), new TankContentKind(), new TreaterContentKind(),
+                new GasPlantContentKind(), new ExportLineContentKind(), new ManifoldContentKind(),
+            ],
+            new PluginRegistry())
+            .LoadAll(settings.Content);
+
     internal static IReadOnlyList<IModule> ShippedModules(
         AuditTrail audit, SimulationClock clock, IRandomSource random,
-        RealityProfile profile) =>
+        RealityProfile profile, FacilityLadders ladders) =>
     [
         new SubsurfaceModule(),
         new WellsModule(),
         new FlowModule(),
-        new FacilitiesModule(),
+        new FacilitiesModule(ladders),
         new OperationsModule(),
         new CompanyModule(),
         new InformationModule(),
@@ -1681,7 +1601,7 @@ public static class EngineBuilder
         new HseModule(),
         new ObjectivesModule(),
         new MaterialsModule(profile),
-        new FieldModule(),
+        new FieldModule(ladders),
         new DiagnosticsModule(audit, clock, random),
     ];
 
@@ -1749,13 +1669,16 @@ public static class EngineBuilder
     {
         ArgumentNullException.ThrowIfNull(settings);
 
+        if (Ladders(settings) is not FacilityLadders ladders)
+            return new BuildRefusedByContent(Failures(settings));
+
         var clock = new SimulationClock(settings.Epoch);
         var audit = new AuditTrail(clock, settings.Retention);
 
         return Build(
             settings,
             ShippedModules(audit, clock, new RandomSource(settings.WorldSeed),
-                           Defaults.ProfileNamed(settings.RealityProfile)),
+                           Defaults.ProfileNamed(settings.RealityProfile), ladders),
             clock, audit);
     }
 
@@ -1777,6 +1700,9 @@ public static class EngineBuilder
     {
         ArgumentNullException.ThrowIfNull(settings);
 
+        if (Ladders(settings) is not FacilityLadders ladders)
+            return new BuildRefusedByContent(Failures(settings));
+
         var clock = new SimulationClock(settings.Epoch);
         clock.RestoreTo(tick);
 
@@ -1785,7 +1711,7 @@ public static class EngineBuilder
         return Build(
             settings,
             ShippedModules(audit, clock, new RandomSource(settings.WorldSeed),
-                           Defaults.ProfileNamed(settings.RealityProfile)),
+                           Defaults.ProfileNamed(settings.RealityProfile), ladders),
             clock, audit);
     }
 

@@ -748,8 +748,10 @@ public sealed class GameplayTests
             "a tank with no room left would have shut this field in; the fixture is not " +
             "measuring a producing field");
 
+        // Capacity from the engine's own ladder rather than a constant: content
+        // owns it since R20c.9.2, and the two would drift on the first rebalance.
         Assert.Equal(
-            Defaults.TankTier.Capacity.Kilograms,
+            engine.Provided.Resolve<FacilityLadders>().Tank[0].Capacity.Kilograms,
             storage.Held.Kilograms + storage.Ullage.Kilograms,
             precision: 6);
     }

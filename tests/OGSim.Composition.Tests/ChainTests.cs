@@ -172,8 +172,13 @@ public sealed class ChainTests
             // watered-out well would be measuring the reservoir instead.
             waterCut: 0.0);
 
-        var flowing = Assert.IsType<Flowing>(
-            well.SolveOperatingPoint(Defaults.SeparatorTier.OperatingPressure));
+        // The vessel's pressure from the ENGINE's ladder, which since R20c.9.2
+        // comes from content. A constant here would be a second owner of the
+        // number the chain actually runs at, and a rebalance would leave this
+        // test green against a vessel the engine no longer has (law L5).
+        Pressure vessel = Fixture.Ladders().Separator[0].OperatingPressure;
+
+        var flowing = Assert.IsType<Flowing>(well.SolveOperatingPoint(vessel));
 
         // The COMPLETION'S OWN Bo, which is the one the conversion actually uses.
         //
@@ -195,7 +200,7 @@ public sealed class ChainTests
         // little across the month it is producing.
         Assert.True(Math.Abs(delivered - expected) / expected < 0.01,
             $"the chain delivered {delivered} m³ where the well's operating point at the " +
-            $"vessel's {Defaults.SeparatorTier.OperatingPressure.Pascals / 1e5} bar is {expected} m³");
+            $"vessel's {vessel.Pascals / 1e5} bar is {expected} m³");
     }
 
     // ------------------------------------------------- the chain is watchable
@@ -448,8 +453,14 @@ public sealed class ChainTests
         (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled();
         Produce(engine, target);
 
-        // Climb to the top.
-        for (var rung = 1; rung < Defaults.SeparatorLadder.Count; rung++)
+        // Climb to the top. The ladder comes from the ENGINE rather than from a
+        // constant, because since R20c.9.2 it comes from content — and a test
+        // that hard-coded its length would have to be edited to add a rung, which
+        // is the thing content exists to avoid.
+        IReadOnlyList<OGSim.Facilities.SeparatorTier> ladder =
+            engine.Provided.Resolve<FacilityLadders>().Separator;
+
+        for (var rung = 1; rung < ladder.Count; rung++)
         {
             Assert.IsType<Accepted>(engine.Commands.Submit(new InstallSeparatorCommand()));
 
@@ -912,7 +923,9 @@ public sealed class ChainTests
         (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled();
         FieldControl field = engine.Provided.Resolve<FieldControl>();
 
-        for (var well = 0; well < Defaults.ManifoldTier.Slots; well++) Produce(engine, target);
+        int slots = engine.Provided.Resolve<FacilityLadders>().Manifold[0].Slots;
+
+        for (var well = 0; well < slots; well++) Produce(engine, target);
 
         Assert.False(field.HasFreeSlot);
         Assert.Equal(0, field.FreeSlots);
