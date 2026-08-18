@@ -40,7 +40,9 @@ internal sealed class InstallSeparatorActivity(
     IReadOnlyList<OGSim.Facilities.SeparatorTier> ladder,
     FacilityLadders ladders,
     OGSim.Capabilities.CapabilityState capabilities,
-    OGSim.Capabilities.EraCalendar eras) : Activity<InstallSeparatorCommand>(terms)
+    OGSim.Capabilities.EraCalendar eras,
+    IGatingValidator gate,
+    IEffectState effects) : Activity<InstallSeparatorCommand>(terms)
 {
     /// <summary>A vessel is PP&amp;E: the money buys something the company still
     /// owns next month (SDD-009 §1).</summary>
@@ -60,10 +62,7 @@ internal sealed class InstallSeparatorActivity(
 
     public override IReadOnlyList<RejectionReason> OwnRefusals(InstallSeparatorCommand command)
     {
-        if (NextRung() is { } next)
-            return ladders.InventedBy(next.Id, capabilities.Era)
-                ? []
-                : [ladders.NotYet(next.Id, capabilities.Era, eras)];
+        if (NextRung() is { } next) return RungGate.Buyable(next.Id, ladders, capabilities, eras, gate, effects);
 
         return
         [
@@ -123,7 +122,9 @@ internal sealed class InstallGasPlantActivity(
     IReadOnlyList<OGSim.Facilities.GasPlantTier> ladder,
     FacilityLadders ladders,
     OGSim.Capabilities.CapabilityState capabilities,
-    OGSim.Capabilities.EraCalendar eras) : Activity<InstallGasPlantCommand>(terms)
+    OGSim.Capabilities.EraCalendar eras,
+    IGatingValidator gate,
+    IEffectState effects) : Activity<InstallGasPlantCommand>(terms)
 {
     /// <summary>A plant is PP&amp;E (SDD-009 §1) — and it now depreciates by the
     /// barrel like everything else the company owns.</summary>
@@ -139,10 +140,7 @@ internal sealed class InstallGasPlantActivity(
 
     public override IReadOnlyList<RejectionReason> OwnRefusals(InstallGasPlantCommand command)
     {
-        if (NextRung() is { } next)
-            return ladders.InventedBy(next.Id, capabilities.Era)
-                ? []
-                : [ladders.NotYet(next.Id, capabilities.Era, eras)];
+        if (NextRung() is { } next) return RungGate.Buyable(next.Id, ladders, capabilities, eras, gate, effects);
 
         return
         [
@@ -190,7 +188,9 @@ internal sealed class InstallManifoldActivity(
     IReadOnlyList<OGSim.Facilities.ManifoldTier> ladder,
     FacilityLadders ladders,
     OGSim.Capabilities.CapabilityState capabilities,
-    OGSim.Capabilities.EraCalendar eras) : Activity<InstallManifoldCommand>(terms)
+    OGSim.Capabilities.EraCalendar eras,
+    IGatingValidator gate,
+    IEffectState effects) : Activity<InstallManifoldCommand>(terms)
 {
     /// <summary>Steel on a site: PP&amp;E (SDD-009 §1).</summary>
     /// <summary>A rung on the surface ladder (finding 225).</summary>
@@ -205,10 +205,7 @@ internal sealed class InstallManifoldActivity(
 
     public override IReadOnlyList<RejectionReason> OwnRefusals(InstallManifoldCommand command)
     {
-        if (NextRung() is { } next)
-            return ladders.InventedBy(next.Id, capabilities.Era)
-                ? []
-                : [ladders.NotYet(next.Id, capabilities.Era, eras)];
+        if (NextRung() is { } next) return RungGate.Buyable(next.Id, ladders, capabilities, eras, gate, effects);
 
         return
         [
@@ -259,7 +256,9 @@ internal sealed class InstallTankActivity(
     IReadOnlyList<OGSim.Facilities.TankTier> ladder,
     FacilityLadders ladders,
     OGSim.Capabilities.CapabilityState capabilities,
-    OGSim.Capabilities.EraCalendar eras) : Activity<InstallTankCommand>(terms)
+    OGSim.Capabilities.EraCalendar eras,
+    IGatingValidator gate,
+    IEffectState effects) : Activity<InstallTankCommand>(terms)
 {
     /// <summary>Civil work a company still owns next month: PP&amp;E
     /// (SDD-009 §1).</summary>
@@ -275,10 +274,7 @@ internal sealed class InstallTankActivity(
 
     public override IReadOnlyList<RejectionReason> OwnRefusals(InstallTankCommand command)
     {
-        if (NextRung() is { } next)
-            return ladders.InventedBy(next.Id, capabilities.Era)
-                ? []
-                : [ladders.NotYet(next.Id, capabilities.Era, eras)];
+        if (NextRung() is { } next) return RungGate.Buyable(next.Id, ladders, capabilities, eras, gate, effects);
 
         return
         [
@@ -325,7 +321,9 @@ internal sealed class InstallTreaterActivity(
     IReadOnlyList<OGSim.Facilities.TreaterTier> ladder,
     FacilityLadders ladders,
     OGSim.Capabilities.CapabilityState capabilities,
-    OGSim.Capabilities.EraCalendar eras) : Activity<InstallTreaterCommand>(terms)
+    OGSim.Capabilities.EraCalendar eras,
+    IGatingValidator gate,
+    IEffectState effects) : Activity<InstallTreaterCommand>(terms)
 {
     /// <summary>A rung on the surface ladder (finding 225).</summary>
     public override MovementCategory Spend => MovementCategory.Development;
@@ -339,10 +337,7 @@ internal sealed class InstallTreaterActivity(
 
     public override IReadOnlyList<RejectionReason> OwnRefusals(InstallTreaterCommand command)
     {
-        if (NextRung() is { } next)
-            return ladders.InventedBy(next.Id, capabilities.Era)
-                ? []
-                : [ladders.NotYet(next.Id, capabilities.Era, eras)];
+        if (NextRung() is { } next) return RungGate.Buyable(next.Id, ladders, capabilities, eras, gate, effects);
 
         return
         [
@@ -368,5 +363,60 @@ internal sealed class InstallTreaterActivity(
             if (ladder[i].Id == treater.Tier.Id) return ladder[i + 1];
 
         return null;
+    }
+}
+
+/// <summary>
+/// Whether a rung can be bought, and why not (SDD-005 §2's R20d.10b amendment).
+///
+/// <para>TWO CHECKS AND TWO KINDS OF FACT. The era is a CALENDAR comparison made
+/// here, because an era that has not arrived is not something a company can go
+/// and get and would be a "missing item" with no remedy. The technology is a
+/// REQUIREMENT and goes through the one validator §2 specifies — the same road
+/// activity gating travels, so equipment cannot drift onto a second one.</para>
+///
+/// <para>Shared by all five install verbs rather than repeated in each: the
+/// question is identical and only the noun differs, and five copies would be
+/// five chances for one of them to forget a half.</para>
+/// </summary>
+internal static class RungGate
+{
+
+    public static IReadOnlyList<RejectionReason> Buyable(
+        ContentId rung,
+        FacilityLadders ladders,
+        OGSim.Capabilities.CapabilityState capabilities,
+        OGSim.Capabilities.EraCalendar eras,
+        IGatingValidator gate,
+        IEffectState effects)
+    {
+        ArgumentNullException.ThrowIfNull(ladders);
+        ArgumentNullException.ThrowIfNull(capabilities);
+        ArgumentNullException.ThrowIfNull(gate);
+
+        if (!ladders.InventedBy(rung, capabilities.Era))
+            return [ladders.NotYet(rung, capabilities.Era, eras)];
+
+        // NO RENTALS: a service rental is scoped to one operation (SDD-005 §2)
+        // and a vessel bolted to a deck is not an operation — it outlives the
+        // crew that fitted it, so renting the knowledge to install it would leave
+        // the company owning equipment it cannot run.
+        if (gate.Check(ladders.RequirementsOf(rung), capabilities.Technology, [], effects)
+            is not GateFail failed)
+            return [];
+
+        var reasons = new List<RejectionReason>(failed.Missing.Count);
+
+        // EVERY miss, never just the first (the R3-V2 principle) — and NAMED, so
+        // a player is told which technology to go and get rather than that
+        // requirements were not met (R17 §2.6b).
+        for (int i = 0; i < failed.Missing.Count; i++)
+            if (failed.Missing[i] is MissingTechnology missing)
+                reasons.Add(new RejectionReason(
+                    "$loc:reject.technology-not-held",
+                    $"'{rung.Value}' needs {missing.Tech.Value.Value}, which this " +
+                    "company has not acquired"));
+
+        return reasons;
     }
 }

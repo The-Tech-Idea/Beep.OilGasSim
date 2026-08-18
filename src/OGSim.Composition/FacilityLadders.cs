@@ -50,7 +50,18 @@ public sealed record FacilityLadders(
     /// <para>Read by key only. Rule D-5 forbids ENUMERATING a dictionary, which
     /// this never does — the ladders carry the order.</para>
     /// </summary>
-    IReadOnlyDictionary<ContentId, Era> InventedIn)
+    IReadOnlyDictionary<ContentId, Era> InventedIn,
+
+    /// <summary>
+    /// What a rung needs a company to KNOW, by tier id — SDD-004 §6's
+    /// <c>requiresTech</c>, absent on most rungs and never on a rung 0.
+    ///
+    /// <para>The other half of SDD-005 §2's R20d.10b amendment: an era is a
+    /// calendar fact checked at the refusal, and this is a REQUIREMENT — a thing
+    /// a company can go and get — so it goes through the one validator §2
+    /// specifies rather than being compared here.</para>
+    /// </summary>
+    IReadOnlyDictionary<ContentId, IReadOnlyList<TechnologyId>> Needs)
 {
     // Finding 131: the compiler's record equality is REFERENCE equality for a
     // collection member, so two ladder sets loaded from the same content would
@@ -65,14 +76,15 @@ public sealed record FacilityLadders(
         && Structural.Equal(GasPlant, other.GasPlant)
         && Structural.Equal(Export, other.Export)
         && Structural.Equal(Manifold, other.Manifold)
-        && Structural.Equal(InventedIn, other.InventedIn);
+        && Structural.Equal(InventedIn, other.InventedIn)
+        && Structural.Equal(Needs, other.Needs);
 
     public override int GetHashCode() =>
         HashCode.Combine(
             Structural.HashOf(Separator), Structural.HashOf(Tank),
             Structural.HashOf(Treater), Structural.HashOf(GasPlant),
             Structural.HashOf(Export), Structural.HashOf(Manifold),
-            Structural.HashOf(InventedIn));
+            Structural.HashOf(InventedIn), Structural.HashOf(Needs));
 
     /// <summary>
     /// The catalogues as ladders (SDD-004 §6's R20c.9 amendment).
@@ -87,13 +99,14 @@ public sealed record FacilityLadders(
         ArgumentNullException.ThrowIfNull(catalogues);
 
         var invented = new Dictionary<ContentId, Era>();
+        var needs = new Dictionary<ContentId, IReadOnlyList<TechnologyId>>();
 
-        Note<SeparatorDefinition>(catalogues, invented);
-        Note<TankDefinition>(catalogues, invented);
-        Note<TreaterDefinition>(catalogues, invented);
-        Note<GasPlantDefinition>(catalogues, invented);
-        Note<ExportLineDefinition>(catalogues, invented);
-        Note<ManifoldDefinition>(catalogues, invented);
+        Note<SeparatorDefinition>(catalogues, invented, needs);
+        Note<TankDefinition>(catalogues, invented, needs);
+        Note<TreaterDefinition>(catalogues, invented, needs);
+        Note<GasPlantDefinition>(catalogues, invented, needs);
+        Note<ExportLineDefinition>(catalogues, invented, needs);
+        Note<ManifoldDefinition>(catalogues, invented, needs);
 
         return new FacilityLadders(
             Rungs<SeparatorDefinition, Facilities.SeparatorTier>(catalogues, "separator", d =>
@@ -122,18 +135,42 @@ public sealed record FacilityLadders(
             Rungs<ManifoldDefinition, Facilities.ManifoldTier>(catalogues, "manifold", d =>
                 new Facilities.ManifoldTier(d.Id, d.Slots)),
 
-            invented);
+            invented,
+            needs);
     }
 
     /// <summary>One kind's eras into the shared map.</summary>
     private static void Note<TDefinition>(
-        ICatalogSet catalogues, Dictionary<ContentId, Era> invented)
+        ICatalogSet catalogues,
+        Dictionary<ContentId, Era> invented,
+        Dictionary<ContentId, IReadOnlyList<TechnologyId>> needs)
         where TDefinition : FacilityUnitDefinition
     {
         IReadOnlyList<TDefinition> all = catalogues.Of<TDefinition>().All;
 
-        for (int i = 0; i < all.Count; i++) invented[all[i].Id] = all[i].AvailableFromEra;
+        for (int i = 0; i < all.Count; i++)
+        {
+            invented[all[i].Id] = all[i].AvailableFromEra;
+
+            // EMPTY rather than absent when a rung needs nothing, so a caller
+            // never has to ask whether a key is present before reading it — a
+            // missing key and "requires nothing" would otherwise be two spellings
+            // of one answer, and only one of them would be handled.
+            needs[all[i].Id] = all[i].RequiresTech is ContentId tech
+                ? [new TechnologyId(tech)]
+                : [];
+        }
     }
+
+    /// <summary>
+    /// What a rung requires, as the block the one validator reads (SDD-005 §2).
+    ///
+    /// <para>A <c>Requirements</c> and not a bare list, because that is the shape
+    /// the validator takes and the shape content declares elsewhere — building it
+    /// here keeps equipment gating and activity gating on one road.</para>
+    /// </summary>
+    public Requirements RequirementsOf(ContentId tier) =>
+        new(Needs[tier], MinDetectClass: null, []);
 
     /// <summary>
     /// Whether a rung can be bought yet (SDD-005 §2's R20d.10b amendment).

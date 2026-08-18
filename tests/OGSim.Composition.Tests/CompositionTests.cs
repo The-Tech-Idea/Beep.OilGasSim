@@ -984,15 +984,42 @@ public sealed class TechnologyArcTests
 /// </summary>
 public sealed class EquipmentEraTests
 {
+    /// <summary>The shipped sheets with one file's text replaced.</summary>
+    private static IContentSource Edited(string id, string find, string replace)
+    {
+        var files = new List<ContentFile>();
+
+        foreach (ContentFile file in Fixture.ShippedContent().Files)
+            files.Add(file.RelativePath.EndsWith(id + ".json", StringComparison.Ordinal)
+                ? file with { Json = Replaced(file.Json, find, replace) }
+                : file);
+
+        return new Edit(files);
+    }
+
+    private static string Replaced(string json, string find, string replace)
+    {
+        Assert.Contains(find, json, StringComparison.Ordinal);
+        return json.Replace(find, replace, StringComparison.Ordinal);
+    }
+
+    private sealed class Edit(IReadOnlyList<ContentFile> files) : IContentSource
+    {
+        public string Name => "base";
+        public int DeclaredOrder => 0;
+        public IReadOnlyList<ContentFile> Files => files;
+    }
+
     /// <summary>
     /// An engine with something to work on. The shared refusals return early on a
     /// company with no compartment — "there is nothing here to work on" — which
     /// would answer instead of the era and make these tests pass for the wrong
     /// reason.
     /// </summary>
-    private static Engine Field()
+    private static Engine Field(IContentSource? content = null)
     {
-        Built built = Assert.IsType<Built>(EngineBuilder.Build(Fixture.Settings()));
+        Built built = Assert.IsType<Built>(EngineBuilder.Build(
+            content is null ? Fixture.Settings() : Fixture.Settings(content: [content])));
 
         built.Engine.Provided.Resolve<FieldControl>().AddCompartment(
             new GeneratedCompartment(
@@ -1073,6 +1100,46 @@ public sealed class EquipmentEraTests
         if (result is Rejected refused)
             Assert.DoesNotContain(refused.Reasons,
                 reason => reason.LocId == "$loc:reject.not-yet-invented");
+    }
+
+    /// <summary>
+    /// <b>And a rung can require a TECHNOLOGY, which is the half no shipped
+    /// sheet uses yet.</b> `requiresTech` has been on every facility definition
+    /// since R20c.9.1 and read by nothing — the same shape `availableFromEra`
+    /// had, and it would have passed silently the first day content used it
+    /// (finding 236).
+    ///
+    /// <para>Exercised through an EDITED sheet rather than by shipping a
+    /// requirement, because which node opens which rung is a mapping the
+    /// TECH_TREE only gestures at — *the tiers span E1–E3* — and authoring it is
+    /// R20's content pass. The gate is proved to work so that pass can rely on
+    /// it; inventing the mapping here to give the test something to bite on
+    /// would be choosing balance numbers to make a mechanism look joined.</para>
+    ///
+    /// <para>The refusal NAMES the technology, per R17 §2.6b: a player is told
+    /// what to go and get, not that requirements were not met. That is the whole
+    /// difference between this and the era refusal beside it — an era is a date
+    /// to wait for and a technology is an errand.</para>
+    /// </summary>
+    [Fact]
+    public void A_rung_requiring_a_technology_the_company_lacks_is_refused()
+    {
+        // `directional` is a real node in the shipped registry, and a 1965
+        // company holds nothing at all.
+        BuildResult result = EngineBuilder.Build(Fixture.Settings(content: [Edited(
+            "separator-3phase-e2",
+            "\"rung\": 1,",
+            "\"rung\": 1, \"requiresTech\": \"directional\",")]));
+
+        Engine engine = Assert.IsType<Built>(result).Engine;
+
+        Rejected refused = Assert.IsType<Rejected>(
+            engine.Commands.Submit(new InstallSeparatorCommand()));
+
+        RejectionReason reason = Assert.Single(
+            refused.Reasons, r => r.LocId == "$loc:reject.technology-not-held");
+
+        Assert.Contains("directional", reason.Detail, StringComparison.Ordinal);
     }
 
     /// <summary>
