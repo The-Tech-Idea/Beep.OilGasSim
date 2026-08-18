@@ -135,6 +135,7 @@ table is a record of the phase as built and the ids resolve from today.
 | R20d-V3 | Gas leaves the separator | A well produces gas, the separator sends it to the flare, and flared gas earns nothing |
 | R20d-V4 | The water leg exists before it carries anything | The leg is present and DRY before breakthrough — the absence of water is modelled rather than the leg being absent |
 | R20d-V5 | Revenue is caused by a metered delivery | A sale cites a custody transfer (SDD-009 §1), and a month with no delivery records no transfer |
+| R20d-V10 | The era advances and technology arrives | A campaign begun in E1 reaches a later era with the calendar, and a company holds nodes it did not start with — granted only where the registry's Routes column marks **D**, since the other three routes are things a company must go and get |
 | R12b-V2 | The header a full field needs can be installed | The ladder reaches the size a developed field requires, so the refusal in R20d-V1 is a decision rather than a dead end |
 | R12b-V8 | Capacity is a purchase with a price | A player sees the jam, pays for a bigger vessel and the field flows; a vessel is CAPITALISED and a survey is not; the top of the ladder is refused with a reason |
 | R12b-V10 | An abandonment obligation is carried, not conjured | A well carries its obligation from the day it opens; shutting a well in does not discharge it; abandoning a plugged well is refused; abandoning the last well closes the field |

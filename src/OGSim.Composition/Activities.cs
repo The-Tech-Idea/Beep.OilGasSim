@@ -555,7 +555,8 @@ internal sealed class ActivityOrders(
     FieldControl field,
     ActivityState activities,
     SimulationClock clock,
-    OGSim.Environment.WeatherState weather)
+    OGSim.Environment.WeatherState weather,
+    OGSim.Capabilities.CapabilityState capabilities)
 {
     /// <summary>
     /// Every reason this order cannot be given, not the first. A player told only
@@ -609,7 +610,14 @@ internal sealed class ActivityOrders(
         IReadOnlyList<string> refusals = activities.Scheduler.Refusals(
             activities.SpecFor(template, target, depth),
             startDay: Today,
-            availableCapabilities: [],
+            // WHAT THE COMPANY ACTUALLY HOLDS (SDD-005 §2's R20d.10 amendment).
+            // This was a hardcoded empty list at both call sites, standing in for
+            // `TechnologyState.Acquired`, so `Requirements.RequiredCapabilities`
+            // could neither refuse nor permit anything. No shipped template
+            // declares a requirement today, so this refuses nothing new — it is
+            // the difference between a gate that is open and one that is not
+            // connected (finding 233's shape, a third time).
+            availableCapabilities: capabilities.Technology.Acquired,
             targetExists: _ => true);
 
         for (int i = 0; i < refusals.Count; i++)
@@ -628,7 +636,14 @@ internal sealed class ActivityOrders(
         ScheduleResult result = activities.Scheduler.Submit(
             activities.SpecFor(template, target, depth),
             startDay: Today,
-            availableCapabilities: [],
+            // WHAT THE COMPANY ACTUALLY HOLDS (SDD-005 §2's R20d.10 amendment).
+            // This was a hardcoded empty list at both call sites, standing in for
+            // `TechnologyState.Acquired`, so `Requirements.RequiredCapabilities`
+            // could neither refuse nor permit anything. No shipped template
+            // declares a requirement today, so this refuses nothing new — it is
+            // the difference between a gate that is open and one that is not
+            // connected (finding 233's shape, a third time).
+            availableCapabilities: capabilities.Technology.Acquired,
             targetExists: _ => true);
 
         if (result is not Scheduled scheduled)

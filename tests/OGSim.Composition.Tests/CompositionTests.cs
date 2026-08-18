@@ -110,17 +110,31 @@ internal static class Fixture
             files.Add(new ContentFile("facilities/" + Path.GetFileName(path),
                                       File.ReadAllText(path)));
 
+        // AND THE TECHNOLOGY REGISTRY, which the engine reads from the same
+        // source since R20d.10 — sixty-five nodes that shipped at R20c.9 and
+        // were read by a fixture test alone.
+        string tech = Path.Combine(here.Parent!.Parent!.FullName, "content", "technologies");
+
+        foreach (string path in Directory.EnumerateFiles(tech, "*.json")
+                                         .OrderBy(p => p, StringComparer.Ordinal))
+            files.Add(new ContentFile("technologies/" + Path.GetFileName(path),
+                                      File.ReadAllText(path)));
+
         return new DirectorySource(files);
     }
 
     /// <summary>The shipped ladders, for the two tests that build the module
     /// list themselves rather than going through <c>EngineBuilder.Build</c>.</summary>
-    public static FacilityLadders Ladders()
+    public static FacilityLadders Ladders() => FacilityLadders.From(Loaded());
+
+    /// <summary>The shipped content, through the real loader.</summary>
+    private static ICatalogSet Loaded()
     {
         var loader = new ContentLoader(
             [
                 new SeparatorContentKind(), new TankContentKind(), new TreaterContentKind(),
                 new GasPlantContentKind(), new ExportLineContentKind(), new ManifoldContentKind(),
+                new OGSim.Capabilities.TechnologyContentKind(),
             ],
             new PluginRegistry());
 
@@ -128,10 +142,32 @@ internal static class Fixture
 
         if (result is ContentFailures failed)
             throw new InvalidOperationException(
-                "the shipped facility content does not load: " + string.Join(
+                "the shipped content does not load: " + string.Join(
                     "; ", failed.Failures.Select(f => $"{f.File} {f.JsonPath} {f.Message}")));
 
-        return FacilityLadders.From(((ContentLoaded)result).Catalogues);
+        return ((ContentLoaded)result).Catalogues;
+    }
+
+    /// <summary>The shipped technology registry, for the tests that build the
+    /// module list themselves.</summary>
+    public static IReadOnlyList<OGSim.Capabilities.TechnologyNode> Registry()
+    {
+        var graph = new List<OGSim.Capabilities.TechnologyNode>();
+
+        foreach (OGSim.Capabilities.TechnologyDefinition node in
+                 Loaded().Of<OGSim.Capabilities.TechnologyDefinition>().All)
+        {
+            var prerequisites = new List<TechnologyId>(node.Prerequisites.Count);
+
+            for (int i = 0; i < node.Prerequisites.Count; i++)
+                prerequisites.Add(new TechnologyId(node.Prerequisites[i]));
+
+            graph.Add(new OGSim.Capabilities.TechnologyNode(
+                new TechnologyId(node.Id), node.AvailableFrom, node.DiffusionLagTicks,
+                prerequisites, node.Effects, node.GrantsDetectClass, node.Routes));
+        }
+
+        return graph;
     }
 
     private sealed class DirectorySource(IReadOnlyList<ContentFile> files) : IContentSource
@@ -192,7 +228,7 @@ public sealed class ShippedSetTests
 
         IReadOnlyList<IModule> modules = EngineBuilder.ShippedModules(
             audit, new SimulationClock(new GameDate(1965, 1)), new RandomSource(1UL),
-            Defaults.Simulation, Fixture.Ladders());
+            Defaults.Simulation, Fixture.Ladders(), Fixture.Registry());
 
         var provided = new HashSet<Type>();
         foreach (IModule module in modules)
@@ -219,7 +255,7 @@ public sealed class ShippedSetTests
 
         var reversed = new List<IModule>(EngineBuilder.ShippedModules(
             audit, new SimulationClock(new GameDate(1965, 1)), new RandomSource(1UL),
-            Defaults.Simulation, Fixture.Ladders()));
+            Defaults.Simulation, Fixture.Ladders(), Fixture.Registry()));
         reversed.Reverse();
 
         Built forward = Assert.IsType<Built>(EngineBuilder.Build(Fixture.Settings()));
@@ -265,6 +301,12 @@ public sealed class ShippedSetTests
     /// money — and this test is why adding it was a visible edit rather than a
     /// silent one (SDD-008 §2d.3, finding 200).</para>
     ///
+    /// <para>R20d.10 made <b>Environment</b> appear twice for the same reason:
+    /// the weather advances at order 0 and technology diffuses at order 1, both
+    /// at stage 2. Diffusion is a calendar fact — a node with a <b>D</b> route
+    /// arrives at its era's start plus its content lag — so it belongs beside the
+    /// other thing the world does to the company without being asked.</para>
+    ///
     /// <para>R22.17 made <b>Availability</b> appear TWICE, which is a slot with two
     /// contributors rather than a stage declared twice: the bow-tie's threat pass
     /// runs first and may take an element out, and the hazard/segmentation pass
@@ -278,7 +320,7 @@ public sealed class ShippedSetTests
         Built built = Assert.IsType<Built>(EngineBuilder.Build(Fixture.Settings()));
 
         Assert.Equal(
-            [StageId.Environment, StageId.Operations,
+            [StageId.Environment, StageId.Environment, StageId.Operations,
              StageId.Availability, StageId.Availability,
              StageId.SolveFlow, StageId.MaterialBalance, StageId.Custody,
              StageId.Economics, StageId.HseRegulation, StageId.Information,
@@ -730,7 +772,7 @@ public sealed class AccessWindowTests
 
         var modules = new List<IModule>(EngineBuilder.ShippedModules(
             audit, clock, new RandomSource(20260806UL), Defaults.Simulation,
-            Fixture.Ladders()));
+            Fixture.Ladders(), Fixture.Registry()));
 
         for (int i = 0; i < modules.Count; i++)
             if (modules[i] is EnvironmentModule)
@@ -837,5 +879,101 @@ public sealed class AccessWindowTests
             Assert.True(Defaults.Climate.AccessOpen[month],
                 $"month {month + 1} of the shipped climate is closed; if that is " +
                 "intended, the slow suite's timelines change and this test should say so");
+    }
+}
+
+/// <summary>
+/// R20d.10 — the technology arc, joined (SDD-005 §2's R20d.10 amendment).
+/// </summary>
+public sealed class TechnologyArcTests
+{
+    /// <summary>
+    /// <b>A company acquires technology over a campaign</b>, which it could not
+    /// before: `CapabilityState` was constructed NOWHERE — not in the engine and
+    /// not in a test — so the shipped composition ran `AllCapabilities`, the
+    /// sandbox all-tech mode, and the sixty-five nodes in
+    /// `content/technologies/` had nothing to be acquired into (finding 235).
+    ///
+    /// <para>Three joins had to land together for this to be observable, and any
+    /// one alone would have been another mechanism wired to nothing: the era is
+    /// derived from the date so it advances at all, `ApplyDiffusion` runs at
+    /// stage 2 so "eventually standard practice" becomes a date, and the registry
+    /// is loaded from content so there is a graph to diffuse through.</para>
+    ///
+    /// <para>Twelve years, because the shipped start is 1965 and E2 opens in
+    /// 1970: nothing can arrive on a lag measured from an era that has not begun.
+    /// The assertion is that SOMETHING was granted and not which, because which
+    /// node arrives when is the registry's business and this test is about the
+    /// mechanism being connected.</para>
+    /// </summary>
+    [Fact]
+    [Trait("Speed", "Slow")]
+    public void A_company_acquires_technology_as_the_decades_pass()
+    {
+        Built built = Assert.IsType<Built>(EngineBuilder.Build(Fixture.Settings()));
+
+        var capabilities =
+            built.Engine.Provided.Resolve<OGSim.Capabilities.CapabilityState>();
+
+        Assert.Empty(capabilities.Technology.Acquired);
+        Assert.Equal(Era.E1, capabilities.Era);
+
+        for (var month = 0; month < 12 * 12; month++) built.Engine.Pipeline.AdvanceTick();
+
+        Assert.Equal(Era.E2, capabilities.Era);
+
+        Assert.NotEmpty(capabilities.Technology.Acquired);
+    }
+
+    /// <summary>
+    /// And the era follows the calendar rather than standing still — the whole of
+    /// finding 191, which recorded that a 1965-to-2005 campaign stayed in E1
+    /// throughout because `CapabilityState.Era` had a private setter written only
+    /// by its constructor and its `Restore`.
+    /// </summary>
+    [Fact]
+    [Trait("Speed", "Slow")]
+    public void R20dV10_the_era_advances_with_the_calendar()
+    {
+        Built built = Assert.IsType<Built>(EngineBuilder.Build(Fixture.Settings()));
+
+        var capabilities =
+            built.Engine.Provided.Resolve<OGSim.Capabilities.CapabilityState>();
+
+        // 1965 + 300 months = 1990, which is E3's first year.
+        for (var month = 0; month < 300; month++) built.Engine.Pipeline.AdvanceTick();
+
+        Assert.Equal(Era.E3, capabilities.Era);
+    }
+
+    /// <summary>
+    /// Only nodes the registry marks <b>D</b> arrive free. The other three routes
+    /// are things a company must go and get, and erasing that difference would
+    /// make the four routes one (finding 128, guarded here through the engine
+    /// rather than through a fixture graph).
+    /// </summary>
+    [Fact]
+    [Trait("Speed", "Slow")]
+    public void Only_nodes_with_a_diffusion_route_arrive_free()
+    {
+        Built built = Assert.IsType<Built>(EngineBuilder.Build(Fixture.Settings()));
+
+        var capabilities =
+            built.Engine.Provided.Resolve<OGSim.Capabilities.CapabilityState>();
+
+        for (var month = 0; month < 12 * 30; month++) built.Engine.Pipeline.AdvanceTick();
+
+        IReadOnlyList<OGSim.Capabilities.TechnologyNode> registry = Fixture.Registry();
+
+        foreach (TechnologyId held in capabilities.Technology.Acquired)
+        {
+            OGSim.Capabilities.TechnologyNode? node = null;
+
+            for (int i = 0; i < registry.Count; i++)
+                if (registry[i].Id.Equals(held)) node = registry[i];
+
+            Assert.NotNull(node);
+            Assert.Contains(OGSim.Capabilities.AcquisitionRoute.Diffusion, node!.Routes);
+        }
     }
 }

@@ -644,6 +644,9 @@ internal sealed class FieldModule(FacilityLadders ladders) : EngineModule(Declar
         typeof(OGSim.Information.ProspectRisks),
         typeof(OGSim.Integrity.AssetIntegrity),
 
+        // What the company holds, so the scheduler can be told (R20d.10).
+        typeof(OGSim.Capabilities.CapabilityState),
+
         // finding 229 — required in code and not in the manifest until the
         // scan found them.
         typeof(IHydraulicModel),
@@ -1033,7 +1036,8 @@ internal sealed class FieldModule(FacilityLadders ladders) : EngineModule(Declar
         var orders = new ActivityOrders(
             company, composition.Require<OGSim.Company.MarketState>(), field, activities,
             composition.Require<SimulationClock>(),
-            composition.Require<OGSim.Environment.WeatherState>());
+            composition.Require<OGSim.Environment.WeatherState>(),
+            composition.Require<OGSim.Capabilities.CapabilityState>());
 
         for (int i = 0; i < activities.Catalogue.Count; i++)
             activities.Catalogue[i].Register(composition, orders);
@@ -1189,12 +1193,26 @@ internal sealed class WorldModule() : EngineModule(Declare(
 /// which is content (`plans/catalog/`) and does not exist yet. Declaring the key
 /// here would claim a fact this composition has none of.
 /// </summary>
-internal sealed class CapabilitiesModule() : EngineModule(Declare(
+internal sealed class CapabilitiesModule(
+    IReadOnlyList<OGSim.Capabilities.TechnologyNode> registry,
+    OGSim.Capabilities.EraCalendar eras,
+    SimulationClock clock) : EngineModule(Declare(
     "capabilities",
-    provides: [typeof(IGatingValidator), typeof(ICapabilitySet), typeof(IEffectState)],
+    provides:
+    [
+        typeof(IGatingValidator), typeof(ICapabilitySet), typeof(IEffectState),
+
+        // What the company has actually acquired, so the scheduler can be told
+        // rather than handed an empty list (SDD-005 §2's R20d.10 amendment).
+        typeof(OGSim.Capabilities.CapabilityState),
+    ],
     requires: [],
-    ownsState: NothingOwnedYet,
-    stages: NoStagesYet))
+
+    // The holdings are STATE and always were: `Acquire` replays them in order
+    // through the graph that authorised them. Nothing owned this key because
+    // nothing composed the owner.
+    ownsState: ["capabilities.technology"],
+    stages: [new StageParticipation(StageId.Environment, Order: 1)]))
 {
     public override void Compose(IModuleComposition composition)
     {
@@ -1202,12 +1220,50 @@ internal sealed class CapabilitiesModule() : EngineModule(Declare(
 
         composition.Provide<IGatingValidator>(new OGSim.Capabilities.GatingValidator());
 
-        // AllCapabilities is a SHIPPED MODE (SDD-005 §2) — the sandbox all-tech
-        // modifier, and the composition every pre-R17 phase ran under. A
-        // campaign composes TechnologyState instead; both are real.
-        composition.Provide<ICapabilitySet>(new OGSim.Capabilities.AllCapabilities());
+        // THE CAMPAIGN'S OWN HOLDINGS, replacing `AllCapabilities` (SDD-005 §2's
+        // R20d.10 amendment). That is a SHIPPED MODE and not a stub — the sandbox
+        // all-tech modifier of design 18 §5, and the composition every pre-R17
+        // phase ran under — but it is the wrong one for a campaign: `Has` returns
+        // true for everything, so no gate could ever refuse and the sixty-five
+        // nodes in `content/technologies/` had nothing to be acquired INTO.
+        var state = new OGSim.Capabilities.CapabilityState(
+            registry, eras, () => clock.Date, clock.Epoch);
+
+        composition.Own(state);
+        composition.Provide(state);
+        composition.Provide<ICapabilitySet>(state.Technology);
+
         composition.Provide<IEffectState>(new OGSim.Capabilities.EffectState(
             new Dictionary<EnvelopeKind, double>()));
+
+        composition.Contribute(order: 1, new DiffusionStage(state));
+    }
+}
+
+/// <summary>
+/// Stage 2. What has become standard practice (SDD-005 §2, design 07 §3).
+///
+/// <para>"Everything eventually becomes standard practice" is a DATE, not an
+/// event: a node with a <b>D</b> route arrives at its era's start plus its
+/// content lag, in the same month of every game with the same start. No draw,
+/// so it costs the hazard stream nothing and cannot shift another mechanic's
+/// dice.</para>
+///
+/// <para>Nothing called <c>ApplyDiffusion</c> before this — the third of four
+/// acquisition routes existed for its own unit tests, which is why a campaign
+/// could run forty years and hold nothing it did not start with (finding 191).</para>
+/// </summary>
+internal sealed class DiffusionStage(OGSim.Capabilities.CapabilityState capabilities)
+    : ITickStage
+{
+    public StageId Id => StageId.Environment;
+
+    public void Execute(TickContext context)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+
+        capabilities.Technology.ApplyDiffusion(
+            capabilities.Era, capabilities.EraStart, context.Tick);
     }
 }
 

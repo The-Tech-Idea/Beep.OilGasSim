@@ -1327,6 +1327,18 @@ internal static class Defaults
     /// which is what makes the two curves over one x describe real weather
     /// rather than two independent noises.
     /// </summary>
+    /// <summary>
+    /// When each era starts (SDD-005 §2's R20d.10 amendment).
+    ///
+    /// <para>TECH_TREE's own line — *Eras: E1 1950s–60s · E2 70s–80s · E3
+    /// 90s–2000s · E4 2010s+* — transcribed rather than chosen here, because the
+    /// registry that assigns every node an era is the document entitled to say
+    /// when those eras are. A 1965 start begins fifteen years into E1 and reaches
+    /// E3 inside a forty-year run.</para>
+    /// </summary>
+    public static Capabilities.EraCalendar Eras { get; } =
+        new([(Era.E1, 1950), (Era.E2, 1970), (Era.E3, 1990), (Era.E4, 2010)]);
+
     public static Environment.ClimateProfile Climate { get; } =
         new(new ContentId("temperate-offshore"),
             Persistence: 0.75,
@@ -1613,11 +1625,15 @@ public static class EngineBuilder
     /// round — a plugin must not be built during content load, "which happens
     /// before the engine exists" — and this is that sentence's other half.</para>
     /// </summary>
-    private static FacilityLadders? Ladders(EngineSettings settings)
+    private static (FacilityLadders Ladders,
+                    IReadOnlyList<OGSim.Capabilities.TechnologyNode> Registry)? Ladders(
+        EngineSettings settings)
     {
         ContentLoadResult result = FacilityContent(settings);
 
-        return result is ContentLoaded loaded ? FacilityLadders.From(loaded.Catalogues) : null;
+        return result is ContentLoaded loaded
+            ? (FacilityLadders.From(loaded.Catalogues), Registry(loaded.Catalogues))
+            : null;
     }
 
     /// <summary>Why it would not load, for the refusal to carry.</summary>
@@ -1625,7 +1641,46 @@ public static class EngineBuilder
         FacilityContent(settings) is ContentFailures failed ? failed.Failures : [];
 
     /// <summary>
-    /// The six facility kinds over the host's sources.
+    /// The technology registry, as a graph (SDD-005 §2's R20d.10 amendment).
+    ///
+    /// <para>Sixty-five nodes have shipped in <c>content/technologies/</c> since
+    /// R20c.9 and the ENGINE never read one: `CapabilitiesModule` composed
+    /// `AllCapabilities`, so the graph existed for a fixture test alone. This is
+    /// the same door the facility sheets come through.</para>
+    /// </summary>
+    private static IReadOnlyList<OGSim.Capabilities.TechnologyNode> Registry(
+        ICatalogSet catalogues)
+    {
+        IReadOnlyList<OGSim.Capabilities.TechnologyDefinition> all =
+            catalogues.Of<OGSim.Capabilities.TechnologyDefinition>().All;
+
+        var graph = new List<OGSim.Capabilities.TechnologyNode>(all.Count);
+
+        for (int i = 0; i < all.Count; i++)
+        {
+            OGSim.Capabilities.TechnologyDefinition node = all[i];
+
+            var prerequisites = new List<TechnologyId>(node.Prerequisites.Count);
+
+            for (int p = 0; p < node.Prerequisites.Count; p++)
+                prerequisites.Add(new TechnologyId(node.Prerequisites[p]));
+
+            graph.Add(new OGSim.Capabilities.TechnologyNode(
+                new TechnologyId(node.Id),
+                node.AvailableFrom,
+                node.DiffusionLagTicks,
+                prerequisites,
+                node.Effects,
+                node.GrantsDetectClass,
+                node.Routes));
+        }
+
+        return graph;
+    }
+
+    /// <summary>
+    /// The six facility kinds and the technology registry over the host's
+    /// sources.
     ///
     /// <para>No plugin binding: a facility datasheet names no model, so the
     /// registry handed to the loader answers for nothing. It is still REQUIRED
@@ -1638,13 +1693,15 @@ public static class EngineBuilder
             [
                 new SeparatorContentKind(), new TankContentKind(), new TreaterContentKind(),
                 new GasPlantContentKind(), new ExportLineContentKind(), new ManifoldContentKind(),
+                new OGSim.Capabilities.TechnologyContentKind(),
             ],
             new PluginRegistry())
             .LoadAll(settings.Content);
 
     internal static IReadOnlyList<IModule> ShippedModules(
         AuditTrail audit, SimulationClock clock, IRandomSource random,
-        RealityProfile profile, FacilityLadders ladders) =>
+        RealityProfile profile, FacilityLadders ladders,
+        IReadOnlyList<OGSim.Capabilities.TechnologyNode> registry) =>
     [
         new SubsurfaceModule(),
         new WellsModule(),
@@ -1654,7 +1711,7 @@ public static class EngineBuilder
         new CompanyModule(),
         new InformationModule(),
         new WorldModule(),
-        new CapabilitiesModule(),
+        new CapabilitiesModule(registry, Defaults.Eras, clock),
         new IntegrityModule(),
         new EnvironmentModule(Defaults.Climate),
         new HseModule(),
@@ -1728,7 +1785,7 @@ public static class EngineBuilder
     {
         ArgumentNullException.ThrowIfNull(settings);
 
-        if (Ladders(settings) is not FacilityLadders ladders)
+        if (Ladders(settings) is not var (ladders, registry))
             return new BuildRefusedByContent(Failures(settings));
 
         var clock = new SimulationClock(settings.Epoch);
@@ -1737,7 +1794,7 @@ public static class EngineBuilder
         return Build(
             settings,
             ShippedModules(audit, clock, new RandomSource(settings.WorldSeed),
-                           Defaults.ProfileNamed(settings.RealityProfile), ladders),
+                           Defaults.ProfileNamed(settings.RealityProfile), ladders, registry),
             clock, audit);
     }
 
@@ -1759,7 +1816,7 @@ public static class EngineBuilder
     {
         ArgumentNullException.ThrowIfNull(settings);
 
-        if (Ladders(settings) is not FacilityLadders ladders)
+        if (Ladders(settings) is not var (ladders, registry))
             return new BuildRefusedByContent(Failures(settings));
 
         var clock = new SimulationClock(settings.Epoch);
@@ -1770,7 +1827,7 @@ public static class EngineBuilder
         return Build(
             settings,
             ShippedModules(audit, clock, new RandomSource(settings.WorldSeed),
-                           Defaults.ProfileNamed(settings.RealityProfile), ladders),
+                           Defaults.ProfileNamed(settings.RealityProfile), ladders, registry),
             clock, audit);
     }
 
