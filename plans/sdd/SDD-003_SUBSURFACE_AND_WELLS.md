@@ -1071,6 +1071,79 @@ same stale phase-doc text that finding corrects at each `Rn.0`.
 > that needs a site visit to re-choke is a *content* distinction (07 §4b's remote
 > choke), not a reason to make every choke change take months.
 
+> **R20d.9 amendment. `IWell` and `IWellbore`, implemented — against the
+> REACHABLE subset of design 02 §3.4's lifecycle, stated rather than guessed
+> at.**
+>
+> `IWell` and `IWellbore` have been declared since §5's contract pass and
+> implemented by nothing. Building them against the full twelve-state diagram
+> would mean nine dead states: this composition has one drilling template
+> (`drill-development-well`), no separate propose/permit step (the rig is
+> assigned the tick the command is accepted), no sidetrack command, no
+> injector-drilling command (the disposal/injection well is composed once as
+> part of the surface chain, never drilled by a player), and — checked against
+> `DrillWellActivity.Complete` rather than assumed — **a dry hole opens no
+> completion at all**. The money is spent and the months are gone; nothing is
+> created for a `Well` to attach to. So `Proposed`, `Permitted`, `Logged`,
+> `SuspendedNonCommercial`, `Completing`, `Workover` and `Injecting` are not
+> reachable, and neither is `Drilling` or `DryHole` as a WELL state — both are
+> facts about an *activity*, not about an entity that persists once the tick
+> closes, and `WellStatusView` (`ProductionLoop.Wells()`) has never treated
+> them as one.
+>
+> **The reachable subset is three states, and it is the one already shipped**:
+>
+> ```text
+> [*] --> Producing: completion opens (drill succeeds)
+> Producing --> ShutIn: choke closed
+> ShutIn --> Producing: choke opened
+> Producing --> Abandoned: plugged
+> ShutIn --> Abandoned: plugged
+> Abandoned --> [*]
+> ```
+>
+> This is exactly what `ProductionLoop.Wells()` has computed since R21.2 —
+> `_abandoned.Contains(id) ? Abandoned : well.IsShutIn ? ShutIn : Producing` —
+> which confirms the subset rather than inventing it. `Well.Status` computes
+> the SAME three-way switch from the SAME two owned facts
+> (`WellsState.Completions` and `ProductionLoop`'s abandoned set), because a
+> second implementation of one derivation is the second-owner shape law L5
+> forbids even when both sides would agree today.
+>
+> **Every well is `Classification.Development`**, honestly rather than by
+> default: the shipped catalogue has one drilling template and it is not
+> gated as exploration or appraisal work, so there is nothing else a drilled
+> well in this composition could be.
+>
+> **`Surface` is `Coordinate` `(0, 0)` for every well, stated as a limit and
+> not a default.** World generation (R15/R20d.8) produces a compartment's
+> volumetrics — pore volume, porosity, saturation, pressure, depth — and no
+> `(x, y)`; `IProspect` is a marker interface with no members. There is no
+> basin map in this composition for a surface location to be a position ON,
+> so every well answers the origin, honestly, until R20d.8's spatial half
+> lands. A test asserts this explicitly (mirroring R22.6's "no shipped
+> climate closes"), so a future map is a visible change to it rather than a
+> silent one.
+>
+> **`Wellbore.Path` is a two-station vertical trajectory**, `(0, 0, Surface)`
+> to `(TotalDepth, TotalDepth, Surface)`: the only geometry `DrillWellCommand`
+> takes is a single `Length`, so every well in this composition is vertical
+> by construction, and a deviated or horizontal trajectory is not a case this
+> command surface produces.
+>
+> **`ContactLengthIn` reads the completion's OWN perforations rather than
+> re-deriving from the path.** A perforation already states its own
+> `TopMd`/`BottomMd` — the fact flow calculations actually use — and a
+> geometry-only derivation through `Trajectory ∩ compartment interval` would
+> be a second computation of the same interval with no compartment-side depth
+> range to check it against (a compartment carries one `Depth`, not a top and
+> a bottom). Summing the perforations draining the named compartment is the
+> one owner already established; this reads it rather than adding another.
+>
+> **One `Wellbore` per `Well`**, since no command produces a second: the id
+> is shared with the completion's, which is the same convention `Well.Id`
+> uses.
+
 ## 6. The completion — the source element
 
 `ICompletion : IFlowElement`. Its `Transform` is the operating-point solve —

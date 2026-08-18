@@ -58,6 +58,77 @@ all `D`-severity with the EM7 default: forfeit — announced twice, never silent
 Rounds: generated on the jurisdiction's cadence; blocks are polygon partitions
 of open acreage.
 
+> **R20d.9 amendment. The join, against ONE licence — because this
+> composition has one field.**
+>
+> `Licence` has been complete and constructed nowhere: no test, no
+> composition. §1's machinery is real and untouched by this amendment; what
+> was missing is everything downstream of "a company holds one."
+>
+> **`Well.Licence` returns the composition's ONE licence directly**, rather
+> than each well carrying an independent reference that happens to agree.
+> §1's own words are "already committed, because a well references one from
+> R6 onward" — written for a company that may hold several blocks. This
+> composition generates one field ([R20d.8](../phases/R20d_INTEGRATION.md)),
+> so there is exactly one licence to reference; a per-well field would be a
+> second place storing an answer the composition already knows, and a
+> multi-licence company is R20's content, not a reason to shape the join
+> around a case this engine cannot produce yet.
+>
+> **Terms are ONE hand-authored `Defaults.LicenceTerms`**, on the same
+> footing as `Defaults.Climate` and `Defaults.Eras`: this composition ships a
+> single instance of every mechanic before R20's content pass gives it a
+> catalogue, and a licence is not different in kind from a climate. The
+> numbers are chosen proportionally to what already exists rather than
+> invented from nothing — the bond is a multiple of one well's cost
+> (`Defaults.DrillWellTerms.Cost`), the commitment is drilling one well
+> within a runway a real campaign needs, the term spans the composition's own
+> forty-year test horizon. **`Relinquishment` is the empty list, stated
+> rather than padded**: this field is `DeclareKnownField`d from the first
+> tick (SDD-010 §4b), so there is no unexplored acreage to hand back, and a
+> non-empty schedule would be a control this composition has nothing for it
+> to control. **`HseRegime` carries a placeholder id with no consumer yet** —
+> R16.6's own row already says the rules it would name are R23's; the field
+> is required by the record and this states plainly that naming it does not
+> mean enforcing it (rule 7's own test: what reads this to make a decision).
+>
+> **`RecordDelivery` fires from the activity that completes the commitment**,
+> matched by `CommitmentItem.Kind == ActivityTerms.Template` — the same
+> convention a facility rung's `requiresTech` matches a registry node's id
+> by. `DrillWellActivity.Complete` calls it on a successful hole; a dry hole
+> delivers nothing, which is correct — the commitment is to drill a well
+> that stands, not to spend the money trying.
+>
+> **Assessment runs at `StageId.Company` (11), which no module has ever
+> contributed to.** Not a new stage: the fourteen-stage order has carried
+> this slot since design 03 §6 and it has sat empty. On loss: the bond posts
+> as `Account.Penalty` against `Account.Cash` under
+> `MovementCategory.Contractual` — both declared in the ledger's own
+> `Causes` list since R21 §2.4b and posted to by nothing until now.
+>
+> **"Announced twice" is scoped down, and stated as a limit rather than
+> claimed in full.** Design 16's EM7 describes a `Decision`-severity event
+> published AHEAD of a deadline, that later EXPIRES into its declared
+> default and publishes THAT too — an advance-warning-then-expiry pattern.
+> Checked rather than assumed: `Severity.Decision` is referenced nowhere in
+> the engine except `EventBus`'s own cause-required guard, so no module
+> tracks a live deadline and publishes ahead of it — EM7 in full is its own
+> unbuilt mechanic, not a small addition to this join. What ships here is the
+> half that is achievable without it: the outcome publishes ONCE, at the
+> moment of forfeiture, as a `Severity.Decision` event carrying the
+> forfeiture as its audited cause, which is genuinely "never silent" — a
+> host cannot miss it — without the second, advance half EM7's full text
+> promises. Building that is design 16's own task, not this one's.
+>
+> **A lost licence refuses further drilling and nothing already standing.**
+> `DrillWellActivity.OwnRefusals` checks `licence.IsLive`; wells already
+> producing keep producing, because losing the right to develop further is
+> not the same fact as losing what has already been developed, and design
+> 02 §3.4's diagram routes every terminal state through `Abandoned` — a
+> licence loss is not one of its edges into that state, and inventing a
+> forced-abandonment consequence here would be a second, uninvited
+> mechanic.
+
 ## 2. Rivals — the architectural rule
 
 > **A rival is a policy over beliefs, never a reader of truth.** Rivals hold
