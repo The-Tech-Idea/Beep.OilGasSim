@@ -14,13 +14,27 @@ namespace OGSim.Environment.Tests;
 
 public class WeatherTests
 {
-    private static ClimateProfile Climate(double persistence, double amplitude = 1.0) =>
+    private static ClimateProfile Climate(
+        double persistence, double amplitude = 1.0, IReadOnlyList<bool>? access = null) =>
         new(new ContentId("north-sea"),
             persistence,
             Baseline: Flat(3.0),
             Amplitude: Flat(amplitude),
             TemperatureBaseline: Flat(8.0),
-            TemperatureAmplitude: -2.0);
+            TemperatureAmplitude: -2.0,
+            AccessOpen: access ?? Open());
+
+    /// <summary>A year a boat can reach in every month.</summary>
+    private static IReadOnlyList<bool> Open() =>
+        [.. Enumerable.Range(0, 12).Select(_ => true)];
+
+    /// <summary>
+    /// An ICE ROAD: reachable only while the ground is frozen. December through
+    /// March, which is four months of the twelve and the shape that makes a
+    /// window a deadline rather than a tax.
+    /// </summary>
+    private static IReadOnlyList<bool> IceRoad() =>
+        [.. Enumerable.Range(1, 12).Select(month => month <= 3 || month == 12)];
 
     private static double[] Flat(double value)
     {
@@ -247,9 +261,84 @@ public class WeatherTests
         var eleven = new double[11];
 
         var profile = new ClimateProfile(
-            new ContentId("short-year"), 0.5, eleven, Flat(1.0), Flat(8.0), -2.0);
+            new ContentId("short-year"), 0.5, eleven, Flat(1.0), Flat(8.0), -2.0, Open());
 
         Assert.Throws<ContentFault>(profile.Validate);
     }
 
+    // ------------------------------------------- access windows (R22.6)
+
+    /// <summary>
+    /// A window is a CALENDAR fact and takes no draw (SDD-016 §5b's R22.6
+    /// amendment) — so it answers the same in every game, which is what lets a
+    /// player plan a mobilisation against it a year ahead.
+    ///
+    /// <para>Asserted by advancing the weather between the two questions: if the
+    /// answer came from the daily severities, thirty fresh draws would have moved
+    /// it. It does not move, because the road is frozen or it is not.</para>
+    /// </summary>
+    [Fact]
+    public void EN3_an_access_window_is_a_calendar_fact_and_takes_no_draw()
+    {
+        var state = new WeatherState([Climate(0.75, access: IceRoad())]);
+        var stream = new RandomSource(11UL).Stream(StreamId.Weather);
+        var model = new Ar1Weather(0.75);
+
+        Assert.True(state.AccessOpenIn(0, new GameDate(1965, 1)));
+        Assert.False(state.AccessOpenIn(0, new GameDate(1965, 7)));
+
+        for (var month = 0; month < 24; month++)
+            state.Advance(new GameDate(1965 + (month / 12), (month % 12) + 1), model, stream);
+
+        // Two years of weather later, the calendar says exactly what it said.
+        Assert.True(state.AccessOpenIn(0, new GameDate(1967, 1)));
+        Assert.False(state.AccessOpenIn(0, new GameDate(1967, 7)));
+    }
+
+    /// <summary>
+    /// How long is left to commit — the question a player actually has, since a
+    /// window gates STARTING and the decision it creates is a deadline.
+    ///
+    /// <para>Independently counted against the ice road above: open in December,
+    /// January, February and March. Asked in January, two months remain after
+    /// this one, so the answer is 3 — the count INCLUDING the month asked about,
+    /// because a job committed in January is committed inside the window.</para>
+    /// </summary>
+    [Fact]
+    public void The_window_says_how_long_is_left_to_commit()
+    {
+        var state = new WeatherState([Climate(0.75, access: IceRoad())]);
+
+        Assert.Equal(3, state.MonthsUntilAccessCloses(0, new GameDate(1965, 1)));
+        Assert.Equal(2, state.MonthsUntilAccessCloses(0, new GameDate(1965, 2)));
+        Assert.Equal(1, state.MonthsUntilAccessCloses(0, new GameDate(1965, 3)));
+
+        // Shut already: nothing is left, and the honest answer is not "eight
+        // months until it opens" — that is a different question.
+        Assert.Equal(0, state.MonthsUntilAccessCloses(0, new GameDate(1965, 4)));
+
+        // December opens it, and the count runs across the year boundary.
+        Assert.Equal(4, state.MonthsUntilAccessCloses(0, new GameDate(1965, 12)));
+    }
+
+    /// <summary>A year that never opens is content that has closed the field for
+    /// ever, which is abandonment rather than a season.</summary>
+    [Fact]
+    public void A_climate_no_month_can_reach_is_refused()
+    {
+        ClimateProfile shut = Climate(
+            0.5, access: [.. Enumerable.Range(0, 12).Select(_ => false)]);
+
+        Assert.Throws<ContentFault>(shut.Validate);
+    }
+
+    /// <summary>A window is twelve months, like every other seasonal curve.</summary>
+    [Fact]
+    public void A_window_of_the_wrong_length_is_refused()
+    {
+        ClimateProfile eleven = Climate(
+            0.5, access: [.. Enumerable.Range(0, 11).Select(_ => true)]);
+
+        Assert.Throws<ContentFault>(eleven.Validate);
+    }
 }

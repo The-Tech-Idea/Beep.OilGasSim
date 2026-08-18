@@ -46,6 +46,21 @@ public sealed record ActivityTerms(
     /// </summary>
     double WeatherLimit,
 
+    /// <summary>
+    /// Whether this work needs the site to be REACHABLE to begin (SDD-016 §5b's
+    /// R22.6 amendment).
+    ///
+    /// <para>Separate from <see cref="WeatherLimit"/> and gating a different
+    /// thing: the limit costs standby days to work ALREADY UNDER WAY, and this
+    /// refuses work from STARTING. A rig, a vessel and a coil unit have to be
+    /// brought in; a build-up survey on a well that is already shut in does
+    /// not.</para>
+    ///
+    /// <para>Required, with no default, for the reason the limit beside it is:
+    /// a default would answer for every template that never chose.</para>
+    /// </summary>
+    bool RequiresAccess,
+
     OutcomeTable Outcomes)
 {
     /// <summary>
@@ -539,7 +554,8 @@ internal sealed class ActivityOrders(
     OGSim.Company.MarketState market,
     FieldControl field,
     ActivityState activities,
-    SimulationClock clock)
+    SimulationClock clock,
+    OGSim.Environment.WeatherState weather)
 {
     /// <summary>
     /// Every reason this order cannot be given, not the first. A player told only
@@ -565,6 +581,24 @@ internal sealed class ActivityOrders(
             // The scheduler's own target check would repeat this in its words.
             return reasons;
         }
+
+        // THE SITE HAS TO BE REACHABLE TO START (SDD-016 §5b's R22.6 amendment).
+        // Refused rather than deferred: a company that cannot move a rig until
+        // June must be told in January, because the whole decision a window
+        // creates is a deadline — and an order silently queued until the road
+        // opened would take that decision away and hand back a surprise.
+        //
+        // Only at the START. Work already under way continues through a closing
+        // window: the crew and the kit are on site, and the road shutting behind
+        // them does not stop the job. A mechanic that suspended running
+        // operations at a window boundary would strand every long job at the same
+        // moment each year.
+        if (activity.Terms.RequiresAccess
+            && !weather.AccessOpenIn(ActivityStage.FieldRegion, clock.Date))
+            reasons.Add(new RejectionReason(
+                "$loc:reject.access-closed",
+                $"the site cannot be reached in month {clock.Date.Month}; " +
+                $"{template.Value} has to be committed while the window is open"));
 
         if (activity.OnePerTarget && activities.IsRunning(template, target))
             reasons.Add(new RejectionReason(
@@ -662,7 +696,7 @@ internal sealed class ActivityStage(
     public StageId Id => StageId.Operations;
 
     /// <summary>The one region this world has (SDD-016 §1).</summary>
-    private const int FieldRegion = 0;
+    internal const int FieldRegion = 0;
 
     public void Execute(TickContext context)
     {

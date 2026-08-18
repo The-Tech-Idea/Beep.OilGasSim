@@ -487,6 +487,9 @@ internal static class Defaults
         DurationTicks: 4,
         Rig: TheRig,
         WeatherLimit: 6.0,   // a rig on location: heave stops tripping pipe long before it stops the platform
+        // a rig has to be brought to location.
+        RequiresAccess: true,
+
         Outcomes: DrillingOutcomes);
 
     public static ActivityTerms WellTestTerms { get; } = new(
@@ -495,6 +498,9 @@ internal static class Defaults
         DurationTicks: 1,
         Rig: TheRig,
         WeatherLimit: 7.5,   // the well is shut in and a gauge is reading; little to do on deck
+        // the well is shut in and a gauge on site reads it.
+        RequiresAccess: false,
+
         Outcomes: WellTestOutcomes);
 
     /// <summary>Cheap, quick, and run on the rig that is already there.</summary>
@@ -504,6 +510,9 @@ internal static class Defaults
         DurationTicks: 1,
         Rig: TheRig,
         WeatherLimit: 6.5,   // a wireline unit needs a stable deck to run tools on a thin cable
+        // a logging unit and its cable arrive by boat.
+        RequiresAccess: true,
+
         Outcomes: WellTestOutcomes);
 
     /// <summary>Several times the price of a log for the same two properties,
@@ -514,6 +523,9 @@ internal static class Defaults
         DurationTicks: 1,
         Rig: TheRig,
         WeatherLimit: 6.0,   // coring is drilling, and slower
+        // cut from a rig that is already being mobilised.
+        RequiresAccess: true,
+
         Outcomes: WellTestOutcomes);
 
     /// <summary>
@@ -529,6 +541,9 @@ internal static class Defaults
         DurationTicks: 2,
         Rig: null,
         WeatherLimit: 5.5,   // streamers in the water are the most weather-limited thing offshore
+        // a survey vessel and its streamers.
+        RequiresAccess: true,
+
         Outcomes: SurveyOutcomes);
 
     /// <summary>
@@ -769,6 +784,9 @@ internal static class Defaults
         DurationTicks: 9,
         Rig: null,
         WeatherLimit: 5.0,   // pipeline and terminal work is heavy lift
+        // a lay barge, which is the largest mobilisation here.
+        RequiresAccess: true,
+
         Outcomes: SurveyOutcomes);
 
     /// <summary>
@@ -865,6 +883,9 @@ internal static class Defaults
         DurationTicks: 2,
         Rig: null,
         WeatherLimit: 6.0,   // rig-based, like the drilling it undoes
+        // the same rig, and a cement unit with it.
+        RequiresAccess: true,
+
         Outcomes: SurveyOutcomes);
 
     /// <summary>
@@ -890,6 +911,9 @@ internal static class Defaults
         DurationTicks: 5,
         Rig: null,
         WeatherLimit: 5.0,   // heavy lift
+        // a module lifted onto the deck.
+        RequiresAccess: true,
+
         Outcomes: SurveyOutcomes);
 
 
@@ -905,6 +929,9 @@ internal static class Defaults
         DurationTicks: 6,
         Rig: null,
         WeatherLimit: 5.0,   // heavy lift
+        // the same, and heavier.
+        RequiresAccess: true,
+
         Outcomes: SurveyOutcomes);
 
 
@@ -919,6 +946,9 @@ internal static class Defaults
         DurationTicks: 4,
         Rig: null,
         WeatherLimit: 4.5,   // a subsea lift is the least tolerant work in the catalogue
+        // a subsea structure set from a vessel.
+        RequiresAccess: true,
+
         Outcomes: SurveyOutcomes);
 
     /// <summary>What a treater costs and how long it takes.</summary>
@@ -928,6 +958,9 @@ internal static class Defaults
         DurationTicks: 3,
         Rig: null,
         WeatherLimit: 5.0,   // heavy lift
+        // a skid delivered and tied in.
+        RequiresAccess: true,
+
         Outcomes: SurveyOutcomes);
 
     /// <summary>
@@ -942,6 +975,9 @@ internal static class Defaults
         DurationTicks: 1,
         Rig: null,
         WeatherLimit: 6.5,   // a wellsite intervention, lighter than a rig job
+        // chemicals pumped from stock held on the platform.
+        RequiresAccess: false,
+
         Outcomes: SurveyOutcomes);
 
     /// <summary>
@@ -960,6 +996,9 @@ internal static class Defaults
         DurationTicks: 1,
         Rig: null,
         WeatherLimit: 8.0,   // planned maintenance happens inside the module it maintains
+        // planned work by the crew who are already there.
+        RequiresAccess: false,
+
         Outcomes: SurveyOutcomes);
 
     /// <summary>
@@ -979,6 +1018,9 @@ internal static class Defaults
         DurationTicks: 1,
         Rig: null,
         WeatherLimit: 8.0,   // fitting a kit to equipment already in place, under cover
+        // kit that has to be carried out and fitted.
+        RequiresAccess: true,
+
         Outcomes: SurveyOutcomes);
 
     /// <summary>
@@ -1000,6 +1042,9 @@ internal static class Defaults
         DurationTicks: 1,
         Rig: null,
         WeatherLimit: 7.5,   // emergency work is done in weather planned work would wait out
+        // an emergency fix with the spares already aboard.
+        RequiresAccess: false,
+
         Outcomes: SurveyOutcomes);
 
     public static ActivityTerms InstallSeparatorTerms { get; } = new(
@@ -1008,6 +1053,9 @@ internal static class Defaults
         DurationTicks: 3,
         Rig: null,
         WeatherLimit: 5.0,   // heavy lift
+        // a vessel craned into a socket.
+        RequiresAccess: true,
+
         Outcomes: SurveyOutcomes);
 
     /// <summary>
@@ -1286,7 +1334,18 @@ internal static class Defaults
             Amplitude: [1.6, 1.6, 1.4, 1.2, 1.0, 0.9, 0.9, 1.0, 1.2, 1.4, 1.5, 1.6],
             TemperatureBaseline: [6.0, 5.6, 6.4, 8.2, 10.8, 13.4,
                                   15.1, 15.4, 14.0, 11.6, 9.0, 7.0],
-            TemperatureAmplitude: -1.8);
+            TemperatureAmplitude: -1.8,
+
+            // OPEN ALL YEAR, and that is a statement about this climate rather
+            // than a mechanic switched off. A temperate offshore field is reached
+            // by boat and helicopter in every month; what stops work there is the
+            // sea state on the day, which is what `WeatherLimit` already prices.
+            // A window belongs to an ice road or a monsoon coast, and this
+            // composition ships neither — so no shipped climate closes, and the
+            // refusal is proved against an arctic profile in the tests until R20
+            // authors a scenario that has one (SDD-016 §5b's R22.6 amendment).
+            AccessOpen: [true, true, true, true, true, true,
+                         true, true, true, true, true, true]);
 
     /// <summary>
     /// The severity an operation can work through (SDD-016 §3). ONE limit for
@@ -1597,7 +1656,7 @@ public static class EngineBuilder
         new WorldModule(),
         new CapabilitiesModule(),
         new IntegrityModule(),
-        new EnvironmentModule(),
+        new EnvironmentModule(Defaults.Climate),
         new HseModule(),
         new ObjectivesModule(),
         new MaterialsModule(profile),

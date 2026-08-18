@@ -1032,7 +1032,8 @@ internal sealed class FieldModule(FacilityLadders ladders) : EngineModule(Declar
         // to compose rather than shipping an order nothing listens to.
         var orders = new ActivityOrders(
             company, composition.Require<OGSim.Company.MarketState>(), field, activities,
-            composition.Require<SimulationClock>());
+            composition.Require<SimulationClock>(),
+            composition.Require<OGSim.Environment.WeatherState>());
 
         for (int i = 0; i < activities.Catalogue.Count; i++)
             activities.Catalogue[i].Register(composition, orders);
@@ -1231,7 +1232,8 @@ internal sealed class WeatherStage(
     }
 }
 
-internal sealed class EnvironmentModule() : EngineModule(Declare(
+internal sealed class EnvironmentModule(OGSim.Environment.ClimateProfile climate)
+    : EngineModule(Declare(
     "environment",
     provides: [typeof(IWeatherModel), typeof(OGSim.Environment.WeatherState)],
     requires: [typeof(IRandomSource)],
@@ -1248,8 +1250,13 @@ internal sealed class EnvironmentModule() : EngineModule(Declare(
     {
         ArgumentNullException.ThrowIfNull(composition);
 
-        var model = new OGSim.Environment.Ar1Weather(Defaults.Climate.Persistence);
-        var weather = new OGSim.Environment.WeatherState([Defaults.Climate]);
+        // THE CLIMATE IS AN ARGUMENT, not a static read (law L2). It was
+        // `Defaults.Climate` in both lines, which is a dependency with a default
+        // wearing a constant's clothes — and it made the access window of
+        // SDD-016 §5b's R22.6 amendment untestable through a composed engine,
+        // since no test could hand the module a coast that closes.
+        var model = new OGSim.Environment.Ar1Weather(climate.Persistence);
+        var weather = new OGSim.Environment.WeatherState([climate]);
 
         composition.Own(weather);
         composition.Provide<IWeatherModel>(model);

@@ -26,7 +26,20 @@ public sealed record ClimateProfile(
     IReadOnlyList<double> Baseline,
     IReadOnlyList<double> Amplitude,
     IReadOnlyList<double> TemperatureBaseline,
-    double TemperatureAmplitude)
+    double TemperatureAmplitude,
+
+    /// <summary>
+    /// Which months the site can be REACHED (SDD-016 §3, and §5b's R22.6
+    /// amendment) — an ice road that carries a rig only while the ground is
+    /// frozen, a coast a monsoon shuts for a season.
+    ///
+    /// <para><b>Twelve booleans and not a severity threshold</b>, which is the
+    /// distinction §3 draws and the one that is easy to lose. A window is a
+    /// CALENDAR fact and takes no draw: deriving it from <c>severity &gt; L</c>
+    /// would make it a consequence of the dice, and a lucky calm February would
+    /// then open an ice road in a thaw.</para>
+    /// </summary>
+    IReadOnlyList<bool> AccessOpen)
 {
     /// <summary>Twelve of everything, checked here rather than at the first
     /// December of a forty-year game.</summary>
@@ -35,6 +48,19 @@ public sealed record ClimateProfile(
         Twelve(Baseline, nameof(Baseline));
         Twelve(Amplitude, nameof(Amplitude));
         Twelve(TemperatureBaseline, nameof(TemperatureBaseline));
+        TwelveOf(AccessOpen, nameof(AccessOpen));
+
+        // A climate no month can reach is content that has closed the field
+        // permanently, which is a state the game reaches by abandonment and
+        // never by a calendar.
+        var open = 0;
+        for (var month = 0; month < MonthsPerYear; month++) if (AccessOpen[month]) open++;
+
+        if (open == 0)
+            throw new ContentFault("SDD-016 §3", null,
+                $"climate '{Id.Value}' is closed in all twelve months; a site that " +
+                "can never be reached cannot be developed, and a permanent closure " +
+                "is abandonment rather than a season");
 
         for (var month = 0; month < MonthsPerYear; month++)
             if (!double.IsFinite(Baseline[month])
@@ -58,6 +84,16 @@ public sealed record ClimateProfile(
             throw new ContentFault("SDD-016 §1", null,
                 $"climate '{Id.Value}' declares {curve.Count} months of {named}; a " +
                 "seasonal curve has twelve, one per month of the 30/360 year");
+    }
+
+    private void TwelveOf(IReadOnlyList<bool> window, string named)
+    {
+        ArgumentNullException.ThrowIfNull(window);
+
+        if (window.Count != MonthsPerYear)
+            throw new ContentFault("SDD-016 §3", null,
+                $"climate '{Id.Value}' declares {window.Count} months of {named}; a " +
+                "window is a season and the year has twelve");
     }
 
     internal const int MonthsPerYear = 12;
@@ -157,6 +193,48 @@ public sealed class WeatherState : IStateOwner
         return Temperature.FromCelsius(
             _climates[region].TemperatureBaseline[month]
             + (_climates[region].TemperatureAmplitude * _daily[at]));
+    }
+
+    /// <summary>
+    /// Whether the site can be reached this month (SDD-016 §5b's R22.6
+    /// amendment).
+    ///
+    /// <para>Reads the CALENDAR and nothing else — not the daily severities, not
+    /// the carry, and no draw. So it answers the same for a given month of a
+    /// given region in every game, which is what lets a player plan against it a
+    /// year ahead.</para>
+    /// </summary>
+    public bool AccessOpenIn(int region, GameDate month)
+    {
+        return _climates[Region(region)].AccessOpen[month.Month - 1];
+    }
+
+    /// <summary>
+    /// How many months are left before the window shuts — 0 when it is already
+    /// shut, and the count INCLUDING this one when it is open.
+    ///
+    /// <para>This is the question a player actually has (§5b's R22.6 amendment).
+    /// A window gates STARTING, so the decision is a deadline: the work has to
+    /// be committed before the road closes, and a month spent deciding can cost a
+    /// year. "Is it open?" is answerable from the calendar by anyone; "how long
+    /// have I got?" is what turns it into a decision.</para>
+    ///
+    /// <para>Bounded by the twelve months of the year: a window that never shuts
+    /// answers twelve rather than looping, because a year of notice and a
+    /// permanent opening are the same thing to anyone planning a job.</para>
+    /// </summary>
+    public int MonthsUntilAccessCloses(int region, GameDate from)
+    {
+        IReadOnlyList<bool> window = _climates[Region(region)].AccessOpen;
+
+        int start = from.Month - 1;
+
+        if (!window[start]) return 0;
+
+        for (var ahead = 1; ahead < ClimateProfile.MonthsPerYear; ahead++)
+            if (!window[(start + ahead) % ClimateProfile.MonthsPerYear]) return ahead;
+
+        return ClimateProfile.MonthsPerYear;
     }
 
     /// <summary>

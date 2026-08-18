@@ -703,3 +703,139 @@ public sealed class FacilityContentTests
         Assert.Contains("gas-plant", fault.Message, StringComparison.Ordinal);
     }
 }
+
+/// <summary>
+/// R22.6 — the access window, through a composed engine (SDD-016 §5b's R22.6
+/// amendment).
+/// </summary>
+public sealed class AccessWindowTests
+{
+    /// <summary>An ice road: reachable December through March and no other
+    /// month.</summary>
+    private static OGSim.Environment.ClimateProfile Arctic() =>
+        new(new ContentId("arctic-onshore"),
+            Persistence: 0.75,
+            Baseline: [.. Enumerable.Repeat(3.0, 12)],
+            Amplitude: [.. Enumerable.Repeat(1.0, 12)],
+            TemperatureBaseline: [.. Enumerable.Repeat(-15.0, 12)],
+            TemperatureAmplitude: -4.0,
+            AccessOpen: [.. Enumerable.Range(1, 12).Select(m => m <= 3 || m == 12)]);
+
+    /// <summary>The shipped set with the climate swapped, which is what makes
+    /// this a test of the ENGINE rather than of the profile record.</summary>
+    private static Engine OnAnIceRoad(GameDate epoch)
+    {
+        var clock = new SimulationClock(epoch);
+        var audit = new AuditTrail(clock, new AuditRetention(12));
+
+        var modules = new List<IModule>(EngineBuilder.ShippedModules(
+            audit, clock, new RandomSource(20260806UL), Defaults.Simulation,
+            Fixture.Ladders()));
+
+        for (int i = 0; i < modules.Count; i++)
+            if (modules[i] is EnvironmentModule)
+                modules[i] = new EnvironmentModule(Arctic());
+
+        EngineSettings settings = Fixture.Settings() with { Epoch = epoch };
+
+        Engine engine = Assert.IsType<Built>(EngineBuilder.Build(settings, modules)).Engine;
+
+        // A FIELD TO WORK ON. The shared refusals return early on a company with
+        // no compartment — "there is nothing here to work on" — and would answer
+        // that instead of the window, which would make this test pass for the
+        // wrong reason in the month it is supposed to fail.
+        engine.Provided.Resolve<FieldControl>().AddCompartment(
+            new GeneratedCompartment(
+                PoreVolume: new ReservoirVolume(100.0e6),
+                Porosity: 0.22,
+                OilSaturation: 0.7,
+                InitialPressure: new Pressure(30.0e6),
+                Temperature: Temperature.FromCelsius(93.3),
+                Depth: new Length(2000.0)),
+            permeability: new Permeability(1.0e-13),
+            netThickness: new Length(20.0),
+            drainageArea: new Area(2.0e5),
+            rockCompressibility: 4.5e-10,
+            gasOilContact: new Length(1900.0),
+            oilWaterContact: new Length(2100.0),
+            Defaults.Wettability, Defaults.Drive,
+            Defaults.AquiferStrength, Defaults.AquiferResponseTime);
+
+        return engine;
+    }
+
+    /// <summary>
+    /// EN3 — <b>a rig cannot be ordered onto a site the road does not reach</b>,
+    /// and the player is told so rather than having the order quietly queued.
+    ///
+    /// <para><b>EN4 is NOT covered by this and is not claimed</b>: a delayed
+    /// arctic operation waiting a full year while the licence clock keeps running
+    /// is a second mechanic — the refusal here says no, and nothing yet models
+    /// what that costs a company holding a licence with a commitment on it.</para>
+    ///
+    /// <para>Refused and not deferred, which is the whole mechanic: a window
+    /// gates STARTING, so the decision it creates is a DEADLINE — the work has to
+    /// be committed before the road shuts. An order silently held until June would
+    /// take that decision away and hand back a surprise.</para>
+    /// </summary>
+    [Fact]
+    public void EN3_work_that_must_be_mobilised_is_refused_while_the_road_is_shut()
+    {
+        Engine shut = OnAnIceRoad(new GameDate(1965, 7));
+
+        // A VESSEL CRANED ONTO THE DECK: it has to arrive, so it is gated. The
+        // command needs no world, which keeps this test about the window.
+        Rejected refused = Assert.IsType<Rejected>(
+            shut.Commands.Submit(new InstallSeparatorCommand()));
+
+        Assert.Contains(refused.Reasons,
+            reason => reason.LocId == "$loc:reject.access-closed");
+    }
+
+    /// <summary>
+    /// And accepted in a month the road is open — the other half, without which
+    /// the test above would pass against a survey that could never be ordered at
+    /// all.
+    /// </summary>
+    [Fact]
+    public void EN3_the_same_work_is_accepted_while_the_road_is_open()
+    {
+        Engine open = OnAnIceRoad(new GameDate(1965, 1));
+
+        Assert.IsType<Accepted>(open.Commands.Submit(new InstallSeparatorCommand()));
+    }
+
+    /// <summary>
+    /// Work done with what is already on site is NOT gated. A repair is an
+    /// emergency fix with the spares aboard, and refusing it for eight months of
+    /// the year would shut the field in for a road it never needed.
+    /// </summary>
+    [Fact]
+    public void Work_needing_no_mobilisation_is_not_gated_by_the_window()
+    {
+        Assert.False(Defaults.RepairEquipmentTerms.RequiresAccess);
+        Assert.False(Defaults.ServiceEquipmentTerms.RequiresAccess);
+        Assert.False(Defaults.WellTestTerms.RequiresAccess);
+        Assert.False(Defaults.RemediateInjectorTerms.RequiresAccess);
+
+        Assert.True(Defaults.DrillWellTerms.RequiresAccess);
+        Assert.True(Defaults.SeismicSurveyTerms.RequiresAccess);
+        Assert.True(Defaults.ExpandExportTerms.RequiresAccess);
+    }
+
+    /// <summary>
+    /// AND NO SHIPPED CLIMATE CLOSES, stated as a test so it is a decision rather
+    /// than an oversight. `temperate-offshore` is reached by boat in every month;
+    /// what stops work there is the sea state on the day, which `WeatherLimit`
+    /// already prices. A window belongs to an ice road or a monsoon coast, and
+    /// authoring one is R20's scenario content.
+    /// </summary>
+    [Fact]
+    public void No_shipped_climate_closes_and_that_is_deliberate()
+    {
+        for (var month = 0; month < 12; month++)
+            Assert.True(Defaults.Climate.AccessOpen[month],
+                $"month {month + 1} of the shipped climate is closed; if that is " +
+                "intended, the slow suite's timelines change and this test should say so");
+    }
+}
