@@ -868,7 +868,79 @@ public sealed class SaveGameTests
             reason => reason.Contains("manifest", StringComparison.Ordinal));
     }
 
+    /// <summary>
+    /// R20d.9. <b>A plugged well is still plugged after a reload</b>, which it
+    /// was not: <c>Abandon</c> sets the same <c>ChokeSetting.Closed</c> a normal
+    /// shut-in uses, so <c>Completion.IsShutIn</c> reads true for either, and
+    /// <c>FieldControl</c>'s abandoned set was the ONLY place the two differed.
+    /// Unsaved, a reload returned an abandoned well reporting <c>ShutIn</c> —
+    /// which cost it nothing to look right, since nothing published the
+    /// distinction until <c>IWell.Status</c> made it one.
+    /// </summary>
+    [Fact]
+    public void A_plugged_well_is_still_plugged_after_a_reload()
+    {
+        Built built = Assert.IsType<Built>(EngineBuilder.Build(Fixture.Settings()));
+        Engine engine = built.Engine;
 
+        FieldControl field = engine.Provided.Resolve<FieldControl>();
 
+        EntityId<IReservoirCompartmentEntity> target = field.AddCompartment(
+            new GeneratedCompartment(
+                PoreVolume: new ReservoirVolume(100.0e6),
+                Porosity: 0.22,
+                OilSaturation: 0.7,
+                InitialPressure: new Pressure(30.0e6),
+                Temperature: Temperature.FromCelsius(93.3),
+                Depth: new Length(2000.0)),
+            permeability: new Permeability(1.0e-13),
+            netThickness: new Length(20.0),
+            drainageArea: new Area(2.0e5),
+            rockCompressibility: 4.5e-10,
+            gasOilContact: new Length(1900.0),
+            oilWaterContact: new Length(2100.0),
+            Defaults.Wettability, Defaults.Drive,
+            Defaults.AquiferStrength, Defaults.AquiferResponseTime);
 
+        engine.Provided.Resolve<WorldState>()
+            .DeclareKnownField(target, new ReservoirVolume(100.0e6));
+
+        field.Drill(target, new Length(2000.0));
+
+        // TWO WELLS: one plugged, one left shut in — so the comparison is
+        // between the two states this bit is supposed to tell apart, not between
+        // "abandoned" and "the default".
+        field.Drill(target, new Length(2000.0));
+
+        engine.Pipeline.AdvanceTick();
+
+        var plugged = new EntityId<ICompletion>(1);
+        var shut = new EntityId<ICompletion>(2);
+
+        engine.Commands.Submit(new AbandonWellCommand(plugged));
+        engine.Commands.Submit(new SetWellChokeCommand(shut, Open: false));
+
+        engine.Pipeline.AdvanceTick();
+        while (engine.ReadModel!.ActivitiesRunning > 0) engine.Pipeline.AdvanceTick();
+
+        Assert.Equal(WellStatus.Abandoned, StatusOf(engine, plugged));
+        Assert.Equal(WellStatus.ShutIn, StatusOf(engine, shut));
+
+        Engine reloaded = Assert.IsType<Built>(
+            SaveGame.Load(Saved(engine), Fixture.Settings())).Engine;
+
+        reloaded.Pipeline.AdvanceTick();
+
+        Assert.Equal(WellStatus.Abandoned, StatusOf(reloaded, plugged));
+        Assert.Equal(WellStatus.ShutIn, StatusOf(reloaded, shut));
+    }
+
+    private static WellStatus StatusOf(Engine engine, EntityId<ICompletion> well)
+    {
+        foreach (WellStatusView row in engine.ReadModel!.Wellbores)
+            if (row.Well == new EntityRef(EntityKind.Completion, well.Value))
+                return row.Status;
+
+        throw new InvalidOperationException($"well {well.Value} is not on the read model");
+    }
 }

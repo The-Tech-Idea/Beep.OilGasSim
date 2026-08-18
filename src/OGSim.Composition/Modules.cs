@@ -663,7 +663,7 @@ internal sealed class FieldModule(FacilityLadders ladders) : EngineModule(Declar
 
     ownsState: [
         "field.activities", "company.obligations", "field.flood", "field.export",
-        "company.facility", "company.reserve-history"],
+        "company.facility", "company.reserve-history", "field.abandoned"],
     stages:
     [
         new StageParticipation(StageId.Operations, Order: 0),
@@ -818,6 +818,7 @@ internal sealed class FieldModule(FacilityLadders ladders) : EngineModule(Declar
         // and it was in no save at all: a reloaded game kept the water already
         // injected and quietly stopped buying more (R20d.12).
         composition.Own(loop);
+        composition.Own(field);
 
         // AND THE EXPORT LINE, the most expensive purchase in the catalogue.
         // Owned here because this module composes the terminal; the five rungs

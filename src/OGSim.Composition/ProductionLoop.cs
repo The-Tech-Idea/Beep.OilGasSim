@@ -1731,7 +1731,7 @@ internal sealed class ProductionLoop : IStateOwner
 /// </summary>
 internal delegate OGSim.Facilities.Pipeline GatheringLine(Length run);
 
-public sealed class FieldControl
+public sealed class FieldControl : IStateOwner
 {
     private readonly SubsurfaceState _subsurface;
     private readonly WellsState _wells;
@@ -2044,8 +2044,57 @@ public sealed class FieldControl
 
     /// <summary>Which wells are plugged. Held here because it is what
     /// distinguishes a shut-in well from an abandoned one, and only this layer
-    /// knows an abandonment happened.</summary>
+    /// knows an abandonment happened.
+    ///
+    /// <para>STATE, and it was not (R20d.9). `Abandon` sets the SAME
+    /// `ChokeSetting.Closed` a normal shut-in uses — `Completion.IsShutIn` reads
+    /// true for either — so this set was the only place the two differed, and it
+    /// went nowhere on a save. Unreachable while nothing published the
+    /// difference; it became reachable the moment `IWell.Status` made
+    /// `Abandoned` a fact a player could ask for.</para>
+    /// </summary>
     private readonly HashSet<EntityId<ICompletion>> _abandoned = [];
+
+    // ------------------------------------------------------- SDD-013 §4
+
+    public StateKey Key { get; } = new("field.abandoned");
+
+    public int SchemaVersion => 1;
+
+    /// <summary>Nothing has to be back before this is (SDD-013 §2b).</summary>
+    public IReadOnlyList<StateKey> RestoreAfter => [];
+
+    public void Capture(IStateWriter writer)
+    {
+        ArgumentNullException.ThrowIfNull(writer);
+
+        // ID ORDER, not insertion order: a HashSet's enumeration is hash-ordered
+        // (rule D-5), and two runs of one save could plug the same wells in a
+        // different byte order otherwise.
+        var ordered = new List<EntityId<ICompletion>>(_abandoned);
+        ordered.Sort((a, b) => a.Value.CompareTo(b.Value));
+
+        writer.WriteInt64("count", ordered.Count);
+
+        for (int i = 0; i < ordered.Count; i++)
+            writer.WriteInt64(
+                "id." + i.ToString("D4", System.Globalization.CultureInfo.InvariantCulture),
+                (long)ordered[i].Value);
+    }
+
+    public void Restore(IStateReader reader)
+    {
+        ArgumentNullException.ThrowIfNull(reader);
+
+        _abandoned.Clear();
+
+        long count = reader.ReadInt64("count");
+
+        for (long i = 0; i < count; i++)
+            _abandoned.Add(new EntityId<ICompletion>(
+                (ulong)reader.ReadInt64(
+                    "id." + i.ToString("D4", System.Globalization.CultureInfo.InvariantCulture))));
+    }
 
     /// <summary>
     /// Turns a well's valve (SDD-003 §5.1's R20.4 amendment).
