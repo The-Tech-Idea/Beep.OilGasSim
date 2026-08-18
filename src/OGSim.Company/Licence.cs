@@ -39,8 +39,19 @@ public sealed record CommitmentAssessment(
         HashCode.Combine(BondForfeit, LicenceLost, Structural.HashOf(Unmet));
 }
 
-/// <summary>SDD-011 §1. A live licence with its terms and its clocks.</summary>
-public sealed class Licence : ILicence
+/// <summary>
+/// SDD-011 §1. A live licence with its terms and its clocks.
+///
+/// <para><c>IStateOwner</c> since R20d.9: commitment progress and whether the
+/// licence has been forfeited both change over the game's life, so both are
+/// STATE rather than something recomputed from <c>Terms</c> alone. What IS
+/// recomputed every compose, never captured: <c>Terms</c> itself (a fixed
+/// content value), and <c>Granted</c>/<c>Expiry</c>, which follow from it — a
+/// company holds one licence granted at tick 0 in every game this composition
+/// ships, so there is nothing there for a save to disagree with itself
+/// about.</para>
+/// </summary>
+public sealed class Licence : ILicence, IStateOwner
 {
     private readonly List<CommitmentProgress> _progress = [];
 
@@ -144,6 +155,52 @@ public sealed class Licence : ILicence
     /// <summary>Expiry is a clock, not a judgement — it runs whether or not the
     /// work was done.</summary>
     public bool HasExpiredBy(Tick now) => now.Value >= Expiry.Value;
+
+    // ------------------------------------------------------- SDD-013 §4
+
+    public StateKey Key { get; } = new("company.licence");
+
+    public int SchemaVersion => 1;
+
+    /// <summary>Nothing has to be back before this is (SDD-013 §2b).</summary>
+    public IReadOnlyList<StateKey> RestoreAfter => [];
+
+    public void Capture(IStateWriter writer)
+    {
+        ArgumentNullException.ThrowIfNull(writer);
+
+        writer.WriteInt64("is-live", IsLive ? 1L : 0L);
+        writer.WriteInt64("delivered-count", _progress.Count);
+
+        // DECLARED ORDER, matching Terms.WorkCommitment — a List and not a
+        // Dictionary, so this is D-5-safe without needing a sort.
+        for (int i = 0; i < _progress.Count; i++)
+            writer.WriteDouble(
+                "delivered." + i.ToString("D4", System.Globalization.CultureInfo.InvariantCulture),
+                _progress[i].Delivered);
+    }
+
+    public void Restore(IStateReader reader)
+    {
+        ArgumentNullException.ThrowIfNull(reader);
+
+        IsLive = reader.ReadInt64("is-live") != 0L;
+
+        long count = reader.ReadInt64("delivered-count");
+
+        if (count != _progress.Count)
+            throw new SaveDataFault("SDD-011 §1", null,
+                $"the save carries {count} commitment items and this licence's " +
+                $"terms declare {_progress.Count}; the content changed under the save");
+
+        for (long i = 0; i < count; i++)
+        {
+            double delivered = reader.ReadDouble(
+                "delivered." + i.ToString("D4", System.Globalization.CultureInfo.InvariantCulture));
+
+            _progress[(int)i] = _progress[(int)i] with { Delivered = delivered };
+        }
+    }
 
     private static void Validate(LicenceTerms terms)
     {

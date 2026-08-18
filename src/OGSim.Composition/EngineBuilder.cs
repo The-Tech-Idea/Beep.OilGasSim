@@ -1339,6 +1339,54 @@ internal static class Defaults
     public static Capabilities.EraCalendar Eras { get; } =
         new([(Era.E1, 1950), (Era.E2, 1970), (Era.E3, 1990), (Era.E4, 2010)]);
 
+    /// <summary>
+    /// The one licence this composition's company holds (SDD-011 §1's R20d.9
+    /// amendment) — on the same footing as <see cref="Climate"/> and
+    /// <see cref="Eras"/>: a single hand-authored instance of a mechanic this
+    /// composition ships one of, ahead of R20's jurisdiction content.
+    ///
+    /// <para>Proportional to what already exists rather than invented: the
+    /// bond is a small multiple of one well's cost
+    /// (<see cref="DrillWellTerms"/>), and the term spans this composition's
+    /// own forty-year test horizon so no shipped run expires the licence
+    /// mid-game and finds out what that means — a question this amendment
+    /// deliberately leaves unanswered (SDD-011 §1's R20d.9 amendment only
+    /// wires the commitment deadline, not bare expiry).</para>
+    ///
+    /// <para><b>The commitment falls due at month 60, not month 24</b> —
+    /// widened from a first cut that was measured rather than assumed to be
+    /// too tight. A lost licence refuses all further drilling (SDD-011's
+    /// R20d.9 amendment), so a company whose FIRST well came back dry — a real
+    /// outcome the shipped table gives real weight to — had no recourse at
+    /// all under a 24-month deadline: one early roll of bad luck ended the
+    /// game's development for good, which is a harsher reading of "loses the
+    /// acreage" than the mechanic is meant to enforce. Sixty months is margin
+    /// for several real attempts (each `DrillWellTerms.DurationTicks` long)
+    /// before the commitment binds, while staying meaningfully inside the
+    /// 480-month term rather than a formality.</para>
+    ///
+    /// <para><c>Relinquishment</c> is empty and stays that way: this field is
+    /// <c>DeclareKnownField</c>d from the first tick (SDD-010 §4b), so there is
+    /// no unexplored acreage to hand back.</para>
+    /// </summary>
+    public static Contracts.LicenceTerms LicenceTerms { get; } =
+        new(
+            TermMonths: 480,
+            WorkCommitment:
+            [
+                new Contracts.CommitmentItem(
+                    DrillWellTerms.Template, Quantity: 1.0, Due: new Tick(60)),
+            ],
+            Bond: Money.FromMillions(12.0),
+            Relinquishment: [],
+            FiscalRegime: new ContentId("concession"),
+
+            // NO CONSUMER YET (rule 7's own test: what reads this to make a
+            // decision). R16.6's own row already says the rules an HSE regime
+            // would name are R23's; this states plainly that naming it is not
+            // the same as enforcing it.
+            HseRegime: new ContentId("standard"));
+
     public static Environment.ClimateProfile Climate { get; } =
         new(new ContentId("temperate-offshore"),
             Persistence: 0.75,

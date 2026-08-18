@@ -503,6 +503,10 @@ internal sealed class CompanyModule() : EngineModule(Declare(
         typeof(IFiscalRegime), typeof(IPriceModel),
         typeof(OGSim.Company.MarketState), typeof(OGSim.Company.CompanyState),
         typeof(ReservesBook), typeof(IReserveBasedLending),
+
+        // The one licence this composition's company holds (SDD-011 §1's
+        // R20d.9 amendment).
+        typeof(OGSim.Company.Licence),
     ],
 
     // The belief store, because reserves are worked out from what the company
@@ -515,8 +519,12 @@ internal sealed class CompanyModule() : EngineModule(Declare(
         typeof(IAuditTrail), typeof(IBeliefStore),
         typeof(OGSim.Company.MarketState),   // finding 229
     ],
-    ownsState: ["company.ledger", "company.market"],
-    stages: NoStagesYet))
+
+    // The licence's commitment progress and whether it has been forfeited are
+    // STATE and were not (R20d.9): both change over the game's life and
+    // neither is recomputed from Terms alone.
+    ownsState: ["company.ledger", "company.market", "company.licence"],
+    stages: [new StageParticipation(StageId.Company, Order: 0)]))
 {
     public override void Compose(IModuleComposition composition)
     {
@@ -572,6 +580,17 @@ internal sealed class CompanyModule() : EngineModule(Declare(
 
         composition.Own(company);
         composition.Provide(company);
+
+        // THE ONE LICENCE (SDD-011 §1's R20d.9 amendment). Granted at tick 0
+        // always: this composition's company holds one licence for the one
+        // field it generates, and nothing here starts a game mid-licence.
+        var licence = new OGSim.Company.Licence(
+            new EntityId<ILicence>(1), Defaults.LicenceTerms, granted: new Tick(0));
+
+        composition.Own(licence);
+        composition.Provide(licence);
+
+        composition.Contribute(order: 0, new LicenceStage(licence, company, audit));
     }
 
     private static bool IsCustodyTransfer(IAuditTrail audit, AuditId cause)
@@ -584,6 +603,59 @@ internal sealed class CompanyModule() : EngineModule(Declare(
             if (transfers[i].Id == cause) return true;
 
         return false;
+    }
+}
+
+/// <summary>
+/// Stage 11 — <c>StageId.Company</c>, a slot the fourteen-stage order has
+/// carried since design 03 §6 and no module has ever contributed to (SDD-011
+/// §1's R20d.9 amendment).
+///
+/// <para>On loss: the bond posts to <c>Account.Penalty</c> against
+/// <c>Account.Cash</c> under <c>MovementCategory.Contractual</c> — both
+/// declared in the ledger's own <c>Causes</c> list since R21 §2.4b and posted
+/// to by nothing until now — with an <c>AuditCategory.Financial</c> cause,
+/// which is durable (never pruned, finding 236) and is how "never silent" is
+/// satisfied: through the door that demonstrably works today rather than a
+/// new <c>EngineEvent</c> this task would have had to invent from nothing
+/// (SDD-011's R20d.9b correction).</para>
+/// </summary>
+internal sealed class LicenceStage(
+    OGSim.Company.Licence licence, OGSim.Company.CompanyState company, IAuditTrail audit)
+    : ITickStage
+{
+    public StageId Id => StageId.Company;
+
+    public void Execute(TickContext context)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+
+        // ONLY WHILE LIVE. `AssessAt` re-detects the SAME unmet item on every
+        // call after the deadline has passed — nothing marks a forfeited item
+        // resolved, because SDD-011 §1's "unmet ⇒ bond forfeit + licence loss"
+        // is a ONE-TIME transition and `Licence` was never called more than once
+        // per test before this join made it a per-tick call. Calling it every
+        // tick regardless would forfeit the SAME bond every month for the rest
+        // of the game.
+        if (!licence.IsLive) return;
+
+        OGSim.Company.CommitmentAssessment assessment = licence.AssessAt(context.Tick);
+
+        if (!assessment.LicenceLost) return;
+
+        AuditId cause = audit.Record(
+            AuditCategory.Financial, subject: null, cause: null,
+            new Dictionary<string, AuditValue>(StringComparer.Ordinal)
+            {
+                ["spend"] = new("licence-bond-forfeit"),
+                ["unmet-count"] = new(assessment.Unmet.Count.ToString(
+                    System.Globalization.CultureInfo.InvariantCulture)),
+            });
+
+        company.Ledger.Post(new OGSim.Company.Movement(
+            context.Tick, OGSim.Company.Account.Penalty, OGSim.Company.Account.Cash,
+            assessment.BondForfeit, OGSim.Company.MovementCategory.Contractual,
+            Asset: null, Cause: cause));
     }
 }
 
@@ -646,6 +718,10 @@ internal sealed class FieldModule(FacilityLadders ladders) : EngineModule(Declar
 
         // What the company holds, so the scheduler can be told (R20d.10).
         typeof(OGSim.Capabilities.CapabilityState),
+
+        // The one licence, so DrillWellActivity can record delivery against it
+        // and refuse when it has been lost (R20d.9).
+        typeof(OGSim.Company.Licence),
 
         // R20d.10b — the era and technology gate on equipment: an equipment
         // rung needs the same check an activity does.
@@ -905,7 +981,8 @@ internal sealed class FieldModule(FacilityLadders ladders) : EngineModule(Declar
                 composition.Require<OGSim.Information.ProspectRisks>(),
                 composition.Require<WorldState>(),
                 composition.Require<IBeliefStore>(),
-                subsurface, door),
+                subsurface, door,
+                composition.Require<OGSim.Company.Licence>()),
 
             new WellTestActivity(
                 Defaults.WellTestTerms, Defaults.WellTestSource,

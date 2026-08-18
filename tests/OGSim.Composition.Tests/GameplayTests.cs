@@ -488,8 +488,11 @@ public sealed class GameplayTests
         Built built = Assert.IsType<Built>(EngineBuilder.Build(Fixture.Settings()));
         Engine engine = built.Engine;
 
-        // $50M at $300k a month — insolvency arrives, and not before it should.
-        for (var month = 0; month < 166; month++) engine.Pipeline.AdvanceTick();
+        // $50M at $300k a month, minus the $12M bond forfeited at month 24
+        // when the licence's one commitment goes unmet (R20d.9): insolvency
+        // now arrives around month 127, not month 166 — a real, one-time shift
+        // in the shipped economics rather than a defect in the mechanic.
+        for (var month = 0; month < 120; month++) engine.Pipeline.AdvanceTick();
         Assert.False(engine.ReadModel!.Insolvent, "the company is not out of money yet");
 
         for (var month = 0; month < 20; month++) engine.Pipeline.AdvanceTick();

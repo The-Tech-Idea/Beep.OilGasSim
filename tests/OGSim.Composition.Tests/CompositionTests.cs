@@ -313,6 +313,11 @@ public sealed class ShippedSetTests
     /// then plans the month around whatever survived. A stage is a point in the
     /// tick, not a monopoly — this list is of contributions in execution order, so
     /// a second one at an existing point is exactly as visible as a new point.</para>
+    ///
+    /// <para>R20d.9 filled <b>Company</b>, a slot the fourteen-stage order has
+    /// carried since design 03 §6 and no module had ever contributed to: a
+    /// licence's work commitment is assessed here, so a missed deadline forfeits
+    /// the bond and blocks further drilling.</para>
     /// </summary>
     [Fact]
     public void The_shipped_engine_runs_the_stages_its_modules_declared()
@@ -324,7 +329,7 @@ public sealed class ShippedSetTests
              StageId.Availability, StageId.Availability,
              StageId.SolveFlow, StageId.MaterialBalance, StageId.Custody,
              StageId.Economics, StageId.HseRegulation, StageId.Information,
-             StageId.Objectives, StageId.Close],
+             StageId.Company, StageId.Objectives, StageId.Close],
             built.Engine.Pipeline.DeclaredOrder());
     }
 
@@ -1151,5 +1156,216 @@ public sealed class EquipmentEraTests
     public void Equipment_of_the_current_era_is_not_gated()
     {
         Assert.IsType<Accepted>(Field().Commands.Submit(new InstallSeparatorCommand()));
+    }
+}
+
+/// <summary>
+/// R20d.9 — the licence, joined (SDD-011 §1's R20d.9 amendment). One composed
+/// licence, checked through a real engine rather than the unit tests
+/// <c>Licence</c> already had — those proved the class; these prove the join.
+/// </summary>
+public sealed class LicenceTests
+{
+    private static (Engine Engine, EntityId<IReservoirCompartmentEntity> Target) Undrilled(
+        ulong seed = 20260806UL)
+    {
+        Built built = Assert.IsType<Built>(EngineBuilder.Build(
+            Fixture.Settings() with { WorldSeed = seed }));
+
+        EntityId<IReservoirCompartmentEntity> target =
+            built.Engine.Provided.Resolve<FieldControl>().AddCompartment(
+                new GeneratedCompartment(
+                    PoreVolume: new ReservoirVolume(100.0e6),
+                    Porosity: 0.22,
+                    OilSaturation: 0.7,
+                    InitialPressure: new Pressure(30.0e6),
+                    Temperature: Temperature.FromCelsius(93.3),
+                    Depth: new Length(2000.0)),
+                permeability: new Permeability(1.0e-13),
+                netThickness: new Length(20.0),
+                drainageArea: new Area(2.0e5),
+                rockCompressibility: 4.5e-10,
+                gasOilContact: new Length(1900.0),
+                oilWaterContact: new Length(2100.0),
+                Defaults.Wettability, Defaults.Drive,
+                Defaults.AquiferStrength, Defaults.AquiferResponseTime);
+
+        built.Engine.Provided.Resolve<WorldState>()
+            .DeclareKnownField(target, new ReservoirVolume(100.0e6));
+
+        return (built.Engine, target);
+    }
+
+    private static EntityId<IProspect> Structure(
+        Engine engine, EntityId<IReservoirCompartmentEntity> field) =>
+        engine.Provided.Resolve<WorldState>().ProspectFor(field);
+
+    /// <summary>Keeps drilling until one lands — every hole is paid for either
+    /// way, which is the point of the loop and not an inefficiency in the
+    /// test (the same pattern <c>ActivityTests.Drilled</c> uses).</summary>
+    private static void Drilled(Engine engine, EntityId<IReservoirCompartmentEntity> target)
+    {
+        while (engine.ReadModel is null || engine.ReadModel.Wells == 0)
+        {
+            if (engine.ReadModel?.ActivitiesRunning == 0)
+                engine.Commands.Submit(
+                    new DrillWellCommand(Structure(engine, target), new Length(2000.0)));
+
+            engine.Pipeline.AdvanceTick();
+        }
+    }
+
+    /// <summary>
+    /// <b>A well that stands satisfies the commitment</b> — drilled well inside
+    /// the month-60 deadline, the licence stays live past it, and no bond is
+    /// ever forfeited.
+    /// </summary>
+    [Fact]
+    [Trait("Speed", "Slow")]
+    public void A_well_drilled_before_the_deadline_keeps_the_licence_live()
+    {
+        (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled();
+
+        Drilled(engine, target);
+
+        var licence = engine.Provided.Resolve<OGSim.Company.Licence>();
+
+        for (var month = 0; month < 65; month++) engine.Pipeline.AdvanceTick();
+
+        Assert.True(licence.IsLive, "a company that drilled a standing well keeps its licence");
+
+        Assert.DoesNotContain(
+            engine.Audit.Query(new AuditQuery(null, AuditCategory.Financial, null, null)),
+            entry => entry.Data.TryGetValue("spend", out AuditValue spend)
+                     && spend.Value == "licence-bond-forfeit");
+    }
+
+    /// <summary>
+    /// <b>An unmet commitment forfeits the bond, once, and blocks further
+    /// drilling</b> — the three consequences SDD-011 §1's R20d.9 amendment
+    /// promises, all through the real tick loop rather than the unit-tested
+    /// <c>Licence</c> class directly.
+    /// </summary>
+    [Fact]
+    [Trait("Speed", "Slow")]
+    public void An_unmet_commitment_forfeits_the_bond_and_blocks_further_drilling()
+    {
+        (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled();
+
+        var licence = engine.Provided.Resolve<OGSim.Company.Licence>();
+        OGSim.Company.CompanyState company = engine.Provided.Resolve<OGSim.Company.CompanyState>();
+
+        // Up to but not including the deadline tick — the commitment is still
+        // outstanding and nothing has been forfeited yet.
+        for (var month = 0; month < 59; month++) engine.Pipeline.AdvanceTick();
+
+        Assert.True(licence.IsLive, "the deadline has not arrived yet");
+        Money cashBeforeForfeit = company.Ledger.Cash;
+
+        // The deadline tick itself: the commitment is unmet, so the bond
+        // forfeits ON TOP OF the month's ordinary standing charge.
+        engine.Pipeline.AdvanceTick();
+
+        Assert.False(licence.IsLive, "the commitment went unmet at its own deadline");
+
+        Assert.Equal(
+            cashBeforeForfeit.Cents - Defaults.LicenceTerms.Bond.Cents
+                - Defaults.Economics.FixedOperatingCostPerTick.Cents,
+            company.Ledger.Cash.Cents);
+
+        AuditEntry forfeit = Assert.Single(
+            engine.Audit.Query(new AuditQuery(null, AuditCategory.Financial, null, null)),
+            entry => entry.Data.TryGetValue("spend", out AuditValue spend)
+                     && spend.Value == "licence-bond-forfeit");
+
+        Assert.True(forfeit.Data.ContainsKey("unmet-count"));
+
+        // NEVER TWICE (the repeated-forfeit bug this join found and fixed):
+        // another sixty months costs nothing further.
+        Money afterFirstForfeit = company.Ledger.Cash;
+
+        for (var month = 0; month < 60; month++) engine.Pipeline.AdvanceTick();
+
+        Assert.Equal(
+            0L,
+            afterFirstForfeit.Cents - company.Ledger.Cash.Cents
+                - (60L * Defaults.Economics.FixedOperatingCostPerTick.Cents));
+
+        // AND FURTHER DRILLING REFUSES, naming the reason.
+        Rejected refused = Assert.IsType<Rejected>(
+            engine.Commands.Submit(
+                new DrillWellCommand(Structure(engine, target), new Length(2000.0))));
+
+        Assert.Contains(refused.Reasons, reason => reason.LocId == "$loc:reject.licence-lost");
+    }
+
+    /// <summary>
+    /// <b>Every well as <c>IWell</c>, through a real engine</b> — the
+    /// reachable status subset, the licence reference, and a resolvable
+    /// wellbore whose contact length matches the completion's own
+    /// perforation.
+    /// </summary>
+    [Fact]
+    [Trait("Speed", "Slow")]
+    public void AsWells_reports_a_drilled_well_against_the_composed_licence()
+    {
+        (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled();
+
+        Drilled(engine, target);
+
+        FieldControl field = engine.Provided.Resolve<FieldControl>();
+        var licence = engine.Provided.Resolve<OGSim.Company.Licence>();
+
+        IReadOnlyList<IWell> wells = field.AsWells(licence.Id);
+        IWell well = Assert.Single(wells);
+
+        Assert.Equal(WellStatus.Producing, well.Status);
+        Assert.Equal(WellClassification.Development, well.Classification);
+        Assert.Equal(licence.Id, well.Licence);
+
+        EntityId<IWellbore> wellboreId = Assert.Single(well.Wellbores);
+        IWellbore? wellbore = field.WellboreNamed(wellboreId);
+
+        Assert.NotNull(wellbore);
+        Assert.Equal(well.Id.Value, wellbore!.Well.Value);
+        Assert.True(wellbore.ContactLengthIn(target).Metres > 0.0,
+            "the wellbore must contact the compartment it was drilled into");
+    }
+
+    /// <summary>
+    /// <b>The licence's own state survives a reload</b> — progress toward the
+    /// commitment and whether it has been forfeited both change over the
+    /// game's life and neither is recomputed from <c>Terms</c> alone.
+    /// </summary>
+    [Fact]
+    [Trait("Speed", "Slow")]
+    public void The_licence_stays_lost_after_a_reload()
+    {
+        (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled();
+
+        for (var month = 0; month < 61; month++) engine.Pipeline.AdvanceTick();
+
+        var licence = engine.Provided.Resolve<OGSim.Company.Licence>();
+        Assert.False(licence.IsLive);
+
+        var container = new MemoryStream();
+        SaveGame.Write(engine, Fixture.Settings().WorldSeed, container);
+        container.Position = 0;
+
+        Engine reloaded = Assert.IsType<Built>(
+            SaveGame.Load(container, Fixture.Settings())).Engine;
+
+        var reloadedLicence = reloaded.Provided.Resolve<OGSim.Company.Licence>();
+        Assert.False(reloadedLicence.IsLive);
+
+        // AND THE REFUSAL STAYS TOO — proving the RESTORED field, not a
+        // freshly-composed one that happens to agree.
+        reloaded.Pipeline.AdvanceTick();
+
+        Rejected refused = Assert.IsType<Rejected>(
+            reloaded.Commands.Submit(
+                new DrillWellCommand(Structure(reloaded, target), new Length(2000.0))));
+
+        Assert.Contains(refused.Reasons, reason => reason.LocId == "$loc:reject.licence-lost");
     }
 }

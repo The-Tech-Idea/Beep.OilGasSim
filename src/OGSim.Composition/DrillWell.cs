@@ -50,7 +50,8 @@ internal sealed class DrillWellActivity(
     WorldState world,
     IBeliefStore beliefs,
     OGSim.Subsurface.SubsurfaceState subsurface,
-    ObservationDoor door) : Activity<DrillWellCommand>(terms)
+    ObservationDoor door,
+    OGSim.Company.Licence licence) : Activity<DrillWellCommand>(terms)
 {
     /// <summary>A well is PP&amp;E: the money buys something the company still
     /// owns next month (SDD-009 §1).</summary>
@@ -99,6 +100,17 @@ internal sealed class DrillWellActivity(
                 "$loc:reject.no-manifold-slot",
                 "every slot on the manifold is taken; a well with nowhere to tie in " +
                 "cannot flow, and a bigger header has to be installed first"));
+
+        // A LOST LICENCE REFUSES FURTHER DRILLING (SDD-011 §1's R20d.9
+        // amendment). Nothing already producing stops — this is checked at
+        // ORDER time, not at the wells themselves, because design 02 §3.4's
+        // diagram routes every terminal state through `Abandoned` and a
+        // licence loss is not one of its edges into it.
+        if (!licence.IsLive)
+            reasons.Add(new RejectionReason(
+                "$loc:reject.licence-lost",
+                "the licence's work commitment went unmet and the bond was " +
+                "forfeited; no further development is possible here"));
 
         return reasons;
     }
@@ -150,6 +162,13 @@ internal sealed class DrillWellActivity(
         EntityId<IReservoirCompartmentEntity> reservoir = found.Value;
 
         field.Drill(reservoir, done.Depth);
+
+        // THE COMMITMENT IS TO A WELL THAT STANDS (SDD-011 §1's R20d.9
+        // amendment), not to the money spent trying: a dry hole (the branch
+        // above) delivers nothing. Matched by CONTENT ID — `Terms.Template` is
+        // the same id `CommitmentItem.Kind` names — the same convention a
+        // facility rung's `requiresTech` matches a registry node's id by.
+        licence.RecordDelivery(Terms.Template, 1.0);
 
         // AND THE HOLE ITSELF TELLS THE COMPANY WHAT IT FOUND. A discovery
         // well penetrates the column, logs it and samples the rock, so a company

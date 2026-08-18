@@ -2004,20 +2004,107 @@ public sealed class FieldControl : IStateOwner
         {
             Completion well = completions[i];
 
-            WellStatus status =
-                _abandoned.Contains(well.CompletionId) ? WellStatus.Abandoned
-                : well.IsShutIn ? WellStatus.ShutIn
-                : WellStatus.Producing;
-
             rows.Add(new WellStatusView(
                 new EntityRef(EntityKind.Completion, well.CompletionId.Value),
                 "well-" + well.CompletionId.Value.ToString(
                     System.Globalization.CultureInfo.InvariantCulture),
-                status,
+                StatusOf(well),
                 new SurfaceVolume(0.0)));
         }
 
         return rows;
+    }
+
+    /// <summary>
+    /// The reachable three-way switch (SDD-003 §5's R20d.9 amendment), and the
+    /// ONE place it is written: <see cref="Wells"/>'s <c>WellStatusView</c> rows
+    /// and <see cref="AsWells"/>'s <c>IWell</c> entities both read this rather
+    /// than each carrying their own copy (law L5) — a second implementation of
+    /// one derivation is the second-owner shape even when both sides agree
+    /// today.
+    /// </summary>
+    private WellStatus StatusOf(Completion completion) =>
+        _abandoned.Contains(completion.CompletionId) ? WellStatus.Abandoned
+        : completion.IsShutIn ? WellStatus.ShutIn
+        : WellStatus.Producing;
+
+    /// <summary>Every well as a map screen would want it, with no map to draw it
+    /// on (SDD-003 §5's R20d.9 amendment) — every well answers the same origin,
+    /// stated as a limit rather than a default: world generation has no (x, y)
+    /// at all, and R20d.8's spatial half is what moves this.</summary>
+    private static readonly Coordinate NoMapYet = new(0.0, 0.0);
+
+    /// <summary>
+    /// Every well as <see cref="IWell"/>, against ONE composition-wide licence —
+    /// this composition generates one field, so there is exactly one licence
+    /// for every well to reference (SDD-011 §1's R20d.9 amendment).
+    ///
+    /// <para>Walked in the same order as <see cref="Wells"/>, for the same
+    /// reason (D-5): a host's list must not reshuffle between ticks.</para>
+    /// </summary>
+    public IReadOnlyList<IWell> AsWells(EntityId<ILicence> licence)
+    {
+        IReadOnlyList<Completion> completions = _wells.Completions;
+        var result = new List<IWell>(completions.Count);
+
+        for (int i = 0; i < completions.Count; i++)
+        {
+            Completion completion = completions[i];
+
+            var wellId = new EntityId<IWell>(completion.CompletionId.Value);
+            var wellboreId = new EntityId<IWellbore>(completion.CompletionId.Value);
+
+            result.Add(new OGSim.Wells.Well(
+                wellId,
+                StatusOf(completion),
+
+                // EVERY WELL IS DEVELOPMENT, honestly rather than by default:
+                // the shipped catalogue has one drilling template and it is not
+                // gated as exploration or appraisal work, so there is nothing
+                // else a drilled well in this composition could be.
+                WellClassification.Development,
+                licence,
+                NoMapYet,
+                [wellboreId]));
+        }
+
+        return result;
+    }
+
+    /// <summary>The vertical trajectory's bottom station: the deepest
+    /// perforation a completion has, since <c>DrillWellCommand</c>'s only
+    /// geometry parameter is a single <see cref="Length"/> and every well this
+    /// composition produces is vertical by construction.</summary>
+    private static Length DeepestMd(Completion completion)
+    {
+        IReadOnlyList<Perforation> perforations = completion.Perforations;
+        double deepest = 0.0;
+
+        for (int i = 0; i < perforations.Count; i++)
+            if (perforations[i].BottomMd.Metres > deepest) deepest = perforations[i].BottomMd.Metres;
+
+        return new Length(deepest);
+    }
+
+    /// <summary>
+    /// The full <see cref="IWellbore"/> behind an id from a
+    /// <see cref="Well.Wellbores"/> list — reconstructed on demand rather than
+    /// cached, since a wellbore is entirely a function of its completion (law
+    /// L5: caching would be a second, staler copy of the same fact).
+    /// </summary>
+    public IWellbore? WellboreNamed(EntityId<IWellbore> id)
+    {
+        if (_wells.Find(new EntityId<ICompletion>(id.Value)) is not Completion completion)
+            return null;
+
+        return new OGSim.Wells.Wellbore(
+            id, new EntityId<IWell>(id.Value),
+            new Trajectory(
+            [
+                new TrajectoryStation(new Length(0.0), new Length(0.0), NoMapYet),
+                new TrajectoryStation(DeepestMd(completion), DeepestMd(completion), NoMapYet),
+            ]),
+            completion);
     }
 
     /// <summary>
