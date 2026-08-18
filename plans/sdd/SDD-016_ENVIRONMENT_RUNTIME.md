@@ -137,6 +137,40 @@ declares a severity limit; the days above it are STANDBY days, which
 progress. Nothing new is needed in the scheduler, and the 30/0 split it passes
 today is exactly the "no weather" case.
 
+> **R22.6 amendment. The access window is a member, and it gates STARTING
+> rather than progressing.**
+>
+> §3 says access windows are calendar facts *from the climate profile* and §5b's
+> declared `ClimateProfile` has no member for them, so the fact had nowhere to
+> live. It gains one: `IReadOnlyList<bool> AccessOpen` — twelve months, validated
+> beside the other three curves, and **deterministic**: no draw is taken, because
+> a window is a season and weather is what happens inside it.
+>
+> **Twelve booleans and not a severity threshold**, which is the distinction §3
+> is drawing and it is easy to lose. A monsoon closes a road for a season whether
+> or not any particular day is calm; an ice road carries a rig because the ground
+> is frozen, not because the wind dropped. Deriving the window from `severity >
+> L` would make it a consequence of the draws — and then a lucky calm February
+> would open an ice road in a thaw, which is not a thing that happens.
+>
+> **It gates STARTING, and that is the whole mechanic.** An operation whose
+> template declares `RequiresAccess` cannot BEGIN in a closed month; one already
+> under way continues, because the crew and the kit are already on site and the
+> road closing behind them does not stop the work. This is the opposite of how
+> severity couples — severity costs standby days to work IN PROGRESS (`DaysAbove`)
+> — and the two must not be merged: a mechanic that suspended running operations
+> at a window boundary would strand every long job at the same moment each year.
+>
+> **So the player's decision is a DEADLINE rather than a tax**, which is what
+> makes a window interesting: the work has to be committed before the window
+> shuts, and a month spent deciding can cost a year. `WeatherState.AccessOpenIn`
+> answers for a month and `MonthsUntilAccessCloses` answers the question a player
+> actually has, which is how long is left to commit.
+>
+> A refusal is a rejected command carrying a domain reason (design 09 §7's
+> *what did I do wrong*), never a silently deferred operation: a company that
+> cannot move a rig until June must be told in January.
+
 ## 6. Test mapping
 
 EN3/EN4 (windows as calendar facts) · EN5/EN6 (the shared x(d) into derating
