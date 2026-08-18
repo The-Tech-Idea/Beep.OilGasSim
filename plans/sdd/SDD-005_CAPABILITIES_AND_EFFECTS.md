@@ -42,6 +42,43 @@ public interface ICapabilitySet
 mechanism rivals use with their personality lag (SDD-011 §2.1). "Everything
 eventually becomes standard practice" is a date, not an event.
 
+> **R20d.10 amendment. What "era start" IS, and why the era is DERIVED.**
+>
+> §2 above prices diffusion at `era start + diffusionLag(node)` and no document
+> says when an era starts, so the one input the formula needs had no source.
+> [TECH_TREE](../catalog/TECH_TREE.md) states it and always has — *Eras: E1
+> 1950s–60s · E2 70s–80s · E3 90s–2000s · E4 2010s+* — so the boundaries are
+> **1950, 1970, 1990, 2010**, transcribed from the registry rather than chosen
+> here. They are a calendar, passed as a dependency like every other content
+> table; a game that starts in 1965 begins in E1 and reaches E3 inside a
+> forty-year run.
+>
+> **The era is a FUNCTION OF THE DATE and is therefore not state.** It was a
+> stored field on `CapabilityState`, captured into the save and set only by the
+> constructor and by `Restore` — which is law L5's mirrored derived value, and it
+> is why a 1965→2005 campaign stayed in E1 for forty years: nothing ever wrote
+> it, and nothing could, because there was no calendar to write from.
+>
+> This section's own note said the era is captured "because `Acquire` checks it:
+> replaying a late-era technology against a restored early era would refuse a save
+> that was legitimate when written." **Deriving it removes that hazard rather than
+> creating it** — a save restores at the tick it was taken at, so the derived era
+> is the era that authorised the acquisition, by construction. The stored copy was
+> protecting against a divergence only the stored copy could produce.
+>
+> **Diffusion is a per-tick pass, and it is what makes the calendar visible.**
+> Nothing called `ApplyDiffusion`, so the third acquisition route existed for its
+> unit tests alone. It runs at stage 2 with the era and its start tick, and grants
+> what the registry's Routes column marks **D** once the lag has elapsed — no
+> draws, and the same date in every game with the same start.
+>
+> **The scheduler is told what the company actually holds.** It took
+> `availableCapabilities: []` at both call sites: a hardcoded empty list standing
+> in for `TechnologyState.Acquired`, so `Requirements.RequiredCapabilities` could
+> neither refuse nor permit anything. No shipped template declares a requirement
+> today, so this changes no refusal now and is the difference between a gate that
+> is open and a gate that is not connected.
+
 > **R20c.9 review corrections (findings 128, 129).** Writing the registry as
 > loadable content found the `tech` kind unspecified and diffusion ignoring the
 > one column that limits it.
