@@ -1,0 +1,8 @@
+{
+  "kind": "tank",
+  "id": "tank-terminal-e1",
+  "availableFromEra": "E1",
+  "rung": 0,
+  "capacity": "150000 t",
+  "vapourLossRatePerTick": "0.1 pct"
+}

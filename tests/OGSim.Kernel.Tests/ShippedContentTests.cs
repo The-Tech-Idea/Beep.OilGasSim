@@ -220,4 +220,136 @@ public class ShippedContentTests
         RockTypeDefinition shale = rocks[new ContentId("shale")];
         Assert.True(sandstone.TypicalPermeability / shale.TypicalPermeability > 1e4);
     }
+
+    /// <summary>
+    /// R20c.9. <b>The shipped facility sheets load, and they carry the numbers
+    /// the C# ladders carried</b> — value by value, because this is a
+    /// TRANSCRIPTION and a transcription's only real risk is a digit.
+    ///
+    /// <para>Pinned against the literals rather than against
+    /// <c>Defaults.SeparatorLadder</c>: comparing content to the thing it
+    /// replaces passes trivially once the ladder is built FROM the content, and
+    /// then stops being evidence about anything. These are the values as they
+    /// stood before the move, written out here so that a later rebalance is a
+    /// visible edit to this test as well as to the sheet.</para>
+    ///
+    /// <para>Two of them were nearly lost in the move and are the reason this
+    /// test asserts every field: <c>waterIntoLiquid</c>, without which a vessel
+    /// produces dry crude at every tier and the sales spec cannot be breached
+    /// (finding 173), and <c>operatingPressure</c>, which the vessel IMPOSES on
+    /// the network upstream (finding 157). Both sit on records long enough that
+    /// the first transcription of the datasheet omitted them.</para>
+    /// </summary>
+    [Fact]
+    public void R20cV9_the_shipped_facility_sheets_carry_the_ladders_they_replaced()
+    {
+        ICatalogSet loaded = LoadFacilities();
+
+        SeparatorDefinition first = Facility<SeparatorDefinition>(loaded, "separator-3phase-e1");
+
+        Assert.Equal(0, first.Rung);
+        Assert.Equal(50.0, first.GasCapacityKgPerSecond, precision: 9);
+        Assert.Equal(12.0, first.LiquidCapacityKgPerSecond, precision: 9);
+        Assert.Equal(30.0, first.VolumeCubicMetres, precision: 9);
+        Assert.Equal(0.0, first.LiquidFromGas, precision: 9);
+        Assert.Equal(0.0, first.GasFromLiquid, precision: 9);
+        Assert.Equal(0.0, first.WaterFromLiquid, precision: 9);
+        Assert.Equal(0.07, first.WaterIntoLiquid, precision: 9);
+        Assert.Equal(0.05, first.DesignRateCubicMetresPerSecond, precision: 9);
+        Assert.Equal(15.0e5, first.OperatingPressurePascals, precision: 6);
+
+        SeparatorDefinition second = Facility<SeparatorDefinition>(loaded, "separator-3phase-e2");
+
+        Assert.Equal(1, second.Rung);
+        Assert.Equal(150.0, second.GasCapacityKgPerSecond, precision: 9);
+        Assert.Equal(40.0, second.LiquidCapacityKgPerSecond, precision: 9);
+        Assert.Equal(90.0, second.VolumeCubicMetres, precision: 9);
+        Assert.Equal(0.15, second.DesignRateCubicMetresPerSecond, precision: 9);
+
+        Assert.Equal(0.0, Facility<GasPlantDefinition>(loaded, "gas-plant-none").CapacityKgPerSecond);
+        Assert.Equal(3.0, Facility<GasPlantDefinition>(loaded, "gas-plant-e1").CapacityKgPerSecond, 9);
+        Assert.Equal(8.0, Facility<GasPlantDefinition>(loaded, "gas-plant-e2").CapacityKgPerSecond, 9);
+
+        Assert.Equal(20.0, Facility<ExportLineDefinition>(loaded, "export-line-e1").OfftakeKgPerSecond, 9);
+        Assert.Equal(40.0, Facility<ExportLineDefinition>(loaded, "export-line-e2").OfftakeKgPerSecond, 9);
+        Assert.Equal(80.0, Facility<ExportLineDefinition>(loaded, "export-line-e3").OfftakeKgPerSecond, 9);
+
+        Assert.Equal(0.0, Facility<TreaterDefinition>(loaded, "treater-none").WaterRemoved);
+        Assert.Equal(0.90, Facility<TreaterDefinition>(loaded, "heater-treater").WaterRemoved, 9);
+        Assert.Equal(0.98, Facility<TreaterDefinition>(loaded, "heater-treater-desalter").WaterRemoved, 9);
+
+        TankDefinition tank = Facility<TankDefinition>(loaded, "tank-terminal-e1");
+
+        Assert.Equal(150.0e6, tank.CapacityKilograms, precision: 3);
+        Assert.Equal(0.001, tank.VapourLossRatePerTick, precision: 9);
+        Assert.Equal(300.0e6, Facility<TankDefinition>(loaded, "tank-farm-e2").CapacityKilograms, 3);
+
+        Assert.Equal(8, Facility<ManifoldDefinition>(loaded, "manifold-fixed-8").Slots);
+        Assert.Equal(16, Facility<ManifoldDefinition>(loaded, "manifold-16slot").Slots);
+    }
+
+    /// <summary>
+    /// Every ladder's rungs are 0..n-1 with no gap and no repeat, per kind.
+    ///
+    /// <para>A duplicate rung is the defect that would not otherwise show: two
+    /// definitions claiming one position sort by whatever the sort is stable
+    /// against, so the ladder a player climbs would depend on file order. A gap
+    /// is milder and still wrong — the install command walks one rung at a time.</para>
+    /// </summary>
+    [Fact]
+    public void The_shipped_ladders_are_dense_and_start_at_the_absent_rung()
+    {
+        ICatalogSet loaded = LoadFacilities();
+
+        Dense<SeparatorDefinition>(loaded);
+        Dense<TankDefinition>(loaded);
+        Dense<TreaterDefinition>(loaded);
+        Dense<GasPlantDefinition>(loaded);
+        Dense<ExportLineDefinition>(loaded);
+        Dense<ManifoldDefinition>(loaded);
+    }
+
+    private static void Dense<TDefinition>(ICatalogSet loaded)
+        where TDefinition : FacilityUnitDefinition
+    {
+        var rungs = new List<int>();
+        foreach (TDefinition unit in loaded.Of<TDefinition>().All) rungs.Add(unit.Rung);
+
+        rungs.Sort();
+
+        Assert.NotEmpty(rungs);
+
+        for (int i = 0; i < rungs.Count; i++)
+            Assert.Equal(i, rungs[i]);
+    }
+
+    /// <summary>Catalogues are keyed by the CONCRETE definition type — the
+    /// loader groups on what it built, so there is no catalogue of the shared
+    /// base and each ladder is addressed by its own kind.</summary>
+    private static TDefinition Facility<TDefinition>(ICatalogSet loaded, string id)
+        where TDefinition : FacilityUnitDefinition =>
+        loaded.Of<TDefinition>()[new ContentId(id)];
+
+    /// <summary>The facility sheets through the real loader, from the real
+    /// directory — the same route the engine takes.</summary>
+    private static ICatalogSet LoadFacilities()
+    {
+        string root = ContentRoot();
+
+        var loader = new ContentLoader(
+            [
+                new SeparatorContentKind(), new TankContentKind(), new TreaterContentKind(),
+                new GasPlantContentKind(), new ExportLineContentKind(), new ManifoldContentKind(),
+            ],
+            new NoPlugins());
+
+        ContentLoadResult result =
+            loader.LoadAll([new DiskSource("base", 0, root, "facilities")]);
+
+        if (result is ContentFailures failed)
+            Assert.Fail(string.Join("; ", failed.Failures.Select(
+                f => $"{f.File} {f.JsonPath} [{f.Stage}] {f.Message}")));
+
+        return Assert.IsType<ContentLoaded>(result).Catalogues;
+    }
 }

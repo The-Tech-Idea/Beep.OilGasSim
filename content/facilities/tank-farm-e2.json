@@ -1,0 +1,8 @@
+{
+  "kind": "tank",
+  "id": "tank-farm-e2",
+  "availableFromEra": "E1",
+  "rung": 1,
+  "capacity": "300000 t",
+  "vapourLossRatePerTick": "0.1 pct"
+}
