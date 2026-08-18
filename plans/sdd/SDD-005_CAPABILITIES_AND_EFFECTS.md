@@ -42,6 +42,31 @@ public interface ICapabilitySet
 mechanism rivals use with their personality lag (SDD-011 §2.1). "Everything
 eventually becomes standard practice" is a date, not an event.
 
+> **R20d.10b amendment. The era gate is a CALENDAR check and is not part of
+> `Requirements`.**
+>
+> §2's `Requirements` block carries `Tech`, `MinDetectClass` and `Envelopes` —
+> and no era. That is correct and worth stating, because the obvious reading is
+> that `IGatingValidator` should answer the whole question and it cannot: a
+> requirement is something a company can go and GET, and every `MissingItem` the
+> validator returns names an action — acquire this node, rent it, get a bigger
+> rig. **An era has not arrived yet and no amount of spending changes that**, so
+> folding it into the validator would produce a "missing item" with no remedy and
+> teach a player that a refusal is a shopping list when this one is a date.
+>
+> So an equipment tier is purchasable when **both** hold, checked in two places
+> because they are two kinds of fact:
+>
+> - its `availableFromEra` has begun — a comparison against the calendar of the
+>   amendment below, made where the purchase is refused;
+> - its `requiresTech` is held or rented — `Requirements.Tech` through the one
+>   validator, as §2 already specifies.
+>
+> **The refusal names the era and the year**, per R17 §2.6b's rule that a domain
+> reason renders straight to the player: *this equipment is not invented yet, and
+> here is when it will be* is actionable — a player waits, or plans around it —
+> where *requirements not met* is not.
+
 > **R20d.10 amendment. What "era start" IS, and why the era is DERIVED.**
 >
 > §2 above prices diffusion at `era start + diffusionLag(node)` and no document
