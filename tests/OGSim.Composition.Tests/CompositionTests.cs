@@ -977,3 +977,112 @@ public sealed class TechnologyArcTests
         }
     }
 }
+
+/// <summary>
+/// R20d.10b — equipment cannot be bought before it is invented (SDD-005 §2's
+/// R20d.10b amendment).
+/// </summary>
+public sealed class EquipmentEraTests
+{
+    /// <summary>
+    /// An engine with something to work on. The shared refusals return early on a
+    /// company with no compartment — "there is nothing here to work on" — which
+    /// would answer instead of the era and make these tests pass for the wrong
+    /// reason.
+    /// </summary>
+    private static Engine Field()
+    {
+        Built built = Assert.IsType<Built>(EngineBuilder.Build(Fixture.Settings()));
+
+        built.Engine.Provided.Resolve<FieldControl>().AddCompartment(
+            new GeneratedCompartment(
+                PoreVolume: new ReservoirVolume(100.0e6),
+                Porosity: 0.22,
+                OilSaturation: 0.7,
+                InitialPressure: new Pressure(30.0e6),
+                Temperature: Temperature.FromCelsius(93.3),
+                Depth: new Length(2000.0)),
+            permeability: new Permeability(1.0e-13),
+            netThickness: new Length(20.0),
+            drainageArea: new Area(2.0e5),
+            rockCompressibility: 4.5e-10,
+            gasOilContact: new Length(1900.0),
+            oilWaterContact: new Length(2100.0),
+            Defaults.Wettability, Defaults.Drive,
+            Defaults.AquiferStrength, Defaults.AquiferResponseTime);
+
+        return built.Engine;
+    }
+
+    /// <summary>
+    /// <b>A 1965 company cannot buy 1970s equipment</b>, and until now it could:
+    /// every facility sheet declared an `availableFromEra` because SDD-004 §6's
+    /// gate requires one, `FacilityLadders` built every rung regardless, and
+    /// nothing anywhere read the field — so `gas-plant-e2` was purchasable on the
+    /// first tick of a game set five years before it existed (finding 234).
+    ///
+    /// <para>The refusal is a CALENDAR statement and not a `Requirements` miss:
+    /// an era that has not arrived is not something a company can go and get, so
+    /// it is not a missing item the gating validator could name a remedy for. It
+    /// names the era and the year, because "not invented yet, and here is when"
+    /// is actionable where "requirements not met" is not.</para>
+    /// </summary>
+    [Fact]
+    public void Equipment_from_a_later_era_is_refused_with_the_year_it_arrives()
+    {
+        Engine engine = Field();
+
+        // The gas plant's rung 1 is E1 and its rung 2 is E2, so climb one first:
+        // the refusal we want is the one ABOVE what a 1965 field can have.
+        Assert.IsType<Accepted>(engine.Commands.Submit(new InstallGasPlantCommand()));
+
+        engine.Pipeline.AdvanceTick();
+        while (engine.ReadModel!.ActivitiesRunning > 0) engine.Pipeline.AdvanceTick();
+
+        Rejected refused = Assert.IsType<Rejected>(
+            engine.Commands.Submit(new InstallGasPlantCommand()));
+
+        RejectionReason reason = Assert.Single(
+            refused.Reasons, r => r.LocId == "$loc:reject.not-yet-invented");
+
+        Assert.Contains("E2", reason.Detail, StringComparison.Ordinal);
+        Assert.Contains("1970", reason.Detail, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// And it becomes buyable when the decade turns — the other half, without
+    /// which the refusal above could be a rung that is simply unreachable.
+    /// </summary>
+    [Fact]
+    [Trait("Speed", "Slow")]
+    public void The_same_equipment_is_accepted_once_its_era_arrives()
+    {
+        Engine engine = Field();
+
+        Assert.IsType<Accepted>(engine.Commands.Submit(new InstallGasPlantCommand()));
+
+        // 1965 to 1970: the year E2 opens.
+        for (var month = 0; month < 60; month++) engine.Pipeline.AdvanceTick();
+
+        // THE ERA STOPS REFUSING, which is the claim. Not "the order is
+        // accepted": this fixture has a compartment and no wells, so five years
+        // of standing charges may leave it unable to afford one — and asserting
+        // acceptance would make an era test fail for the price of a gas plant.
+        CommandResult result = engine.Commands.Submit(new InstallGasPlantCommand());
+
+        if (result is Rejected refused)
+            Assert.DoesNotContain(refused.Reasons,
+                reason => reason.LocId == "$loc:reject.not-yet-invented");
+    }
+
+    /// <summary>
+    /// A rung of the CURRENT era is not gated, which is what stops the check
+    /// being a blanket refusal: the separator ladder is E1 throughout and a
+    /// field debottlenecks itself in 1965 exactly as it did before.
+    /// </summary>
+    [Fact]
+    public void Equipment_of_the_current_era_is_not_gated()
+    {
+        Assert.IsType<Accepted>(Field().Commands.Submit(new InstallSeparatorCommand()));
+    }
+}

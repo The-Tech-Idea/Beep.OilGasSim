@@ -37,7 +37,10 @@ public sealed record InstallSeparatorCommand() : Command(Subject: null);
 internal sealed class InstallSeparatorActivity(
     ActivityTerms terms,
     OGSim.Facilities.Separator separator,
-    IReadOnlyList<OGSim.Facilities.SeparatorTier> ladder) : Activity<InstallSeparatorCommand>(terms)
+    IReadOnlyList<OGSim.Facilities.SeparatorTier> ladder,
+    FacilityLadders ladders,
+    OGSim.Capabilities.CapabilityState capabilities,
+    OGSim.Capabilities.EraCalendar eras) : Activity<InstallSeparatorCommand>(terms)
 {
     /// <summary>A vessel is PP&amp;E: the money buys something the company still
     /// owns next month (SDD-009 §1).</summary>
@@ -57,7 +60,10 @@ internal sealed class InstallSeparatorActivity(
 
     public override IReadOnlyList<RejectionReason> OwnRefusals(InstallSeparatorCommand command)
     {
-        if (NextRung() is not null) return [];
+        if (NextRung() is { } next)
+            return ladders.InventedBy(next.Id, capabilities.Era)
+                ? []
+                : [ladders.NotYet(next.Id, capabilities.Era, eras)];
 
         return
         [
@@ -114,7 +120,10 @@ public sealed record InstallGasPlantCommand() : Command(Subject: null);
 internal sealed class InstallGasPlantActivity(
     ActivityTerms terms,
     OGSim.Facilities.GasCapture plant,
-    IReadOnlyList<OGSim.Facilities.GasPlantTier> ladder) : Activity<InstallGasPlantCommand>(terms)
+    IReadOnlyList<OGSim.Facilities.GasPlantTier> ladder,
+    FacilityLadders ladders,
+    OGSim.Capabilities.CapabilityState capabilities,
+    OGSim.Capabilities.EraCalendar eras) : Activity<InstallGasPlantCommand>(terms)
 {
     /// <summary>A plant is PP&amp;E (SDD-009 §1) — and it now depreciates by the
     /// barrel like everything else the company owns.</summary>
@@ -130,7 +139,10 @@ internal sealed class InstallGasPlantActivity(
 
     public override IReadOnlyList<RejectionReason> OwnRefusals(InstallGasPlantCommand command)
     {
-        if (NextRung() is not null) return [];
+        if (NextRung() is { } next)
+            return ladders.InventedBy(next.Id, capabilities.Era)
+                ? []
+                : [ladders.NotYet(next.Id, capabilities.Era, eras)];
 
         return
         [
@@ -175,7 +187,10 @@ public sealed record InstallManifoldCommand() : Command(Subject: null);
 internal sealed class InstallManifoldActivity(
     ActivityTerms terms,
     OGSim.Facilities.Manifold header,
-    IReadOnlyList<OGSim.Facilities.ManifoldTier> ladder) : Activity<InstallManifoldCommand>(terms)
+    IReadOnlyList<OGSim.Facilities.ManifoldTier> ladder,
+    FacilityLadders ladders,
+    OGSim.Capabilities.CapabilityState capabilities,
+    OGSim.Capabilities.EraCalendar eras) : Activity<InstallManifoldCommand>(terms)
 {
     /// <summary>Steel on a site: PP&amp;E (SDD-009 §1).</summary>
     /// <summary>A rung on the surface ladder (finding 225).</summary>
@@ -190,7 +205,10 @@ internal sealed class InstallManifoldActivity(
 
     public override IReadOnlyList<RejectionReason> OwnRefusals(InstallManifoldCommand command)
     {
-        if (NextRung() is not null) return [];
+        if (NextRung() is { } next)
+            return ladders.InventedBy(next.Id, capabilities.Era)
+                ? []
+                : [ladders.NotYet(next.Id, capabilities.Era, eras)];
 
         return
         [
@@ -238,7 +256,10 @@ public sealed record InstallTankCommand() : Command(Subject: null);
 internal sealed class InstallTankActivity(
     ActivityTerms terms,
     OGSim.Facilities.Tank tank,
-    IReadOnlyList<OGSim.Facilities.TankTier> ladder) : Activity<InstallTankCommand>(terms)
+    IReadOnlyList<OGSim.Facilities.TankTier> ladder,
+    FacilityLadders ladders,
+    OGSim.Capabilities.CapabilityState capabilities,
+    OGSim.Capabilities.EraCalendar eras) : Activity<InstallTankCommand>(terms)
 {
     /// <summary>Civil work a company still owns next month: PP&amp;E
     /// (SDD-009 §1).</summary>
@@ -254,7 +275,10 @@ internal sealed class InstallTankActivity(
 
     public override IReadOnlyList<RejectionReason> OwnRefusals(InstallTankCommand command)
     {
-        if (NextRung() is not null) return [];
+        if (NextRung() is { } next)
+            return ladders.InventedBy(next.Id, capabilities.Era)
+                ? []
+                : [ladders.NotYet(next.Id, capabilities.Era, eras)];
 
         return
         [
@@ -298,7 +322,10 @@ public sealed record InstallTreaterCommand() : Command(Subject: null);
 internal sealed class InstallTreaterActivity(
     ActivityTerms terms,
     OGSim.Facilities.Treater treater,
-    IReadOnlyList<OGSim.Facilities.TreaterTier> ladder) : Activity<InstallTreaterCommand>(terms)
+    IReadOnlyList<OGSim.Facilities.TreaterTier> ladder,
+    FacilityLadders ladders,
+    OGSim.Capabilities.CapabilityState capabilities,
+    OGSim.Capabilities.EraCalendar eras) : Activity<InstallTreaterCommand>(terms)
 {
     /// <summary>A rung on the surface ladder (finding 225).</summary>
     public override MovementCategory Spend => MovementCategory.Development;
@@ -312,7 +339,10 @@ internal sealed class InstallTreaterActivity(
 
     public override IReadOnlyList<RejectionReason> OwnRefusals(InstallTreaterCommand command)
     {
-        if (NextRung() is not null) return [];
+        if (NextRung() is { } next)
+            return ladders.InventedBy(next.Id, capabilities.Era)
+                ? []
+                : [ladders.NotYet(next.Id, capabilities.Era, eras)];
 
         return
         [

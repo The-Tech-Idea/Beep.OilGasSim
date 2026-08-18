@@ -886,6 +886,11 @@ internal sealed class FieldModule(FacilityLadders ladders) : EngineModule(Declar
             composition.Require<IBeliefStore>(),
             Defaults.SpaceOf);
 
+        // The era gate on equipment: what a company may buy is a calendar fact as
+        // well as a cash one (SDD-005 §2's R20d.10b amendment).
+        var capabilities = composition.Require<OGSim.Capabilities.CapabilityState>();
+        OGSim.Capabilities.EraCalendar eras = Defaults.Eras;
+
         IActivity[] catalogue =
         [
             new DrillWellActivity(
@@ -919,7 +924,7 @@ internal sealed class FieldModule(FacilityLadders ladders) : EngineModule(Declar
             // until the chain was wired: an installed vessel would have been
             // paid for and bypassed (finding 153).
             new InstallSeparatorActivity(
-                Defaults.InstallSeparatorTerms, chain.Separator, ladders.Separator),
+                Defaults.InstallSeparatorTerms, chain.Separator, ladders.Separator, ladders, capabilities, eras),
 
             // THE FIELD'S LAST CEILING (R20d.8). Debottleneck everything upstream
             // and a field still sells only what the export line takes — which is
@@ -931,7 +936,7 @@ internal sealed class FieldModule(FacilityLadders ladders) : EngineModule(Declar
             // company charged for flaring could only respond by producing less
             // oil, which is a tax rather than a decision.
             new InstallGasPlantActivity(
-                Defaults.InstallGasPlantTerms, chain.GasPlant, ladders.GasPlant),
+                Defaults.InstallGasPlantTerms, chain.GasPlant, ladders.GasPlant, ladders, capabilities, eras),
 
             // THE ANSWER TO A BROKEN ANYTHING (SDD-012 §3). Stage 4 now takes
             // equipment out of the network and the route law shuts in whatever
@@ -970,19 +975,19 @@ internal sealed class FieldModule(FacilityLadders ladders) : EngineModule(Declar
             // has to be installed first" has been the reason a well is turned
             // away since R12b, and nothing could install one.
             new InstallManifoldActivity(
-                Defaults.InstallManifoldTerms, chain.Manifold, ladders.Manifold),
+                Defaults.InstallManifoldTerms, chain.Manifold, ladders.Manifold, ladders, capabilities, eras),
 
             // THE THIRD ANSWER TO A FULL TANK. Stage 6 offers "more storage,
             // more export and less production"; the other two shipped and this
             // did not.
             new InstallTankActivity(
-                Defaults.InstallTankTerms, chain.Tank, ladders.Tank),
+                Defaults.InstallTankTerms, chain.Tank, ladders.Tank, ladders, capabilities, eras),
 
             // THE ANSWER TO WET OIL (finding 173). A field that waters out sells
             // a stream the meter turns away, and without this that is a tax on
             // getting old rather than a decision.
             new InstallTreaterActivity(
-                Defaults.InstallTreaterTerms, chain.Treater, ladders.Treater),
+                Defaults.InstallTreaterTerms, chain.Treater, ladders.Treater, ladders, capabilities, eras),
 
             // The ENDING (R12b.10). Finding 153's other reason is gone too: opex
             // scales with the liquid lifted, so a watered-out well genuinely

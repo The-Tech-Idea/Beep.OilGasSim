@@ -35,7 +35,22 @@ public sealed record FacilityLadders(
     IReadOnlyList<Facilities.TreaterTier> Treater,
     IReadOnlyList<Facilities.GasPlantTier> GasPlant,
     IReadOnlyList<Facilities.ExportTier> Export,
-    IReadOnlyList<Facilities.ManifoldTier> Manifold)
+    IReadOnlyList<Facilities.ManifoldTier> Manifold,
+
+    /// <summary>
+    /// When each rung was invented, by tier id (SDD-005 §2's R20d.10b
+    /// amendment).
+    ///
+    /// <para>Kept BESIDE the ladders rather than on the tiers, because a
+    /// <c>SeparatorTier</c> is what the flow model needs to solve a vessel and an
+    /// era is not part of that: putting it on the tier would push a purchasing
+    /// fact into the physics. The definitions own both and this is the one map
+    /// between them.</para>
+    ///
+    /// <para>Read by key only. Rule D-5 forbids ENUMERATING a dictionary, which
+    /// this never does — the ladders carry the order.</para>
+    /// </summary>
+    IReadOnlyDictionary<ContentId, Era> InventedIn)
 {
     // Finding 131: the compiler's record equality is REFERENCE equality for a
     // collection member, so two ladder sets loaded from the same content would
@@ -49,13 +64,15 @@ public sealed record FacilityLadders(
         && Structural.Equal(Treater, other.Treater)
         && Structural.Equal(GasPlant, other.GasPlant)
         && Structural.Equal(Export, other.Export)
-        && Structural.Equal(Manifold, other.Manifold);
+        && Structural.Equal(Manifold, other.Manifold)
+        && Structural.Equal(InventedIn, other.InventedIn);
 
     public override int GetHashCode() =>
         HashCode.Combine(
             Structural.HashOf(Separator), Structural.HashOf(Tank),
             Structural.HashOf(Treater), Structural.HashOf(GasPlant),
-            Structural.HashOf(Export), Structural.HashOf(Manifold));
+            Structural.HashOf(Export), Structural.HashOf(Manifold),
+            Structural.HashOf(InventedIn));
 
     /// <summary>
     /// The catalogues as ladders (SDD-004 §6's R20c.9 amendment).
@@ -68,6 +85,15 @@ public sealed record FacilityLadders(
     public static FacilityLadders From(ICatalogSet catalogues)
     {
         ArgumentNullException.ThrowIfNull(catalogues);
+
+        var invented = new Dictionary<ContentId, Era>();
+
+        Note<SeparatorDefinition>(catalogues, invented);
+        Note<TankDefinition>(catalogues, invented);
+        Note<TreaterDefinition>(catalogues, invented);
+        Note<GasPlantDefinition>(catalogues, invented);
+        Note<ExportLineDefinition>(catalogues, invented);
+        Note<ManifoldDefinition>(catalogues, invented);
 
         return new FacilityLadders(
             Rungs<SeparatorDefinition, Facilities.SeparatorTier>(catalogues, "separator", d =>
@@ -94,8 +120,36 @@ public sealed record FacilityLadders(
                 new Facilities.ExportTier(d.Id, new MassRate(d.OfftakeKgPerSecond))),
 
             Rungs<ManifoldDefinition, Facilities.ManifoldTier>(catalogues, "manifold", d =>
-                new Facilities.ManifoldTier(d.Id, d.Slots)));
+                new Facilities.ManifoldTier(d.Id, d.Slots)),
+
+            invented);
     }
+
+    /// <summary>One kind's eras into the shared map.</summary>
+    private static void Note<TDefinition>(
+        ICatalogSet catalogues, Dictionary<ContentId, Era> invented)
+        where TDefinition : FacilityUnitDefinition
+    {
+        IReadOnlyList<TDefinition> all = catalogues.Of<TDefinition>().All;
+
+        for (int i = 0; i < all.Count; i++) invented[all[i].Id] = all[i].AvailableFromEra;
+    }
+
+    /// <summary>
+    /// Whether a rung can be bought yet (SDD-005 §2's R20d.10b amendment).
+    ///
+    /// <para>A CALENDAR comparison and not a <c>Requirements</c> check: an era
+    /// that has not arrived is not something a company can go and get, so it is
+    /// not a missing item the gating validator could name a remedy for.</para>
+    /// </summary>
+    public bool InventedBy(ContentId tier, Era era) => InventedIn[tier] <= era;
+
+    /// <summary>Why not, in words a player can act on — the era and the year,
+    /// per R17 §2.6b.</summary>
+    public RejectionReason NotYet(ContentId tier, Era now, Capabilities.EraCalendar calendar) =>
+        new("$loc:reject.not-yet-invented",
+            $"'{tier.Value}' is {InventedIn[tier]} equipment and the year is {now}; " +
+            $"it can be built from {calendar.FirstYearOf(InventedIn[tier])}");
 
     /// <summary>
     /// One kind's definitions as a ladder: sorted by rung, checked dense.

@@ -90,5 +90,16 @@ public sealed class EraCalendar
             $"era {era} is not in the calendar; a node assigned to it could never diffuse");
     }
 
+    /// <summary>The year an era begins — what a refusal tells a player to wait
+    /// for.</summary>
+    public int FirstYearOf(Era era)
+    {
+        for (var i = 0; i < _boundaries.Length; i++)
+            if (_boundaries[i].Era == era) return _boundaries[i].FromYear;
+
+        throw new ContentFault("SDD-005 §2", null,
+            $"era {era} is not in the calendar");
+    }
+
     private const int MonthsPerYear = 12;
 }
