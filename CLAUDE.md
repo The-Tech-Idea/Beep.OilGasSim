@@ -14,7 +14,7 @@ code and is still authoritative. **The engine now runs.** Seventeen projects und
 `src/` compose into a playable field — a world is generated, prospects are
 drilled, a chain of surface equipment moves the fluid, a market moves under it, a
 bank lends against reserves, equipment wears out and breaks, and two headless
-clients play the whole arc through `ReadModel` + `Commands` alone. 1027 tests
+clients play the whole arc through `ReadModel` + `Commands` alone. 1035 tests
 across seventeen suites, 0 warnings.
 
 **Treat every count in this file as stale until you have checked it.** Three
@@ -37,13 +37,14 @@ dotnet build OGSim.slnx                 # must be 0 warnings — warnings are er
 dotnet test  OGSim.slnx                 # xUnit — the gate, and the only complete answer
 dotnet test  OGSim.slnx --no-build --filter "FullyQualifiedName~Money_rounds_half_even"
 
-# While iterating: skip the forty-year runs (~15m -> ~1m, 151 of 180)
+# While iterating: skip the forty-year runs (~8m -> ~20s, 156 of 193)
 dotnet test tests/OGSim.Composition.Tests --no-build --filter "Speed!=Slow"
 ```
 
-**`Speed=Slow` is a convenience, never a gate.** Twenty-nine tests in the
+**`Speed=Slow` is a convenience, never a gate.** Thirty-seven tests in the
 composition suite play a whole field life — 480 ticks, sometimes twice — and
-they carry about fourteen of the suite's fifteen minutes. They are also where
+they carry about seven and a half of the suite's eight
+minutes. They are also where
 almost every finding in this project came from, because a mechanic that works
 in a unit test and not over forty years is the defect this codebase keeps
 producing. So the filter exists to make iteration bearable and **the unfiltered
@@ -77,11 +78,11 @@ quietly stops being evidence, which is the same failure in a new place.
 > **Until then the REDUCED GATE is what can be trusted**, and it does complete:
 >
 > ```bash
-> dotnet test OGSim.slnx --filter "Speed!=Slow"     # 993 of 1027, exit 0, ~3 min
+> dotnet test OGSim.slnx --filter "Speed!=Slow"     # 998 of 1035, exit 0, ~3 min
 > ```
 >
-> Every suite, every test except the 34 forty-year runs. **It is not a
-> substitute and must not be described as one**: the excluded 34 are precisely
+> Every suite, every test except the 37 forty-year runs. **It is not a
+> substitute and must not be described as one**: the excluded 37 are precisely
 > where almost every finding in this project came from, so a reduced-gate green
 > says a change did not break anything cheap to check, and says nothing about
 > whether it survives forty years. Use it to keep working; do not use it to
