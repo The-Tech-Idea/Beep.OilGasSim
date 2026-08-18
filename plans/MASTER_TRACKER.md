@@ -19,7 +19,7 @@ next.** Updated at the close of every phase.
 
 | | |
 |---|---|
-| **Phase** | **Derived from the task rows, not from the section letters — both were wrong in both directions.** **Complete (every task ✅)**: R0–R3, R21a–e. **Partial**: R4–R19, R20c, R20d, R21, R22, R23, R24 — sixteen model phases plus four integration ones, each with tasks still open. **Not started**: R20 (0 of 12), R25 (0 of 9). **R21a–d ✅ — the engine is played.** The composite programme is one document: [phases/R20d_INTEGRATION.md](phases/R20d_INTEGRATION.md).</br></br>**R22, R23 and R24 were marked ✅ here while their own sections said ⬜, 🟨 and 🟨** — this row and the sections disagreed, in the one file whose job is to be reliable about what is built. The sections are right and this row was wrong: R22 has three of eight tasks, R23 has five of twelve, R24 is partial. Corrected rather than reconciled, because the sections carry per-task evidence and this row carries a letter (finding 231). |
+| **Phase** | **Derived from the task rows, not from the section letters — both were wrong in both directions.** **Complete (every task ✅)**: R0–R3, R21a–e. **Partial**: R4–R19, R20c, R20d, R21, R22, R23, R24 — sixteen model phases plus four integration ones, each with tasks still open. **Not started**: R20 alone (0 of 12). R25 is 🟨 rather than ⬜ — its fidelity axis works — which the guard found after this row was first written and the summary had said otherwise twice. **R21a–d ✅ — the engine is played.** The composite programme is one document: [phases/R20d_INTEGRATION.md](phases/R20d_INTEGRATION.md).</br></br>**R22, R23 and R24 were marked ✅ here while their own sections said ⬜, 🟨 and 🟨** — this row and the sections disagreed, in the one file whose job is to be reliable about what is built. The sections are right and this row was wrong: R22 has three of eight tasks, R23 has five of twelve, R24 is partial. Corrected rather than reconciled, because the sections carry per-task evidence and this row carries a letter (finding 231). |
 | **Design docs** | 24 design + 1 research + **26 phase docs**, 17 catalogue sheets + tech tree, 18 SDDs (000–017). Coherence log: **231 findings**, 61–231 from the code passes. **48 open SDD items of 62 raised** — all 62 registered below, verified against the SDDs rather than counted by hand. |
 | **Code status** | 16 engine assemblies + 1 client outside the engine, 0 warnings, 0 errors, **1035 tests across 17 suites** — 998 of them outside the `Speed=Slow` filter, 37 forty-year runs inside it. The kernel, the contract layer, **thirteen** domain modules and Layer 4 composition are implemented (this row said eleven; the count is of `src/` projects less kernel, contracts, composition and the client); scenario, activity-mass, VOI, lending and souring contracts are declared in their SDDs and compiled. The composed engine **advances a tick and plays**: a player drills, waits, finds oil or doesn't, produces, declines, and wins or goes broke. Every implemented member traces to a pinned SDD section (F-1). |
 | **Repository** | `The-Tech-Idea/Beep.OilGasSim`, branch `master`. Work lands directly on `master`, one task per commit. |
@@ -109,6 +109,68 @@ not a game with things in it.
 | **R1-C10** | **Tenth contract pass — full SDD-vs-code audit, both directions.** Of 300 public types, 62 were declared in no SDD at all (F-1 says implementations are not exempt) and 32 SDD-declared types had no code. Closed now: the **three §3.2 slots** declared (`ISeparationModel` + `SeparationEfficiency`, `IHydraulicModel` + `PipeGeometry`, `IObservationModel`), **[SDD-002](sdd/SDD-002_STREAMS_AND_FLOW.md) §2b’s whole surface** built (5 distributions, `IPropertyKind`, `IProperty`, `IMaterial`, `IMaterialCatalog`, `Dimension`), and **[SDD-001](sdd/SDD-001_KERNEL_CONTRACTS.md) §12b** naming R1’s 13 concrete types — F-1 had been honoured for the interfaces and quietly broken for the classes behind them. Gap 62 → 51; the rest are per-phase and close at each `Rn.0`. One design error caught while writing: the first `ISeparationModel` draft duplicated `IFluidPropertyModel.SplitAt` — phase *existence* is thermodynamics, phase *recovery* is equipment | ✅ |
 | **R1-C9** | **Ninth contract pass (finding 82), run as R2.0** — a sweep of every `I<Name>` the 25 phase documents promise against code and SDDs: 62 undeclared. **Three [03](design/03_ARCHITECTURE.md) §3.2 slots were genuinely missing** and are now pinned (`IHydraulicModel`/`ISeparationModel` in [SDD-006](sdd/SDD-006_FACILITIES_AND_TRANSPORT_ELEMENTS.md) §0, `IObservationModel` in [SDD-008](sdd/SDD-008_INFORMATION_AND_BELIEFS.md) §3); R2’s property/material surface written as [SDD-002](sdd/SDD-002_STREAMS_AND_FLOW.md) §2b with the **P90-low/P10-high** convention pinned; ~20 equipment names recorded as **never to be declared** ([02](design/02_DOMAIN_MODEL.md) §4.1 forbids a facility-type hierarchy — they are content templates behind `IFlowElement`). Phase docs corrected at each `Rn.0`, not swept | ✅ |
 | **R1-C8** | **Eighth contract pass** (finding 81): the spatial read surface — `IEngine.World`/`WorldView` (static world beside the per-tick ReadModel; public knowledge only), `Site` coordinates on well/facility views, licence polygons, believed prospect outlines with POS. Found by walking the host's screens against the declared surface; SDD-017 §1c + R21 §2.4b amended | ✅ |
+
+---
+
+## What is left
+
+**Derived from the task rows, and guarded.** Every number below was read out of
+the tables in this file rather than remembered, and
+`Record_EveryPhaseHeadingAgreesWithItsTaskRows` fails the build if a phase
+heading stops agreeing with the rows beneath it. That rule exists because this
+summary has now been wrong in both directions three times — R22/R23/R24 marked
+complete over sections that said otherwise, R2/R3 marked not-started over
+fifteen finished tasks, and R25 marked not-started with a task already part
+done, which the guard found on its first run after two hand corrections had
+missed it (finding 231). **The counts here will go stale; the guard will say
+so.**
+
+**Complete — every task done:** R0, R1, R2, R3, and R21a–e.
+
+**Nothing started at all: R20 alone.** It is also the largest single block and
+the one that turns a spine into a game — SC1's full-lifecycle acceptance test,
+calibration CAL1–CAL10, the balance content pass, the twelve missions and ten
+challenge patterns as content, the four-era campaign, and four whole
+verification suites (CI-V1–13, PD1–PD7, I-V1–16, SC11–13).
+
+**Three modules from [03](design/03_ARCHITECTURE.md) §8 do not exist:**
+`Transport`, `Hse`, `Advisor`. HSE *behaviour* now runs — the bow-tie is joined,
+the standing moves — but it lives in `OGSim.Integrity` and composition's
+`HseModule`; the project design 03 names is not there.
+
+| Phase | done | part | to do |
+|---|---:|---:|---:|
+| **R20** Scenarios and balance | 0 | 0 | 12 |
+| **R25** Advisor and Reality Profiles | 0 | 1 | 8 |
+| **R13** Economics | 3 | 2 | 7 |
+| **R22** Environment and Setting | 3 | 0 | 5 |
+| **R8** Facilities and separation | 7 | 0 | 4 |
+| **R11** Transport and export | 4 | 4 | 2 |
+| **R12** Operations and scheduling | 3 | 4 | 2 |
+| **R24** Objectives, Challenges and Missions | 5 | 2 | 3 |
+| **R6** Wells | 8 | 2 | 2 |
+| **R14** Information and uncertainty | 7 | 2 | 2 |
+| **R19** Persistence and determinism | 3 | 2 | 2 |
+| **R5** Subsurface | 7 | 1 | 2 |
+| **R17** Technology | 5 | 1 | 2 |
+| **R18** Degradation, hazards, maintenance | 4 | 1 | 2 |
+| **R21** Host contract | 1 | 5 | 0 |
+| **R23** Health, Safety and Environment | 5 | 4 | 0 |
+| **R16** Company, licences, regulation | 6 | 1 | 1 |
+| **R20c** Composition | 10 | 1 | 1 |
+| **R20d** Integration: wiring what is built into the loop | 11 | 1 | 1 |
+| **R7** Artificial lift | 6 | 0 | 1 |
+| **R9** Gas processing | 8 | 0 | 1 |
+| **R10** Water handling | 5 | 0 | 1 |
+| **R4** Flow solver core | 9 | 1 | 0 |
+
+**R21 and R23 have nothing not-started** — every remaining task in both is
+already part done. R21.3 needs a projection over the audit queries that now
+answer; R21.6 needs SDD-017 §2's named VIEWS rather than twenty-six fields on
+one record.
+
+**48 open SDD items of 62**, registered and checked in both directions by
+`Record_EveryOpenItemIsRegistered` and its closure counterpart.
 
 ---
 
@@ -1239,7 +1301,7 @@ hypothetical:
 
 | # | Finding |
 |---|---|
-| 231 | **This file disagreed with itself about three whole phases, and the commit log disagrees with it about task numbers.** The *Current state* row read `R0–R19, R22, R23, R24 ✅` while those three sections' own headers read ⬜, 🟨 and 🟨 — R22 has three of eight tasks, R23 five of twelve, R24 partial. **The sections were right**, because they carry per-task evidence and the summary row carries a letter, and a letter cannot be checked against anything. Same cause as the four count drifts already logged (findings 199, 211 and the command/read-model pair): a claim written in prose that nothing re-derives, in the one file whose stated job is to be reliable about what is built. **Separately, the commit numbers do not match the task tables and cannot be made to.** Work landed as `R22.12`/`R22.15`–`R22.17` against a table with eight rows, and two commits carry `R23.1`/`R23.2` — numbers this file has held for *Barrier* and *Bow-tie evaluation* since those tasks closed phases ago. Git history is immutable, so the divergence is recorded in both sections rather than papered over: **the tables say WHAT is built and the log says WHEN**. Also corrected here: 1027 → 1035 tests across 17 suites, eleven → thirteen domain modules, and `FieldReadModel`'s 24 → 26 fields. Every one of those was measured for this update rather than adjusted by the delta, which is the only way any of them has ever been right. **AND THE FIRST CORRECTION WAS ITSELF INCOMPLETE, in the same way and within the hour**: the summary row was fixed for the three phases that had just been worked on and left reading `R0–R19 ✅`, which is wrong for R4 through R19 — all sixteen are partial. The section letters were wrong in the OTHER direction too: R2 and R3 read ⬜ with every one of their fifteen tasks ✅. **So neither the summary letter nor the section letter is evidence; only the task rows are**, and the summary row now says so and is derived from them — complete R0–R3 and R21a–e, partial R4–R19 plus R20c/R20d/R21/R22/R23/R24, not started R20 (0 of 12) and R25 (0 of 9). Fixing a hand-maintained summary by hand reproduces the defect; the only durable answer is to derive it, which is what R21.2's unrun PD1 fixture and the `RecordRules` suite exist to do for the counts they cover |
+| 231 | **This file disagreed with itself about three whole phases, and the commit log disagrees with it about task numbers.** The *Current state* row read `R0–R19, R22, R23, R24 ✅` while those three sections' own headers read ⬜, 🟨 and 🟨 — R22 has three of eight tasks, R23 five of twelve, R24 partial. **The sections were right**, because they carry per-task evidence and the summary row carries a letter, and a letter cannot be checked against anything. Same cause as the four count drifts already logged (findings 199, 211 and the command/read-model pair): a claim written in prose that nothing re-derives, in the one file whose stated job is to be reliable about what is built. **Separately, the commit numbers do not match the task tables and cannot be made to.** Work landed as `R22.12`/`R22.15`–`R22.17` against a table with eight rows, and two commits carry `R23.1`/`R23.2` — numbers this file has held for *Barrier* and *Bow-tie evaluation* since those tasks closed phases ago. Git history is immutable, so the divergence is recorded in both sections rather than papered over: **the tables say WHAT is built and the log says WHEN**. Also corrected here: 1027 → 1035 tests across 17 suites, eleven → thirteen domain modules, and `FieldReadModel`'s 24 → 26 fields. Every one of those was measured for this update rather than adjusted by the delta, which is the only way any of them has ever been right. **AND THE FIRST CORRECTION WAS ITSELF INCOMPLETE, in the same way and within the hour**: the summary row was fixed for the three phases that had just been worked on and left reading `R0–R19 ✅`, which is wrong for R4 through R19 — all sixteen are partial. The section letters were wrong in the OTHER direction too: R2 and R3 read ⬜ with every one of their fifteen tasks ✅. **So neither the summary letter nor the section letter is evidence; only the task rows are**, and the summary row now says so and is derived from them — complete R0–R3 and R21a–e, partial R4–R19 plus R20c/R20d/R21/R22/R23/R24, not started R20 (0 of 12) and R25 (0 of 9). Fixing a hand-maintained summary by hand reproduces the defect; the only durable answer is to derive it. **So it is derived and guarded now**: `Record_EveryPhaseHeadingAgreesWithItsTaskRows` computes each phase's position from its own task rows and fails the build when the heading disagrees — and it found a THIRD disagreement on its first run, after two hand corrections had missed it: R25 marked ⬜ with `R25.1`'s fidelity axis already part built. That is three passes over the same file by hand, each confident, each leaving one wrong. A companion rule pins the number of sections the guard can actually parse (25, with R15's task-less section named), because a rule that quietly stopped reading a reformatted table would present as coverage — finding 212's lesson applied to its own successor. **What no guard here can check is the WORDING of a task row**: a row saying 🟨 with a description of work that is finished is agreement between two things that are both wrong, and only reading the code settles it |
 | 230 | **The most frequent financial event in the game recorded an empty dictionary, and a count of entries called it answered.** Design 09 §7's *where did my money go this quarter?* is backed by financial audit entries; the field's monthly operating cost writes one every tick of every game. `OperatingCost` computed a standing charge, a lifting cost per tonne handled and an injection-water bill, added them inside the method, returned the sum — and the audit entry beside the posting was constructed with `new Dictionary<string, AuditValue>(...)` and nothing put in it. **Two hundred and forty entries in a twenty-year run, none of which said anything**, and finding 211 had listed this feature as answerable on the strength of the entries existing. **The itemisation is what a player acts on**: the standing charge is what abandonment ends, the lifting cost is what shutting a well in stops, and the water bill is what a flood costs to run — three different decisions behind one number. Fixed by returning the components and recording them, and R21-V6 now asserts on the FIELDS each of §7's seven audit-backed features needs rather than on entry counts, which is the difference between the two versions of this check: counting would have passed against the empty dictionary for as long as it existed. **Seven and not eleven is correct, and finding 211 read it as a stale count**: four of §7's rows name something other than an audit entry as their backing — the integrity model, the read model's standing indicators, the segment plan — so the audit trail's share of that table is exactly seven |
 | 229 | **Nine `Require<T>()` calls across four modules resolved contracts their manifests never declared, and nothing could tell.** `IModuleRegistry` validates the whole set and refuses to start naming every unmet requirement — a guarantee only as strong as the declarations, and `Every_declared_requirement_is_declared_by_some_provider` checks the other direction: that declared requires have providers. A requirement that is never declared is invisible to it. Those modules composed because the list happened to be in a workable order, which is exactly the defect finding 126 fixed by ordering FROM the graph — an undeclared edge is simply absent from that graph. `FieldModule` carried TWO comments explaining this lesson, written when the weather state and then the ESG assessment hit it, while four more of its own requirements went undeclared underneath them. **A convention that is only written down regrows.** Guarded now by a source rule that scans each module for a `Require` its manifest does not carry, with `provides` counting as satisfying — a module resolving its own provision takes no dependency and requiring it would be a self-loop. The rule caught a real case on its first run, and then caught a declaration this same task had put on the wrong module |
 | 228 | **The ESG standing promised two exits and shipped with one, and a green test named `the_loop_has_two_exits` is why nobody noticed.** SDD-012 §4b's intensity term was computed from LIFETIME cumulative flaring over LIFETIME cumulative production. A lifetime average cannot fall: by year ten a perfect month moves it by a hundredth of what a bad month moved it on the way up, and a gas plant bought in year ten moves it not at all. `EsgStanding`'s own documentation states design rule CI4's two exits — *reduce the intensities, or let the incident record decay* — and only the second existed. **Finding 223's three symptoms are this one defect**: the lender's spread table had one reachable row, the gas plant rewarded nothing, and `incidentPoints` was subtracted from a number already clamped at zero, which is what made R23's bow-tie look unjoinable. **The test that should have caught it proved the wrong half.** `HS12_the_loop_has_two_exits` demonstrated exit one by handing `Standing` a clean intensity list — establishing that the function is monotonic in its argument, and never that any history a company can have produces such an argument. True, fast, and vacuous, in the exact way this codebase keeps producing: a check the fixture never makes the game DO. **Fixed as a specification change first (F-4)**: the amendment keeps the original reasoning — still per unit produced, so size is not priced, and a single month still barely moves a record whose half-life is three years — and changes only the memory, ageing numerator and denominator together on the same clock the incident term already used. `EsgAssessment.Of` now takes no arguments at all, because the parameter was a second place the answer could come from. A field that flares for a decade reports 0.0000, buys the gas plant, and reports 0.79 after a clean decade; with the ageing removed it reports exactly 0.0000 forever |
@@ -1626,7 +1688,7 @@ content (R21e). What is left of the original three is the chain.
 
 ---
 
-### Phase R25 — Advisor and Reality Profiles ⬜  *(executes after R21)*
+### Phase R25 — Advisor and Reality Profiles 🟨  *(executes after R21)*
 > 📄 [phases/R25_ADVISOR.md](phases/R25_ADVISOR.md)
 
 | # | Task | Status |
@@ -1680,8 +1742,11 @@ order they are built in.
 the work still open it is superseded by
 [phases/R20d_INTEGRATION.md](phases/R20d_INTEGRATION.md) §2: **R12b's
 measurements ✅ → beliefs (R20d.7) ✅ → R21e scenario runner ✅ → the chain
-(R20d.1–5, with R12b.8) → R22 + environment wiring → technology & company
+(R20d.1–5, with R12b.8) ✅ → R22 + environment wiring ✅ *(weather, forecast and
+days lost; the profile and access windows are not)* → technology & company
 (R20d.10/.9, with R12b.10) → equipment content (R20c.9) → R20 → R21 → R25.**
+See [What is left](#what-is-left) for the per-phase position, which is derived
+rather than restated.
 Phase numbers stay stable; only the order is restated — and R12b's remaining
 templates are now distributed across it rather than sitting at the front
 (finding 153). R20d.8 and R20d.11 are still unplaced, which is how that finding

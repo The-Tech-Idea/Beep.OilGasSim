@@ -24,9 +24,11 @@
 // trusting it: the shape check is the only one of these rules that can see a
 // defect the register and the SDDs agree about.
 
+using System.Text.RegularExpressions;
+
 namespace OGSim.Architecture.Tests;
 
-public class RecordRules
+public partial class RecordRules
 {
     /// <summary>An open item as its SDD declares it. <paramref name="Status"/> is
     /// the last cell: <c>✅</c> means closed, anything else means open. It is the
@@ -430,4 +432,149 @@ public class RecordRules
 
     private static string Excerpt(string line) =>
         line.Length <= 90 ? line : line[..90] + "…";
+
+    // --------------------------------------------- finding 231: the phase letter
+
+    /// <summary>The four marks a phase or a task can carry.</summary>
+    private const string Done = "✅";
+    private const string Part = "🟨";
+    private const string Todo = "⬜";
+    private const string Blocked = "❌";
+
+    [Fact] // Every phase heading's mark agrees with its own task rows. The
+           // summary said R22, R23 and R24 were complete while their sections
+           // said not-started, in-progress and in-progress; the sections said R2
+           // and R3 were not-started while every one of their fifteen tasks was
+           // done. Wrong in both directions, in the file whose stated job is to
+           // be reliable about what is built — and the first correction repeated
+           // it within the hour, because a hand-maintained summary fixed by hand
+           // is still hand-maintained (finding 231).
+    public void Record_EveryPhaseHeadingAgreesWithItsTaskRows()
+    {
+        var violations = new List<string>();
+
+        foreach (PhaseSection phase in Phases())
+        {
+            // A section with no task table states nothing this rule can check.
+            // R15 is one: it carries a findings table where the others carry
+            // tasks. Counted and reported below rather than passed over, because
+            // a rule's blind spot has to be visible or it reads as coverage.
+            if (phase.Done + phase.Part + phase.Todo == 0) continue;
+
+            string implied =
+                phase.Todo == 0 && phase.Part == 0 ? Done
+                : phase.Done == 0 && phase.Part == 0 ? Todo
+                : Part;
+
+            if (phase.Mark != implied)
+                violations.Add(
+                    $"MASTER_TRACKER.md:{phase.Line} phase {phase.Id} is marked {phase.Mark} " +
+                    $"and its rows are {phase.Done} done / {phase.Part} part / {phase.Todo} " +
+                    $"to do, which is {implied}");
+        }
+
+        EngineCorpus.AssertNone(violations,
+            "every phase heading agrees with the task rows beneath it");
+    }
+
+    [Fact] // And the rule above can see most of them: a section whose tasks it
+           // cannot parse would pass silently, so the number it CAN read is
+           // pinned. If a table is reformatted into invisibility this fails
+           // rather than going quiet — which is the failure mode the register
+           // rules exist to prevent (finding 212).
+    public void Record_ThePhaseRuleReadsEveryPhaseThatHasATaskTable()
+    {
+        var withTasks = 0;
+        var withoutTasks = new List<string>();
+
+        foreach (PhaseSection phase in Phases())
+            if (phase.Done + phase.Part + phase.Todo > 0) withTasks++;
+            else withoutTasks.Add(phase.Id);
+
+        Assert.Equal(25, withTasks);
+
+        // R15's section carries findings instead of tasks. Named, so that a
+        // second one appearing is a visible change rather than a quiet one.
+        Assert.Equal(["R15"], withoutTasks);
+    }
+
+    private readonly record struct PhaseSection(
+        string Id, string Mark, int Line, int Done, int Part, int Todo);
+
+    /// <summary>
+    /// Every <c>### Phase Rn — title MARK</c> heading with the marks of the task
+    /// rows beneath it, to the next heading.
+    ///
+    /// <para>A task row's status is the first cell after the identifier whose
+    /// text BEGINS with one of the four marks — not the third cell and not the
+    /// last, because a task description may itself contain a pipe and a status
+    /// cell carries prose after its mark.</para>
+    /// </summary>
+    private static IEnumerable<PhaseSection> Phases()
+    {
+        string[] lines = Tracker();
+
+        var id = string.Empty;
+        var mark = string.Empty;
+        var line = 0;
+        int done = 0, part = 0, todo = 0;
+
+        for (int i = 0; i < lines.Length; i++)
+        {
+            Match heading = PhaseHeading().Match(lines[i]);
+
+            if (heading.Success)
+            {
+                if (id.Length > 0)
+                    yield return new PhaseSection(id, mark, line, done, part, todo);
+
+                id = heading.Groups[1].Value;
+                mark = heading.Groups[2].Value;
+                line = i + 1;
+                done = part = todo = 0;
+                continue;
+            }
+
+            if (id.Length == 0) continue;
+
+            Match row = TaskRow().Match(lines[i]);
+
+            if (!row.Success || row.Groups[1].Value != id) continue;
+
+            switch (MarkOf(lines[i]))
+            {
+                case Done: done++; break;
+                case Part: part++; break;
+                case Todo or Blocked: todo++; break;
+                default: break;
+            }
+        }
+
+        if (id.Length > 0)
+            yield return new PhaseSection(id, mark, line, done, part, todo);
+    }
+
+    /// <summary>The first cell of a row beginning with a mark, or empty.</summary>
+    private static string MarkOf(string row)
+    {
+        string[] cells = row.Split('|');
+
+        // From the third cell: the first is empty, the second is the identifier,
+        // and an identifier can carry no mark.
+        for (int i = 2; i < cells.Length; i++)
+        {
+            string cell = cells[i].TrimStart();
+
+            foreach (string candidate in new[] { Done, Part, Todo, Blocked })
+                if (cell.StartsWith(candidate, StringComparison.Ordinal)) return candidate;
+        }
+
+        return string.Empty;
+    }
+
+    [GeneratedRegex(@"^### Phase (R[0-9]+[a-z]?) — .*?(✅|🟨|⬜|❌)")]
+    private static partial Regex PhaseHeading();
+
+    [GeneratedRegex(@"^\| (R[0-9]+[a-z]?)[\.0-9· ]*\|")]
+    private static partial Regex TaskRow();
 }
