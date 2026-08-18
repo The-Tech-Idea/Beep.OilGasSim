@@ -204,7 +204,7 @@ internal sealed class ProductionLoop : IStateOwner
     private readonly Temperature _reservoirTemperature;
     private readonly IFlowSolver _solver;
     private readonly IFlowElementRegistry _network;
-    private readonly Temperature _ambient;
+    private readonly OGSim.Environment.WeatherState _weather;
     private readonly Density _surfaceDensity;
     private readonly int _materialCount;
 
@@ -305,7 +305,7 @@ internal sealed class ProductionLoop : IStateOwner
         Func<bool> isAbandoned,
         FieldEconomics economics,
         Temperature reservoirTemperature,
-        Temperature ambient,
+        OGSim.Environment.WeatherState weather,
         Density surfaceDensity,
         int materialCount)
     {
@@ -354,7 +354,7 @@ internal sealed class ProductionLoop : IStateOwner
         _economics = economics;
         _handled = new double[materialCount];
         _reservoirTemperature = reservoirTemperature;
-        _ambient = ambient;
+        _weather = weather;
         _surfaceDensity = surfaceDensity;
         _materialCount = materialCount;
 
@@ -666,12 +666,38 @@ internal sealed class ProductionLoop : IStateOwner
         Array.Clear(_handled);
         double[] delivered = new double[_materialCount];
 
+        var ambientDayDegrees = 0.0;
+        var severityDayWeighted = 0.0;
+        var weatheredDays = 0;
+
         for (int i = 0; i < plan.Segments.Count; i++)
         {
             Segment segment = plan.Segments[i];
 
+            // THE SEGMENT'S OWN WEATHER (SDD-016 §3), which was two constants:
+            // a fixed 15 °C ambient and a severity of literally zero, handed to
+            // the solver every month of every game while `WeatherState` computed
+            // the real seasonal values a few metres away and only the read model
+            // read them.
+            //
+            // **What this does and does not buy, stated plainly.** Nothing in the
+            // shipped chain derates on either yet — the `Compressor` that reads
+            // §3.3's k_derate is built and not composed, and the berth that would
+            // close on severity is R11's — so today these move stream
+            // temperatures on zero-flow elements and little else. It is fixed
+            // here anyway because the alternative is worse than a gap: the first
+            // element that DOES read ambient would derate against 15 °C for forty
+            // years and look entirely plausible doing it, which is the
+            // accepted-then-ignored defect arriving pre-installed (finding 233).
+            Temperature ambient = AmbientOver(segment);
+            double severity = SeverityOver(segment);
+
+            ambientDayDegrees += ambient.Kelvin * segment.DurationDays;
+            severityDayWeighted += severity * segment.DurationDays;
+            weatheredDays += segment.DurationDays;
+
             SolveReport report = _solver.Solve(
-                new SegmentContext(segment.DurationDays, _ambient, WeatherSeverity: 0.0),
+                new SegmentContext(segment.DurationDays, ambient, severity),
                 _network.ViewFor(segment.Available));
 
             // DURATION-WEIGHTED (SDD-002 §9). Rates are per second and a segment
@@ -679,6 +705,11 @@ internal sealed class ProductionLoop : IStateOwner
             // exact rather than nearly.
             Accumulate(report, segment.DurationDays * SecondsPerDay, delivered);
         }
+
+        // What the month was actually solved at, for the projection to report
+        // rather than compute a second way (law L5).
+        AmbientThisTick = new Temperature(ambientDayDegrees / weatheredDays);
+        SeverityThisTick = severityDayWeighted / weatheredDays;
 
         Delivered = OGSim.Kernel.Composition.Validated([.. delivered]);
         ProducedThisTick = new SurfaceVolume(
@@ -1271,6 +1302,24 @@ internal sealed class ProductionLoop : IStateOwner
     /// </summary>
     public Mass FlaredThisTick { get; private set; }
 
+    /// <summary>
+    /// The ambient the field actually SOLVED at this month, and the severity it
+    /// solved through — duration-weighted across the segments (SDD-016 §3).
+    ///
+    /// <para><b>Published rather than recomputed by the projection</b>, which is
+    /// law L5 and was being broken quietly: the read model asked
+    /// <c>TemperatureOn(lastDayOfTheMonth)</c> while the solver used a per-segment
+    /// mean, so a host was shown a temperature the field never ran at. One
+    /// number, computed where it is used, reported from there.</para>
+    ///
+    /// <para>Weighted by DAYS, because segments are not equal: a month split 3/27
+    /// by an outage would otherwise average a three-day cold snap against
+    /// twenty-seven days as though they were the same amount of weather.</para>
+    /// </summary>
+    public Temperature AmbientThisTick { get; private set; } = new(0.0);
+
+    public double SeverityThisTick { get; private set; }
+
     /// <summary>What left for market this tick. What the tank could not hold
     /// stays in it, and what it could not take never left the field.</summary>
     public Mass Exported { get; private set; }
@@ -1609,6 +1658,41 @@ internal sealed class ProductionLoop : IStateOwner
             Scale(_economics.LiftingCostPerTonne, liquid / KilogramsPerTonne),
             Scale(_economics.InjectionWaterCostPerCubicMetre, _importedThisTick));
     }
+
+    /// <summary>
+    /// The mean ambient over a segment's days (SDD-016 §3).
+    ///
+    /// <para>A MEAN and not the first day's, because a segment is a run of days
+    /// and the element it is handed to solves once for the whole run. Taking the
+    /// first day would make a segment boundary — which exists for availability
+    /// reasons, not weather ones — decide which day's temperature the month is
+    /// solved at.</para>
+    /// </summary>
+    private Temperature AmbientOver(Segment segment)
+    {
+        var sum = 0.0;
+
+        for (var day = 0; day < segment.DurationDays; day++)
+            sum += _weather.TemperatureOn(FieldRegion, segment.StartDay + day).Kelvin;
+
+        return new Temperature(sum / segment.DurationDays);
+    }
+
+    /// <summary>The mean severity over the same days, on the same argument.</summary>
+    private double SeverityOver(Segment segment)
+    {
+        var sum = 0.0;
+
+        for (var day = 0; day < segment.DurationDays; day++)
+            sum += _weather.SeverityOn(FieldRegion, segment.StartDay + day);
+
+        return sum / segment.DurationDays;
+    }
+
+    /// <summary>One climate region per location (SDD-016 §1). The same constant
+    /// `ActivityStage` uses, and it will become a field property when R22.1's
+    /// environment profile lands.</summary>
+    private const int FieldRegion = 0;
 
     private const double KilogramsPerTonne = 1000.0;
 

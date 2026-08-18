@@ -452,4 +452,50 @@ public sealed class ProductionLoopTests
         Assert.Fail($"no {category} entry carries {key}={value}");
         return found[0];
     }
+
+    /// <summary>
+    /// R22.7 / SDD-016 §3 — <b>the field solves at the weather it is having</b>,
+    /// not at a constant.
+    ///
+    /// <para>`SegmentContext.Ambient` is a real solver input — `Compressor`
+    /// derates on it through design 13 §3.3's k_derate — and the loop handed it a
+    /// fixed 15 °C every month of every game, with `WeatherSeverity: 0.0` beside
+    /// it, while `WeatherState` computed the seasonal values a few metres away
+    /// and only the read model read them (finding 233).</para>
+    ///
+    /// <para>Asserted through the READ MODEL, which is now the same number: the
+    /// projection used to ask `TemperatureOn` for the month's last day while the
+    /// solve used a per-segment mean, so a host was shown a temperature the field
+    /// never ran at. One fact, one owner, and the reason this test can see the
+    /// solver's input at all.</para>
+    ///
+    /// <para>A YEAR, and asserted on the SPREAD rather than on a shape: the
+    /// shipped climate is temperate and its baseline runs 15.4 °C in August to
+    /// 5.6 °C in February, so a field that solved at one temperature all year
+    /// would show a spread of zero. Which month is warmest is the content's
+    /// business and not this test's.</para>
+    /// </summary>
+    [Fact]
+    [Trait("Speed", "Slow")]
+    public void R22V15_the_field_solves_at_the_ambient_it_is_having()
+    {
+        (Engine engine, _) = Field();
+
+        var coldest = double.MaxValue;
+        var warmest = double.MinValue;
+
+        for (var month = 0; month < 12; month++)
+        {
+            engine.Pipeline.AdvanceTick();
+
+            double ambient = engine.ReadModel!.Weather.Ambient.Kelvin;
+
+            if (ambient < coldest) coldest = ambient;
+            if (ambient > warmest) warmest = ambient;
+        }
+
+        Assert.True(warmest - coldest > 5.0,
+            $"a year of solving spanned {warmest - coldest:F2} K, so the field is " +
+            "running at a constant rather than at its own weather");
+    }
 }

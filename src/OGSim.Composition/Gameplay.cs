@@ -462,9 +462,14 @@ internal sealed class FieldProjection(
             position.ActivitiesRunning, position.ProducedThisTick, position.Insolvent,
             progress, Project(beliefs), loop.Chain(), field.Wells(), Prospects(),
             loop.Market.OilPrice, loop.Market.CostIndex,
+            // WHAT THE FIELD RAN AT, taken from the loop rather than recomputed
+            // here. This asked `TemperatureOn(lastDayOfTheMonth)` while the solve
+            // used a per-segment mean, so a host was shown a temperature the
+            // field never ran at — one fact with two owners (L5), and the kind
+            // that never fails a test because both answers are plausible.
             new WeatherView(
-                weather.SeverityOn(FieldRegion, DayJustEnded),
-                weather.TemperatureOn(FieldRegion, DayJustEnded),
+                loop.SeverityThisTick,
+                loop.AmbientThisTick,
                 weather.Look(FieldRegion, ForecastHorizonDays)),
             reserves.Remaining(loop.CumulativeProduced),
             history.Ratio(

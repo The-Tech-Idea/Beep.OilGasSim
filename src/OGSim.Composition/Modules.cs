@@ -791,7 +791,7 @@ internal sealed class FieldModule(FacilityLadders ladders) : EngineModule(Declar
             () => field.IsAbandoned,
             Defaults.Economics,
             Defaults.ReservoirTemperature,
-            Defaults.SurfaceAmbient,
+            composition.Require<OGSim.Environment.WeatherState>(),
             Defaults.SurfaceOilDensity,
             Defaults.MaterialCount);
 
