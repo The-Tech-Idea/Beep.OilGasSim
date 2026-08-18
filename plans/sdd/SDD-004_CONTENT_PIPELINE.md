@@ -297,10 +297,22 @@ public interface ICatalogSet
 > every field optional, every reader branching on which ones arrived.
 >
 > So `facility-unit` resolves into six kinds — `separator`, `tank`, `treater`,
-> `gas-plant`, `export-line`, `manifold` — each a closed record deriving from
-> `GatedDefinition`. They share the gate and nothing else, which is what §6's
-> "the datasheet block is kind-specific and closed" already says; the correction
-> is only that the KIND is what varies, not a block inside one.
+> `gas-plant`, `export-line`, `manifold` — each a closed record over a shared
+> `FacilityUnitDefinition(Id, RequiresTech, AvailableFromEra, Rung)`. They share
+> the gate and the rung and nothing else, which is what §6's "the datasheet block
+> is kind-specific and closed" already says; the correction is only that the KIND
+> is what varies, not a block inside one.
+>
+> **They do NOT derive from `GatedDefinition`, and the missing member is the
+> reason.** That base requires `Fits : SlotKind`, which SDD-005 §4.0b defines as
+> how the system knows where a device plugs in *without branching on what it is*
+> — and `SlotKind` has no facility member. Adding one would make a `separator`
+> definition declare that it fits the separator slot, which is its own kind
+> restated: a second owner of one fact, which law L5 forbids. **For a facility
+> unit the KIND IS THE SLOT.** So these carry the gate pair explicitly and leave
+> `Fits` to the unlockables that genuinely need it — a lift method, a completion
+> fluid, a chemical — where one socket accepts several kinds of thing and the
+> answer cannot be read off the record's type.
 >
 > **A ladder is ORDERED, and `ICatalog.All` is not.** Catalogue order is the
 > id-sorted list, which is right for save stability and wrong for a progression:
