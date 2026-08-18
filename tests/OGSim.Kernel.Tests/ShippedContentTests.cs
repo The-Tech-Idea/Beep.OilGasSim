@@ -233,6 +233,13 @@ public class ShippedContentTests
     /// stood before the move, written out here so that a later rebalance is a
     /// visible edit to this test as well as to the sheet.</para>
     ///
+    /// <para><b>No verification id in the name, deliberately.</b> R20c has no
+    /// verification table — it is a phase design 03 §8 gave a layer and the phase
+    /// list never gave a suite — so an <c>R20cV9</c> here would claim a coverage
+    /// no document declares, which is exactly what
+    /// <c>Record_EveryVerificationIdInATestNameIsDeclared</c> refuses. It caught
+    /// this name on its first run after being written for it (finding 213).</para>
+    ///
     /// <para>Two of them were nearly lost in the move and are the reason this
     /// test asserts every field: <c>waterIntoLiquid</c>, without which a vessel
     /// produces dry crude at every tier and the sales spec cannot be breached
@@ -241,7 +248,7 @@ public class ShippedContentTests
     /// the first transcription of the datasheet omitted them.</para>
     /// </summary>
     [Fact]
-    public void R20cV9_the_shipped_facility_sheets_carry_the_ladders_they_replaced()
+    public void The_shipped_facility_sheets_carry_the_ladders_they_replaced()
     {
         ICatalogSet loaded = LoadFacilities();
 
