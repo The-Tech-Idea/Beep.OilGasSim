@@ -106,19 +106,29 @@ of open acreage.
 > `MovementCategory.Contractual` — both declared in the ledger's own
 > `Causes` list since R21 §2.4b and posted to by nothing until now.
 >
-> **"Announced twice" is scoped down, and stated as a limit rather than
-> claimed in full.** Design 16's EM7 describes a `Decision`-severity event
-> published AHEAD of a deadline, that later EXPIRES into its declared
-> default and publishes THAT too — an advance-warning-then-expiry pattern.
-> Checked rather than assumed: `Severity.Decision` is referenced nowhere in
-> the engine except `EventBus`'s own cause-required guard, so no module
-> tracks a live deadline and publishes ahead of it — EM7 in full is its own
-> unbuilt mechanic, not a small addition to this join. What ships here is the
-> half that is achievable without it: the outcome publishes ONCE, at the
-> moment of forfeiture, as a `Severity.Decision` event carrying the
-> forfeiture as its audited cause, which is genuinely "never silent" — a
-> host cannot miss it — without the second, advance half EM7's full text
-> promises. Building that is design 16's own task, not this one's.
+> **"Announced twice" is scoped down FURTHER than first written here, and the
+> reason is worth recording alongside the first cut.** This amendment
+> originally proposed publishing one `Severity.Decision` `EngineEvent` at the
+> moment of forfeiture. Checked while implementing rather than assumed:
+> **no concrete `EngineEvent` subtype exists anywhere in this engine.**
+> `EngineEvent` is abstract, `EventBus.Publish` has never been called by any
+> module, and design 16's own ordering fields — `Day`, `LoopRole`,
+> `IsSegmentBoundary` — have no worked example to build the first one
+> against. Building the engine's FIRST concrete event correctly, from a
+> design section this task has not fully absorbed, is its own unscoped
+> undertaking and not a footnote — bolting one on half-understood risks
+> violating design 21 §5.3's ordering invariants in a way nothing would
+> catch, which is worse than not publishing one.
+>
+> **So this join uses the ESTABLISHED door instead: the audit trail.** The
+> bond forfeit posts as a `Movement` whose `Cause` is an `AuditId` from
+> `_audit.Record(AuditCategory.Financial, ...)` — the same mechanism every
+> other financial consequence in this composition already goes through, and
+> `Financial` is one of the categories `AuditTrail.Prune` keeps forever
+> (finding 236). "Never silent" is satisfied by a channel that demonstrably
+> works today, rather than claimed of one this task would be inventing from
+> nothing. The `EventBus`/EM7 half — for THIS or any other mechanic — is
+> genuinely unbuilt and is design 16's own task.
 >
 > **A lost licence refuses further drilling and nothing already standing.**
 > `DrillWellActivity.OwnRefusals` checks `licence.IsLive`; wells already
