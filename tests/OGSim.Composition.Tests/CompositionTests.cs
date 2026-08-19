@@ -128,6 +128,15 @@ internal static class Fixture
             files.Add(new ContentFile("terrain-classes/" + Path.GetFileName(path),
                                       File.ReadAllText(path)));
 
+        // AND THE ONE SALES CONTRACT (SDD-009 §7's R13.3 amendment, finding
+        // 250) — the same door.
+        string contracts = Path.Combine(here.Parent!.Parent!.FullName, "content", "contracts");
+
+        foreach (string path in Directory.EnumerateFiles(contracts, "*.json")
+                                         .OrderBy(p => p, StringComparer.Ordinal))
+            files.Add(new ContentFile("contracts/" + Path.GetFileName(path),
+                                      File.ReadAllText(path)));
+
         return new DirectorySource(files);
     }
 
@@ -144,6 +153,7 @@ internal static class Fixture
                 new GasPlantContentKind(), new ExportLineContentKind(), new ManifoldContentKind(),
                 new OGSim.Capabilities.TechnologyContentKind(),
                 new OGSim.World.TerrainClassContentKind(),
+                new TakeOrPayContentKind(),
             ],
             new PluginRegistry());
 
@@ -183,6 +193,17 @@ internal static class Fixture
     /// module list themselves.</summary>
     public static IReadOnlyList<OGSim.World.TerrainClassDefinition> TerrainClasses() =>
         Loaded().Of<OGSim.World.TerrainClassDefinition>().All;
+
+    /// <summary>The shipped take-or-pay contract (SDD-009 §7's R13.3
+    /// amendment), for the tests that build the module list themselves.</summary>
+    public static OGSim.Company.TakeOrPayTerms TakeOrPay()
+    {
+        TakeOrPayDefinition definition =
+            Loaded().Of<TakeOrPayDefinition>()[new ContentId("oil-take-or-pay")];
+
+        return new OGSim.Company.TakeOrPayTerms(
+            definition.CommittedVolume, definition.WindowMonths, definition.PenaltyRate);
+    }
 
     private sealed class DirectorySource(IReadOnlyList<ContentFile> files) : IContentSource
     {
@@ -242,7 +263,8 @@ public sealed class ShippedSetTests
 
         IReadOnlyList<IModule> modules = EngineBuilder.ShippedModules(
             audit, new SimulationClock(new GameDate(1965, 1)), new RandomSource(1UL),
-            Defaults.Simulation, Fixture.Ladders(), Fixture.Registry(), Fixture.TerrainClasses());
+            Defaults.Simulation, Fixture.Ladders(), Fixture.Registry(), Fixture.TerrainClasses(),
+            Fixture.TakeOrPay());
 
         var provided = new HashSet<Type>();
         foreach (IModule module in modules)
@@ -269,7 +291,8 @@ public sealed class ShippedSetTests
 
         var reversed = new List<IModule>(EngineBuilder.ShippedModules(
             audit, new SimulationClock(new GameDate(1965, 1)), new RandomSource(1UL),
-            Defaults.Simulation, Fixture.Ladders(), Fixture.Registry(), Fixture.TerrainClasses()));
+            Defaults.Simulation, Fixture.Ladders(), Fixture.Registry(), Fixture.TerrainClasses(),
+            Fixture.TakeOrPay()));
         reversed.Reverse();
 
         Built forward = Assert.IsType<Built>(EngineBuilder.Build(Fixture.Settings()));
@@ -345,7 +368,13 @@ public sealed class ShippedSetTests
              StageId.Availability, StageId.Availability,
              StageId.SolveFlow, StageId.MaterialBalance, StageId.Custody,
              StageId.Economics, StageId.HseRegulation, StageId.Information,
-             StageId.Company, StageId.Company, StageId.Objectives, StageId.Close],
+
+             // Three StageId.Company participants: CompanyModule's
+             // LicenceStage (order 0), CapabilitiesModule's diffusion
+             // (order 1), and FieldModule's TakeOrPayStage (order 2,
+             // SDD-009 §7's R13.3 amendment, finding 250).
+             StageId.Company, StageId.Company, StageId.Company,
+             StageId.Objectives, StageId.Close],
             built.Engine.Pipeline.DeclaredOrder());
     }
 
@@ -794,7 +823,7 @@ public sealed class AccessWindowTests
 
         var modules = new List<IModule>(EngineBuilder.ShippedModules(
             audit, clock, new RandomSource(20260806UL), Defaults.Simulation,
-            Fixture.Ladders(), Fixture.Registry(), Fixture.TerrainClasses()));
+            Fixture.Ladders(), Fixture.Registry(), Fixture.TerrainClasses(), Fixture.TakeOrPay()));
 
         for (int i = 0; i < modules.Count; i++)
             if (modules[i] is EnvironmentModule)

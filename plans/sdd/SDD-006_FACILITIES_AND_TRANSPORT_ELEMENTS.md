@@ -771,9 +771,18 @@ into as well.
 
 **Order of work**, each landing green before the next:
 
-1. The berth carries the rate (§7a's L5 decision), with no schedule yet —
-   behaviour identical, tests unmoved, and the duplicate-rate hazard closed
-   before anything can depend on it.
+1. **Done (finding 251).** The berth carries the rate (§7a's L5 decision),
+   with no schedule yet — behaviour identical, tests unmoved, and the
+   duplicate-rate hazard closed before anything can depend on it.
+   `ExportTerminal.Berth` is a DERIVED value (`new Berth(Tier.Id,
+   Tier.Offtake)`), never a second stored fact — `Tier` stays the one thing
+   `Fit`/save-restore touch, so there is still exactly one owner of the rate
+   (law L5) even though there are now two names for reading it. The tank's
+   draw (`ProductionLoop`, formerly `_terminal.Tier.Offtake` directly) now
+   reads `_terminal.Berth.LoadingRate` — the one consumer §7a.1 named, moved
+   to the seam a schedule will eventually attach to. Steps 2–4 remain open
+   and each still needs the company-value prerequisite §7a.2 records before
+   it is safe to attempt.
 2. Cargoes and occupancy: the tank fills between liftings. **This is where the
    slow suite moves**, and where the predictions above are checked.
 3. Laytime and demurrage — a cost, so it touches the ledger and the ESG/covenant

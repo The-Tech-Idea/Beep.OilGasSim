@@ -18,6 +18,17 @@ namespace OGSim.Facilities;
 public sealed record ExportTier(ContentId Id, MassRate Offtake);
 
 /// <summary>
+/// SDD-006 §7a's L5 decision, step 1 (finding 251): the berth carries the
+/// rate, not the terminal — a schedule (§7a's steps 2-4) will one day attach
+/// to this same identity. DERIVED from the fitted <see cref="ExportTier"/>,
+/// never a second stored fact: <c>Tier</c> stays the one thing
+/// <see cref="ExportTerminal.Fit"/> and save/restore touch, so introducing a
+/// second name to read the rate through does not introduce a second owner
+/// of it (law L5).
+/// </summary>
+public sealed record Berth(ContentId Id, MassRate LoadingRate);
+
+/// <summary>
 /// The socket. Its identity is the terminal's and does not change when a bigger
 /// line is laid — the berth, the metering and the sales contract stay exactly
 /// where they were (SDD-006 §0c).
@@ -44,6 +55,10 @@ public sealed class ExportTerminal
     /// <summary>What is fitted now. The rate stage 6 draws from the tank
     /// against, and the one fact about export capacity there is (law L5).</summary>
     public ExportTier Tier { get; private set; }
+
+    /// <summary>SDD-006 §7a's L5 decision, step 1 (finding 251) — the same
+    /// rate, read through the seam a schedule will eventually attach to.</summary>
+    public Berth Berth => new(Tier.Id, Tier.Offtake);
 
     /// <summary>
     /// Lay a bigger line. Called only by a COMPLETED expansion — the months and

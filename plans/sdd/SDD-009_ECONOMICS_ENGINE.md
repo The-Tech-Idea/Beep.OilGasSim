@@ -358,6 +358,60 @@ Insurance (ED6): premium(class) = exposure(class) · rate(record) per year;
   renewal from the audited incident history — the barrier model prices the policy.
 ```
 
+> **R13.3 amendment (finding 250): the take-or-pay half, typed.** The tracker
+> named `ISalesContract` — spot, term, take-or-pay, hedge — as one task and
+> this formula block as its whole specification; neither states a shape a
+> compiler can check, and R13's own verification table assigns exactly one
+> id to it, R13-V10, "take-or-pay penalty". Under F-1 the take-or-pay half is
+> pinned here; spot and term need no new mechanism (every sale already prices
+> off the composed `IPriceModel` through the one custody-transfer door — that
+> IS a spot sale), and hedges and insurance stay open, each its own task, not
+> fabricated alongside this one for symmetry with a task name.
+>
+> `ISalesContract` itself is corrected to a concrete type, the same
+> correction findings 117 and 246 already made for compression and pumping:
+> nothing else in this engine implements "a sales contract" polymorphically,
+> so a plugin interface would be speculative generality rather than a seam
+> anything reaches through.
+>
+> ```csharp
+> // Company layer, beside LicenceTerms/Licence — the same shape: terms are
+> // fixed content, progress is state that resets on its own clock.
+> public sealed record TakeOrPayTerms(
+>     SurfaceVolume CommittedVolume,   // per window, stock-tank m³
+>     int WindowMonths,
+>     Money PenaltyRate);              // per m³ of shortfall
+>
+> public sealed record TakeOrPayAssessment(
+>     SurfaceVolume Delivered, SurfaceVolume Shortfall, Money Penalty);
+>
+> public sealed class TakeOrPayContract : IStateOwner
+> {
+>     public void RecordDelivery(SurfaceVolume delivered);   // every tick
+>     public TakeOrPayAssessment? AssessAt(Tick now);         // null off-window
+> }
+> ```
+>
+> **Assessed on a stored window boundary, not `elapsed % WindowMonths`.**
+> `Licence.AssessAt` re-derives its deadlines from fixed `Terms`, which a
+> take-or-pay window cannot: the boundary itself ADVANCES each time it is
+> crossed, so it is state (`_windowEndsAt`), captured and restored like
+> `Licence.IsLive` — a modulo against a restored tick would still be correct
+> arithmetic, but the boundary would no longer be *stored*, which is the
+> difference between a fact and a recomputation of one law L5 cares about.
+>
+> **Delivered is read from `ProductionLoop.ProducedThisTick`**, not
+> re-derived from the audit trail the way `IsCustodyTransfer` checks a
+> cause: the loop already computes this tick's custody-transferred volume to
+> build that same audit entry (`RecordCustody`), and a second computation of
+> the identical fact from its own audit record would be two owners of one
+> number rather than one reading the other's output.
+>
+> **Posted the same way the licence bond is**: `Account.Penalty` against
+> `Account.Cash`, `MovementCategory.Contractual` — both already declared and
+> already proven end to end by the bond forfeit, so this needed no new
+> ledger vocabulary, only a second poster of the existing kind.
+
 ## 8. Error surface
 
 | Situation | Response |

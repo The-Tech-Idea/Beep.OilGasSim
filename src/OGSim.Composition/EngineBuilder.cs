@@ -1734,20 +1734,37 @@ public static class EngineBuilder
     /// </summary>
     private static (FacilityLadders Ladders,
                     IReadOnlyList<OGSim.Capabilities.TechnologyNode> Registry,
-                    IReadOnlyList<OGSim.World.TerrainClassDefinition> TerrainClasses)? Ladders(
+                    IReadOnlyList<OGSim.World.TerrainClassDefinition> TerrainClasses,
+                    OGSim.Company.TakeOrPayTerms TakeOrPay)? Ladders(
         EngineSettings settings)
     {
         ContentLoadResult result = FacilityContent(settings);
 
         return result is ContentLoaded loaded
             ? (FacilityLadders.From(loaded.Catalogues), Registry(loaded.Catalogues),
-               loaded.Catalogues.Of<OGSim.World.TerrainClassDefinition>().All)
+               loaded.Catalogues.Of<OGSim.World.TerrainClassDefinition>().All,
+               TakeOrPayFrom(loaded.Catalogues))
             : null;
     }
 
     /// <summary>Why it would not load, for the refusal to carry.</summary>
     private static IReadOnlyList<LoadFailure> Failures(EngineSettings settings) =>
         FacilityContent(settings) is ContentFailures failed ? failed.Failures : [];
+
+    /// <summary>
+    /// SDD-009 §7's R13.3 amendment (finding 250, revised). ONE contract, the
+    /// same relationship <see cref="Defaults.LicenceTerms"/> has to the one
+    /// licence — no ladder, because a sales contract is not a purchasable
+    /// progression.
+    /// </summary>
+    private static OGSim.Company.TakeOrPayTerms TakeOrPayFrom(ICatalogSet catalogues)
+    {
+        TakeOrPayDefinition definition =
+            catalogues.Of<TakeOrPayDefinition>()[new ContentId("oil-take-or-pay")];
+
+        return new OGSim.Company.TakeOrPayTerms(
+            definition.CommittedVolume, definition.WindowMonths, definition.PenaltyRate);
+    }
 
     /// <summary>
     /// The technology registry, as a graph (SDD-005 §2's R20d.10 amendment).
@@ -1804,6 +1821,7 @@ public static class EngineBuilder
                 new GasPlantContentKind(), new ExportLineContentKind(), new ManifoldContentKind(),
                 new OGSim.Capabilities.TechnologyContentKind(),
                 new OGSim.World.TerrainClassContentKind(),
+                new TakeOrPayContentKind(),
             ],
             new PluginRegistry())
             .LoadAll(settings.Content);
@@ -1812,7 +1830,8 @@ public static class EngineBuilder
         AuditTrail audit, SimulationClock clock, IRandomSource random,
         RealityProfile profile, FacilityLadders ladders,
         IReadOnlyList<OGSim.Capabilities.TechnologyNode> registry,
-        IReadOnlyList<OGSim.World.TerrainClassDefinition> terrainClasses) =>
+        IReadOnlyList<OGSim.World.TerrainClassDefinition> terrainClasses,
+        OGSim.Company.TakeOrPayTerms takeOrPay) =>
     [
         new SubsurfaceModule(),
         new WellsModule(),
@@ -1828,7 +1847,7 @@ public static class EngineBuilder
         new HseModule(),
         new ObjectivesModule(),
         new MaterialsModule(profile),
-        new FieldModule(ladders),
+        new FieldModule(ladders, takeOrPay),
         new DiagnosticsModule(audit, clock, random),
     ];
 
@@ -1904,7 +1923,7 @@ public static class EngineBuilder
     {
         ArgumentNullException.ThrowIfNull(settings);
 
-        if (Ladders(settings) is not var (ladders, registry, terrainClasses))
+        if (Ladders(settings) is not var (ladders, registry, terrainClasses, takeOrPay))
             return new BuildRefusedByContent(Failures(settings));
 
         var clock = new SimulationClock(settings.Epoch);
@@ -1913,7 +1932,8 @@ public static class EngineBuilder
         return Build(
             settings,
             ShippedModules(audit, clock, new RandomSource(settings.WorldSeed),
-                           Defaults.ProfileNamed(settings.RealityProfile), ladders, registry, terrainClasses),
+                           Defaults.ProfileNamed(settings.RealityProfile), ladders, registry,
+                           terrainClasses, takeOrPay),
             clock, audit);
     }
 
@@ -1935,7 +1955,7 @@ public static class EngineBuilder
     {
         ArgumentNullException.ThrowIfNull(settings);
 
-        if (Ladders(settings) is not var (ladders, registry, terrainClasses))
+        if (Ladders(settings) is not var (ladders, registry, terrainClasses, takeOrPay))
             return new BuildRefusedByContent(Failures(settings));
 
         var clock = new SimulationClock(settings.Epoch);
@@ -1946,7 +1966,8 @@ public static class EngineBuilder
         return Build(
             settings,
             ShippedModules(audit, clock, new RandomSource(settings.WorldSeed),
-                           Defaults.ProfileNamed(settings.RealityProfile), ladders, registry, terrainClasses),
+                           Defaults.ProfileNamed(settings.RealityProfile), ladders, registry,
+                           terrainClasses, takeOrPay),
             clock, audit);
     }
 

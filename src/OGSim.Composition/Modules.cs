@@ -659,6 +659,48 @@ internal sealed class LicenceStage(
     }
 }
 
+/// <summary>
+/// Stage 11, beside <see cref="LicenceStage"/> — SDD-009 §7's R13.3 amendment
+/// (finding 250). Records the tick's delivered volume every tick, and posts
+/// the SAME shape of movement the licence bond does — <c>Account.Penalty</c>
+/// against <c>Account.Cash</c>, <c>MovementCategory.Contractual</c> — the
+/// tick a window closes short.
+/// </summary>
+internal sealed class TakeOrPayStage(
+    OGSim.Company.TakeOrPayContract contract,
+    ProductionLoop loop,
+    OGSim.Company.CompanyState company,
+    IAuditTrail audit) : ITickStage
+{
+    public StageId Id => StageId.Company;
+
+    public void Execute(TickContext context)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+
+        contract.RecordDelivery(loop.ProducedThisTick);
+
+        OGSim.Company.TakeOrPayAssessment? assessment = contract.AssessAt(context.Tick);
+        if (assessment is null || assessment.Penalty.Cents <= 0) return;
+
+        AuditId cause = audit.Record(
+            AuditCategory.Financial, subject: null, cause: null,
+            new Dictionary<string, AuditValue>(StringComparer.Ordinal)
+            {
+                ["spend"] = new("take-or-pay-shortfall"),
+                ["delivered-m3"] = new(assessment.Delivered.CubicMetres.ToString(
+                    "R", System.Globalization.CultureInfo.InvariantCulture)),
+                ["shortfall-m3"] = new(assessment.Shortfall.CubicMetres.ToString(
+                    "R", System.Globalization.CultureInfo.InvariantCulture)),
+            });
+
+        company.Ledger.Post(new OGSim.Company.Movement(
+            context.Tick, OGSim.Company.Account.Penalty, OGSim.Company.Account.Cash,
+            assessment.Penalty, OGSim.Company.MovementCategory.Contractual,
+            Asset: null, Cause: cause));
+    }
+}
+
 // ---------------------------------------------------------------- field
 
 /// <summary>
@@ -675,12 +717,18 @@ internal sealed class LicenceStage(
 /// pay are three stages in design 03 §6's order rather than one function,
 /// because a failed solve must commit nothing.</para>
 /// </summary>
-internal sealed class FieldModule(FacilityLadders ladders) : EngineModule(Declare(
+internal sealed class FieldModule(
+    FacilityLadders ladders, OGSim.Company.TakeOrPayTerms takeOrPay) : EngineModule(Declare(
     "field",
     provides:
     [
         typeof(FieldControl), typeof(CloseStage), typeof(IObligationRegistry),
         typeof(Bank), typeof(ReserveHistory),
+
+        // SDD-009 §7's R13.3 amendment (finding 250) — the one take-or-pay
+        // contract, provided so a test can resolve and assess it directly,
+        // the same reason Licence is.
+        typeof(OGSim.Company.TakeOrPayContract),
     ],
     requires:
     [
@@ -739,7 +787,8 @@ internal sealed class FieldModule(FacilityLadders ladders) : EngineModule(Declar
 
     ownsState: [
         "field.activities", "company.obligations", "field.flood", "field.export",
-        "company.facility", "company.reserve-history", "field.abandoned"],
+        "company.facility", "company.reserve-history", "field.abandoned",
+        "company.take-or-pay"],
     stages:
     [
         new StageParticipation(StageId.Operations, Order: 0),
@@ -747,6 +796,16 @@ internal sealed class FieldModule(FacilityLadders ladders) : EngineModule(Declar
         new StageParticipation(StageId.SolveFlow, Order: 0),
         new StageParticipation(StageId.Custody, Order: 0),
         new StageParticipation(StageId.Economics, Order: 0),
+
+        // SDD-009 §7's R13.3 amendment (finding 250) — TakeOrPayStage, the
+        // same stage LicenceStage posts a contractual penalty from, for the
+        // same reason: after stage 8 has settled the month's custody and
+        // before stage 12 reports it. Order 2: CompanyModule's LicenceStage
+        // claims order 0 and CapabilitiesModule's diffusion claims order 1 on
+        // this stage, and within-stage order must be unambiguous across
+        // modules — the three are independent, so which runs first does not
+        // matter beyond that.
+        new StageParticipation(StageId.Company, Order: 2),
 
         // STALENESS (SDD-008 §2d.3). Declared by THIS module rather than by the
         // information one, and the choice is worth stating: what fixes the
@@ -1110,6 +1169,16 @@ internal sealed class FieldModule(FacilityLadders ladders) : EngineModule(Declar
         var close = new CloseStage(projection, objectives);
         composition.Contribute(order: 0, close);
         composition.Provide(close);
+
+        // THE ONE TAKE-OR-PAY CONTRACT (SDD-009 §7's R13.3 amendment, finding
+        // 250), granted at tick 0 like the one licence: this composition's
+        // company holds one offtake commitment against the one field it
+        // generates.
+        var takeOrPayContract = new OGSim.Company.TakeOrPayContract(takeOrPay, start: new Tick(0));
+
+        composition.Own(takeOrPayContract);
+        composition.Provide(takeOrPayContract);
+        composition.Contribute(order: 2, new TakeOrPayStage(takeOrPayContract, loop, company, audit));
 
         // Stage 3: rigs that finished this month hand over a well or a dry hole,
         // BEFORE stage 5 solves — so a well completed in January produces in

@@ -1271,9 +1271,11 @@ internal sealed class ProductionLoop : IStateOwner
 
         // Asked of the TERMINAL each tick rather than held: a line laid this
         // month must lift against its new capacity from this month
-        // (SDD-006 §7b).
+        // (SDD-006 §7b). Through the berth (SDD-006 §7a's L5 decision, step
+        // 1, finding 251) — the same rate, read through the seam a schedule
+        // will eventually attach to.
         MaterialInventory lifted = _tank.Draw(
-            new Mass(_terminal.Tier.Offtake.KgPerSecond * tick.Seconds));
+            new Mass(_terminal.Berth.LoadingRate.KgPerSecond * tick.Seconds));
 
         Exported = lifted.Total;
     }
