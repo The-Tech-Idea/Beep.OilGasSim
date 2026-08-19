@@ -1301,7 +1301,14 @@ internal sealed class CapabilitiesModule(
     // through the graph that authorised them. Nothing owned this key because
     // nothing composed the owner.
     ownsState: ["capabilities.technology"],
-    stages: [new StageParticipation(StageId.Environment, Order: 1)]))
+
+    // StageId.Company (11), not Environment — SDD-005 §4.2's own words:
+    // "applied when acquisition completes (a stage-11 state change), taking
+    // effect next tick — technology never creates a segment boundary." A first
+    // pass placed this at stage 2 by analogy with weather and was corrected
+    // (SDD-005's R20d.10 amendment) after checking it against §4.2, which had
+    // already stated the right stage and the reason for it.
+    stages: [new StageParticipation(StageId.Company, Order: 1)]))
 {
     public override void Compose(IModuleComposition composition)
     {
@@ -1330,7 +1337,8 @@ internal sealed class CapabilitiesModule(
 }
 
 /// <summary>
-/// Stage 2. What has become standard practice (SDD-005 §2, design 07 §3).
+/// Stage 11 — <c>StageId.Company</c>. What has become standard practice
+/// (SDD-005 §2, design 07 §3).
 ///
 /// <para>"Everything eventually becomes standard practice" is a DATE, not an
 /// event: a node with a <b>D</b> route arrives at its era's start plus its
@@ -1341,11 +1349,18 @@ internal sealed class CapabilitiesModule(
 /// <para>Nothing called <c>ApplyDiffusion</c> before this — the third of four
 /// acquisition routes existed for its own unit tests, which is why a campaign
 /// could run forty years and hold nothing it did not start with (finding 191).</para>
+///
+/// <para><b>Stage 11, not stage 2</b> (SDD-005 §4.2's R20d.10 correction): a
+/// first pass placed this beside weather at stage 2, which would let a node
+/// diffusing this month reach stage 4's segmentation THIS SAME month. §4.2
+/// already said the right stage and why — "technology never creates a segment
+/// boundary" — so this runs after the solve, and a newly diffused node is a
+/// genuinely NEXT-tick fact.</para>
 /// </summary>
 internal sealed class DiffusionStage(OGSim.Capabilities.CapabilityState capabilities)
     : ITickStage
 {
-    public StageId Id => StageId.Environment;
+    public StageId Id => StageId.Company;
 
     public void Execute(TickContext context)
     {

@@ -301,12 +301,6 @@ public sealed class ShippedSetTests
     /// money — and this test is why adding it was a visible edit rather than a
     /// silent one (SDD-008 §2d.3, finding 200).</para>
     ///
-    /// <para>R20d.10 made <b>Environment</b> appear twice for the same reason:
-    /// the weather advances at order 0 and technology diffuses at order 1, both
-    /// at stage 2. Diffusion is a calendar fact — a node with a <b>D</b> route
-    /// arrives at its era's start plus its content lag — so it belongs beside the
-    /// other thing the world does to the company without being asked.</para>
-    ///
     /// <para>R22.17 made <b>Availability</b> appear TWICE, which is a slot with two
     /// contributors rather than a stage declared twice: the bow-tie's threat pass
     /// runs first and may take an element out, and the hazard/segmentation pass
@@ -317,7 +311,15 @@ public sealed class ShippedSetTests
     /// <para>R20d.9 filled <b>Company</b>, a slot the fourteen-stage order has
     /// carried since design 03 §6 and no module had ever contributed to: a
     /// licence's work commitment is assessed here, so a missed deadline forfeits
-    /// the bond and blocks further drilling.</para>
+    /// the bond and blocks further drilling. **Company now has TWO
+    /// contributors**, corrected here after a first pass wrongly placed the
+    /// second at Environment: technology diffusion runs at order 1, after the
+    /// licence assessment at order 0, because SDD-005 §4.2 places it there —
+    /// "applied when acquisition completes (a stage-11 state change), taking
+    /// effect next tick" — and the first placement (beside weather, reasoning by
+    /// analogy rather than checking §4.2) would have let a diffusing node reach
+    /// stage 4's segmentation the SAME month it diffused (SDD-005's R20d.10
+    /// correction).</para>
     /// </summary>
     [Fact]
     public void The_shipped_engine_runs_the_stages_its_modules_declared()
@@ -325,11 +327,11 @@ public sealed class ShippedSetTests
         Built built = Assert.IsType<Built>(EngineBuilder.Build(Fixture.Settings()));
 
         Assert.Equal(
-            [StageId.Environment, StageId.Environment, StageId.Operations,
+            [StageId.Environment, StageId.Operations,
              StageId.Availability, StageId.Availability,
              StageId.SolveFlow, StageId.MaterialBalance, StageId.Custody,
              StageId.Economics, StageId.HseRegulation, StageId.Information,
-             StageId.Company, StageId.Objectives, StageId.Close],
+             StageId.Company, StageId.Company, StageId.Objectives, StageId.Close],
             built.Engine.Pipeline.DeclaredOrder());
     }
 

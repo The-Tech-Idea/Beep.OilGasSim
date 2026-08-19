@@ -93,9 +93,24 @@ eventually becomes standard practice" is a date, not an event.
 >
 > **Diffusion is a per-tick pass, and it is what makes the calendar visible.**
 > Nothing called `ApplyDiffusion`, so the third acquisition route existed for its
-> unit tests alone. It runs at stage 2 with the era and its start tick, and grants
-> what the registry's Routes column marks **D** once the lag has elapsed — no
-> draws, and the same date in every game with the same start.
+> unit tests alone. It runs with the era and its start tick, and grants what the
+> registry's Routes column marks **D** once the lag has elapsed — no draws, and
+> the same date in every game with the same start.
+>
+> **It runs at `StageId.Company` (11), NOT stage 2 — corrected here after
+> shipping it at the wrong one.** This amendment first placed `DiffusionStage`
+> beside weather at stage 2, reasoning by analogy — "the world does this to the
+> company" — without checking it against §4.2 two sections below, which already
+> states the correct answer and the reason for it: *"applied when acquisition
+> completes (a stage-11 state change), taking effect next tick — technology
+> never creates a segment boundary (R17 §2.7)."* At stage 2 a node diffusing
+> this month would be visible to stage 4's segmentation THIS SAME month; at
+> stage 11, after the solve has already run on last month's holdings, a newly
+> diffused node is genuinely a NEXT-tick fact, which is what "next tick" in
+> §4.2 has always meant. Currently unobservable — nothing yet reads
+> `EffectiveEnvelope` from inside a tick — which is exactly why it went
+> uncaught rather than evidence it did not matter: the first envelope-reading
+> consumer would have inherited the wrong timing silently.
 >
 > **The scheduler is told what the company actually holds.** It took
 > `availableCapabilities: []` at both call sites: a hardcoded empty list standing
