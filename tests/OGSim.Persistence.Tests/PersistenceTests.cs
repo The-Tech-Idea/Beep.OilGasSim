@@ -180,8 +180,17 @@ public class SaveFileTests
         Assert.Equal(SaveFile.Digest(one).State, SaveFile.Digest(other).State);
     }
 
-    [Fact] // A changed block changes ONLY its own module digest
-    public void PV1_a_change_localises_to_one_module_digest()
+    /// <summary>
+    /// A changed block changes ONLY its own module digest — PV1's own claim
+    /// (per-module localisation) and PV8's (design 11 §4: "any single state
+    /// change alters the digest"), proved by the same assertion. R19.5's row
+    /// read PV8 as needing the tick loop; it needs nothing beyond
+    /// <c>SaveFile.Digest</c> itself, which is pure canonicalisation and
+    /// hashing over two hand-built block lists — this test already was PV8,
+    /// under PV1's name alone.
+    /// </summary>
+    [Fact]
+    public void PV1_and_PV8_a_change_localises_to_one_module_digest_and_moves_the_state_digest()
     {
         IReadOnlyList<ModuleBlock> before = [Fx.Block("wells"), Fx.Block("company")];
         IReadOnlyList<ModuleBlock> after =
