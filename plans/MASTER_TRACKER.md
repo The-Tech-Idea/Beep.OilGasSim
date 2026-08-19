@@ -142,7 +142,7 @@ the standing moves — but it lives in `OGSim.Integrity` and composition's
 |---|---:|---:|---:|
 | **R20** Scenarios and balance | 0 | 0 | 12 |
 | **R25** Advisor and Reality Profiles | 0 | 1 | 8 |
-| **R13** Economics | 3 | 2 | 7 |
+| **R13** Economics | 5 | 4 | 3 |
 | **R22** Environment and Setting | 3 | 0 | 5 |
 | **R8** Facilities and separation | 7 | 0 | 4 |
 | **R11** Transport and export | 4 | 4 | 2 |
@@ -742,15 +742,15 @@ comparison drops off the end.
 |---|---|---|
 | R13.0 | SDD review — no findings | ✅ |
 | R13.1 | `CostLedger` — double-entry, **INV2 with no tolerance** | ✅ |
-| R13.2 | `IPriceModel` plugins | ⬜ — contract declared; the OU-in-log-space model needs the `Price` RNG stream in a tick |
+| R13.2 | `IPriceModel` plugins | ✅ — stale ⬜ (found doing R13). `MeanRevertingPrice : IPriceModel` (`OGSim.Company/PriceModels.cs`) is composed into `ProductionLoop` and drives `MarketState.OilPrice` every tick — the market that moves and reverts referenced throughout this tracker's own "Next" narrative |
 | R13.3 | `ISalesContract` — spot, term, take-or-pay, hedge | ⬜ |
 | R13.4 | `IFiscalRegime` — royalty/tax, PSC, service | ✅ — sliding scale is a content table over the same PSC machinery |
 | R13.5 | `ITreasury` — cash, debt, equity, RBL | 🟨 — the ledger holds cash, debt and equity as accounts; borrowing-base mechanics need R13.7's reserves |
 | R13.6 | P&L and balance sheet | 🟨 — the accounts and the trial balance are here; the statements are a projection R19's read model owns |
-| R13.7 | `IReservesBooking` — 1P/2P/3P; RRR | ⬜ — needs R14's belief percentiles |
-| R13.8 | Economic limit; abandonment provision | ⬜ — needs `IObligationRegistry` (R12.8) |
+| R13.7 | `IReservesBooking` — 1P/2P/3P; RRR | 🟨 — stale ⬜ (found doing R13). `ReservesBook` (R20d.14, `OGSim.Composition`) computes Proved/Probable/Possible from held P90/P50/P10 beliefs via `ArpsReserves.From`, composed and consumed by `Bank` (reserve-based lending), the read model and the abandonment provision accrual — not a placeholder. **RRR itself is the genuine gap** (finding 208, already on R21.6's row: "reserves by class, no RRR") |
+| R13.8 | Economic limit; abandonment provision | ✅ — stale ⬜ (found doing R13). `ArpsReserves.EconomicLimit` is computed inside `ReservesBook.Ultimate()` and is the denominator R20d.14's provision accrues against; the plugging bill accrues per barrel against it every tick (`R20d14V1`) |
 | R13.9 | `IWorkingInterest`; farm-outs | ⬜ |
-| R13.10 | Insolvency and restructuring | ⬜ |
+| R13.10 | Insolvency and restructuring | 🟨 — stale ⬜ (found doing R13). `Insolvent` is a real, computed loss condition on the read model and `Scenario` (R24's territory). **Restructuring — the recovery mechanic — is genuinely unbuilt**; only the detection half exists |
 | R13.11 | SC6 | ⬜ — needs R13.2's price model |
 
 **R13's verification.** R13-V1 ✅ · R13-V2 ✅ · R13-V4 ✅ · R13-V5 ✅ ·
