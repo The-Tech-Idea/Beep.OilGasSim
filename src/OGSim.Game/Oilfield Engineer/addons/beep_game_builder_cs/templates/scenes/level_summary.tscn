@@ -1,0 +1,71 @@
+[gd_scene load_steps=8 format=3]
+
+[ext_resource type="Script" path="res://addons/beep_game_builder_cs/ecs/ui/kit/KitPushButton.cs" id="k_pbtn"]
+[ext_resource type="Script" path="res://addons/beep_game_builder_cs/ecs/ui/kit/KitPanelContainer.cs" id="k_panelc"]
+[ext_resource type="Script" path="res://addons/beep_game_builder_cs/ecs/scenes/LevelSummary.cs" id="1_script"]
+[ext_resource type="Script" path="res://addons/beep_game_builder_cs/ecs/ui/ThemePresetComponent.cs" id="2_theme"]
+[ext_resource type="Script" path="res://addons/beep_game_builder_cs/ecs/ui/GameInfoBinder.cs" id="3_binder"]
+[ext_resource type="Script" path="res://addons/beep_game_builder_cs/ecs/ui/kit/KitColorRect.cs" id="k_color"]
+[ext_resource type="Script" path="res://addons/beep_game_builder_cs/ecs/ui/kit/KitLabel.cs" id="k_label"]
+
+[node name="LevelSummary" type="CanvasLayer"]
+script = ExtResource("1_script")
+layer = 20
+
+[node name="Dim" type="ColorRect" parent="."]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0, 0, 0, 0.6)
+
+script = ExtResource("k_color")
+[node name="Center" type="CenterContainer" parent="."]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Panel" type="PanelContainer" parent="Center"]
+custom_minimum_size = Vector2(420, 0)
+script = ExtResource("k_panelc")
+
+[node name="Margin" type="MarginContainer" parent="Center/Panel"]
+theme_override_constants/margin_left = 24
+theme_override_constants/margin_right = 24
+theme_override_constants/margin_top = 20
+theme_override_constants/margin_bottom = 20
+
+[node name="VBox" type="VBoxContainer" parent="Center/Panel/Margin"]
+theme_override_constants/separation = 16
+
+[node name="BannerLabel" type="Label" parent="Center/Panel/Margin/VBox"]
+text = "Level Complete!"
+horizontal_alignment = 1
+
+script = ExtResource("k_label")
+[node name="Spacer" type="Control" parent="Center/Panel/Margin/VBox"]
+custom_minimum_size = Vector2(0, 8)
+
+[node name="ButtonRow" type="HBoxContainer" parent="Center/Panel/Margin/VBox"]
+alignment = 1
+theme_override_constants/separation = 12
+
+[node name="ContinueButton" type="Button" parent="Center/Panel/Margin/VBox/ButtonRow"]
+custom_minimum_size = Vector2(170, 44)
+text = "Continue ▶"
+script = ExtResource("k_pbtn")
+
+[node name="MenuButton" type="Button" parent="Center/Panel/Margin/VBox/ButtonRow"]
+custom_minimum_size = Vector2(150, 44)
+text = "Main Menu"
+script = ExtResource("k_pbtn")
+
+[node name="Theme" type="Node" parent="Center"]
+script = ExtResource("2_theme")
+
+[node name="GameInfoBinder" type="Node" parent="."]
+script = ExtResource("3_binder")
+ThemeComponentPath = NodePath("Center/Theme")

@@ -1,0 +1,115 @@
+[gd_scene load_steps=9 format=3]
+
+[ext_resource type="Script" path="res://addons/beep_game_builder_cs/ecs/ui/kit/KitPushButton.cs" id="k_pbtn"]
+[ext_resource type="Script" path="res://addons/beep_game_builder_cs/ecs/ui/kit/KitPanelContainer.cs" id="k_panelc"]
+[ext_resource type="Script" path="res://addons/beep_game_builder_cs/ecs/ui/ThemePresetComponent.cs" id="1_theme"]
+[ext_resource type="Script" path="res://addons/beep_game_builder_cs/ecs/ui/GameInfoBinder.cs" id="2_binder"]
+[ext_resource type="Script" path="res://addons/beep_game_builder_cs/ecs/ui/AnimatedMenuComponent.cs" id="3_anim"]
+[ext_resource type="Script" path="res://addons/beep_game_builder_cs/ecs/scenes/puzzle/LevelComplete.cs" id="4_script"]
+[ext_resource type="Script" path="res://addons/beep_game_builder_cs/ecs/ui/kit/KitColorRect.cs" id="k_color"]
+[ext_resource type="Script" path="res://addons/beep_game_builder_cs/ecs/ui/kit/KitLabel.cs" id="k_label"]
+
+[node name="LevelComplete" type="CanvasLayer"]
+script = ExtResource("4_script")
+layer = 20
+
+[node name="Dim" type="ColorRect" parent="."]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0, 0, 0, 0.65)
+
+script = ExtResource("k_color")
+[node name="Center" type="CenterContainer" parent="."]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Panel" type="PanelContainer" parent="Center"]
+custom_minimum_size = Vector2(480, 0)
+script = ExtResource("k_panelc")
+
+[node name="Margin" type="MarginContainer" parent="Center/Panel"]
+theme_override_constants/margin_left = 32
+theme_override_constants/margin_right = 32
+theme_override_constants/margin_top = 28
+theme_override_constants/margin_bottom = 28
+
+[node name="VBox" type="VBoxContainer" parent="Center/Panel/Margin"]
+theme_override_constants/separation = 18
+
+[node name="BannerLabel" type="Label" parent="Center/Panel/Margin/VBox"]
+theme_type_variation = &"BeepTitle"
+text = "Level Complete!"
+horizontal_alignment = 1
+
+script = ExtResource("k_label")
+[node name="StarRow" type="HBoxContainer" parent="Center/Panel/Margin/VBox"]
+alignment = 1
+theme_override_constants/separation = 20
+
+[node name="Star1" type="Label" parent="Center/Panel/Margin/VBox/StarRow"]
+theme_type_variation = &"BeepTitle"
+text = "★"
+
+script = ExtResource("k_label")
+[node name="Star2" type="Label" parent="Center/Panel/Margin/VBox/StarRow"]
+theme_type_variation = &"BeepTitle"
+text = "★"
+
+script = ExtResource("k_label")
+[node name="Star3" type="Label" parent="Center/Panel/Margin/VBox/StarRow"]
+theme_type_variation = &"BeepTitle"
+text = "★"
+
+script = ExtResource("k_label")
+[node name="ScoreRule" type="HSeparator" parent="Center/Panel/Margin/VBox"]
+
+[node name="ScoreLabel" type="Label" parent="Center/Panel/Margin/VBox"]
+theme_type_variation = &"BeepValue"
+text = "Score: 1820"
+horizontal_alignment = 1
+
+script = ExtResource("k_label")
+[node name="HighScoreLabel" type="Label" parent="Center/Panel/Margin/VBox"]
+text = "New High Score!"
+horizontal_alignment = 1
+
+script = ExtResource("k_label")
+[node name="ButtonRow" type="HBoxContainer" parent="Center/Panel/Margin/VBox"]
+alignment = 1
+theme_override_constants/separation = 12
+
+[node name="MapButton" type="Button" parent="Center/Panel/Margin/VBox/ButtonRow"]
+custom_minimum_size = Vector2(120, 44)
+text = "Map"
+metadata/action = "map"
+script = ExtResource("k_pbtn")
+
+[node name="RetryButton" type="Button" parent="Center/Panel/Margin/VBox/ButtonRow"]
+custom_minimum_size = Vector2(120, 44)
+text = "Retry"
+metadata/action = "retry"
+script = ExtResource("k_pbtn")
+
+[node name="NextButton" type="Button" parent="Center/Panel/Margin/VBox/ButtonRow"]
+custom_minimum_size = Vector2(150, 44)
+text = "Next ▶"
+metadata/action = "next"
+script = ExtResource("k_pbtn")
+
+[node name="Theme" type="Node" parent="Center"]
+script = ExtResource("1_theme")
+GenreName = "puzzle"
+
+[node name="GameInfoBinder" type="Node" parent="."]
+script = ExtResource("2_binder")
+ThemeComponentPath = NodePath("Center/Theme")
+
+[node name="MenuAnimation" type="Node" parent="Center/Panel/Margin/VBox"]
+script = ExtResource("3_anim")
+AnimateOnReady = true

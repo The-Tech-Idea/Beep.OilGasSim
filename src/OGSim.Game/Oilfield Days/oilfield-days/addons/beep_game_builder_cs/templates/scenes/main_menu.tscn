@@ -1,0 +1,115 @@
+[gd_scene load_steps=10 format=3]
+
+[ext_resource type="Script" path="res://addons/beep_game_builder_cs/ecs/ui/kit/KitPushButton.cs" id="k_btn"]
+[ext_resource type="Script" path="res://addons/beep_game_builder_cs/ecs/ui/ThemePresetComponent.cs" id="2_theme"]
+[ext_resource type="Script" path="res://addons/beep_game_builder_cs/ecs/ui/GameInfoBinder.cs" id="3_binder"]
+[ext_resource type="Script" path="res://addons/beep_game_builder_cs/ecs/ui/SceneTransitionComponent.cs" id="4_transition"]
+[ext_resource type="Script" path="res://addons/beep_game_builder_cs/ecs/ui/AnimatedMenuComponent.cs" id="5_anim"]
+[ext_resource type="Script" path="res://addons/beep_game_builder_cs/ecs/scenes/MainMenu.cs" id="6_scene"]
+[ext_resource type="Script" path="res://addons/beep_game_builder_cs/ecs/ui/SaveLoadManagerComponent.cs" id="7_saveload"]
+[ext_resource type="Script" path="res://addons/beep_game_builder_cs/ecs/ui/kit/KitColorRect.cs" id="k_color"]
+[ext_resource type="Script" path="res://addons/beep_game_builder_cs/ecs/ui/kit/KitLabel.cs" id="k_label"]
+
+[node name="MainMenu" type="Control"]
+script = ExtResource("6_scene")
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Background" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.09, 0.09, 0.12, 1)
+
+script = ExtResource("k_color")
+[node name="Center" type="CenterContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="MenuVBox" type="VBoxContainer" parent="Center"]
+layout_mode = 2
+theme_override_constants/separation = 14
+
+[node name="TitleLabel" type="Label" parent="Center/MenuVBox"]
+layout_mode = 2
+theme_type_variation = &"BeepTitle"
+text = "Game Title"
+horizontal_alignment = 1
+
+script = ExtResource("k_label")
+[node name="VersionLabel" type="Label" parent="Center/MenuVBox"]
+layout_mode = 2
+theme_type_variation = &"BeepCaption"
+text = "v0.1.0"
+horizontal_alignment = 1
+
+script = ExtResource("k_label")
+[node name="Spacer" type="Control" parent="Center/MenuVBox"]
+custom_minimum_size = Vector2(0, 20)
+layout_mode = 2
+
+[node name="NewGameButton" type="Button" parent="Center/MenuVBox"]
+layout_mode = 2
+script = ExtResource("k_btn")
+text = "New Game"
+
+[node name="ContinueButton" type="Button" parent="Center/MenuVBox"]
+layout_mode = 2
+script = ExtResource("k_btn")
+text = "Continue"
+
+[node name="SaveGameButton" type="Button" parent="Center/MenuVBox"]
+layout_mode = 2
+script = ExtResource("k_btn")
+text = "Save Game"
+
+[node name="LoadGameButton" type="Button" parent="Center/MenuVBox"]
+layout_mode = 2
+script = ExtResource("k_btn")
+text = "Load Game"
+
+[node name="SettingsButton" type="Button" parent="Center/MenuVBox"]
+layout_mode = 2
+script = ExtResource("k_btn")
+text = "Settings"
+
+[node name="QuitButton" type="Button" parent="Center/MenuVBox"]
+layout_mode = 2
+script = ExtResource("k_btn")
+text = "Quit"
+
+[node name="Theme" type="Node" parent="."]
+script = ExtResource("2_theme")
+
+[node name="GameInfoBinder" type="Node" parent="."]
+script = ExtResource("3_binder")
+TitleLabelPath = NodePath("Center/MenuVBox/TitleLabel")
+VersionLabelPath = NodePath("Center/MenuVBox/VersionLabel")
+ThemeComponentPath = NodePath("Theme")
+SetWindowTitle = true
+
+[node name="Transition" type="Node" parent="."]
+script = ExtResource("4_transition")
+Duration = 0.4
+
+[node name="MenuAnimation" type="Node" parent="Center/MenuVBox"]
+script = ExtResource("5_anim")
+EntryDirection = 1
+Duration = 0.3
+StaggerDelay = 0.05
+AnimateOnReady = true
+
+[node name="SaveLoadManager" type="Node" parent="."]
+script = ExtResource("7_saveload")
+

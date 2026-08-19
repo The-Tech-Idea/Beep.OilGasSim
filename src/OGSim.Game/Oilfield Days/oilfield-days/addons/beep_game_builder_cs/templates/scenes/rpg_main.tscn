@@ -1,0 +1,254 @@
+[gd_scene load_steps=18 format=3]
+
+[ext_resource type="Script" path="res://addons/beep_game_builder_cs/ecs/GameFlowComponent.cs" id="1_flow"]
+[ext_resource type="Script" path="res://addons/beep_game_builder_cs/ecs/ui/ThemePresetComponent.cs" id="hud_theme"]
+[ext_resource type="Script" path="res://addons/beep_game_builder_cs/ecs/ui/HudCollapseComponent.cs" id="hud_collapse"]
+[ext_resource type="Script" path="res://addons/beep_game_builder_cs/ecs/ui/MinimapComponent.cs" id="minimap"]
+[ext_resource type="Script" path="res://addons/beep_game_builder_cs/ecs/ui/hud/RpgHudComponent.cs" id="20_hud"]
+[ext_resource type="Script" path="res://addons/beep_game_builder_cs/ecs/ui/GenreScreenComponent.cs" id="30_screen"]
+[ext_resource type="PackedScene" path="res://addons/beep_game_builder_cs/templates/scenes/atmosphere.tscn" id="atmos_scene"]
+[ext_resource type="Script" path="res://addons/beep_game_builder_cs/ecs/LevelLoaderComponent.cs" id="10_loader"]
+[ext_resource type="PackedScene" path="res://addons/beep_game_builder_cs/templates/scenes/levels/rpg/level_1.tscn" id="lvl_1"]
+[ext_resource type="PackedScene" path="res://addons/beep_game_builder_cs/templates/scenes/levels/rpg/level_2.tscn" id="lvl_2"]
+[ext_resource type="Script" path="res://addons/beep_game_builder_cs/ecs/ui/GameInfoBinder.cs" id="binder_gi"]
+[ext_resource type="Script" path="res://addons/beep_game_builder_cs/ecs/ui/kit/KitPanel.cs" id="panelframe"]
+[ext_resource type="Script" path="res://addons/beep_game_builder_cs/ecs/TopDownController.cs" id="player_ctrl"]
+[ext_resource type="Script" path="res://addons/beep_game_builder_cs/ecs/ui/kit/KitLabelValue.cs" id="k_pair"]
+[ext_resource type="Script" path="res://addons/beep_game_builder_cs/ecs/ui/kit/KitOrbMeter.cs" id="k_orb"]
+[ext_resource type="Script" path="res://addons/beep_game_builder_cs/ecs/ui/kit/KitLabel.cs" id="k_label"]
+[ext_resource type="Script" path="res://addons/beep_game_builder_cs/ecs/ui/kit/KitInventorySlot.cs" id="k_slot"]
+
+[node name="RPGMain" type="Node2D"]
+
+[node name="Atmosphere" parent="." instance=ExtResource("atmos_scene")]
+
+[node name="LevelContainer" type="Node2D" parent="."]
+
+[node name="LevelLoader" type="Node" parent="."]
+script = ExtResource("10_loader")
+Levels = Array[PackedScene]([ExtResource("lvl_1"), ExtResource("lvl_2")])
+LevelContainerPath = NodePath("../LevelContainer")
+
+[node name="GameFlow" type="Node" parent="."]
+script = ExtResource("1_flow")
+
+[node name="HUD" type="CanvasLayer" parent="."]
+layer = 1
+
+[node name="Root" type="Control" parent="HUD"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="Theme" type="Node" parent="HUD/Root"]
+script = ExtResource("hud_theme")
+GenreName = "rpg"
+HudMode = true
+
+[node name="HudCollapse" type="Node" parent="HUD/Root"]
+script = ExtResource("hud_collapse")
+
+[node name="BottomFrame" type="Panel" parent="HUD/Root"]
+anchor_left = 0.5
+anchor_top = 1.0
+anchor_right = 0.5
+anchor_bottom = 1.0
+offset_left = -382.0
+offset_top = -146.0
+offset_right = 382.0
+offset_bottom = -10.0
+grow_horizontal = 2
+grow_vertical = 0
+mouse_filter = 2
+script = ExtResource("panelframe")
+Title = ""
+TargetPath = NodePath("../BottomDock")
+TargetPadding = Vector2(26, 18)
+
+[node name="BottomDock" type="MarginContainer" parent="HUD/Root"]
+anchor_left = 0.5
+anchor_top = 1.0
+anchor_right = 0.5
+anchor_bottom = 1.0
+custom_minimum_size = Vector2(724, 118)
+offset_left = -362.0
+offset_top = -132.0
+offset_right = 362.0
+offset_bottom = -20.0
+grow_horizontal = 2
+grow_vertical = 0
+theme_override_constants/margin_left = 18
+theme_override_constants/margin_top = 12
+theme_override_constants/margin_right = 18
+theme_override_constants/margin_bottom = 12
+
+[node name="Bar" type="HBoxContainer" parent="HUD/Root/BottomDock"]
+theme_override_constants/separation = 14
+alignment = 1
+
+[node name="HealthLabel" type="Control" parent="HUD/Root/BottomDock/Bar"]
+custom_minimum_size = Vector2(92, 92)
+layout_mode = 2
+mouse_filter = 2
+script = ExtResource("k_orb")
+Value = 1.0
+Fill = 5
+CentreText = "HP"
+Symbol = "HP"
+
+[node name="CommandStack" type="VBoxContainer" parent="HUD/Root/BottomDock/Bar"]
+custom_minimum_size = Vector2(456, 94)
+layout_mode = 2
+size_flags_vertical = 4
+theme_override_constants/separation = 8
+alignment = 1
+
+[node name="LevelLabel" type="Control" parent="HUD/Root/BottomDock/Bar/CommandStack"]
+custom_minimum_size = Vector2(72, 32)
+layout_mode = 2
+size_flags_horizontal = 4
+script = ExtResource("k_pair")
+Label = "LV"
+Value = "1"
+Accent = 2
+
+[node name="ActionSlots" type="HBoxContainer" parent="HUD/Root/BottomDock/Bar/CommandStack"]
+layout_mode = 2
+theme_override_constants/separation = 8
+alignment = 1
+
+[node name="Skill1" type="Control" parent="HUD/Root/BottomDock/Bar/CommandStack/ActionSlots"]
+custom_minimum_size = Vector2(46, 46)
+layout_mode = 2
+script = ExtResource("k_slot")
+Selected = true
+
+[node name="Skill2" type="Control" parent="HUD/Root/BottomDock/Bar/CommandStack/ActionSlots"]
+custom_minimum_size = Vector2(46, 46)
+layout_mode = 2
+script = ExtResource("k_slot")
+Rarity = 2
+
+[node name="Skill3" type="Control" parent="HUD/Root/BottomDock/Bar/CommandStack/ActionSlots"]
+custom_minimum_size = Vector2(46, 46)
+layout_mode = 2
+script = ExtResource("k_slot")
+Rarity = 6
+
+[node name="Skill4" type="Control" parent="HUD/Root/BottomDock/Bar/CommandStack/ActionSlots"]
+custom_minimum_size = Vector2(46, 46)
+layout_mode = 2
+script = ExtResource("k_slot")
+
+[node name="Potion1" type="Control" parent="HUD/Root/BottomDock/Bar/CommandStack/ActionSlots"]
+custom_minimum_size = Vector2(46, 46)
+layout_mode = 2
+script = ExtResource("k_slot")
+Count = 3
+Rarity = 5
+
+[node name="Potion2" type="Control" parent="HUD/Root/BottomDock/Bar/CommandStack/ActionSlots"]
+custom_minimum_size = Vector2(46, 46)
+layout_mode = 2
+script = ExtResource("k_slot")
+Count = 2
+Rarity = 6
+
+[node name="ManaLabel" type="Control" parent="HUD/Root/BottomDock/Bar"]
+custom_minimum_size = Vector2(92, 92)
+layout_mode = 2
+mouse_filter = 2
+script = ExtResource("k_orb")
+Value = 1.0
+Fill = 6
+CentreText = "MP"
+Symbol = "MP"
+
+[node name="Minimap" type="Control" parent="HUD/Root"]
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -158.0
+offset_top = 18.0
+offset_right = -18.0
+offset_bottom = 158.0
+grow_horizontal = 0
+script = ExtResource("minimap")
+PlayerPath = NodePath("../../../Player")
+
+[node name="QuestFrame" type="Panel" parent="HUD/Root"]
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -354.0
+offset_top = 176.0
+offset_right = -18.0
+offset_bottom = 250.0
+grow_horizontal = 0
+mouse_filter = 2
+script = ExtResource("panelframe")
+Title = ""
+Intent = 0
+TargetPath = NodePath("../QuestBox")
+TargetPadding = Vector2(20, 16)
+
+[node name="QuestBox" type="MarginContainer" parent="HUD/Root"]
+anchor_left = 1.0
+anchor_right = 1.0
+custom_minimum_size = Vector2(300, 42)
+offset_left = -334.0
+offset_top = 196.0
+offset_right = -34.0
+offset_bottom = 238.0
+grow_horizontal = 0
+mouse_filter = 2
+theme_override_constants/margin_left = 10
+theme_override_constants/margin_top = 6
+theme_override_constants/margin_right = 10
+theme_override_constants/margin_bottom = 6
+
+[node name="QuestLabel" type="Label" parent="HUD/Root/QuestBox"]
+text = "Quest: Reach the village"
+horizontal_alignment = 0
+vertical_alignment = 1
+text_overrun_behavior = 3
+clip_text = true
+
+script = ExtResource("k_label")
+[node name="GenreHud" type="Node" parent="HUD/Root"]
+script = ExtResource("20_hud")
+LevelPath = NodePath("BottomDock/Bar/CommandStack/LevelLabel")
+HealthPath = NodePath("BottomDock/Bar/HealthLabel")
+ManaPath = NodePath("BottomDock/Bar/ManaLabel")
+
+[node name="InventoryScreen" type="Node" parent="."]
+script = ExtResource("30_screen")
+ScreenKey = "inventory"
+OpenAction = "inventory"
+
+[node name="CharacterScreen" type="Node" parent="."]
+script = ExtResource("30_screen")
+ScreenKey = "character"
+OpenAction = "character"
+
+[node name="QuestsScreen" type="Node" parent="."]
+script = ExtResource("30_screen")
+ScreenKey = "quests"
+OpenAction = "quests"
+
+[node name="GameInfoBinder" type="Node" parent="HUD/Root"]
+script = ExtResource("binder_gi")
+ThemeComponentPath = NodePath("Theme")
+
+[node name="Player" type="CharacterBody2D" parent="."]
+position = Vector2(640, 360)
+
+[node name="Controller" type="Node" parent="Player"]
+script = ExtResource("player_ctrl")
+
+[node name="Weather" parent="Atmosphere" index="3"]
+CloudMode = 0
+CurrentWeather = 1
+TopDownView = true
+ViewMode = 2

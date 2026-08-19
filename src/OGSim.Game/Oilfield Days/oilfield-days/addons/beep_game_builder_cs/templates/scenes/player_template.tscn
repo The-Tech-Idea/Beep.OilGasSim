@@ -1,0 +1,65 @@
+[gd_scene load_steps=10 format=3]
+
+[ext_resource type="Script" path="res://addons/beep_game_builder_cs/ecs/HealthComponent.cs" id="1_health"]
+[ext_resource type="Script" path="res://addons/beep_game_builder_cs/ecs/MovementComponent.cs" id="2_movement"]
+[ext_resource type="Script" path="res://addons/beep_game_builder_cs/ecs/AttackComponent.cs" id="3_attack"]
+[ext_resource type="Script" path="res://addons/beep_game_builder_cs/ecs/HealthBarComponent.cs" id="4_healthbar"]
+[ext_resource type="Script" path="res://addons/beep_game_builder_cs/ecs/GameOverOnDeathComponent.cs" id="5_gameover"]
+[ext_resource type="Script" path="res://addons/beep_game_builder_cs/ecs/HitSoundComponent.cs" id="6_hitsound"]
+[ext_resource type="Script" path="res://addons/beep_game_builder_cs/ecs/FootstepComponent.cs" id="7_footstep"]
+[ext_resource type="Script" path="res://addons/beep_game_builder_cs/ecs/RespawnComponent.cs" id="8_respawn"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_body"]
+size = Vector2(28, 44)
+
+[node name="Player" type="CharacterBody2D"]
+
+[node name="Sprite2D" type="Sprite2D" parent="."]
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("RectangleShape2D_body")
+
+[node name="Health" type="Node" parent="."]
+script = ExtResource("1_health")
+MaxHealth = 100.0
+CurrentHealth = 100.0
+ParticipatesInSave = true
+EntityGroup = "players"
+
+[node name="Movement" type="Node" parent="."]
+script = ExtResource("2_movement")
+Speed = 200.0
+Acceleration = 1800.0
+Friction = 1400.0
+ReadInput = true
+
+[node name="Attack" type="Node" parent="."]
+script = ExtResource("3_attack")
+Damage = 10.0
+Range = 50.0
+Cooldown = 0.5
+IsRanged = false
+AttackOnInput = true
+
+[node name="HealthBar" type="Node" parent="."]
+script = ExtResource("4_healthbar")
+ShowOnlyWhenDamaged = true
+
+[node name="GameOverOnDeath" type="Node" parent="."]
+script = ExtResource("5_gameover")
+LivesToLose = 1
+
+[node name="Respawn" type="Node" parent="."]
+script = ExtResource("8_respawn")
+RespawnDelay = 0.8
+
+[node name="HitSound" type="Node" parent="."]
+script = ExtResource("6_hitsound")
+
+[node name="Footstep" type="Node" parent="."]
+script = ExtResource("7_footstep")
+
+[node name="Camera2D" type="Camera2D" parent="."]
+position_smoothing_enabled = true
+position_smoothing_speed = 8.0
+limit_left = 0
+limit_top = 0

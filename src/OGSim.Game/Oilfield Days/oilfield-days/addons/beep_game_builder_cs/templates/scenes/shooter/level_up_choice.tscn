@@ -1,0 +1,176 @@
+[gd_scene load_steps=8 format=3]
+
+[ext_resource type="Script" path="res://addons/beep_game_builder_cs/ecs/ui/kit/KitPushButton.cs" id="k_pbtn"]
+[ext_resource type="Script" path="res://addons/beep_game_builder_cs/ecs/ui/kit/KitPanelContainer.cs" id="k_panelc"]
+[ext_resource type="Script" path="res://addons/beep_game_builder_cs/ecs/ui/ThemePresetComponent.cs" id="1_theme"]
+[ext_resource type="Script" path="res://addons/beep_game_builder_cs/ecs/ui/GameInfoBinder.cs" id="2_binder"]
+[ext_resource type="Script" path="res://addons/beep_game_builder_cs/ecs/scenes/shooter/LevelUpChoice.cs" id="3_script"]
+[ext_resource type="Script" path="res://addons/beep_game_builder_cs/ecs/ui/kit/KitColorRect.cs" id="k_color"]
+[ext_resource type="Script" path="res://addons/beep_game_builder_cs/ecs/ui/kit/KitLabel.cs" id="k_label"]
+
+[node name="LevelUpChoice" type="CanvasLayer"]
+script = ExtResource("3_script")
+layer = 30
+
+[node name="Dim" type="ColorRect" parent="."]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0, 0, 0, 0.65)
+
+script = ExtResource("k_color")
+[node name="Center" type="CenterContainer" parent="."]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="VBox" type="VBoxContainer" parent="Center"]
+theme_override_constants/separation = 18
+
+[node name="BannerLabel" type="Label" parent="Center/VBox"]
+theme_type_variation = &"BeepTitle"
+text = "Level Up!"
+horizontal_alignment = 1
+
+script = ExtResource("k_label")
+[node name="HintLabel" type="Label" parent="Center/VBox"]
+theme_type_variation = &"BeepCaption"
+text = "Choose one"
+horizontal_alignment = 1
+
+script = ExtResource("k_label")
+[node name="CardRow" type="HBoxContainer" parent="Center/VBox"]
+alignment = 1
+theme_override_constants/separation = 20
+
+[node name="Card1" type="PanelContainer" parent="Center/VBox/CardRow"]
+custom_minimum_size = Vector2(230, 300)
+script = ExtResource("k_panelc")
+
+[node name="Card1Margin" type="MarginContainer" parent="Center/VBox/CardRow/Card1"]
+theme_override_constants/margin_left = 16
+theme_override_constants/margin_right = 16
+theme_override_constants/margin_top = 16
+theme_override_constants/margin_bottom = 16
+
+[node name="Card1VBox" type="VBoxContainer" parent="Center/VBox/CardRow/Card1/Card1Margin"]
+theme_override_constants/separation = 12
+
+[node name="Icon1" type="ColorRect" parent="Center/VBox/CardRow/Card1/Card1Margin/Card1VBox"]
+custom_minimum_size = Vector2(0, 90)
+color = Color(0.7, 0.3, 0.3, 1)
+
+script = ExtResource("k_color")
+[node name="Name1" type="Label" parent="Center/VBox/CardRow/Card1/Card1Margin/Card1VBox"]
+theme_type_variation = &"BeepSubtitle"
+text = "New Weapon"
+horizontal_alignment = 1
+
+script = ExtResource("k_label")
+[node name="Desc1" type="Label" parent="Center/VBox/CardRow/Card1/Card1Margin/Card1VBox"]
+theme_type_variation = &"BeepCaption"
+text = "Fires piercing shots."
+horizontal_alignment = 1
+autowrap_mode = 2
+
+script = ExtResource("k_label")
+[node name="Card1Spacer" type="Control" parent="Center/VBox/CardRow/Card1/Card1Margin/Card1VBox"]
+size_flags_vertical = 3
+
+[node name="Pick1" type="Button" parent="Center/VBox/CardRow/Card1/Card1Margin/Card1VBox"]
+custom_minimum_size = Vector2(0, 48)
+text = "Pick"
+metadata/action = "pick_1"
+script = ExtResource("k_pbtn")
+
+[node name="Card2" type="PanelContainer" parent="Center/VBox/CardRow"]
+custom_minimum_size = Vector2(230, 300)
+script = ExtResource("k_panelc")
+
+[node name="Card2Margin" type="MarginContainer" parent="Center/VBox/CardRow/Card2"]
+theme_override_constants/margin_left = 16
+theme_override_constants/margin_right = 16
+theme_override_constants/margin_top = 16
+theme_override_constants/margin_bottom = 16
+
+[node name="Card2VBox" type="VBoxContainer" parent="Center/VBox/CardRow/Card2/Card2Margin"]
+theme_override_constants/separation = 12
+
+[node name="Icon2" type="ColorRect" parent="Center/VBox/CardRow/Card2/Card2Margin/Card2VBox"]
+custom_minimum_size = Vector2(0, 90)
+color = Color(0.3, 0.6, 0.8, 1)
+
+script = ExtResource("k_color")
+[node name="Name2" type="Label" parent="Center/VBox/CardRow/Card2/Card2Margin/Card2VBox"]
+theme_type_variation = &"BeepSubtitle"
+text = "Move Speed"
+horizontal_alignment = 1
+
+script = ExtResource("k_label")
+[node name="Desc2" type="Label" parent="Center/VBox/CardRow/Card2/Card2Margin/Card2VBox"]
+theme_type_variation = &"BeepCaption"
+text = "+10% movement speed."
+horizontal_alignment = 1
+autowrap_mode = 2
+
+script = ExtResource("k_label")
+[node name="Card2Spacer" type="Control" parent="Center/VBox/CardRow/Card2/Card2Margin/Card2VBox"]
+size_flags_vertical = 3
+
+[node name="Pick2" type="Button" parent="Center/VBox/CardRow/Card2/Card2Margin/Card2VBox"]
+custom_minimum_size = Vector2(0, 48)
+text = "Pick"
+metadata/action = "pick_2"
+script = ExtResource("k_pbtn")
+
+[node name="Card3" type="PanelContainer" parent="Center/VBox/CardRow"]
+custom_minimum_size = Vector2(230, 300)
+script = ExtResource("k_panelc")
+
+[node name="Card3Margin" type="MarginContainer" parent="Center/VBox/CardRow/Card3"]
+theme_override_constants/margin_left = 16
+theme_override_constants/margin_right = 16
+theme_override_constants/margin_top = 16
+theme_override_constants/margin_bottom = 16
+
+[node name="Card3VBox" type="VBoxContainer" parent="Center/VBox/CardRow/Card3/Card3Margin"]
+theme_override_constants/separation = 12
+
+[node name="Icon3" type="ColorRect" parent="Center/VBox/CardRow/Card3/Card3Margin/Card3VBox"]
+custom_minimum_size = Vector2(0, 90)
+color = Color(0.3, 0.7, 0.4, 1)
+
+script = ExtResource("k_color")
+[node name="Name3" type="Label" parent="Center/VBox/CardRow/Card3/Card3Margin/Card3VBox"]
+theme_type_variation = &"BeepSubtitle"
+text = "Max Health"
+horizontal_alignment = 1
+
+script = ExtResource("k_label")
+[node name="Desc3" type="Label" parent="Center/VBox/CardRow/Card3/Card3Margin/Card3VBox"]
+theme_type_variation = &"BeepCaption"
+text = "+25 max health."
+horizontal_alignment = 1
+autowrap_mode = 2
+
+script = ExtResource("k_label")
+[node name="Card3Spacer" type="Control" parent="Center/VBox/CardRow/Card3/Card3Margin/Card3VBox"]
+size_flags_vertical = 3
+
+[node name="Pick3" type="Button" parent="Center/VBox/CardRow/Card3/Card3Margin/Card3VBox"]
+custom_minimum_size = Vector2(0, 48)
+text = "Pick"
+metadata/action = "pick_3"
+script = ExtResource("k_pbtn")
+
+[node name="Theme" type="Node" parent="Center"]
+script = ExtResource("1_theme")
+GenreName = "shooter"
+
+[node name="GameInfoBinder" type="Node" parent="."]
+script = ExtResource("2_binder")
+ThemeComponentPath = NodePath("Center/Theme")

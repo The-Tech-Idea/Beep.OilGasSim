@@ -1,0 +1,49 @@
+{
+  "id": "rpg",
+  "display_name": "RPG",
+  "icon": "\u2694\ufe0f",
+  "description": "Character progression, inventory, quests and dialogue",
+  "default_theme": "fantasy",
+  "default_geometry": "rpg",
+  "themes": [
+    "fantasy",
+    "darkfantasy",
+    "arcane",
+    "royal",
+    "parchment"
+  ],
+  "main_scene": "rpg_main.tscn",
+  "scenes": [
+    "inventory.tscn",
+    "character.tscn",
+    "quests.tscn"
+  ],
+  "nav_wiring": {
+    "inventory": "inventory.tscn",
+    "character": "character.tscn",
+    "quests": "quests.tscn",
+    "LevelCompletePath": "res://scenes/ui/level_summary.tscn"
+  },
+  "tuning": {
+    "inventory_columns": 6,
+    "dialogue_speed": 0.04,
+    "tooltip_delay": 0.35,
+    "enable_weather": true,
+    "default_weather": "Cloudy",
+    "enable_day_night": true,
+    "enable_seasons": true,
+    "default_season": "Spring",
+    "days_per_season": 30,
+    "enable_temperature": false,
+    "ambient_temperature": 20,
+    "enable_forecast": false,
+    "forecast_days": 7,
+    "enable_save_load": true,
+    "max_save_slots": 5,
+    "autosave_enabled": true,
+    "autosave_interval_seconds": 300,
+    "auto_cycle": true,
+    "top_down_view": true,
+    "weather_view": "RpgTopDown"
+  }
+}

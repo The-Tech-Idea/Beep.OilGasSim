@@ -1,0 +1,16 @@
+<Project Sdk="Godot.NET.Sdk/4.7.1">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <TargetFramework Condition=" '$(GodotTargetPlatform)' == 'android' ">net9.0</TargetFramework>
+    <EnableDynamicLoading>true</EnableDynamicLoading>
+    <RootNamespace>OilfieldDays</RootNamespace>
+
+    <!-- Implicit usings stay OFF because the beep addons say `using Godot;` and
+         `using System.IO;` in the same file: the SDK's implicit System.IO makes
+         FileAccess and Timer ambiguous (CS0104) across ~30 addon sources.
+         Nullable is ON because godot_mcp annotates its API with `?`. -->
+    <ImplicitUsings>disable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+  </PropertyGroup>
+</Project>

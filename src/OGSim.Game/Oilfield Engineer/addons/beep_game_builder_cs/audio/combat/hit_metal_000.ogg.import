@@ -1,0 +1,19 @@
+[remap]
+
+importer="oggvorbisstr"
+type="AudioStreamOggVorbis"
+uid="uid://crpi7xfy8a8e5"
+path="res://.godot/imported/hit_metal_000.ogg-2b23b381c2effa8a48a63e9723a4317f.oggvorbisstr"
+
+[deps]
+
+source_file="res://Oilfield Engineer/addons/beep_game_builder_cs/audio/combat/hit_metal_000.ogg"
+dest_files=["res://.godot/imported/hit_metal_000.ogg-2b23b381c2effa8a48a63e9723a4317f.oggvorbisstr"]
+
+[params]
+
+loop=false
+loop_offset=0
+bpm=0
+beat_count=0
+bar_beats=4

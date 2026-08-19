@@ -1,0 +1,48 @@
+{
+  "id": "strategy",
+  "display_name": "Strategy",
+  "icon": "\u265f\ufe0f",
+  "description": "Command panels, resources, units and tactical overlays",
+  "default_theme": "command",
+  "default_geometry": "strategy",
+  "themes": [
+    "command",
+    "military",
+    "royal",
+    "scifi",
+    "blueprint"
+  ],
+  "main_scene": "strategy_main.tscn",
+  "scenes": [
+    "unit_panel.tscn",
+    "research.tscn",
+    "diplomacy.tscn"
+  ],
+  "nav_wiring": {
+    "unit_panel": "unit_panel.tscn",
+    "research": "research.tscn",
+    "diplomacy": "diplomacy.tscn"
+  },
+  "tuning": {
+    "resource_slots": 5,
+    "unit_card_width": 220,
+    "map_overlay_opacity": 0.78,
+    "enable_weather": false,
+    "default_weather": "Clear",
+    "enable_day_night": false,
+    "enable_seasons": false,
+    "default_season": "Spring",
+    "days_per_season": 7,
+    "enable_temperature": false,
+    "ambient_temperature": 20,
+    "enable_forecast": false,
+    "forecast_days": 7,
+    "enable_save_load": true,
+    "max_save_slots": 5,
+    "autosave_enabled": true,
+    "autosave_interval_seconds": 300,
+    "time_axis": "turns",
+    "top_down_view": true,
+    "weather_view": "Isometric"
+  }
+}

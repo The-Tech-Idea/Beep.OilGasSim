@@ -1,0 +1,19 @@
+[remap]
+
+importer="mp3"
+type="AudioStreamMP3"
+uid="uid://xuvxfm4rb7hx"
+path="res://.godot/imported/thunder_7.mp3-67a5599e5d53e5ea73d64f454033be5c.mp3str"
+
+[deps]
+
+source_file="res://Oilfield Engineer/addons/beep_game_builder_cs/audio/weather/thunder_7.mp3"
+dest_files=["res://.godot/imported/thunder_7.mp3-67a5599e5d53e5ea73d64f454033be5c.mp3str"]
+
+[params]
+
+loop=false
+loop_offset=0
+bpm=0
+beat_count=0
+bar_beats=4

@@ -1,0 +1,145 @@
+[gd_scene load_steps=13 format=3]
+
+[ext_resource type="Script" path="res://addons/beep_game_builder_cs/ecs/ui/kit/KitPanelContainer.cs" id="k_panelc"]
+[ext_resource type="Script" path="res://addons/beep_game_builder_cs/ecs/GameFlowComponent.cs" id="1_flow"]
+[ext_resource type="Script" path="res://addons/beep_game_builder_cs/ecs/ui/ThemePresetComponent.cs" id="hud_theme"]
+[ext_resource type="Script" path="res://addons/beep_game_builder_cs/ecs/ui/HudCollapseComponent.cs" id="hud_collapse"]
+[ext_resource type="Script" path="res://addons/beep_game_builder_cs/ecs/ui/hud/StrategyHudComponent.cs" id="hud_stat"]
+[ext_resource type="Script" path="res://addons/beep_game_builder_cs/ecs/ui/MinimapComponent.cs" id="minimap"]
+[ext_resource type="Script" path="res://addons/beep_game_builder_cs/ecs/ui/GenreScreenComponent.cs" id="30_screen"]
+[ext_resource type="Script" path="res://addons/beep_game_builder_cs/ecs/ui/GameInfoBinder.cs" id="binder_gi"]
+[ext_resource type="Script" path="res://addons/beep_game_builder_cs/ecs/ui/CollapsiblePanelComponent.cs" id="collapsible"]
+[ext_resource type="Script" path="res://addons/beep_game_builder_cs/ecs/ui/kit/KitLabelValue.cs" id="k_pair"]
+[ext_resource type="Script" path="res://addons/beep_game_builder_cs/ecs/ui/kit/KitMeter.cs" id="k_meter"]
+[ext_resource type="Script" path="res://addons/beep_game_builder_cs/ecs/ui/kit/KitColorRect.cs" id="k_color"]
+
+[node name="StrategyMain" type="Node2D"]
+
+[node name="Background" type="ColorRect" parent="."]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.1, 0.12, 0.15, 1)
+
+script = ExtResource("k_color")
+[node name="GameFlow" type="Node" parent="."]
+script = ExtResource("1_flow")
+
+[node name="HUD" type="CanvasLayer" parent="."]
+layer = 1
+
+[node name="Root" type="Control" parent="HUD"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="Theme" type="Node" parent="HUD/Root"]
+script = ExtResource("hud_theme")
+GenreName = "strategy"
+HudMode = true
+
+[node name="HudCollapse" type="Node" parent="HUD/Root"]
+script = ExtResource("hud_collapse")
+
+[node name="TopBar" type="PanelContainer" parent="HUD/Root"]
+anchor_right = 1.0
+custom_minimum_size = Vector2(0, 64)
+offset_bottom = 64.0
+mouse_filter = 2
+script = ExtResource("k_panelc")
+Title = ""
+TitleStyle = 2
+Intent = 0
+ExtraPadding = Vector2(10, 8)
+
+[node name="Bar" type="HBoxContainer" parent="HUD/Root/TopBar"]
+theme_override_constants/separation = 10
+alignment = 1
+
+[node name="GoldLabel" type="Control" parent="HUD/Root/TopBar/Bar"]
+custom_minimum_size = Vector2(184, 34)
+layout_mode = 2
+script = ExtResource("k_pair")
+Label = "GOLD"
+Value = "100"
+Accent = 4
+
+[node name="FoodLabel" type="Control" parent="HUD/Root/TopBar/Bar"]
+custom_minimum_size = Vector2(184, 34)
+layout_mode = 2
+script = ExtResource("k_pair")
+Label = "FOOD"
+Value = "80"
+Accent = 3
+
+[node name="WoodLabel" type="Control" parent="HUD/Root/TopBar/Bar"]
+custom_minimum_size = Vector2(184, 34)
+layout_mode = 2
+script = ExtResource("k_pair")
+Label = "WOOD"
+Value = "60"
+Accent = 1
+
+[node name="UnitsLabel" type="ProgressBar" parent="HUD/Root/TopBar/Bar"]
+custom_minimum_size = Vector2(168, 26)
+layout_mode = 2
+mouse_filter = 2
+script = ExtResource("k_meter")
+Value = 0.2
+Fill = 6
+EndCaps = true
+
+[node name="TurnLabel" type="Control" parent="HUD/Root"]
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -120.0
+offset_top = 76.0
+offset_right = 120.0
+offset_bottom = 112.0
+grow_horizontal = 2
+mouse_filter = 2
+script = ExtResource("k_pair")
+Label = "TURN"
+Value = "1"
+Accent = 2
+
+[node name="Minimap" type="Control" parent="HUD/Root"]
+anchor_left = 1.0
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -196.0
+offset_top = -196.0
+offset_right = -16.0
+offset_bottom = -16.0
+grow_horizontal = 0
+grow_vertical = 0
+script = ExtResource("minimap")
+PlayerPath = NodePath("")
+
+[node name="ResearchScreen" type="Node" parent="."]
+script = ExtResource("30_screen")
+ScreenKey = "research"
+OpenAction = "research"
+
+[node name="DiplomacyScreen" type="Node" parent="."]
+script = ExtResource("30_screen")
+ScreenKey = "diplomacy"
+OpenAction = "quests"
+
+[node name="UnitPanelScreen" type="Node" parent="."]
+script = ExtResource("30_screen")
+ScreenKey = "unit_panel"
+OpenAction = "character"
+
+[node name="GenreHud" type="Node" parent="HUD/Root"]
+script = ExtResource("hud_stat")
+
+[node name="GameInfoBinder" type="Node" parent="HUD/Root"]
+script = ExtResource("binder_gi")
+ThemeComponentPath = NodePath("Theme")
