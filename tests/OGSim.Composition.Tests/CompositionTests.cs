@@ -1371,3 +1371,120 @@ public sealed class LicenceTests
         Assert.Contains(refused.Reasons, reason => reason.LocId == "$loc:reject.licence-lost");
     }
 }
+
+/// <summary>
+/// SDD-005 §4.2's R20d.10e amendment, proved against the ACTUAL composed
+/// classes rather than reconstructed types (design 03 §6, R20d-V11).
+///
+/// <para><c>R17V2_technology_and_environment_apply_through_the_same_method</c>
+/// (<c>GatingTests.cs</c>) already proves <c>EffectState.Apply</c> combines
+/// technology and environment effects correctly at the unit level. What that
+/// test cannot show is whether <c>CapabilitiesModule</c> actually WIRES a
+/// diffused node's effects into the state it provides — <c>ActiveEffects()</c>
+/// existed and nothing called it before this join (finding 240's amendment).
+/// These tests call <c>DiffusionStage</c> itself, constructed exactly as
+/// <c>CapabilitiesModule.Compose</c> constructs it.</para>
+///
+/// <para>Built from a synthetic one-node graph rather than the shipped
+/// registry: <c>TechnologyContentKind.Read</c> hardcodes <c>Effects</c> to
+/// <c>[]</c> for every loaded node (no SDD ever specified a JSON grammar for
+/// the field, and none of the sixty-five shipped nodes needs one — SDD-005's
+/// own R20c.9 correction says a node carries an effect only where it changes
+/// "a number nobody bought", which is true of at most one shipped node,
+/// Arctic operations, and that node's other half — an environment-side
+/// restriction and a consumer that checks the envelope — does not exist yet
+/// either). Recorded as finding 241 rather than fixed here: building the JSON
+/// grammar today would have no real consumer, which is the same defect from
+/// the other side (CLAUDE.md rule 6). A synthetic node exercises the STAGE,
+/// which is what this join is actually about.</para>
+/// </summary>
+public sealed class DiffusionStageTests
+{
+    private static readonly GameDate Epoch = new(1965, 1);
+
+    private static (OGSim.Capabilities.CapabilityState Capabilities, OGSim.Capabilities.EffectState Effects, DiffusionStage Stage)
+        Build(OGSim.Capabilities.TechnologyNode node)
+    {
+        var capabilities = new OGSim.Capabilities.CapabilityState(
+            [node], Defaults.Eras, () => Epoch, Epoch);
+        var effects = new OGSim.Capabilities.EffectState(new Dictionary<EnvelopeKind, double>());
+        var stage = new DiffusionStage(capabilities, effects);
+
+        return (capabilities, effects, stage);
+    }
+
+    /// <summary>
+    /// A node that diffuses this tick moves an envelope that had no other
+    /// contribution — the case §4.2 exists to describe: technology reaching a
+    /// model through the one path environment also uses.
+    /// </summary>
+    [Fact]
+    public void R20dV11_a_diffused_nodes_envelope_extension_reaches_the_effect_state()
+    {
+        var node = new OGSim.Capabilities.TechnologyNode(
+            new TechnologyId(new ContentId("test-arctic-kit")),
+            Era.E1,
+            DiffusionLagTicks: 0,
+            Prerequisites: [],
+            Effects: [new MoveEnvelope(EnvelopeKind.ArcticOperability, EnvelopeContributionKind.Extension, 8.0)],
+            GrantsDetectClass: null,
+            Routes: [OGSim.Capabilities.AcquisitionRoute.Diffusion]);
+
+        (_, OGSim.Capabilities.EffectState effects, DiffusionStage stage) = Build(node);
+
+        Assert.Equal(0.0, effects.EffectiveEnvelope(EnvelopeKind.ArcticOperability));
+
+        stage.Execute(new TickContext { Tick = new Tick(0), Date = Epoch });
+
+        Assert.Equal(8.0, effects.EffectiveEnvelope(EnvelopeKind.ArcticOperability));
+    }
+
+    /// <summary>
+    /// A node whose lag has not elapsed diffuses nothing, and the stage must
+    /// not apply an effect that was never granted — the "next tick" property
+    /// §4.2 asks for starts here, at "not yet acquired at all".
+    /// </summary>
+    [Fact]
+    public void R20dV11b_a_not_yet_diffused_nodes_effect_does_not_reach_the_effect_state()
+    {
+        var node = new OGSim.Capabilities.TechnologyNode(
+            new TechnologyId(new ContentId("test-future-kit")),
+            Era.E1,
+            DiffusionLagTicks: 600,
+            Prerequisites: [],
+            Effects: [new MoveEnvelope(EnvelopeKind.ArcticOperability, EnvelopeContributionKind.Extension, 8.0)],
+            GrantsDetectClass: null,
+            Routes: [OGSim.Capabilities.AcquisitionRoute.Diffusion]);
+
+        (_, OGSim.Capabilities.EffectState effects, DiffusionStage stage) = Build(node);
+
+        stage.Execute(new TickContext { Tick = new Tick(0), Date = Epoch });
+
+        Assert.Equal(0.0, effects.EffectiveEnvelope(EnvelopeKind.ArcticOperability));
+    }
+
+    /// <summary>
+    /// Recomputing every tick is equivalent to applying once, on the idempotency
+    /// proof SDD-005's R20d.10e amendment relies on: calling <c>Execute</c>
+    /// again after the node is already held must not double the extension.
+    /// </summary>
+    [Fact]
+    public void R20dV11c_recomputing_every_tick_does_not_double_an_already_held_effect()
+    {
+        var node = new OGSim.Capabilities.TechnologyNode(
+            new TechnologyId(new ContentId("test-arctic-kit-2")),
+            Era.E1,
+            DiffusionLagTicks: 0,
+            Prerequisites: [],
+            Effects: [new MoveEnvelope(EnvelopeKind.ArcticOperability, EnvelopeContributionKind.Extension, 8.0)],
+            GrantsDetectClass: null,
+            Routes: [OGSim.Capabilities.AcquisitionRoute.Diffusion]);
+
+        (_, OGSim.Capabilities.EffectState effects, DiffusionStage stage) = Build(node);
+
+        for (var tick = 0; tick < 5; tick++)
+            stage.Execute(new TickContext { Tick = new Tick(tick), Date = Epoch });
+
+        Assert.Equal(8.0, effects.EffectiveEnvelope(EnvelopeKind.ArcticOperability));
+    }
+}

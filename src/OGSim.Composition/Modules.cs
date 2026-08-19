@@ -1329,10 +1329,16 @@ internal sealed class CapabilitiesModule(
         composition.Provide(state);
         composition.Provide<ICapabilitySet>(state.Technology);
 
-        composition.Provide<IEffectState>(new OGSim.Capabilities.EffectState(
-            new Dictionary<EnvelopeKind, double>()));
+        // HELD AS WELL AS PROVIDED. `DiffusionStage` needs the concrete
+        // `EffectState.Apply` — deliberately not on `IEffectState`, whose three
+        // readers are the whole surface a model may use (SDD-005 §4.2) — so the
+        // module keeps the object it built rather than resolving it back through
+        // the interface it just gave away.
+        var effects = new OGSim.Capabilities.EffectState(new Dictionary<EnvelopeKind, double>());
 
-        composition.Contribute(order: 1, new DiffusionStage(state));
+        composition.Provide<IEffectState>(effects);
+
+        composition.Contribute(order: 1, new DiffusionStage(state, effects));
     }
 }
 
@@ -1356,8 +1362,18 @@ internal sealed class CapabilitiesModule(
 /// already said the right stage and why — "technology never creates a segment
 /// boundary" — so this runs after the solve, and a newly diffused node is a
 /// genuinely NEXT-tick fact.</para>
+///
+/// <para><b>And what it grants now REACHES a model</b> (SDD-005 §4.2's R20d.10e
+/// amendment): <c>TechnologyState.ActiveEffects()</c> existed and nothing ever
+/// read it. Recomputed from it every tick rather than applied incrementally on
+/// acquisition — checked rather than assumed to differ: `EffectState`'s three
+/// combinators are each idempotent under a repeat, and nothing in this design
+/// ever revokes a technology, so a full recompute and an incremental apply
+/// reach the same state. The "next tick" property §4.2 asks for comes from the
+/// STAGE, not from how the combinators are invoked.</para>
 /// </summary>
-internal sealed class DiffusionStage(OGSim.Capabilities.CapabilityState capabilities)
+internal sealed class DiffusionStage(
+    OGSim.Capabilities.CapabilityState capabilities, OGSim.Capabilities.EffectState effects)
     : ITickStage
 {
     public StageId Id => StageId.Company;
@@ -1368,6 +1384,8 @@ internal sealed class DiffusionStage(OGSim.Capabilities.CapabilityState capabili
 
         capabilities.Technology.ApplyDiffusion(
             capabilities.Era, capabilities.EraStart, context.Tick);
+
+        effects.Apply(capabilities.Technology.ActiveEffects());
     }
 }
 

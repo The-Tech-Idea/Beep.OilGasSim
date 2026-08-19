@@ -358,6 +358,33 @@ capability-blind (§3 rule 2): a model asks what its effective envelope, plugin
 or parameter *is*, and has no way to ask who contributed it or whether the
 company owns a technology.
 
+> **R20d.10e amendment. Technology's effects are RECOMPUTED too, not applied
+> incrementally — and the two produce the same answer.**
+>
+> `TechnologyState.ActiveEffects()` already existed: every effect of every held
+> node, in acquisition order. `EffectState.Apply` was checked rather than
+> assumed to need calling once per acquisition: its three combinators are each
+> idempotent under a repeat — `MoveEnvelope` takes `Math.Max`/`Math.Min` against
+> the stored value (the SAME contribution twice leaves it unchanged, never
+> doubled), `UnlockOption` adds to a `HashSet` (`Add` on an existing member is a
+> no-op), `SetModelSelection`/`SetModelParameter` are plain dictionary
+> assignment (re-assigning the same value is a no-op). Nothing in this design
+> ever REVOKES a technology, so there is no case where an old contribution
+> needs to be withdrawn either.
+>
+> Given that, calling `effects.Apply(technology.ActiveEffects())` **every tick**
+> at stage 11 is equivalent in outcome to applying only the newly acquired
+> node's effects incrementally, and simpler: no diff against the previous
+> tick's holdings, no second list to keep in step. **"Next tick" is what the
+> STAGE PLACEMENT already guarantees** (this section's own words: technology
+> "never creates a segment boundary") — the solve at stage 5 has already run
+> against last month's holdings by the time stage 11 recomputes this month's,
+> so a full recompute at stage 11 arrives exactly as late as an incremental
+> apply would have. The distinction this section drew between "recomputed" and
+> "applied... taking effect next tick" is about where each source's effects
+> land in the tick, not about how the combinators inside `EffectState` are
+> invoked.
+
 ## 5. Detectability consumption
 
 ```csharp
