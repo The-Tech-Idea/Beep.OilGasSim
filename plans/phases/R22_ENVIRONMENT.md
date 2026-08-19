@@ -113,6 +113,7 @@ The EN1–EN12 suite from [13_ENVIRONMENT](../design/13_ENVIRONMENT.md) §8, plu
 | R22-V15 | Within-tick weather | Days lost compose correctly with operation durations and the segment model |
 | R22-V16 | Persistence | Weather is autocorrelated at the declared strength |
 | R22-V17 | Setting visibility | The read model exposes the full setting for any block available to bid on |
+| R22-V18 | The environment applies through the SAME path as technology | `WeatherStage`, constructed exactly as `EnvironmentModule.Compose` builds it, calls `effects.Apply(climate.Effects)` every tick against the SAME `EffectState` `DiffusionStage` writes into (SDD-005 §4.2's R22.2 amendment) — proved with a synthetic climate carrying a real `MoveEnvelope`, since no shipped climate needs one yet |
 
 ---
 

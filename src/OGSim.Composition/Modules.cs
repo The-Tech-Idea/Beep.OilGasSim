@@ -1297,6 +1297,13 @@ internal sealed class CapabilitiesModule(
         // What the company has actually acquired, so the scheduler can be told
         // rather than handed an empty list (SDD-005 §2's R20d.10 amendment).
         typeof(OGSim.Capabilities.CapabilityState),
+
+        // THE CONCRETE TYPE TOO (SDD-005 §4.2's R22.2 amendment) — environment
+        // and technology apply through the SAME `EffectState.Apply`, which is
+        // deliberately not on `IEffectState`, so the module that calls it for
+        // weather has to resolve the concrete object this one built rather
+        // than a second instance of its own.
+        typeof(OGSim.Capabilities.EffectState),
     ],
     requires: [],
 
@@ -1340,6 +1347,7 @@ internal sealed class CapabilitiesModule(
         var effects = new OGSim.Capabilities.EffectState(new Dictionary<EnvelopeKind, double>());
 
         composition.Provide<IEffectState>(effects);
+        composition.Provide(effects);
 
         composition.Contribute(order: 1, new DiffusionStage(state, effects));
     }
@@ -1401,7 +1409,13 @@ internal sealed class DiffusionStage(
 internal sealed class WeatherStage(
     OGSim.Environment.WeatherState weather,
     IWeatherModel model,
-    IRandomStream stream) : ITickStage
+    IRandomStream stream,
+
+    /// <summary>SDD-005 §4.2's R22.2 amendment: the same path technology's
+    /// `DiffusionStage` applies through, at the stage design 07 §1 = 13 §2.1
+    /// already puts weather at.</summary>
+    OGSim.Capabilities.EffectState effects,
+    OGSim.Environment.ClimateProfile climate) : ITickStage
 {
     public StageId Id => StageId.Environment;
 
@@ -1410,6 +1424,7 @@ internal sealed class WeatherStage(
         ArgumentNullException.ThrowIfNull(context);
 
         weather.Advance(context.Date, model, stream);
+        effects.Apply(climate.Effects);
     }
 }
 
@@ -1417,7 +1432,7 @@ internal sealed class EnvironmentModule(OGSim.Environment.ClimateProfile climate
     : EngineModule(Declare(
     "environment",
     provides: [typeof(IWeatherModel), typeof(OGSim.Environment.WeatherState)],
-    requires: [typeof(IRandomSource)],
+    requires: [typeof(IRandomSource), typeof(OGSim.Capabilities.EffectState)],
 
     // THE CARRY, which is the one value that crosses a tick. `StreamId.Weather`
     // has existed since R1 and was drawn by nothing until now — the ninth
@@ -1444,7 +1459,8 @@ internal sealed class EnvironmentModule(OGSim.Environment.ClimateProfile climate
         composition.Provide(weather);
 
         composition.Contribute(order: 0, new WeatherStage(
-            weather, model, composition.Require<IRandomSource>().Stream(StreamId.Weather)));
+            weather, model, composition.Require<IRandomSource>().Stream(StreamId.Weather),
+            composition.Require<OGSim.Capabilities.EffectState>(), climate));
     }
 }
 

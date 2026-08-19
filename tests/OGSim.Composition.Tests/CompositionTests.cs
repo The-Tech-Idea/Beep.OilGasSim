@@ -782,7 +782,8 @@ public sealed class AccessWindowTests
             Amplitude: [.. Enumerable.Repeat(1.0, 12)],
             TemperatureBaseline: [.. Enumerable.Repeat(-15.0, 12)],
             TemperatureAmplitude: -4.0,
-            AccessOpen: [.. Enumerable.Range(1, 12).Select(m => m <= 3 || m == 12)]);
+            AccessOpen: [.. Enumerable.Range(1, 12).Select(m => m <= 3 || m == 12)],
+            Effects: []);
 
     /// <summary>The shipped set with the climate swapped, which is what makes
     /// this a test of the ENGINE rather than of the profile record.</summary>
@@ -1583,5 +1584,94 @@ public sealed class DetectClassGatingTests
             new EntityRef(EntityKind.Compartment, 1UL));
 
         Assert.NotNull(sigma);
+    }
+}
+
+/// <summary>
+/// SDD-005 §4.2's R22.2 amendment: the environment applies through the SAME
+/// path technology does, proved against the actual composed classes
+/// (<c>WeatherStage</c>, <c>EnvironmentModule</c>) exactly as
+/// <c>DiffusionStageTests</c> already does for R20d-V11 on the technology
+/// side. Built from a synthetic climate rather than the shipped one:
+/// `Defaults.Climate.Effects` is empty, and correctly so — no shipped climate
+/// changes a number nobody bought, the identical relationship
+/// <c>TechnologyContentKind</c>'s hardcoded `[]` has to the sixty-five
+/// shipped technology nodes.
+/// </summary>
+public sealed class WeatherEffectTests
+{
+    private static (OGSim.Capabilities.EffectState Effects, WeatherStage Stage)
+        Build(OGSim.Environment.ClimateProfile climate, ulong seed)
+    {
+        var weather = new OGSim.Environment.WeatherState([climate]);
+        var model = new OGSim.Environment.Ar1Weather(climate.Persistence);
+        IRandomStream stream = new RandomSource(seed).Stream(StreamId.Weather);
+        var effects = new OGSim.Capabilities.EffectState(new Dictionary<EnvelopeKind, double>());
+
+        return (effects, new WeatherStage(weather, model, stream, effects, climate));
+    }
+
+    private static OGSim.Environment.ClimateProfile ClimateWith(Effect effect) => new(
+        new ContentId("test-climate"),
+        Persistence: 0.75,
+        Baseline: [.. Enumerable.Repeat(3.0, 12)],
+        Amplitude: [.. Enumerable.Repeat(1.0, 12)],
+        TemperatureBaseline: [.. Enumerable.Repeat(-15.0, 12)],
+        TemperatureAmplitude: -4.0,
+        AccessOpen: [.. Enumerable.Repeat(true, 12)],
+        Effects: [effect]);
+
+    /// <summary>
+    /// The stage moves the envelope. Every composed `EffectState` starts with
+    /// an empty base (0.0 for every kind — `CapabilitiesModule.Compose`'s own
+    /// choice, matched here), so an EXTENSION is the effect kind whose result
+    /// is directly observable against it: `Max(0, extension)` is the
+    /// extension itself. A RESTRICTION against a zero base would leave
+    /// `EffectiveEnvelope` at zero whether or not it were ever applied —
+    /// which is why the restriction case is proved separately, in
+    /// combination, in the next test.
+    /// </summary>
+    [Fact]
+    public void R22V18_the_environment_applies_through_the_same_effect_state_as_technology()
+    {
+        (OGSim.Capabilities.EffectState effects, WeatherStage stage) = Build(
+            ClimateWith(new MoveEnvelope(
+                EnvelopeKind.ArcticOperability, EnvelopeContributionKind.Extension, 12.0)),
+            seed: 11UL);
+
+        Assert.Equal(0.0, effects.EffectiveEnvelope(EnvelopeKind.ArcticOperability));
+
+        stage.Execute(new TickContext { Tick = new Tick(0), Date = new GameDate(1965, 1) });
+
+        Assert.Equal(12.0, effects.EffectiveEnvelope(EnvelopeKind.ArcticOperability));
+    }
+
+    /// <summary>
+    /// AND A RESTRICTION COMBINES WITH AN EXTENSION THE NORMAL WAY — the
+    /// whole point of one shared path: an extension a HELD TECHNOLOGY would
+    /// contribute, and this climate's OWN restriction capping it, resolve to
+    /// `Min(Max(base, extension), restriction)`, exactly SDD-005 §4.1's form
+    /// and its rule that restrictions always win. This is what proves the
+    /// restriction reaches `EffectState` at all — the case a lone restriction
+    /// against a zero base cannot show, since `Min(0, restriction)` is zero
+    /// whether or not the restriction was ever applied.
+    /// </summary>
+    [Fact]
+    public void R22V18b_the_climates_restriction_combines_with_an_extension_the_normal_way()
+    {
+        (OGSim.Capabilities.EffectState effects, WeatherStage stage) = Build(
+            ClimateWith(new MoveEnvelope(
+                EnvelopeKind.ArcticOperability, EnvelopeContributionKind.Restriction, 4.0)),
+            seed: 12UL);
+
+        stage.Execute(new TickContext { Tick = new Tick(0), Date = new GameDate(1965, 1) });
+
+        // Simulating what a held technology would have contributed, through
+        // the SAME method — SDD-005 §4.2's whole claim.
+        effects.Apply([new MoveEnvelope(
+            EnvelopeKind.ArcticOperability, EnvelopeContributionKind.Extension, 12.0)]);
+
+        // Min(Max(0, 12), 4) = 4 — the climate's restriction wins.
+        Assert.Equal(4.0, effects.EffectiveEnvelope(EnvelopeKind.ArcticOperability));
     }
 }

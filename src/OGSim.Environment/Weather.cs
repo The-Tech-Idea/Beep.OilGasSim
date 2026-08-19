@@ -39,7 +39,19 @@ public sealed record ClimateProfile(
     /// would make it a consequence of the dice, and a lucky calm February would
     /// then open an ice road in a thaw.</para>
     /// </summary>
-    IReadOnlyList<bool> AccessOpen)
+    IReadOnlyList<bool> AccessOpen,
+
+    /// <summary>
+    /// SDD-005 §4.2's R22.2 amendment: what this climate moves, through the
+    /// SAME path technology does — a cold climate restricting a rig's depth
+    /// rating and a technology extending it are the same kind of statement
+    /// (design 07 §1 = 13 §2.1). Empty for every shipped climate and that is
+    /// correct rather than missing, the identical relationship R20d.10e's
+    /// amendment states for `TechnologyDefinition.Effects`: a node or a
+    /// climate carries an effect only where it changes a number nobody
+    /// bought, and no shipped climate does yet.
+    /// </summary>
+    IReadOnlyList<Effect> Effects)
 {
     /// <summary>Twelve of everything, checked here rather than at the first
     /// December of a forty-year game.</summary>

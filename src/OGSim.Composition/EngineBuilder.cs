@@ -1405,7 +1405,13 @@ internal static class Defaults
             // refusal is proved against an arctic profile in the tests until R20
             // authors a scenario that has one (SDD-016 §5b's R22.6 amendment).
             AccessOpen: [true, true, true, true, true, true,
-                         true, true, true, true, true, true]);
+                         true, true, true, true, true, true],
+
+            // EMPTY, and correct rather than missing (SDD-005 §4.2's R22.2
+            // amendment): a temperate-offshore climate restricts nothing a
+            // technology would extend — that is the arctic-window story, and
+            // this composition ships no arctic climate.
+            Effects: []);
 
     /// <summary>
     /// SDD-016's R20d.8.10 amendment (finding 244):
