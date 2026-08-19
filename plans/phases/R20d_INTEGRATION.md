@@ -142,6 +142,7 @@ table is a record of the phase as built and the ids resolve from today.
 | R12b-V2 | The header a full field needs can be installed | The ladder reaches the size a developed field requires, so the refusal in R20d-V1 is a decision rather than a dead end |
 | R12b-V8 | Capacity is a purchase with a price | A player sees the jam, pays for a bigger vessel and the field flows; a vessel is CAPITALISED and a survey is not; the top of the ladder is refused with a reason |
 | R12b-V10 | An abandonment obligation is carried, not conjured | A well carries its obligation from the day it opens; shutting a well in does not discharge it; abandoning a plugged well is refused; abandoning the last well closes the field |
+| R12b-V19 | Below its tier, a survey source sees nothing | `RegionalObservationModel.SigmaFor` returns null for a prospect whose truth `Subtlety` exceeds the querying source's design-06-§2.3 ceiling (2-D seismic D0, 3-D seismic D1), returns a real sigma at or below the tier, and never gates a subject that is not a prospect — a well test, log, core or discovery well always ask about an already-found compartment, where subtlety has nothing left to say (SDD-005 §5's R12b.19 amendment) |
 
 **`R24V4` was not one of these and is renamed rather than declared.** Its two
 tests assert that objectives read the snapshot and touch nothing after stage 12,

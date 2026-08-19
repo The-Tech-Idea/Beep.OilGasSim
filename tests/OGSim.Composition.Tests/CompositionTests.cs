@@ -1502,3 +1502,86 @@ public sealed class DiffusionStageTests
         Assert.Equal(8.0, effects.EffectiveEnvelope(EnvelopeKind.ArcticOperability));
     }
 }
+
+/// <summary>
+/// SDD-005 §5's R12b.19 amendment: below its tier, a survey source sees
+/// nothing — checked against the actual composition-internal classes
+/// (<c>WorldState</c>, <c>RegionalObservationModel</c>), not a reimplemented
+/// double, exactly as <c>DiffusionStageTests</c> already does for R20d-V11.
+/// </summary>
+public sealed class DetectClassGatingTests
+{
+    private static (WorldState World, RegionalObservationModel Model) Build() =>
+        Build(out _);
+
+    private static (WorldState World, RegionalObservationModel Model) Build(
+        out EntityId<IProspect> prospect, DetectClass subtlety = DetectClass.D1)
+    {
+        var world = new WorldState();
+        prospect = world.Place(default, new ReservoirVolume(1.0e6), subtlety);
+
+        return (world, new RegionalObservationModel(world));
+    }
+
+    /// <summary>2-D seismic's ceiling is D0 (design 06 §2.3); a D1 trap is
+    /// below it, and the rule is "nothing", not a wide sigma.</summary>
+    [Fact]
+    public void R12bV19_a_below_tier_survey_sees_nothing()
+    {
+        (_, RegionalObservationModel model) = Build(out EntityId<IProspect> prospect, DetectClass.D1);
+
+        double? sigma = model.SigmaFor(
+            new ContentId("seismic-2d"), new ContentId("structure-capacity"),
+            new EntityRef(EntityKind.Prospect, prospect.Value));
+
+        Assert.Null(sigma);
+    }
+
+    /// <summary>3-D seismic's ceiling is D1 (design 06 §2.3); at the tier
+    /// exactly, the survey sees the structure — this is the case that
+    /// distinguishes "gated" from "always null".</summary>
+    [Fact]
+    public void R12bV19b_a_survey_at_its_own_tier_sees_the_structure()
+    {
+        (_, RegionalObservationModel model) = Build(out EntityId<IProspect> prospect, DetectClass.D1);
+
+        double? sigma = model.SigmaFor(
+            new ContentId("seismic-3d"), new ContentId("structure-capacity"),
+            new EntityRef(EntityKind.Prospect, prospect.Value));
+
+        Assert.NotNull(sigma);
+    }
+
+    /// <summary>D0's own tier is the obvious-closure case (design 06 §2.3) —
+    /// regional data, the free read every game gets, sees it.</summary>
+    [Fact]
+    public void R12bV19c_an_obvious_trap_is_seen_even_by_regional_data()
+    {
+        (_, RegionalObservationModel model) = Build(out EntityId<IProspect> prospect, DetectClass.D0);
+
+        double? sigma = model.SigmaFor(
+            new ContentId("regional"), new ContentId("oil-in-place"),
+            new EntityRef(EntityKind.Prospect, prospect.Value));
+
+        Assert.NotNull(sigma);
+    }
+
+    /// <summary>
+    /// AND SUBTLETY NEVER GATES A DISCOVERED COMPARTMENT — a well test, a log,
+    /// a core and a discovery well always ask about a COMPARTMENT, and
+    /// `Subtlety` is a property of the trap's own geometry, not of what turns
+    /// out to be inside it (SDD-005 §5's R12b.19 amendment). A subject that is
+    /// not a prospect must reach the ordinary (source, kind) table untouched.
+    /// </summary>
+    [Fact]
+    public void R12bV19d_a_compartment_subject_is_never_gated_by_subtlety()
+    {
+        (WorldState world, RegionalObservationModel model) = Build(out _, DetectClass.D3);
+
+        double? sigma = model.SigmaFor(
+            new ContentId("well-test"), new ContentId("reservoir-pressure"),
+            new EntityRef(EntityKind.Compartment, 1UL));
+
+        Assert.NotNull(sigma);
+    }
+}

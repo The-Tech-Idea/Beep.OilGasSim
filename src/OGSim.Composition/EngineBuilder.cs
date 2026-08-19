@@ -1456,12 +1456,42 @@ internal static class Defaults
 /// units, pressure in pascals, permeability and oil-in-place in natural-log units
 /// where an absolute σ is a relative one.</para>
 /// </summary>
-internal sealed class RegionalObservationModel : IObservationModel
+internal sealed class RegionalObservationModel(WorldState world) : IObservationModel
 {
     public ContentId Id { get; } = new("regional-observation");
 
-    public double? SigmaFor(ContentId source, ContentId propertyKind, EntityRef subject) =>
-        (source.Value, propertyKind.Value) switch
+    /// <summary>
+    /// Design 06 §2.3's table — the only source of a detect ceiling anywhere
+    /// (SDD-005 §5's R12b.19 amendment). Hand-authored beside this model
+    /// rather than content-driven, the same relationship `Defaults.Climate`
+    /// has to a `ClimateContentKind` that does not exist either: three shipped
+    /// sources reach two of the table's four rows, and no `information-source`
+    /// kind exists to load a fifth. Null for a source the table has no ceiling
+    /// for — every non-survey source (a log, a core, a well test, a discovery
+    /// well) never queries a prospect's subtlety at all, so this is never
+    /// consulted for them regardless.
+    /// </summary>
+    private static DetectClass? CeilingOf(ContentId source) => source.Value switch
+    {
+        "regional" => DetectClass.D0,
+        "seismic-2d" => DetectClass.D0,
+        "seismic-3d" => DetectClass.D1,
+        _ => null,
+    };
+
+    public double? SigmaFor(ContentId source, ContentId propertyKind, EntityRef subject)
+    {
+        // BELOW THE TIER, A SURVEY SEES NOTHING (design 06 §2.3) — checked
+        // only when the subject IS the structure: `Subtlety` describes the
+        // trap's own geometry, not what turns out to be in it, so a discovery
+        // well, log, core or well test (always a compartment, always
+        // post-discovery) never reaches this branch.
+        if (subject.Kind == EntityKind.Prospect
+            && CeilingOf(source) is DetectClass ceiling
+            && world.SubtletyOf(new EntityId<IProspect>(subject.Value)) > ceiling)
+            return null;
+
+        return (source.Value, propertyKind.Value) switch
         {
             // Regional data is deliberately coarse: a player who could book
             // reserves off a gravity and magnetics pass would never buy seismic
@@ -1519,6 +1549,7 @@ internal sealed class RegionalObservationModel : IObservationModel
             // rather than merely uncertain (SDD-008 §3).
             _ => null,
         };
+    }
 }
 
 /// <summary>

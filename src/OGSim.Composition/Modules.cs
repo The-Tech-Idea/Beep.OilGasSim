@@ -1173,7 +1173,7 @@ internal sealed class InformationModule() : EngineModule(Declare(
         typeof(OGSim.Information.ObservationSampler),
         typeof(OGSim.Information.ProspectRisks),
     ],
-    requires: [typeof(IAuditTrail), typeof(IRandomSource), typeof(SimulationClock)],
+    requires: [typeof(IAuditTrail), typeof(IRandomSource), typeof(SimulationClock), typeof(WorldState)],
     ownsState: ["information.beliefs", "information.prospect-risk"],
     stages: NoStagesYet))
 {
@@ -1210,7 +1210,7 @@ internal sealed class InformationModule() : EngineModule(Declare(
         composition.Own(beliefs);
         composition.Provide<IBeliefStore>(beliefs);
 
-        var model = new RegionalObservationModel();
+        var model = new RegionalObservationModel(composition.Require<WorldState>());
         composition.Provide<IObservationModel>(model);
 
         // R20d.7's POS, composed at last. `ProspectRisk` was built, tested and
