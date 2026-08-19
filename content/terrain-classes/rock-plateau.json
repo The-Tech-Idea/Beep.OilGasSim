@@ -1,0 +1,12 @@
+{
+  "kind": "terrain-class",
+  "id": "rock-plateau",
+  "formation": { "heightBand": ["mid", "high"], "slopeBand": ["flat"], "climateBands": ["arid", "any"] },
+  "constructionCostFactor": 1.8,
+  "transportCostFactor": 1.5,
+  "buildable": "yes",
+  "rigAccess": "standard",
+  "seismicOps": "hard-rock crew",
+  "settlementWeight": 0.05,
+  "arableWeight": 0.0
+}

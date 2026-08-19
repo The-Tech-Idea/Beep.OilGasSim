@@ -95,23 +95,40 @@ ship as validated content — the vocabulary is loaded and checked against every
 row above, the same way sixty-five technology nodes ship with `Effects: []`
 before anything needs one (SDD-005's R20d.10e amendment).
 
-The (height × slope) grid is filled **exhaustively** by the generator's own
-hand-authored cut table (analogous to `Defaults.Eras` — content-shaped, not
-yet content-driven, pending the world-template system §6's mods note above
-already anticipates), so every land cell reaches exactly one class:
+The classifier reads `formation` bands DIRECTLY off the loaded content — it is
+not a second, hand-duplicated table — so the JSON is the only place the cut
+lives (law L5). That is only possible because the four reachable classes'
+bands are widened into a genuine PARTITION of the (height × slope) grid: each
+of the nine cells matches exactly one class, so there is no overlap to break a
+tie on and no gap to fall through:
 
 | | Flat | Moderate | Steep |
 |---|---|---|---|
-| **Low** | `plains` | `hills` | `hills` |
+| **Low** | `plains` | `hills` | `mountain` |
 | **Mid** | `rock-plateau` | `hills` | `mountain` |
-| **High** | `rock-plateau` | `mountain` | `mountain` |
+| **High** | `rock-plateau` | `hills` | `mountain` |
 
-This is a widening of two rows' own declared bands, both cited here so the
-JSON and this table never drift apart: `rock-plateau`'s `heightBand` is
-`["mid", "high"]` rather than `["mid"]` alone (a flat plateau at altitude is
-still a rock-plateau, not a new class), and `mountain`'s `slopeBand` is
-`["moderate", "steep"]` rather than `["steep"]` alone (the moderate shoulder of
-a high massif is still mountain terrain). Sea (elevation below zero) is never
-classified — [C16](#c16---terrain-classes)'s own rule, "sea is not a class,"
-holds structurally: `GeneratedTerrain.ClassByCell` carries `-1` for a sea cell,
-never an index into `Classes`.
+Slope dominates: **any** steep cell is `mountain` and any moderate cell is
+`hills`, whatever its height — a steep or rolling shoulder reads the same
+whether it sits at 50 m or 2,000 m, which is the physically ordinary case and
+why the table splits cleanly along slope first. Only flat ground distinguishes
+by height, `plains` from `rock-plateau`. This is why the shipped bands are:
+
+- `plains` — `heightBand: ["low"]`, `slopeBand: ["flat"]`
+- `hills` — `heightBand: ["low", "mid", "high"]`, `slopeBand: ["moderate"]`
+- `mountain` — `heightBand: ["low", "mid", "high"]`, `slopeBand: ["steep"]`
+- `rock-plateau` — `heightBand: ["mid", "high"]`, `slopeBand: ["flat"]`
+
+— a widening of the printed table's rows (which named only `mid·moderate` for
+`hills` and `high·steep` for `mountain`) into "any height" once climate is
+dropped from the match, since nothing distinguishes two rows that shared a
+slope band and differed only in a height range neither reaches on its own.
+`desert` and `swamp` are UNCHANGED from the printed table (`low–mid`/`low`,
+`flat`, unreachable without climate) and are free to overlap `plains`'s and
+`rock-plateau`'s cells — `climateBands` never contains `"any"` for either, so
+the classifier (which requires an `"any"` entry to match at all, since it has
+no climate signal to prefer a specific one with) never reaches them, and the
+overlap is inert rather than a live ambiguity. Sea (elevation below zero) is
+never classified — [C16](#c16---terrain-classes)'s own rule, "sea is not a
+class," holds structurally: `GeneratedTerrain.ClassByCell` carries `-1` for a
+sea cell, never an index into `Classes`.

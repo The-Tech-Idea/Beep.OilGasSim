@@ -1,0 +1,12 @@
+{
+  "kind": "terrain-class",
+  "id": "plains",
+  "formation": { "heightBand": ["low"], "slopeBand": ["flat"], "climateBands": ["any"] },
+  "constructionCostFactor": 1.0,
+  "transportCostFactor": 1.0,
+  "buildable": "yes",
+  "rigAccess": "standard",
+  "seismicOps": "standard crew",
+  "settlementWeight": 1.0,
+  "arableWeight": 1.0
+}

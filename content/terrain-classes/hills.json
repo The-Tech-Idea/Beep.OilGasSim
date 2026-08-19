@@ -1,0 +1,12 @@
+{
+  "kind": "terrain-class",
+  "id": "hills",
+  "formation": { "heightBand": ["low", "mid", "high"], "slopeBand": ["moderate"], "climateBands": ["any"] },
+  "constructionCostFactor": 1.4,
+  "transportCostFactor": 1.8,
+  "buildable": "yes",
+  "rigAccess": "standard",
+  "seismicOps": "standard crew",
+  "settlementWeight": 0.5,
+  "arableWeight": 0.4
+}

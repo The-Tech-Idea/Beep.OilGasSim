@@ -120,6 +120,14 @@ internal static class Fixture
             files.Add(new ContentFile("technologies/" + Path.GetFileName(path),
                                       File.ReadAllText(path)));
 
+        // AND THE TERRAIN CLASSES (R20d.8.9) — the same door.
+        string terrain = Path.Combine(here.Parent!.Parent!.FullName, "content", "terrain-classes");
+
+        foreach (string path in Directory.EnumerateFiles(terrain, "*.json")
+                                         .OrderBy(p => p, StringComparer.Ordinal))
+            files.Add(new ContentFile("terrain-classes/" + Path.GetFileName(path),
+                                      File.ReadAllText(path)));
+
         return new DirectorySource(files);
     }
 
@@ -135,6 +143,7 @@ internal static class Fixture
                 new SeparatorContentKind(), new TankContentKind(), new TreaterContentKind(),
                 new GasPlantContentKind(), new ExportLineContentKind(), new ManifoldContentKind(),
                 new OGSim.Capabilities.TechnologyContentKind(),
+                new OGSim.World.TerrainClassContentKind(),
             ],
             new PluginRegistry());
 
@@ -169,6 +178,11 @@ internal static class Fixture
 
         return graph;
     }
+
+    /// <summary>The shipped terrain classes, for the tests that build the
+    /// module list themselves.</summary>
+    public static IReadOnlyList<OGSim.World.TerrainClassDefinition> TerrainClasses() =>
+        Loaded().Of<OGSim.World.TerrainClassDefinition>().All;
 
     private sealed class DirectorySource(IReadOnlyList<ContentFile> files) : IContentSource
     {
@@ -228,7 +242,7 @@ public sealed class ShippedSetTests
 
         IReadOnlyList<IModule> modules = EngineBuilder.ShippedModules(
             audit, new SimulationClock(new GameDate(1965, 1)), new RandomSource(1UL),
-            Defaults.Simulation, Fixture.Ladders(), Fixture.Registry());
+            Defaults.Simulation, Fixture.Ladders(), Fixture.Registry(), Fixture.TerrainClasses());
 
         var provided = new HashSet<Type>();
         foreach (IModule module in modules)
@@ -255,7 +269,7 @@ public sealed class ShippedSetTests
 
         var reversed = new List<IModule>(EngineBuilder.ShippedModules(
             audit, new SimulationClock(new GameDate(1965, 1)), new RandomSource(1UL),
-            Defaults.Simulation, Fixture.Ladders(), Fixture.Registry()));
+            Defaults.Simulation, Fixture.Ladders(), Fixture.Registry(), Fixture.TerrainClasses()));
         reversed.Reverse();
 
         Built forward = Assert.IsType<Built>(EngineBuilder.Build(Fixture.Settings()));
@@ -779,7 +793,7 @@ public sealed class AccessWindowTests
 
         var modules = new List<IModule>(EngineBuilder.ShippedModules(
             audit, clock, new RandomSource(20260806UL), Defaults.Simulation,
-            Fixture.Ladders(), Fixture.Registry()));
+            Fixture.Ladders(), Fixture.Registry(), Fixture.TerrainClasses()));
 
         for (int i = 0; i < modules.Count; i++)
             if (modules[i] is EnvironmentModule)

@@ -4,11 +4,57 @@
 // game is decorative: the player already knows where the oil is and every survey
 // they buy is a formality. It is the end-to-end proof of R14's wall.
 
+using System.Runtime.CompilerServices;
 using OGSim.Contracts;
 using OGSim.Kernel;
 using OGSim.World;
 
 namespace OGSim.World.Tests;
+
+/// <summary>The shipped terrain classes, through the real loader from the real
+/// directory — the same route the engine takes (mirrors `ShippedContentTests`).</summary>
+internal static class TerrainContent
+{
+    private sealed class NoPlugins : IModuleRegistry
+    {
+        public bool CanBind(ContentId plugin, Type contract) => true;
+        public T Bind<T>(ContentId plugin) where T : class =>
+            throw new InvariantFault("test", null, "no plugins in terrain-class content");
+    }
+
+    private static string ContentRoot([CallerFilePath] string thisFile = "")
+    {
+        DirectoryInfo directory = new FileInfo(thisFile).Directory!;   // tests/OGSim.World.Tests
+        return Path.Combine(directory.Parent!.Parent!.FullName, "content", "terrain-classes");
+    }
+
+    public static IReadOnlyList<TerrainClassDefinition> Shipped()
+    {
+        string root = ContentRoot();
+
+        var files = new List<ContentFile>();
+        foreach (string path in Directory.EnumerateFiles(root, "*.json")
+                                         .OrderBy(p => p, StringComparer.Ordinal))
+            files.Add(new ContentFile(Path.GetFileName(path), File.ReadAllText(path)));
+
+        var loader = new ContentLoader([new TerrainClassContentKind()], new NoPlugins());
+        ContentLoadResult result = loader.LoadAll([new DirectorySource(files)]);
+
+        if (result is ContentFailures failed)
+            throw new InvalidOperationException(
+                "the shipped terrain-class content does not load: " + string.Join(
+                    "; ", failed.Failures.Select(f => $"{f.File} {f.JsonPath} {f.Message}")));
+
+        return ((ContentLoaded)result).Catalogues.Of<TerrainClassDefinition>().All;
+    }
+
+    private sealed class DirectorySource(IReadOnlyList<ContentFile> files) : IContentSource
+    {
+        public string Name => "base";
+        public int DeclaredOrder => 0;
+        public IReadOnlyList<ContentFile> Files => files;
+    }
+}
 
 /// <summary>Records everything the generator emits, so a test can inspect the
 /// whole handoff rather than a projection of it.</summary>
@@ -44,7 +90,7 @@ public class WorldGenerationTests
     {
         var sink = new RecordingSink();
 
-        new BasinWorldGenerator().Generate(
+        new BasinWorldGenerator(TerrainContent.Shipped()).Generate(
             parameters ?? Parameters(), sink,
             new RandomSource(seed).Stream(StreamId.WorldGen));
 
@@ -373,14 +419,88 @@ public class WorldGenerationTests
         Heightfield field = surface.Terrain.Elevation;
         Assert.Equal(64 * 64, field.ElevationMetres.Length);
 
-        // Sea is class 0, land class 1 — and the split is the sign of the
+        // Sea is NOT a class (catalog C16) — a sea cell carries -1, never an
+        // index into Classes, and the sea/land split is still the sign of the
         // elevation, so harbour depth falls out of the same field rather than
-        // being authored beside it.
+        // being authored beside it (finding 242's amendment).
         for (int i = 0; i < field.ElevationMetres.Length; i++)
         {
-            int expected = field.ElevationMetres[i] < 0.0 ? 0 : 1;
-            Assert.Equal(expected, surface.Terrain.ClassByCell[i]);
+            bool sea = field.ElevationMetres[i] < 0.0;
+            Assert.Equal(sea, surface.Terrain.ClassByCell[i] == -1);
         }
+    }
+
+    /// <summary>
+    /// C16's amendment: the shipped generator classifies real terrain, not a
+    /// binary sea/land stub (finding 242). Every LAND cell resolves to one of
+    /// the four classes reachable without a per-cell climate signal, and both
+    /// classes that need one (desert, swamp) never appear.
+    /// </summary>
+    [Fact]
+    public void R20dV12_land_classifies_into_one_of_the_four_reachable_terrain_classes()
+    {
+        RecordingSink world = Generate(88UL);
+        Assert.NotNull(world.Surface);
+        GeneratedSurface surface = world.Surface;
+
+        var reachable = new HashSet<string> { "plains", "hills", "mountain", "rock-plateau" };
+        var seen = new HashSet<string>();
+
+        for (int i = 0; i < surface.Terrain.ClassByCell.Length; i++)
+        {
+            int index = surface.Terrain.ClassByCell[i];
+            bool sea = surface.Terrain.Elevation.ElevationMetres[i] < 0.0;
+
+            if (sea) { Assert.Equal(-1, index); continue; }
+
+            Assert.InRange(index, 0, surface.Terrain.Classes.Count - 1);
+            string id = surface.Terrain.Classes[index].Value;
+            Assert.Contains(id, reachable);
+            seen.Add(id);
+        }
+
+        // A 64x64 world at LandFraction 0.5 has enough land to hit variety —
+        // asserting more than one class actually appeared is what would have
+        // caught the old sea/land stub, which this test replaces.
+        Assert.True(seen.Count > 1,
+            $"only {string.Join(", ", seen)} appeared; real relief should produce more than one");
+
+        // AND ALL SIX SHIPPED CLASSES ARE PRESENT IN THE CATALOGUE, whether or
+        // not this world's cells reached them — desert and swamp ship as
+        // validated content and are simply unreachable (S010-3).
+        Assert.Equal(6, surface.Terrain.Classes.Count);
+    }
+
+    /// <summary>The shipped terrain-class content loads and is internally
+    /// consistent — the fixture test on `content/terrain-classes/`.</summary>
+    [Fact]
+    public void The_shipped_terrain_classes_load_and_partition_the_reachable_grid()
+    {
+        IReadOnlyList<TerrainClassDefinition> shipped = TerrainContent.Shipped();
+
+        Assert.Equal(6, shipped.Count);
+
+        foreach (string id in new[] { "plains", "hills", "mountain", "desert", "rock-plateau", "swamp" })
+            Assert.Contains(shipped, c => c.Id == new ContentId(id));
+
+        // Every (height, slope) cell is covered by EXACTLY one reachable class
+        // — the invariant `MatchingClassIndex` relies on rather than guesses.
+        foreach (TerrainHeightBand height in Enum.GetValues<TerrainHeightBand>())
+            foreach (TerrainSlopeBand slope in Enum.GetValues<TerrainSlopeBand>())
+            {
+                int matches = 0;
+                foreach (TerrainClassDefinition c in shipped)
+                {
+                    if (!c.Formation.ClimateBands.Contains(TerrainClimateBand.Any)) continue;
+                    if (!c.Formation.HeightBand.Contains(height)) continue;
+                    if (!c.Formation.SlopeBand.Contains(slope)) continue;
+                    matches++;
+                }
+
+                Assert.True(matches == 1,
+                    $"({height}, {slope}) is matched by {matches} reachable classes; " +
+                    "the partition must cover every cell exactly once");
+            }
     }
 
     // ------------------------------------------------- where everything is (R20d.8)

@@ -25,7 +25,8 @@ namespace OGSim.World;
 /// replaceable, and a scenario that wants a hand-built world supplies a
 /// different implementation of the same interface.</para>
 /// </summary>
-public sealed class BasinWorldGenerator : IWorldGenerator
+public sealed class BasinWorldGenerator(
+    IReadOnlyList<TerrainClassDefinition> terrainClasses) : IWorldGenerator
 {
     /// <summary>How coarse a regional survey is. Deliberately BAD: regional data
     /// is a gravity and magnetics pass over a whole basin, and a player who
@@ -65,7 +66,7 @@ public sealed class BasinWorldGenerator : IWorldGenerator
         // onshore whatever it sat under. Reordering costs nothing in
         // determinism — each step draws from its own substream (§1), so where a
         // step runs cannot shift what another step draws.
-        GeneratedSurface surface = GenerateSurface(parameters, streams);
+        GeneratedSurface surface = GenerateSurface(parameters, streams, terrainClasses);
 
         IReadOnlyList<GeneratedAccumulation> accumulations =
             GenerateGeology(parameters, streams, surface.Terrain);
@@ -406,7 +407,8 @@ public sealed class BasinWorldGenerator : IWorldGenerator
     // ---------------------------------------------------------- surface
 
     private static GeneratedSurface GenerateSurface(
-        WorldParameters parameters, StepStreams streams)
+        WorldParameters parameters, StepStreams streams,
+        IReadOnlyList<TerrainClassDefinition> terrainClasses)
     {
         IRandomStream surface = streams.For(WorldStep.Surface);
 
@@ -422,11 +424,10 @@ public sealed class BasinWorldGenerator : IWorldGenerator
 
         // Sea level is elevation zero, so bathymetry is the same field going
         // negative — harbour depth falls out rather than being authored.
-        var classes = new int[cells];
-        for (int i = 0; i < cells; i++) classes[i] = elevation[i] < 0.0 ? 0 : 1;
+        (int[] classByCell, IReadOnlyList<ContentId> classes) = ClassifyTerrain(
+            elevation, parameters.WidthCells, parameters.HeightCells, terrainClasses);
 
-        var terrain = new GeneratedTerrain(
-            heightfield, [.. classes], [new ContentId("sea"), new ContentId("land")], [], []);
+        var terrain = new GeneratedTerrain(heightfield, [.. classByCell], classes, [], []);
 
         IReadOnlyList<Harbour> harbours = PlaceHarbours(terrain);
 
@@ -437,6 +438,153 @@ public sealed class BasinWorldGenerator : IWorldGenerator
             harbours,
             [],                                  // third-party fabric, step 9.5
             []);                                 // sensitivity zones, step 9.6
+    }
+
+    /// <summary>
+    /// Catalog C16's amendment: height and slope only (no per-cell climate
+    /// exists to classify by — finding 242), read straight off the loaded
+    /// content rather than a second, hand-duplicated table (law L5).
+    ///
+    /// <para><b>Bands are PERCENTILE, not absolute metres.</b> The heightfield's
+    /// amplitude is a function of <c>WorldParameters.LandFraction</c> — a
+    /// mostly-land world compresses toward zero relief — so a fixed metre
+    /// threshold would make mountains vanish from some worlds and cover others
+    /// entirely. Terciles of THIS world's own land cells guarantee every
+    /// generated basin has some flat ground and some steep ground, which is the
+    /// property the six-class table is describing.</para>
+    ///
+    /// <para>No draw: slope is a pure function of the already-generated
+    /// heightfield, so this adds nothing to any RNG stream and every existing
+    /// seeded test's harbours and settlements are unaffected.</para>
+    /// </summary>
+    private static (int[] ClassByCell, IReadOnlyList<ContentId> Classes) ClassifyTerrain(
+        double[] elevation, int width, int height,
+        IReadOnlyList<TerrainClassDefinition> terrainClasses)
+    {
+        int cells = elevation.Length;
+        var slope = new double[cells];
+
+        for (int y = 0; y < height; y++)
+        {
+            for (int x = 0; x < width; x++)
+            {
+                int cell = (y * width) + x;
+                double here = elevation[cell];
+                double steepest = 0.0;
+
+                if (x > 0) steepest = Math.Max(steepest, Math.Abs(here - elevation[cell - 1]));
+                if (x < width - 1)
+                    steepest = Math.Max(steepest, Math.Abs(here - elevation[cell + 1]));
+                if (y > 0) steepest = Math.Max(steepest, Math.Abs(here - elevation[cell - width]));
+                if (y < height - 1)
+                    steepest = Math.Max(steepest, Math.Abs(here - elevation[cell + width]));
+
+                slope[cell] = steepest;
+            }
+        }
+
+        // Only LAND feeds the cuts — however much sea a run happens to draw
+        // must not dilute the terrain mix of the land that is actually there.
+        var landHeight = new List<double>();
+        var landSlope = new List<double>();
+        for (int i = 0; i < cells; i++)
+        {
+            if (elevation[i] < 0.0) continue;
+            landHeight.Add(elevation[i]);
+            landSlope.Add(slope[i]);
+        }
+
+        (double heightLow, double heightHigh) = Terciles(landHeight);
+        (double slopeLow, double slopeHigh) = Terciles(landSlope);
+
+        var classByCell = new int[cells];
+
+        for (int i = 0; i < cells; i++)
+        {
+            if (elevation[i] < 0.0) { classByCell[i] = -1; continue; }   // C16: sea is not a class
+
+            TerrainHeightBand heightBand = elevation[i] < heightLow ? TerrainHeightBand.Low
+                : elevation[i] < heightHigh ? TerrainHeightBand.Mid : TerrainHeightBand.High;
+
+            TerrainSlopeBand slopeBand = slope[i] < slopeLow ? TerrainSlopeBand.Flat
+                : slope[i] < slopeHigh ? TerrainSlopeBand.Moderate : TerrainSlopeBand.Steep;
+
+            classByCell[i] = MatchingClassIndex(terrainClasses, heightBand, slopeBand);
+        }
+
+        var classes = new List<ContentId>(terrainClasses.Count);
+        for (int i = 0; i < terrainClasses.Count; i++) classes.Add(terrainClasses[i].Id);
+
+        return (classByCell, classes);
+    }
+
+    /// <summary>
+    /// The value at the 1/3 and 2/3 rank of a copy of <paramref name="values"/>,
+    /// sorted. (0, 0) when there are none — never consulted, since the caller
+    /// only reaches a land cell's band lookup when land cells exist.
+    /// </summary>
+    private static (double Low, double High) Terciles(List<double> values)
+    {
+        if (values.Count == 0) return (0.0, 0.0);
+
+        var sorted = new double[values.Count];
+        values.CopyTo(sorted);
+        Array.Sort(sorted);
+
+        int low = sorted.Length / 3;
+        int high = (sorted.Length * 2) / 3;
+
+        return (sorted[low], sorted[Math.Min(high, sorted.Length - 1)]);
+    }
+
+    /// <summary>
+    /// The one class whose declared bands cover (<paramref name="heightBand"/>,
+    /// <paramref name="slopeBand"/>) via its wildcard <c>Any</c> climate entry —
+    /// there is no per-cell climate to prefer a specific one with (finding 242),
+    /// so only a class reachable without one can ever be picked.
+    ///
+    /// <para>Refuses rather than guesses if the shipped content does not
+    /// partition the grid exactly: catalog C16's amendment pins the four
+    /// reachable classes' bands as a partition with no gap and no overlap
+    /// precisely so this can be an invariant rather than a tie-break rule.</para>
+    /// </summary>
+    private static int MatchingClassIndex(
+        IReadOnlyList<TerrainClassDefinition> terrainClasses,
+        TerrainHeightBand heightBand, TerrainSlopeBand slopeBand)
+    {
+        int found = -1;
+
+        for (int i = 0; i < terrainClasses.Count; i++)
+        {
+            TerrainFormation formation = terrainClasses[i].Formation;
+
+            if (!Contains(formation.ClimateBands, TerrainClimateBand.Any)) continue;
+            if (!Contains(formation.HeightBand, heightBand)) continue;
+            if (!Contains(formation.SlopeBand, slopeBand)) continue;
+
+            if (found >= 0)
+                throw new ModelFault("catalog C16", null,
+                    $"both '{terrainClasses[found].Id.Value}' and '{terrainClasses[i].Id.Value}' " +
+                    $"match ({heightBand}, {slopeBand}); the four reachable terrain classes must " +
+                    "partition the (height, slope) grid with no overlap");
+
+            found = i;
+        }
+
+        if (found < 0)
+            throw new ModelFault("catalog C16", null,
+                $"no terrain class reachable without climate covers ({heightBand}, {slopeBand}); " +
+                "the four reachable classes must partition the (height, slope) grid with no gap");
+
+        return found;
+    }
+
+    private static bool Contains<T>(IReadOnlyList<T> values, T target) where T : struct, Enum
+    {
+        for (int i = 0; i < values.Count; i++)
+            if (values[i].Equals(target)) return true;
+
+        return false;
     }
 
     /// <summary>

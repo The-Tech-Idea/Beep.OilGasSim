@@ -1674,13 +1674,15 @@ public static class EngineBuilder
     /// before the engine exists" — and this is that sentence's other half.</para>
     /// </summary>
     private static (FacilityLadders Ladders,
-                    IReadOnlyList<OGSim.Capabilities.TechnologyNode> Registry)? Ladders(
+                    IReadOnlyList<OGSim.Capabilities.TechnologyNode> Registry,
+                    IReadOnlyList<OGSim.World.TerrainClassDefinition> TerrainClasses)? Ladders(
         EngineSettings settings)
     {
         ContentLoadResult result = FacilityContent(settings);
 
         return result is ContentLoaded loaded
-            ? (FacilityLadders.From(loaded.Catalogues), Registry(loaded.Catalogues))
+            ? (FacilityLadders.From(loaded.Catalogues), Registry(loaded.Catalogues),
+               loaded.Catalogues.Of<OGSim.World.TerrainClassDefinition>().All)
             : null;
     }
 
@@ -1742,6 +1744,7 @@ public static class EngineBuilder
                 new SeparatorContentKind(), new TankContentKind(), new TreaterContentKind(),
                 new GasPlantContentKind(), new ExportLineContentKind(), new ManifoldContentKind(),
                 new OGSim.Capabilities.TechnologyContentKind(),
+                new OGSim.World.TerrainClassContentKind(),
             ],
             new PluginRegistry())
             .LoadAll(settings.Content);
@@ -1749,7 +1752,8 @@ public static class EngineBuilder
     internal static IReadOnlyList<IModule> ShippedModules(
         AuditTrail audit, SimulationClock clock, IRandomSource random,
         RealityProfile profile, FacilityLadders ladders,
-        IReadOnlyList<OGSim.Capabilities.TechnologyNode> registry) =>
+        IReadOnlyList<OGSim.Capabilities.TechnologyNode> registry,
+        IReadOnlyList<OGSim.World.TerrainClassDefinition> terrainClasses) =>
     [
         new SubsurfaceModule(),
         new WellsModule(),
@@ -1758,7 +1762,7 @@ public static class EngineBuilder
         new OperationsModule(),
         new CompanyModule(),
         new InformationModule(),
-        new WorldModule(),
+        new WorldModule(terrainClasses),
         new CapabilitiesModule(registry, Defaults.Eras, clock),
         new IntegrityModule(),
         new EnvironmentModule(Defaults.Climate),
@@ -1833,7 +1837,7 @@ public static class EngineBuilder
     {
         ArgumentNullException.ThrowIfNull(settings);
 
-        if (Ladders(settings) is not var (ladders, registry))
+        if (Ladders(settings) is not var (ladders, registry, terrainClasses))
             return new BuildRefusedByContent(Failures(settings));
 
         var clock = new SimulationClock(settings.Epoch);
@@ -1842,7 +1846,7 @@ public static class EngineBuilder
         return Build(
             settings,
             ShippedModules(audit, clock, new RandomSource(settings.WorldSeed),
-                           Defaults.ProfileNamed(settings.RealityProfile), ladders, registry),
+                           Defaults.ProfileNamed(settings.RealityProfile), ladders, registry, terrainClasses),
             clock, audit);
     }
 
@@ -1864,7 +1868,7 @@ public static class EngineBuilder
     {
         ArgumentNullException.ThrowIfNull(settings);
 
-        if (Ladders(settings) is not var (ladders, registry))
+        if (Ladders(settings) is not var (ladders, registry, terrainClasses))
             return new BuildRefusedByContent(Failures(settings));
 
         var clock = new SimulationClock(settings.Epoch);
@@ -1875,7 +1879,7 @@ public static class EngineBuilder
         return Build(
             settings,
             ShippedModules(audit, clock, new RandomSource(settings.WorldSeed),
-                           Defaults.ProfileNamed(settings.RealityProfile), ladders, registry),
+                           Defaults.ProfileNamed(settings.RealityProfile), ladders, registry, terrainClasses),
             clock, audit);
     }
 
