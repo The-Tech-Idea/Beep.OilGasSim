@@ -2199,6 +2199,44 @@ public sealed class FieldControl : IStateOwner
         found.SetChoke(choke);
     }
 
+    /// <summary>
+    /// Which wells drain a compartment, plugged ones excluded — what a
+    /// build-up test on that compartment has to shut in and reopen (SDD-007
+    /// §5's R12b.18 amendment). A plugged well's valve reads the same
+    /// <c>ChokeSetting.Closed</c> a shut-in test would set and is never coming
+    /// back open, so it is not "on" the compartment for this question even
+    /// though its perforations still are.
+    /// </summary>
+    internal IReadOnlyList<EntityId<ICompletion>> WellsOn(
+        EntityId<IReservoirCompartmentEntity> compartment)
+    {
+        var found = new List<EntityId<ICompletion>>();
+        IReadOnlyList<Completion> completions = _wells.Completions;
+
+        for (int i = 0; i < completions.Count; i++)
+        {
+            Completion completion = completions[i];
+            if (_abandoned.Contains(completion.CompletionId)) continue;
+
+            for (int p = 0; p < completion.Perforations.Count; p++)
+                if (completion.Perforations[p].Drains == compartment)
+                {
+                    found.Add(completion.CompletionId);
+                    break;
+                }
+        }
+
+        return found;
+    }
+
+    /// <summary>Whether a well's valve is shut, plugged or not (SDD-007 §5's
+    /// R12b.18 amendment) — what a build-up test's own refusal reads, since
+    /// testing an already-shut-in well would either reopen it against the
+    /// player's own choice or leave the test's "reopen when done" with
+    /// nothing honest to restore.</summary>
+    internal bool IsShutIn(EntityId<ICompletion> well) =>
+        _wells.Find(well) is Completion found && found.IsShutIn;
+
     public int CompartmentCount => _subsurface.Count;
 
     public int WellCount => _wells.Count;

@@ -198,7 +198,12 @@ internal abstract class Activity<TCommand> : IActivity
 
     public abstract void Complete(CompletedActivity done, Tick tick);
 
-    public void Register(IModuleComposition composition, ActivityOrders orders)
+    /// <summary>
+    /// Virtual for the one activity that needs its own applier rather than the
+    /// shared one — <c>WellTestActivity</c>'s shut-in (SDD-007 §5's R12b.18
+    /// amendment). Every other activity keeps the default.
+    /// </summary>
+    public virtual void Register(IModuleComposition composition, ActivityOrders orders)
     {
         ArgumentNullException.ThrowIfNull(composition);
 
