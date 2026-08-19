@@ -12,6 +12,20 @@ public readonly record struct Tick(int Value) : IComparable<Tick>
     public int CompareTo(Tick other) => Value.CompareTo(other.Value);
     public static bool operator >(Tick a, Tick b) => a.Value > b.Value;
     public static bool operator <(Tick a, Tick b) => a.Value < b.Value;
+
+    // Finding 248 — HAND-WRITTEN, not the compiler's own. A record struct
+    // declaring an instance property of ITS OWN TYPE (Next, above) makes this
+    // build's compiler mis-synthesise PrintMembers: ToString() calls
+    // PrintMembers() calls ToString() on Next, which HAS a Next, forever — a
+    // genuine stack overflow, reproduced in isolation with nothing else in the
+    // type, and confirmed absent the moment Next is removed or is not
+    // same-typed. Nothing in this engine ever called Tick.ToString() (every
+    // site formats Value directly), which is exactly why a defect this
+    // structural went unnoticed — until a test's OWN failure message tried to
+    // print a Tick and took the whole host down instead of reporting the
+    // failure. An explicit override is not a workaround for readability; it
+    // is the only defence, because the compiler's synthesis is what is wrong.
+    public override string ToString() => $"Tick {{ Value = {Value} }}";
 }
 
 /// <summary>An inclusive tick range for queries.</summary>
