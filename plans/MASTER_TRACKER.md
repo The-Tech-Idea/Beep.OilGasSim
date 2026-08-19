@@ -949,7 +949,7 @@ becomes standard practice" a pressure rather than a promise.
 | R18.0 | SDD review — no findings | ✅ |
 | R18.1 | `IDegradationModel` — severity-weighted decay | ✅ |
 | R18.2 | `IHazardModel` — condition-driven failure rate, and the stage-4 draw | ✅ |
-| R18.3 | Incident types and consequences | ⬜ — the bow-tie is R23's; R18 produces the failure and its day |
+| R18.3 | Incident types and consequences | ⬜ — **confirmed still open, not stale** (checked against the actual join, per the earlier audit's own caution not to correct this one without doing so). `BowTie.Resolve` DOES compute a consequence signal — `mitigatingHeld`, "how many hold selects the consequence tier" (design 14 §8) by its own doc comment — and `ThreatStage` (`Modules.cs`) throws it away: every `TopEvent` costs the identical flat `Defaults.TopEventPoints`, whether every mitigating barrier held or none did (finding 249). Design 14 §8's five tiers (near miss/minor/serious/major/catastrophic, each with a stated immediate and lasting cost) and its "response is an `IOperation`" (emergency response, investigation, remediation, regulatory engagement) have no code at all — one threat type, one severity, no response operations. This is a real sub-feature, not a wiring gap |
 | R18.4 | Maintenance strategies | ✅ — all three, each producing an ordinary operation |
 | R18.5 | Availability feeding stage 4 | 🟨 — the pass returns failures and the ages; wiring them into the segment's network is R7's tick loop |
 | R18.6 | SC7 (compressor cascade) | ⬜ — needs the tick loop; the two halves exist (R9's compressor capacity, this failure) |
