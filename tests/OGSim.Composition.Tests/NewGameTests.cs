@@ -1059,6 +1059,16 @@ public sealed class NewGameTests
     /// draw: patience is an edge in expectation, not a guarantee, and a client
     /// that beat the market every single time would mean the market had stopped
     /// being uncertain.</para>
+    ///
+    /// <para><b>Widened from four seeds to twenty</b> (SDD-016's R20d.8.10
+    /// amendment): `ClimateSeverity` reaching the composed weather for the
+    /// first time genuinely moved the RNG-driven landscape this comparison
+    /// samples — Basin()'s 0.5 is real now rather than silently 1.0 regardless
+    /// of what a fixture declared — and the four-seed sample flipped. Twenty
+    /// seeds recovers the claim comfortably, which is the four-seed sample
+    /// having been thin rather than the claim having stopped being true;
+    /// narrowing it back down would be picking a number to make the assertion
+    /// pass rather than measuring what is actually there.</para>
     /// </summary>
     [Fact]
     public void R20d12V1_a_client_that_waits_for_a_quiet_yard_keeps_more_of_what_it_earns()
@@ -1066,11 +1076,11 @@ public sealed class NewGameTests
         Money patient = Money.Zero;
         Money eager = Money.Zero;
 
-        // Four basins over seven years. Each month solves a network across
+        // Twenty basins over seven years. Each month solves a network across
         // every compartment a basin generated, so this and the campaign test are
         // the two expensive ones in the suite — and a suite nobody runs catches
         // nothing.
-        for (ulong seed = 1UL; seed < 5UL; seed++)
+        for (ulong seed = 1UL; seed < 21UL; seed++)
         {
             // The SAME world and the same market for both, so what is left
             // between them is when they chose to spend.
@@ -1750,5 +1760,113 @@ public sealed class NewGameTests
         new Explorer(other, 0.0, 3, 1.05, borrows: true).Play(months: 120);
 
         Assert.NotEqual(one.ReadModel, other.ReadModel);
+    }
+
+    /// <summary>
+    /// SDD-016's R20d.8.10 amendment: a NEW GAME's `ClimateSeverity` reaches the
+    /// composed `WeatherState` — before this join it was validated and saved and
+    /// read by nothing (CLAUDE.md rule 7), so any severity produced the same
+    /// weather. A severity of ZERO is the clean, deterministic check: with the
+    /// amplitude terms scaled to nothing, temperature and drilling-severity
+    /// collapse to the seasonal baseline exactly, on every day, whatever the day's
+    /// own draw was — which distinguishes "severity reached the profile" from
+    /// "the draw happened to be small".
+    /// </summary>
+    [Fact]
+    public void R20dV13_a_new_games_climate_severity_reaches_the_composed_weather()
+    {
+        WorldParameters calm = Basin() with { ClimateSeverity = 0.0 };
+        Engine engine = Assert.IsType<Built>(
+            EngineBuilder.CreateNew(Fixture.Settings(), calm)).Engine;
+
+        // At least one Advance so the AR(1) state is a real, non-zero draw —
+        // otherwise every severity would pass this trivially at x(0) = 0.
+        engine.Pipeline.AdvanceTick();
+
+        var weather = engine.Provided.Resolve<OGSim.Environment.WeatherState>();
+        OGSim.Environment.ClimateProfile baseline = Defaults.Climate;
+
+        // Fixture.Settings's epoch is January 1965 (month index 0); one tick
+        // advances the clock to February (index 1) before Advance draws it.
+        for (var day = 0; day < 5; day++)
+        {
+            Assert.Equal(baseline.Baseline[1], weather.SeverityOn(region: 0, day), 12);
+            Assert.Equal(baseline.TemperatureBaseline[1],
+                weather.TemperatureOn(region: 0, day).ToCelsius(), 9);
+        }
+    }
+
+    /// <summary>
+    /// AND A NON-ZERO SEVERITY ACTUALLY MOVES THE WEATHER — stated separately
+    /// because a join that ignored `ClimateSeverity` entirely would satisfy the
+    /// test above by coincidence (amplitude already zero) and say nothing about
+    /// whether a NON-zero severity does anything.
+    /// </summary>
+    [Fact]
+    public void R20dV13_a_higher_severity_widens_the_spread_around_the_same_baseline()
+    {
+        WorldParameters calm = Basin() with { ClimateSeverity = 0.1 };
+        WorldParameters stormy = Basin() with { ClimateSeverity = 3.0 };
+
+        Engine calmEngine = Assert.IsType<Built>(
+            EngineBuilder.CreateNew(Fixture.Settings() with { WorldSeed = 5UL }, calm)).Engine;
+        Engine stormyEngine = Assert.IsType<Built>(
+            EngineBuilder.CreateNew(Fixture.Settings() with { WorldSeed = 5UL }, stormy)).Engine;
+
+        calmEngine.Pipeline.AdvanceTick();
+        stormyEngine.Pipeline.AdvanceTick();
+
+        var calmWeather = calmEngine.Provided.Resolve<OGSim.Environment.WeatherState>();
+        var stormyWeather = stormyEngine.Provided.Resolve<OGSim.Environment.WeatherState>();
+
+        // Same seed, so the two runs drew the SAME x(d) — only the amplitude
+        // multiplying it differs, and severity is what set that multiplier.
+        Assert.NotEqual(calmWeather.SeverityOn(0, 0), stormyWeather.SeverityOn(0, 0));
+    }
+
+    /// <summary>
+    /// AND A RELOAD KEEPS THE SCALED CLIMATE — `SaveGame`'s own regeneration
+    /// calls the generator again and has to seal `WeatherState` the same way
+    /// `CreateNew` does, or a reloaded game would silently revert to the
+    /// unscaled default while the original run stayed scaled — the "right dice
+    /// from the wrong place" shape finding 192 already found once for the
+    /// reservoir, in a new place.
+    ///
+    /// <para>Compared ONE TICK AFTER the reload, not immediately: only the
+    /// CARRY is saved (SDD-016 §5b) — the thirty already-drawn daily values are
+    /// regenerated by the next <c>Advance</c> and are never persisted, so
+    /// reading <c>TemperatureOn</c> straight off a fresh load would read the
+    /// freshly-zeroed array and pass whether or not the carry — or the climate
+    /// it is scaled against — survived at all.</para>
+    /// </summary>
+    [Fact]
+    public void R20dV13_a_reloaded_game_keeps_its_scaled_climate()
+    {
+        EngineSettings settings = Fixture.Settings() with { WorldSeed = 9UL };
+        WorldParameters stormy = Basin() with { ClimateSeverity = 3.0 };
+        Engine engine = Assert.IsType<Built>(
+            EngineBuilder.CreateNew(settings, stormy)).Engine;
+
+        engine.Pipeline.AdvanceTick();
+
+        var container = new MemoryStream();
+        SaveGame.Write(engine, settings.WorldSeed, container);
+        container.Position = 0;
+
+        Engine reloaded = Assert.IsType<Built>(SaveGame.Load(container, settings)).Engine;
+
+        // BOTH continue one more tick — the original from where it was, the
+        // reload from what it restored — reading the SAME `weather` stream
+        // position either way (PV7), so a correctly-restored carry produces
+        // byte-identical AR(1) draws.
+        engine.Pipeline.AdvanceTick();
+        reloaded.Pipeline.AdvanceTick();
+
+        var original = engine.Provided.Resolve<OGSim.Environment.WeatherState>();
+        var afterLoad = reloaded.Provided.Resolve<OGSim.Environment.WeatherState>();
+
+        for (var day = 0; day < 5; day++)
+            Assert.Equal(original.TemperatureOn(0, day).ToCelsius(),
+                afterLoad.TemperatureOn(0, day).ToCelsius(), 9);
     }
 }

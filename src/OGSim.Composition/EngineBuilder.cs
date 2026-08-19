@@ -1408,6 +1408,28 @@ internal static class Defaults
                          true, true, true, true, true, true]);
 
     /// <summary>
+    /// SDD-016's R20d.8.10 amendment (finding 244):
+    /// <c>WorldParameters.ClimateSeverity</c> — "weather amplitude/extreme-rate
+    /// multiplier" — validated and saved since R15 and read by nothing
+    /// (CLAUDE.md rule 7). Scales how variable this basin's weather is, not its
+    /// average: the seasonal baselines are what a climate typically looks like,
+    /// and severity is how far a given day can depart from that, so only the
+    /// two amplitude curves move.
+    /// </summary>
+    public static Environment.ClimateProfile ScaledClimate(double climateSeverity)
+    {
+        var amplitude = new double[Climate.Amplitude.Count];
+        for (int i = 0; i < amplitude.Length; i++)
+            amplitude[i] = Climate.Amplitude[i] * climateSeverity;
+
+        return Climate with
+        {
+            Amplitude = amplitude,
+            TemperatureAmplitude = Climate.TemperatureAmplitude * climateSeverity,
+        };
+    }
+
+    /// <summary>
     /// The severity an operation can work through (SDD-016 §3). ONE limit for
     /// every template, which is a simplification the SDD names: §3 puts a
     /// `weatherClass` on each template and each weather-exposed element, and that
@@ -1762,7 +1784,7 @@ public static class EngineBuilder
         new OperationsModule(),
         new CompanyModule(),
         new InformationModule(),
-        new WorldModule(terrainClasses),
+        new WorldModule(terrainClasses, Defaults.Climate.Id),
         new CapabilitiesModule(registry, Defaults.Eras, clock),
         new IntegrityModule(),
         new EnvironmentModule(Defaults.Climate),
@@ -1828,6 +1850,14 @@ public static class EngineBuilder
         // were. Recorded here rather than anywhere else for the same reason the
         // boundary is: this is the one instant the caller is holding both.
         ready.Engine.Provided.Resolve<WorldState>().SealGeneration(world);
+
+        // AND WEATHER'S ONE REGION IS SEALED THE SAME INSTANT (SDD-016's
+        // R20d.8.10 amendment) — composed from Defaults.Climate unscaled so a
+        // hand-built engine that never reaches this line still has weather,
+        // replaced here with what this basin's ClimateSeverity actually asks
+        // for, which is the value world generation just declared a region FOR.
+        ready.Engine.Provided.Resolve<Environment.WeatherState>()
+            .SealGeneration([Defaults.ScaledClimate(world.ClimateSeverity)]);
 
         return built;
     }

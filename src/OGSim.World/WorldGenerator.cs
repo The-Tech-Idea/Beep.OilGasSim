@@ -26,7 +26,14 @@ namespace OGSim.World;
 /// different implementation of the same interface.</para>
 /// </summary>
 public sealed class BasinWorldGenerator(
-    IReadOnlyList<TerrainClassDefinition> terrainClasses) : IWorldGenerator
+    IReadOnlyList<TerrainClassDefinition> terrainClasses,
+
+    /// <summary>SDD-016's R20d.8.10 amendment: composition owns the one climate
+    /// this shipped generator can produce and hands over only its NAME, the
+    /// same door <paramref name="terrainClasses"/> already came through — the
+    /// generator declares which region this basin has, composition decides
+    /// what the id resolves to.</summary>
+    ContentId climateId) : IWorldGenerator
 {
     /// <summary>How coarse a regional survey is. Deliberately BAD: regional data
     /// is a gravity and magnetics pass over a whole basin, and a player who
@@ -74,6 +81,13 @@ public sealed class BasinWorldGenerator(
         for (int i = 0; i < accumulations.Count; i++) sink.AddAccumulation(accumulations[i]);
 
         sink.SetSurface(surface);
+
+        // ONE region, because this generator produces one basin and SDD-016 §1
+        // says a region IS one climate-profile instance's area — "typically a
+        // basin" (finding 242's climate half; S016-1 tracks the multi-basin
+        // case where more than one would ever matter).
+        sink.AddClimateRegion(new ClimateRegion(climateId, WholeMap(parameters)));
+
         sink.AddJurisdiction(GenerateJurisdiction(parameters, streams));
 
         DeliverRegionalData(accumulations, sink, streams);
@@ -814,6 +828,21 @@ public sealed class BasinWorldGenerator(
         if (problems.Count > 0)
             throw new ModelFault("SDD-010 §4", null,
                 "world parameters are out of range: " + string.Join("; ", problems));
+    }
+
+    /// <summary>The generated grid's own extent, counter-clockwise from the
+    /// origin — the real basin footprint, unlike <see cref="SquareAround"/>'s
+    /// placeholder square.</summary>
+    private static Polygon WholeMap(WorldParameters parameters)
+    {
+        double width = parameters.WidthCells * CellSizeMetres;
+        double height = parameters.HeightCells * CellSizeMetres;
+
+        return new Polygon(
+        [
+            new Coordinate(0.0, 0.0), new Coordinate(width, 0.0),
+            new Coordinate(width, height), new Coordinate(0.0, height),
+        ]);
     }
 
     private static Polygon SquareAround(int index)

@@ -63,6 +63,7 @@ internal sealed class RecordingSink : IWorldSink
     public List<GeneratedAccumulation> Accumulations { get; } = [];
     public List<Observation> Observations { get; } = [];
     public List<Jurisdiction> Jurisdictions { get; } = [];
+    public List<ClimateRegion> ClimateRegions { get; } = [];
     public GeneratedSurface? Surface { get; private set; }
 
     public void AddAccumulation(GeneratedAccumulation accumulation) =>
@@ -70,7 +71,7 @@ internal sealed class RecordingSink : IWorldSink
 
     public void SetSurface(GeneratedSurface surface) => Surface = surface;
 
-    public void AddClimateRegion(ClimateRegion region) { }
+    public void AddClimateRegion(ClimateRegion region) => ClimateRegions.Add(region);
 
     public void AddJurisdiction(Jurisdiction jurisdiction) => Jurisdictions.Add(jurisdiction);
 
@@ -90,7 +91,7 @@ public class WorldGenerationTests
     {
         var sink = new RecordingSink();
 
-        new BasinWorldGenerator(TerrainContent.Shipped()).Generate(
+        new BasinWorldGenerator(TerrainContent.Shipped(), new ContentId("temperate-offshore")).Generate(
             parameters ?? Parameters(), sink,
             new RandomSource(seed).Stream(StreamId.WorldGen));
 
@@ -469,6 +470,31 @@ public class WorldGenerationTests
         // not this world's cells reached them — desert and swamp ship as
         // validated content and are simply unreachable (S010-3).
         Assert.Equal(6, surface.Terrain.Classes.Count);
+    }
+
+    /// <summary>
+    /// SDD-016's R20d.8.10 amendment: the generator now declares the basin's
+    /// one climate region instead of leaving `IWorldSink.AddClimateRegion`
+    /// uncalled (finding 242's climate half).
+    /// </summary>
+    [Fact]
+    public void R20dV13_generation_declares_the_basins_one_climate_region()
+    {
+        var climateId = new ContentId("test-climate");
+        var parameters = Parameters(width: 32, height: 48);
+        var sink = new RecordingSink();
+
+        new BasinWorldGenerator(TerrainContent.Shipped(), climateId).Generate(
+            parameters, sink, new RandomSource(7UL).Stream(StreamId.WorldGen));
+
+        ClimateRegion region = Assert.Single(sink.ClimateRegions);
+        Assert.Equal(climateId, region.Profile);
+
+        // The whole generated grid, not a placeholder square — checked against
+        // the same CellSizeMetres the heightfield itself reports.
+        Assert.NotNull(sink.Surface);
+        double cellSize = sink.Surface.Terrain.Elevation.CellSize.Metres;
+        Assert.Equal(32 * cellSize * 48 * cellSize, region.Area.Area.SquareMetres, 3);
     }
 
     /// <summary>The shipped terrain-class content loads and is internally

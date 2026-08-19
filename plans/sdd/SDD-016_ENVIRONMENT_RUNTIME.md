@@ -171,6 +171,57 @@ today is exactly the "no weather" case.
 > *what did I do wrong*), never a silently deferred operation: a company that
 > cannot move a rig until June must be told in January.
 
+> **R20d.8.10 amendment (finding 242's climate half, and finding 244).**
+> `IWorldSink.AddClimateRegion` was never called by the shipped generator, so
+> `WorldState`'s climate list stayed permanently empty and `EnvironmentModule`
+> composed a `WeatherState` from a separately hand-authored `Defaults.Climate`
+> — two owners of one fact (law L5), with the composed one disconnected from
+> whatever a generated basin actually decided (finding 242). Alongside it, a
+> DISTINCT defect at the same address: `WorldParameters.ClimateSeverity` —
+> declared as "weather amplitude/extreme-rate multiplier" — was validated and
+> SAVED and never read by anything (CLAUDE.md rule 7, finding 244). Two
+> findings because they are two call sites that happen to need the same fix.
+>
+> **This composition generates exactly one basin, and §1 already says a region
+> is "typically a basin"** — so the fix is not multiple regions inside one
+> basin (S016-1 below is explicit that spatial variation is a MULTI-basin
+> question, "one storm, two basins", deferred). It is that the basin's ONE
+> region should be a real, generated fact instead of a hardcoded default that
+> happens to sit beside it.
+>
+> **The sequencing problem this raises, and how `WorldState` already solved
+> it.** `EnvironmentModule.Compose` runs at composition time, before a NEW
+> game's generation has run — so `WeatherState` cannot be built FROM the
+> generated region; it does not exist yet. `WorldState` faces exactly this and
+> is composed EMPTY, filled once by `Surface`/`SealGeneration` after
+> generation and before the first tick (SDD-010 §4c). `WeatherState` gains the
+> same shape: composed from `Defaults.Climate` (so a hand-built scenario that
+> never calls the generator — most of this suite's composition tests — still
+> has weather, which is the correct answer for those, not a fallback standing
+> in for a value that should have been supplied), then `SealGeneration`
+> replaces it with what generation decided, at the identical instant
+> `EngineBuilder.CreateNew` already seals `WorldState`.
+>
+> **What generation decides**: `BasinWorldGenerator` is handed the one climate
+> id this composition can produce (`Defaults.Climate.Id`, exactly as it is
+> already handed the loaded terrain-class registry — composition owns the
+> default, the generator only names it) and declares ONE `ClimateRegion`
+> covering the generated map, so `WorldView.ClimateRegions` reports something
+> real rather than the permanently-empty list finding 242 found. `CreateNew`
+> then seals `WeatherState` with `Defaults.Climate` scaled by
+> `ClimateSeverity` — the amplitude and temperature-amplitude curves widen or
+> narrow with it, closing the ignored-parameter half in the same change,
+> because "how variable this basin's weather is" is the one thing
+> `ClimateSeverity` was ever declared to answer.
+>
+> **Loadable `ClimateProfile` content (a `ClimateContentKind`) is explicitly
+> NOT built here.** `Defaults.Climate` is still the only climate this
+> composition can produce — scaling it is not the same claim as authoring a
+> second one, and building a content kind with one shippable file would be
+> content for its own sake. That is separate, future work, matching how a
+> `TerrainContentKind`-shaped loader was built only once C16 had six real
+> classes to load (R20d.8.9).
+
 ## 6. Test mapping
 
 EN3/EN4 (windows as calendar facts) · EN5/EN6 (the shared x(d) into derating

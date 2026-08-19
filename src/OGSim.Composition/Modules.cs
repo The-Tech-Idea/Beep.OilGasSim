@@ -1244,7 +1244,8 @@ internal sealed class InformationModule() : EngineModule(Declare(
 // ---------------------------------------------------------------- world
 
 internal sealed class WorldModule(
-    IReadOnlyList<OGSim.World.TerrainClassDefinition> terrainClasses) : EngineModule(Declare(
+    IReadOnlyList<OGSim.World.TerrainClassDefinition> terrainClasses,
+    ContentId climateId) : EngineModule(Declare(
     "world",
     provides: [typeof(IWorldGenerator), typeof(WorldState)],
     requires: [],
@@ -1255,7 +1256,8 @@ internal sealed class WorldModule(
     {
         ArgumentNullException.ThrowIfNull(composition);
 
-        composition.Provide<IWorldGenerator>(new OGSim.World.BasinWorldGenerator(terrainClasses));
+        composition.Provide<IWorldGenerator>(
+            new OGSim.World.BasinWorldGenerator(terrainClasses, climateId));
 
         // EMPTY, and filled once by generation before the first tick. Composed
         // rather than created by `CreateNew` because the FIELD reads it — a well
