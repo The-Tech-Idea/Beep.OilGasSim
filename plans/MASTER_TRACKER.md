@@ -144,11 +144,11 @@ the standing moves — but it lives in `OGSim.Integrity` and composition's
 | **R25** Advisor and Reality Profiles | 0 | 1 | 8 |
 | **R13** Economics | 5 | 4 | 3 |
 | **R22** Environment and Setting | 3 | 0 | 5 |
-| **R8** Facilities and separation | 7 | 0 | 4 |
+| **R8** Facilities and separation | 8 | 0 | 3 |
 | **R11** Transport and export | 4 | 4 | 2 |
 | **R12** Operations and scheduling | 3 | 4 | 2 |
-| **R24** Objectives, Challenges and Missions | 5 | 2 | 3 |
-| **R6** Wells | 8 | 2 | 2 |
+| **R24** Objectives, Challenges and Missions | 5 | 3 | 2 |
+| **R6** Wells | 8 | 4 | 0 |
 | **R14** Information and uncertainty | 7 | 2 | 2 |
 | **R19** Persistence and determinism | 3 | 2 | 2 |
 | **R5** Subsurface | 7 | 1 | 2 |
@@ -463,7 +463,7 @@ and "someone forgot to pass the pump" are not a distinction a default can make.
 | R8.7 | The spec gate | ✅ — every breach named with its margin; all-or-nothing rejection |
 | R8.8 | `IPowerSource` and the power balance | ✅ — declared duty at stage 4, shed by priority then by size |
 | R8.9 | Manifold, commingling, provenance-preserving mixing | ✅ — proven at R4 (FV10) and reused; `Allocation.Blend` is the kernel's |
-| R8.10 | Flowlines | ⬜ — `IPipeline` declared; the hydraulics are SDD-006 §6 and share SDD-003 §6.2's Colebrook, which R6 already ships |
+| R8.10 | Flowlines | ✅ — stale ⬜ (found going through the plan). `Pipeline : IPipeline` (`OGSim.Facilities/Pipeline.cs`) ships both `LiquidHydraulicModel` and `GasHydraulicModel` on real Colebrook friction, composed in `Modules.cs` and used as the well-to-header gathering-line tieback (`ProductionLoop`'s `GatheringLine`) since R20d.8.8 |
 
 **R8's verification.** R8-V1 ✅ · R8-V2 ✅ · R8-V3 ✅ · R8-V5 ✅ · R8-V6 ✅ ·
 R8-V7 ✅ (including R7-V7's ESP-fleet coupling, now real) · R8-V10 ✅ ·
@@ -1100,9 +1100,9 @@ the worst possible moment.
 | R24.2 | Predicate vocabulary reading **only the read model** | ✅ |
 | R24.3 | Combinators — all-of, any-of, count-of-N, sustained-for, sequence, never | ✅ |
 | R24.4 | Evaluation over sealed state — **observe, never influence** | ✅ |
-| R24.5 | Deadlines, expiry, progress events | 🟨 — `Deadline` is carried and `Never` is the failure condition; emitting `objective.*` needs the tick loop |
+| R24.5 | Deadlines, expiry, progress events | 🟨 — understated (found going through the plan). `ScenarioRunner.Overall`/`Settle` (`Scenario.cs`) fully evaluates deadline expiry and `Never`-failure precedence every tick, composed against a real scenario (`Defaults.FirstField`), not just carried as data. **What is genuinely still missing is narrower than this row said**: no `objective.*` audit-category entries exist at all — state transitions happen and latch correctly, they are just not recorded to the trail |
 | R24.6 | The eight scoring dimensions | ⬜ — each reads a read-model projection (R21) |
-| R24.7 | `IScenario` / `ICampaign` | ⬜ |
+| R24.7 | `IScenario` / `ICampaign` | 🟨 — stale ⬜ (found going through the plan). Those exact names don't exist, but the capability does: `ScenarioRunner` (`Scenario.cs`, landed under "R21e", the same "real work under a different task number" shape R13 had) evaluates objectives and failures against read-model snapshots every tick and refuses an unrunnable scenario at composition. **The real remaining gap**: a scenario is still hand-authored in `Defaults.FirstField`, not loadable from content |
 | R24.8 | Modifier application | ⬜ — reuses R17's effect path |
 | R24.9 | GM1–GM13 | 🟨 — GM1 and GM4 built |
 
