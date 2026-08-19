@@ -419,6 +419,51 @@ ambient temperature — the air-cooled driver and the aftercoolers both lose dut
 `ConstraintKind.TotalCapacity` at the derated value and its `PowerDraw` is
 `W_shaft`, which stage 4's balance consumes exactly as it consumes an ESP's.
 
+## 3d. Liquid pump station — R11.2 amendment (finding 246)
+
+> **R11.2 named no model at all.** [01](../design/01_CONCEPT_MATRIX.md) D2
+> declares `IPumpStation : IFacilityUnit` at status `solved` and
+> [C11](../catalog/C11_PIPELINES_AND_STATIONS.md) prices a power-tier ladder
+> against "liquid head restored mid-line", and neither states a formula. Under
+> F-1 a liquid pump was unimplementable until one was pinned. `IFacilityUnit`
+> itself is the concept matrix's aspirational name for the slot; the settled
+> contract every boosting element implements is `IFlowElement`, exactly as
+> [C16](../catalog/C16_TERRAIN_CLASSES.md)'s flare and §3c's compressor do, so
+> the corrected name is a `LiquidPumpStation : IFlowElement` rather than a new
+> interface (the same correction finding 117 already made for compression).
+
+```text
+LIQUID PUMPING — SI throughout, and simpler than §3c's gas form because a
+liquid is treated incompressible (SDD-003 §3.1 already does this for Bw
+everywhere in the balance; a pump modelled compressibly would disagree with
+the reservoir side about the same barrels).
+
+No staging and no interstage cooling: a liquid pump does not heat the fluid
+the way a polytropic gas stage does, and 05 §3's incompressible treatment
+means one stage always suffices.
+
+  w = (P2 − P1) / ρ̄                                        [J/kg]
+  W_shaft = ṁ · w / η_pump                                  [W]
+
+ρ̄ is the average density of the fluid AT THE PUMP, supplied at construction
+exactly as §3c's compressor takes ρ̄ as an average compressibility Z̄ — both
+are a property of the stream the unit was built for, not a tier constant.
+
+No heat derating (contrast §3c): §2.6/13 §3.3's derate curve exists because a
+gas compressor's air-cooled driver and aftercoolers lose duty in the heat.
+Nothing here does the same job for a liquid pump's motor, and inventing a
+curve nothing calibrates would be a fabricated number rather than a modelled
+one. Capacity is the tier's rated flow, undegraded.
+```
+
+**The pump station is an ordinary `IFlowElement`**, discharge and suction
+pressures fixed at construction like the compressor's — a boosting element
+raises the stream from where it sits to a set discharge, and does not solve
+for that set point itself; sizing it correctly is the player's decision, made
+when the station is bought. Its constraint is `ConstraintKind.TotalCapacity`
+at the tier's rated flow and its `PowerDraw` is `W_shaft`, consumed by stage
+4's balance exactly as the compressor's is.
+
 ## 4. Gas treating (dehydration · sweetening · NGL)
 
 ```text
@@ -827,7 +872,8 @@ into as well.
 Per-unit-kind closed datasheet blocks (SDD-004 §6): separator {gasRating,
 liquidRating, **operatingPressure**, effGL, effLG, effLW}; **manifold {slots}**;
 treater {eff, spec_capable, heatDuty};
-compressor {maxPower, η_poly, maxStageRatio, driver, derateCurve}; tank
+compressor {maxPower, η_poly, maxStageRatio, driver, derateCurve}; **pump
+{ratedFlow, η_pump}** (§3d — no derate curve: nothing calibrates one); tank
 {capacity, lossRate}; pipe-spec {D, rating, roughness, U-value};
 meter {σ}; berth {loadingRate}; power source {maxPower, η_driver, fuelType|grid,
 meritRank}; flare {capacity, combustionEfficiency}; VRU {capacity,
