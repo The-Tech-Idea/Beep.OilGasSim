@@ -791,7 +791,7 @@ verify only that the arithmetic is repeatable.
 | R14.3 | `IObservationModel` and the sampler | ✅ |
 | R14.4 | Seismic surveys; detect-class tiers | 🟨 — the gate is `SigmaFor` returning **null**, which the sampler honours; the survey catalogue is content |
 | R14.5 | Logs, cores, tests, build-ups | 🟨 — each is a source id with its own σ per kind; the catalogue is content, and the `measurement` stream is already wired |
-| R14.6 | Production-history inference; the `p/Z` deduction | ⬜ — R5.7's line is built and R14's store can hold the deduction; joining them needs the tick loop's history |
+| R14.6 | Production-history inference; the `p/Z` deduction | ⬜ — **bigger than a join.** `GasMaterialBalance` (R5.7) is tested against inputs a fixture assembles and dispatched by nothing: `ReservoirCompartment.CommitWithdrawal` always calls `Drive.SolveEndPressure`, which is the OIL balance, and `MaterialBalance.Validate` throws if `OilInPlace <= 0` — so a compartment with none would refuse every tick rather than fall through to the gas form. `InitialConditions.GasInPlace` (G, the free-gas cap) is hardcoded to `StandardGasVolume(0.0)` at both of `SubsurfaceState`'s declaration sites; nothing upstream in world generation ever sizes one. There is no dry-gas compartment anywhere in this composition, so `p/Z` has no subject to fit a line against — this is the tracker's own "Next" narrative's still-open "gas reservoirs a company can produce," not the tick-loop wiring this row previously described |
 | R14.7 | POS — the five-element Beta-Bernoulli | ✅ |
 | R14.8 | P10/P50/P90 | ✅ |
 | R14.9 | Value-of-information | ⬜ — needs R13.7's reserves to value the change |
