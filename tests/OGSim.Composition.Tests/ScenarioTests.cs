@@ -253,4 +253,77 @@ public sealed class ScenarioTests
 
         Assert.Equal(new ContentId("first-field"), runner.Id);
     }
+
+    // ------------------------------------------------- R24-V19: the audit trail
+
+    /// <summary>
+    /// SDD-014 §3's R24.5 amendment: an <c>objective.*</c> event is recorded
+    /// the tick an individual objective settles — here, the shipped scenario's
+    /// "stay-solvent" failure the moment the company actually runs out of
+    /// money, reusing the exact fixture <c>GameplayTests</c>' own insolvency
+    /// test established (no compartment, so every well is refused and the
+    /// company simply pays its standing charge to zero around month 127).
+    /// </summary>
+    [Fact]
+    public void R24V19_a_failed_objective_is_recorded_once_when_it_actually_fails()
+    {
+        Built built = Assert.IsType<Built>(EngineBuilder.Build(Fixture.Settings()));
+        Engine engine = built.Engine;
+
+        for (var month = 0; month < 140; month++) engine.Pipeline.AdvanceTick();
+
+        Assert.True(engine.ReadModel!.Insolvent,
+            "the fixture must actually go insolvent for this test to prove anything");
+
+        AuditEntry entry = Assert.Single(ObjectiveKindEntries(engine, "objective.failed"));
+        Assert.Equal("stay-solvent", entry.Data["objective"].Value);
+
+        // Once latched the run keeps ticking — insolvency does not reverse —
+        // but the fact was reported once, not on every subsequent tick that
+        // merely re-confirms it.
+        for (var month = 0; month < 20; month++) engine.Pipeline.AdvanceTick();
+
+        Assert.Single(ObjectiveKindEntries(engine, "objective.failed"));
+    }
+
+    /// <summary>
+    /// The per-objective event is not a duplicate of the scenario's combined
+    /// verdict — this fixture is the proof it earns its keep. The shipped
+    /// scenario's deadline (tick 120) arrives BEFORE the fixture's own
+    /// insolvency (~tick 127), so <c>Overall</c> latches to <c>Expired</c>
+    /// first and, once latched, never moves again (SDD-014 §5a) — "stay-solvent"
+    /// genuinely broke seven months later and the combined verdict cannot say
+    /// so, having already settled on a different terminal state. The
+    /// per-objective event is the ONLY record that it ever failed at all.
+    /// </summary>
+    [Fact]
+    public void R24V19_the_per_objective_event_survives_where_the_latched_overall_verdict_cannot()
+    {
+        Built built = Assert.IsType<Built>(EngineBuilder.Build(Fixture.Settings()));
+        Engine engine = built.Engine;
+
+        for (var month = 0; month < 140; month++) engine.Pipeline.AdvanceTick();
+
+        IReadOnlyList<AuditEntry> transitions = engine.Audit.Query(
+            new AuditQuery(null, AuditCategory.StateTransition, null, null));
+
+        AuditEntry overall = Assert.Single(transitions,
+            e => e.Data.ContainsKey("overall") && e.Data["overall"].Value == "Expired");
+        Assert.False(overall.Data.ContainsKey("objective"));
+        Assert.Equal(120, overall.Tick.Value);
+
+        // Nothing recorded an overall "Failed" — the latch swallowed it.
+        Assert.DoesNotContain(transitions,
+            e => e.Data.ContainsKey("overall") && e.Data["overall"].Value == "Failed");
+
+        AuditEntry perObjective = Assert.Single(ObjectiveKindEntries(engine, "objective.failed"));
+        Assert.False(perObjective.Data.ContainsKey("overall"));
+        Assert.Equal("stay-solvent", perObjective.Data["objective"].Value);
+        Assert.True(perObjective.Tick.Value > overall.Tick.Value,
+            "the objective failed strictly after the scenario had already expired");
+    }
+
+    private static IEnumerable<AuditEntry> ObjectiveKindEntries(Engine engine, string kind) =>
+        engine.Audit.Query(new AuditQuery(null, AuditCategory.StateTransition, null, null))
+            .Where(e => e.Data.TryGetValue("kind", out AuditValue k) && k.Value == kind);
 }
