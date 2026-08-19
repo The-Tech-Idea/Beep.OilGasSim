@@ -232,3 +232,126 @@ public class DetMathTests
         }
     }
 }
+
+public class FrictionTests
+{
+    /// <summary>
+    /// Colebrook, solved independently of the implementation: fixed-point on
+    /// x = -2·log10(ε/3.7 + 2.51x/Re), iterated far past convergence.
+    ///
+    /// <para>A DIFFERENT METHOD ON PURPOSE (F-3). `Friction.Factor` uses Newton
+    /// in x = 1/√f; this substitutes and re-substitutes. Two methods agreeing on
+    /// the root is evidence about the ROOT; the same method twice would only be
+    /// evidence that it was copied correctly.</para>
+    /// </summary>
+    private static double ColebrookByFixedPoint(double reynolds, double roughness)
+    {
+        double x = 4.0;
+
+        for (var i = 0; i < 200; i++)
+            x = -2.0 * Math.Log10((roughness / 3.7) + (2.51 * x / reynolds));
+
+        return 1.0 / (x * x);
+    }
+
+    [Fact] // The first direct pin this method has had. It is determinism-critical
+           // — a fixed step count from a fixed seed — and was covered only
+           // indirectly through wells and pipelines, so nothing said what it
+           // computes, only that the things above it did not change.
+    public void The_friction_factor_solves_Colebrook()
+    {
+        (double Re, double Roughness)[] cases =
+        [
+            (5.0e3, 0.0),        (5.0e3, 1.0e-3),
+            (1.0e5, 4.6e-5),     (1.0e5, 1.0e-2),
+            (1.0e6, 1.5e-4),     (5.0e7, 1.0e-4),
+        ];
+
+        foreach ((double reynolds, double roughness) in cases)
+        {
+            double solved = Friction.Factor(reynolds, roughness);
+            double oracle = ColebrookByFixedPoint(reynolds, roughness);
+
+            Assert.True(Math.Abs(solved - oracle) < 1.0e-12,
+                $"Re={reynolds} ε/D={roughness}: Newton gave {solved}, " +
+                $"fixed-point gave {oracle}");
+        }
+    }
+
+    [Fact] // Laminar flow is a DIFFERENT law, not a limiting case of the same
+           // one: below 2300 the factor is 64/Re exactly, and Colebrook does not
+           // apply. The discontinuity is physical.
+    public void Below_the_laminar_limit_the_factor_is_the_exact_law()
+    {
+        Assert.Equal(64.0 / 1000.0, Friction.Factor(1000.0, 1.0e-4), 15);
+        Assert.Equal(64.0 / 2299.0, Friction.Factor(2299.0, 1.0e-4), 15);
+    }
+
+    [Fact] // A Reynolds number that is zero, negative or NaN is a fault and never
+           // a number: 64/0 is infinity and would travel as a pressure drop.
+    public void A_nonsensical_input_is_refused()
+    {
+        Assert.Throws<InvariantFault>(() => Friction.Factor(0.0, 1.0e-4));
+        Assert.Throws<InvariantFault>(() => Friction.Factor(-1.0, 1.0e-4));
+        Assert.Throws<InvariantFault>(() => Friction.Factor(double.NaN, 1.0e-4));
+        Assert.Throws<InvariantFault>(() => Friction.Factor(1.0e5, -1.0e-4));
+    }
+
+    /// <summary>
+    /// HOW MANY OF THE TWENTY STEPS ARE DOING WORK — measured, because a live
+    /// dump showed the composition suite inside this method and each step costs a
+    /// software logarithm (finding 217's diagnosis).
+    ///
+    /// <para>Compared with EXACT equality, not a tolerance, which is what made
+    /// the reduction free: past the settling step the iteration is at a fixed
+    /// point in doubles, so further steps return the same bits. Swept across the
+    /// whole domain — Re from just above laminar to 1e8, roughness from smooth
+    /// to 0.05 — the worst case settles at step FIVE. SDD-003 §6.2 pins ten,
+    /// double the measured worst, and this test is the evidence for it
+    /// (R22.14).</para>
+    /// </summary>
+    [Fact]
+    public void The_iteration_is_converged_well_before_it_stops()
+    {
+        var sweep = new List<(double Re, double Roughness)>();
+        for (double re = 2301.0; re <= 1.0e8; re *= 1.7)
+            foreach (double rough in new[] { 0.0, 1.0e-6, 4.6e-5, 1.5e-4, 1.0e-3, 1.0e-2, 5.0e-2 })
+                sweep.Add((re, rough));
+
+        (double Re, double Roughness)[] cases = [.. sweep];
+
+        var worst = 0;
+
+        foreach ((double reynolds, double roughness) in cases)
+        {
+            double converged = Friction.Factor(reynolds, roughness);
+
+            // Replay Newton in x = 1/√f, counting the step after which the
+            // answer stops moving at all.
+            double x = 1.0 / Math.Sqrt(0.02);
+            double ln10 = Math.Log(10.0);
+            var settled = 0;
+
+            for (var step = 1; step <= 20; step++)
+            {
+                double inner = (roughness / 3.7) + (2.51 * x / reynolds);
+                double g = x + (2.0 * (Math.Log(inner) / ln10));
+                double dg = 1.0 + (2.0 * (2.51 / reynolds) / (inner * ln10));
+
+                x -= g / dg;
+
+                if ((1.0 / (x * x)) == converged) { settled = step; break; }
+            }
+
+            Assert.True(settled > 0,
+                $"Re={reynolds} never settled within twenty steps, which would mean " +
+                "the pinned count is doing necessary work and this test is wrong");
+
+            if (settled > worst) worst = settled;
+        }
+
+        Assert.True(worst <= 8,
+            $"the slowest case settled at step {worst} of 20; the headroom this " +
+            "records is smaller than assumed and a reduction would need care");
+    }
+}

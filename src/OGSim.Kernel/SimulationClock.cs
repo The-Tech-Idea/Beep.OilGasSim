@@ -30,6 +30,22 @@ public sealed class SimulationClock : ISimulationClock
     public GameDate Date => _epoch.AddMonths(CurrentTick.Value);
 
     /// <summary>
+    /// The date tick zero was (SDD-013 §2's R20d.12.19 amendment, S013-6).
+    ///
+    /// <para>A save records a tick COUNT, and a count is only a date against an
+    /// epoch. Without this a container carried no way to say what month tick 240
+    /// was, so a host that loaded it with different settings relabelled the whole
+    /// history — every audit entry, every belief's as-of, every deadline — with
+    /// the simulation itself untouched and nothing to show anything had
+    /// moved.</para>
+    ///
+    /// <para>Read-only and not on <see cref="ISimulationClock"/>: a module needs
+    /// to know what month it is, and only the one thing writing a save needs to
+    /// know where the count started from.</para>
+    /// </summary>
+    public GameDate Epoch => _epoch;
+
+    /// <summary>
     /// One month forward. Called once per tick, at stage 0 (design 03 §6), by
     /// the pipeline alone.
     /// </summary>

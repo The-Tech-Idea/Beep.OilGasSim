@@ -215,6 +215,66 @@ public class SourceRules
         EngineCorpus.AssertNone(violations, "D-5 — hash-ordered collections are never enumerated");
     }
 
+    // ------------------------------------------------------------- R21-V5
+
+    [Fact] // R21-V5. A rejection is the ONE engine string a player reads verbatim
+           // (design 09 §5.1: a command refusal is not a fault). It must say what
+           // is wrong in domain terms — so a `Detail` that is empty, or that
+           // leaks a type name or an exception, is a refusal a host has to
+           // rewrite before it can show it, which is exactly what this surface
+           // exists to make unnecessary.
+    public void R21V5_every_rejection_reads_as_something_a_player_can_act_on()
+    {
+        var violations = new List<string>();
+
+        foreach (EngineCorpus.SourceFile file in Sources)
+            foreach (ObjectCreationExpressionSyntax creation in
+                     EngineCorpus.NodesOf<ObjectCreationExpressionSyntax>(file))
+            {
+                if (creation.Type.ToString() != "RejectionReason") continue;
+                if (creation.ArgumentList is not { Arguments.Count: 2 } arguments) continue;
+
+                string locId = arguments.Arguments[0].ToString();
+
+                // ONLY TEXT THIS SCAN CAN SEE. A detail built from a variable is
+                // a refusal authored somewhere else and passed through — the
+                // operations engine's own reasons are re-wrapped this way — and
+                // judging its length or wording here would flag the wrapper for
+                // the wrapped text's sins. That leaves a real blind spot: a
+                // refusal composed at runtime is unchecked, and the only thing
+                // that would catch it is a test that submits the command.
+                if (arguments.Arguments[1].Expression is not LiteralExpressionSyntax
+                    and not InterpolatedStringExpressionSyntax) continue;
+
+                string detail = arguments.Arguments[1].ToString();
+
+                // The localisation key is what a host swaps for translated text,
+                // so a missing one makes the English the only version there will
+                // ever be.
+                if (!locId.Contains("$loc:", StringComparison.Ordinal))
+                    violations.Add($"{EngineCorpus.Where(file, creation)} rejection has no " +
+                                   $"$loc key: {locId}");
+
+                // A DOMAIN sentence, not a diagnostic. The three words below are
+                // what leaks when a refusal is written from the code's point of
+                // view rather than the player's.
+                foreach (string leak in (string[])["Exception", "NullReference", "nameof("])
+                    if (detail.Contains(leak, StringComparison.Ordinal))
+                        violations.Add($"{EngineCorpus.Where(file, creation)} rejection text " +
+                                       $"leaks '{leak}', so a host cannot show it as written");
+
+                // Long enough to be a reason. A three-word refusal names the rule
+                // it broke and never why, which is the difference between "no"
+                // and an answer a player can do something about.
+                if (detail.Length < 25)
+                    violations.Add($"{EngineCorpus.Where(file, creation)} rejection text is " +
+                                   $"too short to be a reason: {detail}");
+            }
+
+        EngineCorpus.AssertNone(
+            violations, "R21-V5 — every rejection is player-facing text");
+    }
+
     // ------------------------------------------------------------- D-8
 
     [Fact] // Culture-sensitive formatting turns a decimal point into a comma and a
@@ -301,5 +361,109 @@ public class SourceRules
 
         Assert.True(checkedCount > 0, "PhysicalConstants is empty — the rule has nothing to guard");
         EngineCorpus.AssertNone(violations, "F-2 — every physical constant is cited");
+    }
+
+    // ------------------------------------------------- the manifest, checked
+
+    [Fact] // Every contract a module RESOLVES is a contract it DECLARES. The
+           // manifest is what the composer orders modules by and what a refusal
+           // names, so a Require<T>() the manifest does not mention leaves the
+           // dependency graph without that edge — and the engine composes only
+           // because the list happened to be in a workable order. Nine of these
+           // were in the tree across four modules when this rule was written
+           // (finding 229), including one whose absence had already been
+           // diagnosed and commented twice in the same file.
+    public void The_manifest_declares_every_contract_a_module_resolves()
+    {
+        var violations = new List<string>();
+
+        foreach (EngineCorpus.SourceFile file in Sources)
+        {
+            foreach (ClassDeclarationSyntax type in
+                     EngineCorpus.NodesOf<ClassDeclarationSyntax>(file))
+            {
+                string declaration = type.ToString();
+
+                // A module is a type whose base list runs its manifest through
+                // Declare — which is the only way a manifest is built, so this
+                // cannot miss one by naming.
+                if (type.BaseList is null
+                    || !type.BaseList.ToString().Contains("Declare(", StringComparison.Ordinal))
+                    continue;
+
+                // PROVIDES counts as declared. A module that resolves its own
+                // provision takes no dependency on anything — there is no edge to
+                // record, and requiring it would be a self-loop the composer would
+                // rightly refuse.
+                var declared = new HashSet<string>(StringComparer.Ordinal);
+
+                foreach (string name in ListAfter(declaration, "provides:"))
+                    declared.Add(name);
+
+                foreach (string name in ListAfter(declaration, "requires:"))
+                    declared.Add(name);
+                foreach (GenericNameSyntax generic in
+                         EngineCorpus.NodesOf<GenericNameSyntax>(file))
+                {
+                    if (generic.Identifier.Text != "Require") continue;
+                    if (!type.Span.Contains(generic.Span)) continue;
+
+                    string resolved = Last(generic.TypeArgumentList.Arguments[0].ToString());
+
+                    if (!declared.Contains(resolved))
+                        violations.Add(
+                            $"{EngineCorpus.Where(file, generic)} {type.Identifier.Text} " +
+                            $"resolves {resolved} without declaring it in its manifest");
+                }
+            }
+        }
+
+        EngineCorpus.AssertNone(violations,
+            "every Require<T>() is declared in the module's manifest");
+    }
+
+    /// <summary>The types in one named manifest list, to its matching close
+    /// bracket — the lists nest, so depth is counted rather than the first
+    /// bracket taken.</summary>
+    private static IEnumerable<string> ListAfter(string declaration, string label)
+    {
+        int start = declaration.IndexOf(label, StringComparison.Ordinal);
+        if (start < 0) return [];
+
+        int open = declaration.IndexOf('[', start);
+        if (open < 0) return [];
+
+        var depth = 0;
+        for (int i = open; i < declaration.Length; i++)
+        {
+            if (declaration[i] == '[') depth++;
+            else if (declaration[i] == ']' && --depth == 0)
+                return Simple(declaration[open..i]);
+        }
+
+        return [];
+    }
+
+    /// <summary>Every <c>typeof(...)</c> in a fragment, by simple name — the
+    /// manifest qualifies some and not others, and the two spellings mean one
+    /// type.</summary>
+    private static IEnumerable<string> Simple(string fragment)
+    {
+        const string Marker = "typeof(";
+
+        for (int i = fragment.IndexOf(Marker, StringComparison.Ordinal); i >= 0;
+             i = fragment.IndexOf(Marker, i + 1, StringComparison.Ordinal))
+        {
+            int close = fragment.IndexOf(')', i);
+            if (close < 0) yield break;
+
+            yield return Last(fragment[(i + Marker.Length)..close]);
+        }
+    }
+
+    private static string Last(string name)
+    {
+        int dot = name.LastIndexOf('.');
+        return dot < 0 ? name.Trim() : name[(dot + 1)..].Trim();
     }
 }

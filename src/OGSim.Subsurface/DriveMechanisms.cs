@@ -61,6 +61,36 @@ internal abstract class DriveMechanism : IDriveMechanism
     }
 
     /// <summary>
+    /// The whole history at once, for a restore (SDD-003 §3.1's R20d.12.17
+    /// amendment, finding 205). NO STEP LIMIT, because there is no step.
+    ///
+    /// <para>§3.1's fraction exists because one-step monthly integration is not
+    /// honest at a large step size. A restore is not integrating a step — it is
+    /// evaluating the balance at a point the engine has ALREADY reached, one
+    /// honest month at a time — so measuring the entire depletion against a
+    /// per-tick limit refuses a state the engine itself produced. It did: a
+    /// compartment that had given up more than a quarter of its initial pressure
+    /// could not be loaded at all, which is every field that is either small or
+    /// old.</para>
+    ///
+    /// <para>A SEPARATE MEMBER rather than a flag on the one above. A boolean
+    /// would put "skip the guard" one wrong argument away from the per-tick path,
+    /// and the guard is the only thing standing between a monthly solve and a
+    /// number whose error nobody can bound.</para>
+    ///
+    /// <para><see cref="AssertCoherent"/> still runs: a compartment carrying
+    /// influx its drive does not admit is wrong however it got there (§4.2b).</para>
+    /// </summary>
+    public Pressure SolveFromInitial(MaterialBalanceInput input, IFluidPropertyModel fluid)
+    {
+        ArgumentNullException.ThrowIfNull(input);
+        ArgumentNullException.ThrowIfNull(fluid);
+
+        AssertCoherent(input);
+        return MaterialBalance.SolveWithoutStepLimit(input, fluid);
+    }
+
+    /// <summary>
     /// §4.2b. The compartment must not carry a term this drive does not admit.
     ///
     /// <para>A model fault, not a silent zeroing. Ignoring the gas cap of a

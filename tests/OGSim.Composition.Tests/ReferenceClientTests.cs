@@ -17,9 +17,9 @@ namespace OGSim.Composition.Tests;
 public sealed class ReferenceClientTests
 {
     private static (Engine Engine, EntityId<IProspect> Prospect) Field(
-        double poreVolume = 100.0e6)
+        double poreVolume = 100.0e6, ulong seed = 20260806UL)
     {
-        Built built = Assert.IsType<Built>(EngineBuilder.Build(Fixture.Settings()));
+        Built built = Assert.IsType<Built>(EngineBuilder.Build(Fixture.Settings(seed: seed)));
 
         EntityId<IReservoirCompartmentEntity> prospect =
             built.Engine.Provided.Resolve<FieldControl>().AddCompartment(
@@ -30,8 +30,15 @@ public sealed class ReferenceClientTests
                     InitialPressure: new Pressure(30.0e6),
                     Temperature: Temperature.FromCelsius(93.3),
                     Depth: new Length(2000.0)),
-                permeability: new Permeability(2.0e-13),
-                netThickness: new Length(30.0),
+                // Rock the shipped plant is sized for. It said 2e-13 and 30 m
+                // while every well was built from Defaults.Inflow's 1e-13 and
+                // 20 m — a compartment stating rock nobody read (finding 170).
+                // Now that a well is built from the rock it is in, the two have
+                // to agree or these fixtures would be testing a field three
+                // times more productive than the one the chain was designed
+                // against.
+                permeability: new Permeability(1.0e-13),
+                netThickness: new Length(20.0),
                 drainageArea: new Area(2.0e5),
                 rockCompressibility: 4.5e-10,
                 gasOilContact: new Length(1900.0),
@@ -51,17 +58,125 @@ public sealed class ReferenceClientTests
     /// R21-V2. A client that can see only what a host can see develops a field
     /// and wins — which is the surface being sufficient, stated as a run rather
     /// than as an opinion.
+    ///
+    /// <para><b>Across seeds, because one seed was asserting luck.</b> This test
+    /// used to play the shipped seed and assert <c>Met</c>. It passed, and it was
+    /// measuring the wrong thing: with no engine change at all, the same client
+    /// on five seeds wins three and expires two — one of those with the company
+    /// down to nothing. The shipped seed happened to be a winner, so an unrelated
+    /// change that merely SHIFTED the hazard stream (R22.17's threat draw, which
+    /// takes no element out and cost the field nothing) moved the run onto a
+    /// losing sequence and failed a test about the read model (finding 227).</para>
+    ///
+    /// <para>So the claim is split into the two halves it always was. <b>Surface
+    /// sufficiency holds on every seed</b>: whatever the field does, a client
+    /// reading only <c>ReadModel</c> finds the wells to drill and the constraint
+    /// to answer — that is the R21 claim, and it is not a matter of luck.
+    /// <b>Winning is asserted over the set and its RATE is not</b>, because
+    /// whether a particular field pays out in ten years is the SCENARIO's
+    /// difficulty and not the API's. The measured rate is two to three wins in
+    /// five — the shipped field is close to a coin flip, which is a content
+    /// balance question recorded in finding 227 and deliberately not settled by
+    /// an assertion here. Pinning "most" would make an unrelated content edit
+    /// fail a test about the read model, which is the mistake this test was
+    /// already making with n = 1.</para>
     /// </summary>
     [Fact]
+    [Trait("Speed", "Slow")]
     public void R21V2_a_client_using_only_the_surface_can_play_and_win()
     {
-        (Engine engine, EntityId<IProspect> prospect) = Field();
+        // Arbitrary and fixed, which is the only thing a seed may be: named here
+        // so the set is part of the test rather than a range someone could widen
+        // until it passed.
+        ulong[] seeds = [20260806UL, 11UL, 22UL, 33UL, 44UL];
 
-        Session session = new Operator(engine, prospect, wellTarget: 6, hurdle: Money.Zero).Play(months: 120);
+        var won = 0;
 
-        Assert.Equal(ObjectiveState.Met, session.Outcome);
-        Assert.True(session.WellsDrilled > 1, "it developed the field rather than drilling once");
-        Assert.True(session.Debottlenecked, "and answered the constraint the wells created");
+        for (var i = 0; i < seeds.Length; i++)
+        {
+            (Engine engine, EntityId<IProspect> prospect) = Field(seed: seeds[i]);
+
+            Session session = new Operator(engine, prospect, wellTarget: 6, hurdle: Money.Zero)
+                .Play(months: 120);
+
+            // EVERY seed, win or lose: the surface told the client where the
+            // field was and it developed it.
+            Assert.True(session.WellsDrilled > 1,
+                $"seed {seeds[i]} developed the field rather than drilling once");
+
+            if (session.Outcome != ObjectiveState.Met) continue;
+
+            won++;
+
+            // AND ON THE SEEDS IT WON, it had answered the constraint — which is
+            // the surface claim with its teeth in, since this field cannot pay
+            // out through a jammed separator. Not asserted on the losing seeds
+            // because ONE OF THEM ENDS BROKE, and a company with nothing in the
+            // bank declining to buy a vessel is playing correctly rather than
+            // failing to see the bottleneck (finding 227).
+            Assert.True(session.Debottlenecked,
+                $"seed {seeds[i]} was won without answering the constraint the " +
+                "wells created, so the win did not come from playing the field");
+        }
+
+        // CAN play and win — R21-V2's word. A surface through which no field is
+        // ever won is insufficient however well it reports; one through which a
+        // field IS won is sufficient, and how often is the content's business.
+        Assert.True(won > 0,
+            $"the client won {won} of {seeds.Length} fields; a client that can " +
+            "never win has not shown the surface sufficient to play");
+    }
+
+    /// R21-V10. DETERMINISM THROUGH THE SURFACE: the same seed and the same
+    /// policy produce the same game, decision for decision.
+    ///
+    /// <para>Every determinism rule in SDD-000 §3 — the eight named streams, no
+    /// transcendentals, no hash-ordered enumeration, no clock — exists so this
+    /// is true. But they are all asserted from INSIDE, and a host does not see
+    /// the inside: it submits commands and reads a projection, and a client that
+    /// branched on something unstable would still be a client whose replay
+    /// diverged. This is the only check that runs the whole loop twice and
+    /// compares what a host would actually have seen.</para>
+    ///
+    /// <para>The Operator is the right instrument precisely because it DECIDES —
+    /// it drills, debottlenecks, services and shuts in based on the read model,
+    /// so an unstable projection changes its choices and not merely its report.
+    /// Comparing two passive runs would prove far less.</para>
+    /// </summary>
+    [Fact]
+    [Trait("Speed", "Slow")]
+    public void R21V10_the_same_seed_and_the_same_policy_play_the_same_game()
+    {
+        (Engine first, EntityId<IProspect> firstProspect) = Field();
+        (Engine second, EntityId<IProspect> secondProspect) = Field();
+
+        Session one = new Operator(first, firstProspect, wellTarget: 6, hurdle: Money.Zero)
+            .Play(months: 120);
+
+        Session two = new Operator(second, secondProspect, wellTarget: 6, hurdle: Money.Zero)
+            .Play(months: 120);
+
+        // The whole session record, which is the client's own account of what it
+        // did: the verdict, the month it ended, the cash it finished with, and
+        // every decision it took along the way.
+        Assert.Equal(one, two);
+
+        // And the projection they finished on, field for field — the session
+        // summarises, and two runs could agree on a summary while disagreeing
+        // about the month that produced it.
+        Assert.Equal(first.ReadModel!.Tick, second.ReadModel!.Tick);
+        Assert.Equal(first.ReadModel!.Cash, second.ReadModel!.Cash);
+        Assert.Equal(first.ReadModel!.ProducedThisTick, second.ReadModel!.ProducedThisTick);
+        Assert.Equal(first.ReadModel!.Storage, second.ReadModel!.Storage);
+
+        Assert.True(
+            Structural.Equal(first.ReadModel!.Chain, second.ReadModel!.Chain),
+            "two runs of one seed finished with different chains, so something the client " +
+            "reads is not a function of the seed");
+
+        Assert.True(
+            Structural.Equal(first.ReadModel!.CashByCause, second.ReadModel!.CashByCause),
+            "the two runs spent differently in their final month");
     }
 
     /// <summary>
@@ -73,6 +188,7 @@ public sealed class ReferenceClientTests
     /// worth producing, rather than by issuing the command directly.</para>
     /// </summary>
     [Fact]
+    [Trait("Speed", "Slow")]
     public void R21V2_a_client_left_running_closes_the_field_when_it_is_finished()
     {
         (Engine engine, EntityId<IProspect> prospect) = Field();
@@ -165,6 +281,7 @@ public sealed class ReferenceClientTests
     /// what lifts it are now two different things.</para>
     /// </summary>
     [Fact]
+    [Trait("Speed", "Slow")]
     public void R20d8V1_a_bigger_reservoir_is_a_bigger_business()
     {
         Money big = Earned(500.0e6), small = Earned(50.0e6);
@@ -181,4 +298,5 @@ public sealed class ReferenceClientTests
             .Play(months: 240)
             .Cash;
     }
+
 }

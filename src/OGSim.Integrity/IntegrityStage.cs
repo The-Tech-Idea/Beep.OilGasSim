@@ -19,16 +19,38 @@ using OGSim.Kernel;
 
 namespace OGSim.Integrity;
 
-/// <summary>A component instance under the integrity pass.</summary>
+/// <summary>
+/// One piece of equipment under the integrity pass.
+///
+/// <para>A FLOW ELEMENT, per SDD-012 §2's R20d.22 amendment: the things that can
+/// be absent from a network are exactly the things whose absence the segment
+/// plan can express, and a failure this pass could not express as absence would
+/// have nowhere to go. §1's severity terms were always stated per equipment
+/// class rather than per downhole component — a separator in marine air
+/// corrodes — and a completion is a flow element too, so nothing narrows.</para>
+/// </summary>
 public sealed record ComponentState(
-    EntityId<IWellComponent> Id,
+    EntityId<IFlowElement> Id,
     ContentId Tier,
     double Condition,
-    bool Failed);
+    bool Failed,
+
+    // ON THE STATE because it IS state: §1's k_i term reads how long this
+    // particular item has gone unserviced, which is a fact about the item and
+    // not about the field it sits in. Severity is computed FROM this rather
+    // than handed in beside it, which is what stops two callers disagreeing
+    // about a component's own history (law L5).
+    int TicksSinceService,
+
+    // WHETHER ANYONE CAN SEE ITS CONDITION (C14, §3's R20d.26.4 amendment).
+    // A property of the item, because the kit is bolted to the item — and the
+    // one owner of it, so the read model asks here rather than keeping a second
+    // list of what is instrumented (L5).
+    bool Monitored);
 
 /// <summary>What stage 4 decided about one component.</summary>
 public sealed record FailureOutcome(
-    EntityId<IWellComponent> Component,
+    EntityId<IFlowElement> Component,
     double Condition,
     double RatePerYear,
     double Probability,
@@ -73,12 +95,12 @@ public sealed class IntegrityPass
     /// </summary>
     public IReadOnlyList<FailureOutcome> Advance(
         IReadOnlyList<ComponentState> components,
-        ServiceSeverity severity,
+        Func<ComponentState, ServiceSeverity> severityOf,
         Duration dt,
         out IReadOnlyList<ComponentState> aged)
     {
         ArgumentNullException.ThrowIfNull(components);
-        ArgumentNullException.ThrowIfNull(severity);
+        ArgumentNullException.ThrowIfNull(severityOf);
 
         var ordered = new List<ComponentState>(components);
         ordered.Sort((a, b) => a.Id.Value.CompareTo(b.Id.Value));
@@ -96,11 +118,12 @@ public sealed class IntegrityPass
             // different mechanic nobody specified.
             if (component.Failed)
             {
-                next.Add(component);
+                next.Add(component with { TicksSinceService = component.TicksSinceService + 1 });
                 continue;
             }
 
-            double condition = _degradation.NextCondition(component.Condition, severity, dt);
+            double condition = _degradation.NextCondition(
+                component.Condition, severityOf(component), dt);
             double rate = _hazard.RateAt(condition);
             double probability = _hazard.FailureProbability(condition, dt);
 
@@ -112,7 +135,16 @@ public sealed class IntegrityPass
             // position is predictable.
             int day = failed ? _hazardStream.NextInt(30) : -1;
 
-            next.Add(component with { Condition = condition, Failed = failed });
+            // The service clock runs whether or not the item failed: a
+            // component that broke has still not been serviced, and stopping the
+            // count would make a neglected item look freshly maintained the
+            // moment it gave out.
+            next.Add(component with
+            {
+                Condition = condition,
+                Failed = failed,
+                TicksSinceService = component.TicksSinceService + 1,
+            });
 
             if (!failed) continue;
 
@@ -151,47 +183,17 @@ public sealed class IntegrityPass
         value.ToString(System.Globalization.CultureInfo.InvariantCulture);
 }
 
-/// <summary>
-/// R18.4's three strategies (SDD-012 §3).
-///
-/// <para>All three produce ORDINARY operations — no special execution path.
-/// That is what makes R18-V5's comparison meaningful: each strategy wins in its
-/// designed circumstance because of what it costs and when, not because the
-/// engine treats one of them specially.</para>
-/// </summary>
-public enum MaintenanceStrategy
-{
-    /// <summary>Nothing scheduled. Cheapest until it is not.</summary>
-    RunToFailure,
-
-    /// <summary>A maintenance operation every N ticks, whatever the condition.</summary>
-    Scheduled,
-
-    /// <summary>Triggered by condition — needs a monitoring tier installed.</summary>
-    ConditionBased,
-}
-
-/// <summary>SDD-012 §3's policy, per asset class.</summary>
-public sealed record MaintenancePolicy(
-    MaintenanceStrategy Strategy,
-    int IntervalTicks,             // Scheduled
-    double ConditionTrigger,       // ConditionBased
-    bool HasMonitoring)            // ConditionBased requires it (C14)
-{
-    /// <summary>
-    /// Whether this component is due for maintenance now.
-    ///
-    /// <para>Condition-based WITHOUT monitoring never triggers — and that is the
-    /// point of the monitoring tier. A policy that fell back to scheduled would
-    /// make the monitoring purchase free, and a player would get
-    /// condition-based behaviour without paying for the instrument that makes
-    /// it possible.</para>
-    /// </summary>
-    public bool IsDue(double condition, int ticksSinceService) => Strategy switch
-    {
-        MaintenanceStrategy.RunToFailure => false,
-        MaintenanceStrategy.Scheduled => ticksSinceService >= IntervalTicks,
-        MaintenanceStrategy.ConditionBased => HasMonitoring && condition < ConditionTrigger,
-        _ => false,
-    };
-}
+// SDD-012 §3's THREE STRATEGIES ARE NOT A TYPE IN THIS ENGINE, and the record
+// that used to be here is deleted rather than left unused (§3's R20d.26.4
+// amendment). A strategy is how a player drives ordinary operations — §3's own
+// "all three produce ordinary SDD-007 operations, no special execution path" —
+// so run-to-failure is answering only failures, scheduled is servicing on a
+// clock, and condition-based is servicing on what the chain view reports. A
+// declared policy the engine scheduled from would be a second way to state one
+// law, and L5 allows one owner per fact.
+//
+// Its monitoring gate now lives where the decision is: `AssetIntegrity`
+// remembers which items are instrumented, the read model publishes a condition
+// only for those, and `service-equipment` is refused on the rest. That gate had
+// been stated in two places and enforced in neither, because `IsDue` was called
+// by its own unit test alone (finding 191).

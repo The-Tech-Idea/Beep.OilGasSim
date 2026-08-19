@@ -58,6 +58,87 @@ all `D`-severity with the EM7 default: forfeit — announced twice, never silent
 Rounds: generated on the jurisdiction's cadence; blocks are polygon partitions
 of open acreage.
 
+> **R20d.9 amendment. The join, against ONE licence — because this
+> composition has one field.**
+>
+> `Licence` has been complete and constructed nowhere: no test, no
+> composition. §1's machinery is real and untouched by this amendment; what
+> was missing is everything downstream of "a company holds one."
+>
+> **`Well.Licence` returns the composition's ONE licence directly**, rather
+> than each well carrying an independent reference that happens to agree.
+> §1's own words are "already committed, because a well references one from
+> R6 onward" — written for a company that may hold several blocks. This
+> composition generates one field ([R20d.8](../phases/R20d_INTEGRATION.md)),
+> so there is exactly one licence to reference; a per-well field would be a
+> second place storing an answer the composition already knows, and a
+> multi-licence company is R20's content, not a reason to shape the join
+> around a case this engine cannot produce yet.
+>
+> **Terms are ONE hand-authored `Defaults.LicenceTerms`**, on the same
+> footing as `Defaults.Climate` and `Defaults.Eras`: this composition ships a
+> single instance of every mechanic before R20's content pass gives it a
+> catalogue, and a licence is not different in kind from a climate. The
+> numbers are chosen proportionally to what already exists rather than
+> invented from nothing — the bond is a multiple of one well's cost
+> (`Defaults.DrillWellTerms.Cost`), the commitment is drilling one well
+> within a runway a real campaign needs, the term spans the composition's own
+> forty-year test horizon. **`Relinquishment` is the empty list, stated
+> rather than padded**: this field is `DeclareKnownField`d from the first
+> tick (SDD-010 §4b), so there is no unexplored acreage to hand back, and a
+> non-empty schedule would be a control this composition has nothing for it
+> to control. **`HseRegime` carries a placeholder id with no consumer yet** —
+> R16.6's own row already says the rules it would name are R23's; the field
+> is required by the record and this states plainly that naming it does not
+> mean enforcing it (rule 7's own test: what reads this to make a decision).
+>
+> **`RecordDelivery` fires from the activity that completes the commitment**,
+> matched by `CommitmentItem.Kind == ActivityTerms.Template` — the same
+> convention a facility rung's `requiresTech` matches a registry node's id
+> by. `DrillWellActivity.Complete` calls it on a successful hole; a dry hole
+> delivers nothing, which is correct — the commitment is to drill a well
+> that stands, not to spend the money trying.
+>
+> **Assessment runs at `StageId.Company` (11), which no module has ever
+> contributed to.** Not a new stage: the fourteen-stage order has carried
+> this slot since design 03 §6 and it has sat empty. On loss: the bond posts
+> as `Account.Penalty` against `Account.Cash` under
+> `MovementCategory.Contractual` — both declared in the ledger's own
+> `Causes` list since R21 §2.4b and posted to by nothing until now.
+>
+> **"Announced twice" is scoped down FURTHER than first written here, and the
+> reason is worth recording alongside the first cut.** This amendment
+> originally proposed publishing one `Severity.Decision` `EngineEvent` at the
+> moment of forfeiture. Checked while implementing rather than assumed:
+> **no concrete `EngineEvent` subtype exists anywhere in this engine.**
+> `EngineEvent` is abstract, `EventBus.Publish` has never been called by any
+> module, and design 16's own ordering fields — `Day`, `LoopRole`,
+> `IsSegmentBoundary` — have no worked example to build the first one
+> against. Building the engine's FIRST concrete event correctly, from a
+> design section this task has not fully absorbed, is its own unscoped
+> undertaking and not a footnote — bolting one on half-understood risks
+> violating design 21 §5.3's ordering invariants in a way nothing would
+> catch, which is worse than not publishing one.
+>
+> **So this join uses the ESTABLISHED door instead: the audit trail.** The
+> bond forfeit posts as a `Movement` whose `Cause` is an `AuditId` from
+> `_audit.Record(AuditCategory.Financial, ...)` — the same mechanism every
+> other financial consequence in this composition already goes through, and
+> `Financial` is one of the categories `AuditTrail.Prune` keeps forever
+> (finding 236). "Never silent" is satisfied by a channel that demonstrably
+> works today, rather than claimed of one this task would be inventing from
+> nothing. The `EventBus`/EM7 half — for THIS or any other mechanic — is
+> genuinely unbuilt and is design 16's own task.
+>
+> **A lost licence refuses further drilling and nothing already standing.**
+> `DrillWellActivity.OwnRefusals` checks `licence.IsLive`; wells already
+> producing keep producing, because losing the right to develop further is
+> not the same fact as losing what has already been developed, and design
+> 02 §3.4's diagram routes every terminal state through `Abandoned` — a
+> licence loss is not one of its edges into that state, and inventing a
+> forced-abandonment consequence here would be a second, uninvited
+> mechanic.
+
 ## 2. Rivals — the architectural rule
 
 > **A rival is a policy over beliefs, never a reader of truth.** Rivals hold
@@ -136,4 +217,4 @@ have no truth access path (the Information `internal` boundary covers them).
 |---|---|---|
 | S011-1 | Rival belief coarseness (full per-prospect vs play-level only) — start play-level + per-bid prospect sampling; measure cost | R16.4 |
 | S011-2 | Whether rivals participate in the same licence's working interests as partners (farm-in TO the player) | post-R20; the data model (WorkingInterest) already permits it |
-| S011-3 | ~~`ILicence` is declared in the wrong file~~ **Closed at R16.** It lives in `OGSim.Contracts/CompanyContracts.cs`, where the tests that cover it are. The type was always right; only its address was wrong | closed |
+| S011-3 | ~~`ILicence` is declared in the wrong file~~ **Closed at R16.** It lives in `OGSim.Contracts/CompanyContracts.cs`, where the tests that cover it are. The type was always right; only its address was wrong | ✅ |

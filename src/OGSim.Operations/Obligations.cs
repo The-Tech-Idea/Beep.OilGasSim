@@ -39,6 +39,24 @@ public sealed class ObligationRegistry : IObligationRegistry, IStateOwner
 
     public int SchemaVersion => 1;
 
+    /// <summary>
+    /// AFTER THE WELLS, and this is the dependency that proved the mechanism
+    /// (SDD-013 §2b). Reopening a completion registers an abandonment obligation
+    /// exactly as drilling one does, so the rebuild puts one on every well it
+    /// brings back — and the SAVE's record is the one that must stand, because a
+    /// company that had already discharged an obligation must not get it back by
+    /// reloading.
+    ///
+    /// <para>The old loader knew this as "obligations land in the third phase ON
+    /// PURPOSE", a sentence in a comment. Key order does not agree —
+    /// <c>company.obligations</c> sorts before <c>wells.completions</c> — so the
+    /// first walk of the declared order restored them early and the rebuild
+    /// faulted on an obligation that already existed. Which is the mechanism
+    /// working: an ordering that had been prose became a claim a sort enforces,
+    /// and the one place it was wrong said so immediately.</para>
+    /// </summary>
+    public IReadOnlyList<StateKey> RestoreAfter { get; } = [new StateKey("wells.completions")];
+
     /// <summary>How many assets still carry one. What a company owes the future,
     /// and what the read model reports.</summary>
     public int Outstanding => _outstanding.Count;

@@ -6,6 +6,7 @@
 
 using OGSim.Contracts;
 using OGSim.Kernel;
+using OGSim.Company;
 
 namespace OGSim.Composition;
 
@@ -29,16 +30,28 @@ public sealed record DrillWellCommand(
 /// as an argument rather than being read off a static.
 /// </summary>
 internal delegate OGSim.Wells.Completion WellDesign(
-    ulong id, EntityId<IReservoirCompartmentEntity> compartment, Length totalDepth);
+    ulong id,
+    EntityId<IReservoirCompartmentEntity> compartment,
+    Length totalDepth,
+
+    /// <summary>
+    /// The rock this well is in (SDD-008 §2c). Passed rather than read off a
+    /// static, because a well's productivity is a fact about ITS compartment —
+    /// and a design that supplied its own would be stating a physical fact twice
+    /// (finding 170).
+    /// </summary>
+    OGSim.Wells.InflowConditions rock);
 
 internal sealed class DrillWellActivity(
     ActivityTerms terms,
     Length maximumDepth,
     FieldControl field,
-    WellDesign design,
     OGSim.Information.ProspectRisks risks,
     WorldState world,
-    IBeliefStore beliefs) : Activity<DrillWellCommand>(terms)
+    IBeliefStore beliefs,
+    OGSim.Subsurface.SubsurfaceState subsurface,
+    ObservationDoor door,
+    OGSim.Company.Licence licence) : Activity<DrillWellCommand>(terms)
 {
     /// <summary>A well is PP&amp;E: the money buys something the company still
     /// owns next month (SDD-009 §1).</summary>
@@ -50,6 +63,9 @@ internal sealed class DrillWellActivity(
     /// the company owns one rig, which is a decision about equipment rather than
     /// a rule about drilling.
     /// </summary>
+    /// <summary>A well is the asset a field is developed with (finding 225).</summary>
+    public override MovementCategory Spend => MovementCategory.Development;
+
     public override bool OnePerTarget => false;
 
     public override (EntityRef Target, Length Depth) Aim(DrillWellCommand command)
@@ -84,6 +100,17 @@ internal sealed class DrillWellActivity(
                 "$loc:reject.no-manifold-slot",
                 "every slot on the manifold is taken; a well with nowhere to tie in " +
                 "cannot flow, and a bigger header has to be installed first"));
+
+        // A LOST LICENCE REFUSES FURTHER DRILLING (SDD-011 §1's R20d.9
+        // amendment). Nothing already producing stops — this is checked at
+        // ORDER time, not at the wells themselves, because design 02 §3.4's
+        // diagram routes every terminal state through `Abandoned` and a
+        // licence loss is not one of its edges into it.
+        if (!licence.IsLive)
+            reasons.Add(new RejectionReason(
+                "$loc:reject.licence-lost",
+                "the licence's work commitment went unmet and the bond was " +
+                "forfeited; no further development is possible here"));
 
         return reasons;
     }
@@ -134,7 +161,30 @@ internal sealed class DrillWellActivity(
 
         EntityId<IReservoirCompartmentEntity> reservoir = found.Value;
 
-        field.OpenWell(design(field.NextWellId(), reservoir, done.Depth), reservoir);
+        field.Drill(reservoir, done.Depth);
+
+        // THE COMMITMENT IS TO A WELL THAT STANDS (SDD-011 §1's R20d.9
+        // amendment), not to the money spent trying: a dry hole (the branch
+        // above) delivers nothing. Matched by CONTENT ID — `Terms.Template` is
+        // the same id `CommitmentItem.Kind` names — the same convention a
+        // facility rung's `requiresTech` matches a registry node's id by.
+        licence.RecordDelivery(Terms.Template, 1.0);
+
+        // AND THE HOLE ITSELF TELLS THE COMPANY WHAT IT FOUND. A discovery
+        // well penetrates the column, logs it and samples the rock, so a company
+        // walks away from a strike knowing roughly how much is down there —
+        // which is a different and far sharper question than how big the trap
+        // was, and the one a development decision is actually taken on.
+        //
+        // Through the observation door like everything else (SDD-008 §3), so it
+        // carries a sigma and a provenance and can be argued with. Wide, because
+        // one hole has seen one point of a field and the other kilometre of it
+        // is inference.
+        door.Deliver(
+            Defaults.DiscoverySource, Defaults.OilInPlaceKind,
+            new EntityRef(EntityKind.Compartment, reservoir.Value),
+            subsurface.TrueOilInPlaceOf(reservoir).CubicMetres,
+            Provenance.WellTest);
 
         // THE PROSPECT BECOMES A FIELD, and the company keeps what it paid for
         // (SDD-008 §4). Seismic bought a belief about this structure's size;

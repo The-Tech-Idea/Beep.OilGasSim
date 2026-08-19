@@ -65,7 +65,6 @@ internal interface IReservoirCompartment
 {
     EntityId<IReservoirCompartmentEntity> Id { get; }
     Pressure Pr { get; }                             // average pressure, Pa
-    InPlace InPlace { get; }                         // mass per material, kg
     ContactSet Contacts { get; }
     RockTruth Rock { get; }
     IDriveMechanism Drive { get; }
@@ -78,6 +77,39 @@ internal interface IReservoirCompartment
 // be committed as an inventory, which is the one arithmetic error the volume
 // families were split up to prevent.
 internal readonly record struct InPlace(ImmutableArray<double> KilogramsByOrdinal);
+
+> **R22.13 amendment (finding 204): `IReservoirCompartment.InPlace` is REMOVED,
+> and what would bring it back is written down here so the intent is not lost
+> with it.**
+>
+> It was specified as mass per material — a COMPOSITIONAL inventory. This
+> engine's material balance is volumetric black oil (§3.1): it tracks N, G and W
+> as volumes and derives everything else, and no phase in the plan introduces
+> per-material tracking of the rock's contents. The member was therefore fed
+> `InPlace.Empty(materialCount: 0)` by every construction path since the first
+> one, read by nothing, and had never carried a value in any engine this
+> repository has built.
+>
+> **Leaving it was the one option NOT available.** Law L3 forbids a member with
+> no behaviour, and a constant standing in for work is exactly what it names; a
+> comment beside a getter that keeps returning a fabricated empty inventory
+> would have been a note rather than an implementation, and making the getter
+> fault is the `NotImplementedException` the same law forbids. So the choice was
+> populate or remove, and populating is a FEATURE rather than a fix: the
+> inventory would have to be filled at construction AND maintained by the
+> balance every tick, because a value correct only at t=0 is worse than an empty
+> one — it would be believed.
+>
+> **What brings it back.** Compositional tracking is a real capability this
+> design may want: it is what a gas cap re-solution, a condensate bank or an
+> H2S-as-material sales spec would need (§5, SDD-012 §5's second destination).
+> The day the balance tracks materials rather than volumes, this member returns
+> with a source — and until then its absence is honest, where its presence read
+> to any implementer as though in-place mass were already tracked.
+>
+> `InPlace` the TYPE stays: it is the kernel's `MaterialInventory` under a
+> local alias and is used by facilities and flow for streams that genuinely are
+> per-material. Only the compartment's unread property goes.
 
 internal readonly record struct ContactSet(
     Length GasOilContact,                            // datum TVD
@@ -167,6 +199,91 @@ VALIDITY LIMIT (05 §3.1), checked AFTER the solve:
   (P_start − P_end) / P_start > maxTickPressureDropFraction
       (content, default 0.25)  → MODEL FAULT
 ```
+
+> **R20d.12.18 open item (finding 206): connate water saturation has TWO
+> OWNERS, and they are not the same double.**
+>
+> `SubsurfaceState.Create` derives `Initial.ConnateWaterSaturation` as
+> `1.0 - generated.OilSaturation`; the rock's relative-permeability curve carries
+> its own `swc` from content (§3.1c). A basin generated at 0.7 oil saturation
+> against a curve declaring 0.30 produces `0.30000000000000004` and `0.3` — the
+> same number in decimal, two different doubles, describing one physical fact.
+> **That is law L5, breached in the subsurface's own initial conditions.**
+>
+> It surfaced through persistence rather than through physics: the save writes
+> one `swc` key and restores both from it, so a reloaded compartment has the two
+> agreeing where the original had them differing, and `krw`'s
+> `(Sw − swc)/(1 − swc − sor)` turns a last-bit change in the denominator's
+> origin into a large relative change in a near-zero water cut. That is PV2's
+> `Chain` exception and 3,644 kg of produced water against 233,955.
+>
+> **DECIDED (R20d.12.18): the ROCK CURVE owns it.** Irreducible water saturation
+> is a capillary property of the rock and belongs with the Corey endpoints that
+> consume it — `krw` and `kro` are both normalised by `(Sw − swc)`, so the curve
+> cannot be evaluated without it while the compartment can perfectly well read
+> it. `Create` therefore takes `Initial.ConnateWaterSaturation` from
+> `wettability.ConnateWaterSaturation`, and `1.0 - generated.OilSaturation` is
+> deleted.
+>
+> **And the two must be RECONCILED rather than silently diverge.** A generator
+> that draws an oil saturation and a content pack that declares a curve are two
+> statements about the same reservoir: at discovery, above the transition zone,
+> initial water saturation IS the irreducible value. So `Create` refuses a pair
+> that disagrees beyond a tolerance, naming both numbers — a content fault at
+> creation, where the cause is in hand, rather than a reservoir that quietly has
+> more oil in place than its own rock curve admits. The tolerance exists because
+> the two arrive as independently-rounded decimals, not because a real
+> disagreement is acceptable.
+>
+> **Why this is not a change to [SDD-010](SDD-010_WORLD_GENERATION.md) §2.** It
+> looked as though generation's oil saturation would have to become derived. It
+> does not: generation keeps drawing it, and the guard makes an incoherent draw a
+> refusal instead of a defect. The saturation a basin generates and the rock it
+> generates are content's to keep consistent, which is what a content fault is
+> for.
+>
+> **Do not "fix" it by writing two keys into the save.** That would make the
+> reload faithful to a state that is itself wrong, and would freeze the breach
+> into the file format.
+
+> **R20d.12.17 amendment (finding 205): the limit is PER TICK and a restore is
+> not a tick — but the code applies it to one, and the effect is that a properly
+> depleted field cannot be reloaded.**
+>
+> `ReservoirCompartment.RestoreTo` re-solves the whole production history in a
+> single call and says so in its own comment: *"a restore is not a tick: the
+> whole history arrives at once, so the step is measured from initial conditions
+> and no per-tick limit applies to it."* The first half is implemented — it
+> passes `StartPressure: Initial.Pressure` and `WithdrawnThisTick: 0` — and the
+> second half is not. `SolveEndPressure` runs the check unconditionally, so the
+> restore measures the ENTIRE depletion as though it were one month and refuses
+> anything past the fraction.
+>
+> **A field that has given up more than a quarter of its initial pressure
+> therefore cannot be loaded at all.** Reproduced at 30 MPa → 16.47 MPa, a
+> fraction of 0.451, refused by `AssertStepIsHonest` inside `RestoreTo`. The
+> original reached that pressure legitimately, one honest month at a time.
+>
+> **Why nothing caught it**: every fixture that saves and reloads uses a
+> compartment large enough that sixty months do not deplete it a quarter — PV2's
+> is 100×10⁶ m³ of pore volume. The defect is invisible until a field is either
+> small or old, which is to say until a game is played properly.
+>
+> **The rule is right and only its application is wrong**, so this is a code fix
+> and not a specification change: the limit exists because *one-step monthly
+> integration is not honest at that step size*, and a restore is not integrating
+> a step — it is evaluating the balance at a point the engine has already reached
+> by honest steps. The drive gains a member for that case, distinct from the
+> per-tick solve rather than a flag on it, so the two callers cannot be confused
+> and the per-tick guard cannot be disabled by accident:
+>
+> ```csharp
+> // The whole history at once. No step limit — there is no step.
+> Pressure SolveFromInitial(MaterialBalanceInput input, IFluidPropertyModel fluid);
+> ```
+>
+> `AssertCoherent` still runs: a compartment carrying influx its drive does not
+> admit is wrong however it got there (§4.2b).
 
 > **R5.0 amendment (finding 106): "a fraction of expansion capacity" has no
 > well-defined value.** The limit was stated against the expansion capacity the
@@ -334,6 +451,181 @@ field is throttled by disposal capacity and by nothing upstream at all.
 > receipt path — the same element, committing rather than disposing, and the
 > voidage replacement that makes water drive a decision rather than weather —
 > is its own task and needs the double-count settled in §9's terms first.
+
+> **R20d.24 — pressure support, specified (finding 182). The double-count, settled.**
+>
+> **What shipped in between.** Produced water no longer leaves the game: it is
+> shared out pro rata by the water each compartment made and committed as
+> `CompartmentWithdrawal.Injected`, so the rock gets back what came out of it.
+> The tick balance holds because the two statements are about DIFFERENT
+> inventories — mass leaves the surface network (`DisposedMass`) by entering the
+> reservoir (a receipt), which is where water down a hole actually goes. That is
+> the double-count this note asked to be settled, and it is settled by observing
+> that it was never one: the fault would be an injector reporting both against
+> the SAME inventory.
+>
+> **And it is not a waterflood, which is the finding.** Measured on the shipped
+> field over forty years on five wells: **327,320 m³ into a 100 Mm³ pore volume,
+> 0.0033 pore volumes**, against 0.1–1 for a real flood. A field can only put
+> back the water it makes, and early in life it makes almost none — exactly when
+> pressure support is worth most. Reinjecting produced water is disposal that
+> happens to help; it is not a decision, because there is no alternative to it
+> and no quantity to choose.
+>
+> **The decision is IMPORTED water, and it needs a source element.**
+>
+> ```csharp
+> // A source: no inlets, one outlet, water in at a commanded rate. The mirror
+> // of a completion, and deliberately the same shape — sourcing water from the
+> // sea is not a special case of anything, it is an element that makes mass.
+> public sealed class WaterIntake : IFlowElement
+> {
+>     public ReservoirRate Commanded { get; }     // the player's lever
+> }
+> ```
+>
+> **Conservation is why it is an element rather than a number.** Imported water
+> enters the compartment without leaving the surface network, so adding it to
+> `Injected` directly would create mass at stage 6 and INV1 would halt the tick
+> — correctly. Sourced at an intake and disposed at the injector, it crosses the
+> network the same way produced oil does, and the balance closes for the same
+> reason. The injector therefore needs a second inlet, and the tree-toward-sink
+> rule (§6, one edge per port) is what makes that a declared port rather than an
+> emergent commingle.
+>
+> **The lever is a voidage replacement ratio**, which is what a reservoir
+> engineer actually sets:
+>
+> ```text
+> target   = VRR · (reservoir volume produced this tick)
+> imported = max(0, target − produced water at reservoir conditions)
+> ```
+>
+> clamped by the injector's injectivity, which already constrains and already
+> plugs. VRR = 0 is today's engine; VRR = 1 replaces every barrel of voidage.
+>
+> **It costs money and it is a genuine trade.** Imported water is lifted,
+> filtered, deaerated and pumped, priced per cubic metre — so a company can
+> spend its way to a flatter decline. What it buys is recovery and what it pays
+> is an earlier water breakthrough: flood hard and the field waters out sooner
+> at a higher recovery factor, flood little and the oil stays in the ground.
+> That is the oldest decision in reservoir management, and this engine has every
+> part of it except the water.
+>
+> **And it is what souring is waiting on** (SDD-012 §5). Injection rises by
+> about two orders of magnitude, which puts the throughput ratio where a souring
+> curve at honest content actually bites — so the H2S arrives twenty years after
+> the decision that bought it, rather than never.
+
+> **R20d.24b — the five things building it settled.** The amendment above fixed
+> the shape; each of these is a question it did not have to answer and the
+> implementation could not avoid.
+>
+> **0. A FLOOD CANNOT PUT BACK MORE THAN THE FIELD HAS TAKEN OUT**, and this is
+> the load-bearing one. §3.1's bisection searches `[floor, Pi]` and FAULTS when
+> there is no root in it, so a compartment given more replacement volume than it
+> has voidage is not mis-priced — the tick halts. Measured: VRR 1.0 on the
+> shipped water-drive field faulted on exactly that, because the aquifer was
+> already replacing most of the voidage and the flood replaced the rest a second
+> time. The cap is the balance's own ceiling read as a volume:
+>
+> ```text
+> room(compartment) = −Φ(Pi) = F(Pi) − We − Vinj        every expansion term is 0 at Pi
+> ```
+>
+> exposed as `SubsurfaceState.TrueVoidageRoomOf` and derived from `Residual`
+> rather than restated beside it (law L5). Three consequences, all of them
+> wanted. It **nets the aquifer off for free**, so a field held up by strong
+> natural water has little room and a flood on one buys almost nothing — which
+> is why there is no separate influx term anywhere in the target. It makes
+> **VRR > 1 harmless**: "catch up as fast as the well allows", bounded by the
+> physics rather than by an invented ceiling in a validator. And it must be read
+> **fresh every tick** — the aquifer commits into the same room in the same
+> stage 6, so a cap cached at last month's close has already been spent, which
+> is a 3,500 m³ overfill and a halted tick.
+>
+> **1. The clamp is applied where the rate is COMMANDED, not by the solver.**
+> S3 throttles COMPLETIONS and nothing else — [SDD-002](SDD-002_STREAMS_AND_FLOW.md)
+> §7, and the solver faults by name when a violated constraint has no live
+> completion above it. An intake is a source and is not a completion, so a
+> constraint it alone violates cannot be relieved by any amount of iterating:
+> the ladder would shut in every well in the field and then report exhaustion,
+> blaming the wells for the water plant. So:
+>
+> ```text
+> headroom = max(0, injector acceptance − produced water at reservoir conditions)
+> imported = min( max(0, VRR·voidage − produced water), headroom )
+> ```
+>
+> The headroom form rather than the acceptance form deliberately: clamping at
+> the full acceptance would let a flood take the injectivity the produced water
+> needs, throttle the producers to nothing, and so remove the voidage that
+> justified the flood — a field that oscillates between drowning and dry. The
+> flood gets what the disposal duty leaves and no more.
+>
+> **2. It is commanded a tick behind, and that is what makes it safe.** Voidage
+> and produced water are both stage 5's answers and the intake is commanded
+> before stage 5 runs, so both come from last tick — design 03 §6.1's declared
+> lag, used exactly as stage 4 uses it. The lag is not a compromise here, it is
+> the safety property: **a field that produced nothing last month has no voidage
+> to replace and imports nothing**, so an idle field never buys water and the
+> solver is never handed a constraint it cannot relieve.
+>
+> **3. Produced water and imported water are allocated to compartments by
+> DIFFERENT rules, and they have to be.** Produced water goes back pro rata by
+> the water each compartment MADE — that is provenance, and it is unchanged.
+> Imported water goes pro rata by the RESERVOIR VOLUME each compartment
+> produced, because voidage is what it is replacing. Sharing imported water by
+> water made would put every cubic metre of it nowhere in exactly the case the
+> mechanic exists for: a young field makes almost no water and is where support
+> is worth most, and a receipt of zero against a discharge that happened is a
+> mass leak as well as a dead feature. What separates the two at stage 6 is the
+> intake's own `Sourced` — the injector's discharge less what the intake made is
+> what the field produced, by construction, because the intake is the only other
+> thing feeding it.
+>
+> **4. One injector takes both, so a flood competes with disposal for the same
+> injectivity — and plugs the well twice as fast.** That is not an artefact of
+> having one well in the composition; it is the trade, and it is what finally
+> gives the acid job (R20d.20) a second reason to exist. A company that floods
+> hard remediates often.
+>
+> **Members this adds** (rule F-1). `OGSim.Facilities.WaterIntake : IFlowElement`
+> — `Id`, `Ports` (no inlets, one outlet), `Commanded` (the rate, in reservoir
+> m³/s), `Command(ReservoirRate)`, `Transform`, `EvaluateConstraints` (none: an
+> intake's limit is its command). `Injector` gains `ImportInlet` (port 1),
+> `Acceptance` (what it will take at its stored conditions) and sums over every
+> inlet in both `Transform` and `EvaluateConstraints` rather than reading inlet
+> zero — the inlet list is compacted, so a missing upstream shifts the indices.
+> `SetVoidageReplacementCommand(double Ratio)` is a set point and not an
+> activity, for the same reason a choke is not (R20.4): committing a quarter's
+> rig time to a number a reservoir engineer changes on a Tuesday would make the
+> decision slower without making it harder. `FieldEconomics` gains
+> `InjectionWaterCostPerCubicMetre`; `SubsurfaceState` gains
+> `TrueVoidageRoomOf` and `ReservoirCompartment` the `VoidageRoom` behind it;
+> `FieldReadModel` gains `Flood`, carrying the target, what was bought and what
+> room is left.
+>
+> **What it measures, on the shipped field, 6 wells, 40 years** — and the point
+> is that the same lever gives opposite answers on two reservoirs:
+>
+> ```text
+> solution-gas drive, no aquifer      water drive, 4 PV aquifer
+>   VRR 0.0   RF  2.1%   −$50M          VRR 0.0   RF 22.1%   $1,792M
+>   VRR 0.5   RF  4.1%     $0M          VRR 0.5   RF 22.0%   $1,754M
+>   VRR 1.0   RF 22.1%  $1,729M         VRR 1.0   RF 22.0%   $1,721M
+>   VRR 2.0   RF 22.0%  $1,712M         VRR 2.0   RF 22.0%   $1,721M
+> ```
+>
+> A field with no natural drive recovers 2% and goes insolvent; flooded, it
+> recovers 22% and is worth $1.7bn — a tenfold recovery from the material
+> balance rather than from a table. On a field the aquifer already supports, the
+> same order is a straight loss of $71M: the water is arriving free, and buying
+> more only brings the breakthrough forward. **VRR 2.0 equals VRR 1.0 on both**,
+> because §0's ceiling is what stops it and not a number anybody chose. So the
+> decision is not "how much flood" in the abstract — it is *which reservoir am I
+> standing on*, which is the question the whole information game exists to make
+> a player answer.
 
 ### 3.2 Contacts
 
@@ -779,6 +1071,79 @@ same stale phase-doc text that finding corrects at each `Rn.0`.
 > that needs a site visit to re-choke is a *content* distinction (07 §4b's remote
 > choke), not a reason to make every choke change take months.
 
+> **R20d.9 amendment. `IWell` and `IWellbore`, implemented — against the
+> REACHABLE subset of design 02 §3.4's lifecycle, stated rather than guessed
+> at.**
+>
+> `IWell` and `IWellbore` have been declared since §5's contract pass and
+> implemented by nothing. Building them against the full twelve-state diagram
+> would mean nine dead states: this composition has one drilling template
+> (`drill-development-well`), no separate propose/permit step (the rig is
+> assigned the tick the command is accepted), no sidetrack command, no
+> injector-drilling command (the disposal/injection well is composed once as
+> part of the surface chain, never drilled by a player), and — checked against
+> `DrillWellActivity.Complete` rather than assumed — **a dry hole opens no
+> completion at all**. The money is spent and the months are gone; nothing is
+> created for a `Well` to attach to. So `Proposed`, `Permitted`, `Logged`,
+> `SuspendedNonCommercial`, `Completing`, `Workover` and `Injecting` are not
+> reachable, and neither is `Drilling` or `DryHole` as a WELL state — both are
+> facts about an *activity*, not about an entity that persists once the tick
+> closes, and `WellStatusView` (`ProductionLoop.Wells()`) has never treated
+> them as one.
+>
+> **The reachable subset is three states, and it is the one already shipped**:
+>
+> ```text
+> [*] --> Producing: completion opens (drill succeeds)
+> Producing --> ShutIn: choke closed
+> ShutIn --> Producing: choke opened
+> Producing --> Abandoned: plugged
+> ShutIn --> Abandoned: plugged
+> Abandoned --> [*]
+> ```
+>
+> This is exactly what `ProductionLoop.Wells()` has computed since R21.2 —
+> `_abandoned.Contains(id) ? Abandoned : well.IsShutIn ? ShutIn : Producing` —
+> which confirms the subset rather than inventing it. `Well.Status` computes
+> the SAME three-way switch from the SAME two owned facts
+> (`WellsState.Completions` and `ProductionLoop`'s abandoned set), because a
+> second implementation of one derivation is the second-owner shape law L5
+> forbids even when both sides would agree today.
+>
+> **Every well is `Classification.Development`**, honestly rather than by
+> default: the shipped catalogue has one drilling template and it is not
+> gated as exploration or appraisal work, so there is nothing else a drilled
+> well in this composition could be.
+>
+> **`Surface` is `Coordinate` `(0, 0)` for every well, stated as a limit and
+> not a default.** World generation (R15/R20d.8) produces a compartment's
+> volumetrics — pore volume, porosity, saturation, pressure, depth — and no
+> `(x, y)`; `IProspect` is a marker interface with no members. There is no
+> basin map in this composition for a surface location to be a position ON,
+> so every well answers the origin, honestly, until R20d.8's spatial half
+> lands. A test asserts this explicitly (mirroring R22.6's "no shipped
+> climate closes"), so a future map is a visible change to it rather than a
+> silent one.
+>
+> **`Wellbore.Path` is a two-station vertical trajectory**, `(0, 0, Surface)`
+> to `(TotalDepth, TotalDepth, Surface)`: the only geometry `DrillWellCommand`
+> takes is a single `Length`, so every well in this composition is vertical
+> by construction, and a deviated or horizontal trajectory is not a case this
+> command surface produces.
+>
+> **`ContactLengthIn` reads the completion's OWN perforations rather than
+> re-deriving from the path.** A perforation already states its own
+> `TopMd`/`BottomMd` — the fact flow calculations actually use — and a
+> geometry-only derivation through `Trajectory ∩ compartment interval` would
+> be a second computation of the same interval with no compartment-side depth
+> range to check it against (a compartment carries one `Depth`, not a top and
+> a bottom). Summing the perforations draining the named compartment is the
+> one owner already established; this reads it rather than adding another.
+>
+> **One `Wellbore` per `Well`**, since no command produces a second: the id
+> is shared with the completion's, which is the same convention `Well.Id`
+> uses.
+
 ## 6. The completion — the source element
 
 `ICompletion : IFlowElement`. Its `Transform` is the operating-point solve —
@@ -980,8 +1345,28 @@ Pwf_required(q) = Pwh + ΔP_hydro + ΔP_friction
                                        and bottomhole estimates, ONE re-evaluation
                                        (fixed two-pass, not iterated — pinned)
 ΔP_friction = f · (MD/D) · ρ_mix · v² / 2
-              f: Colebrook-White, solved by EXACTLY 20 Newton steps from
-              f₀ = 0.02 (deterministic; converged long before 20)
+              f: Colebrook-White, solved by EXACTLY 10 Newton steps from
+              f₀ = 0.02 (deterministic; see the R22.14 amendment)
+> **R22.14 amendment: twenty Newton steps become TEN, and the change is
+> BIT-IDENTICAL rather than a re-balance.** This line already said "converged
+> long before 20"; nobody had measured how long. Swept across the domain — Re
+> from just above the laminar limit to 1e8, roughness from smooth to 0.05, some
+> 175 cases — the iteration reaches a FIXED POINT IN DOUBLES at worst by step
+> five, compared with exact equality rather than a tolerance. Past that, every
+> further step returns the same bits, so steps six to twenty were recomputing an
+> answer that could not change.
+>
+> **Ten is double the measured worst**, which is margin for inputs outside a
+> swept range rather than a guess. The pinned-count property §3.1 and this
+> section both rest on is untouched: the count is still FIXED and still
+> deterministic — it is simply the right fixed number.
+>
+> **Why it was worth doing at all.** A live dump of the composition suite found
+> the solver inside this function and `DetMath.Ln`: it runs per well, per solver
+> iteration, per segment, per tick, and each step costs a software logarithm.
+> Halving the steps halves that. `FrictionTests` in the kernel suite is the
+> evidence and fails if the settling step ever exceeds eight.
+
 Lift hooks (R7): ESP adds ΔP_pump(q) from its TIER's catalogue curve —
   piecewise-linear head-vs-rate at reference density 1000 kg/m³, scaled by
   ρ_mix/ρ_ref; power curve likewise per tier; gas tolerance and temperature

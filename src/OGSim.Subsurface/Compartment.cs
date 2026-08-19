@@ -17,14 +17,6 @@
 using OGSim.Contracts;
 using OGSim.Kernel;
 
-// SDD-003 §3's `InPlace` IS the kernel's mass-per-material type. It lived here
-// as its own struct until R8.0's finding 113: the tank's inventory is the same
-// concept, `InPlace` was internal to this assembly, and two copies of
-// "kilograms by ordinal" is exactly the duplication CLAUDE.md's rule about
-// kernel types exists to prevent. The alias keeps the domain name at the call
-// sites while the arithmetic lives in one place.
-using InPlace = OGSim.Kernel.MaterialInventory;
-
 namespace OGSim.Subsurface;
 
 /// <summary>Fluid contacts, at datum TVD. They move as volume is replaced.</summary>
@@ -81,8 +73,7 @@ internal sealed record InitialConditions(
     StandardGasVolume GasInPlace,           // G (free gas cap)
     double GasCapRatio,                     // m
     double ConnateWaterSaturation,          // Swc
-    double WaterCompressibility,            // cw, 1/Pa
-    InPlace Mass);
+    double WaterCompressibility);
 
 /// <summary>
 /// SDD-003 §3. The hydraulically connected volume on which material balance is
@@ -97,7 +88,6 @@ internal interface IReservoirCompartment
 {
     EntityId<IReservoirCompartmentEntity> Id { get; }
     Pressure Pr { get; }
-    InPlace InPlace { get; }
     ContactSet Contacts { get; }
     RockTruth Rock { get; }
     IDriveMechanism Drive { get; }
@@ -119,18 +109,35 @@ internal readonly record struct CumulativeProduction(
     StandardGasVolume Gas,           // Gp
     SurfaceVolume Water,             // Wp
     ReservoirVolume WaterInflux,     // We
-    ReservoirVolume Injected)        // Vinj
+    ReservoirVolume Injected,        // Vinj
+
+    /// <summary>
+    /// How much of <c>Injected</c> was BOUGHT (SDD-012 §5's R20d.25 amendment).
+    ///
+    /// <para>Part of the injected volume and never added to it — the balance
+    /// counts every cubic metre of water that arrives, whatever its provenance,
+    /// and a second term in Φ would replace the voidage twice.</para>
+    ///
+    /// <para>It is carried separately because SOURING cares which water it was.
+    /// Produced water put back has already been through the rock: anoxic,
+    /// reduced, stripped of sulphate, and the fluid that sours a reservoir
+    /// least. Sea water carries the sulphate the bacteria eat. A compartment
+    /// that only ever reinjected its own water does not sour however long it
+    /// runs, and this is the number that says so.</para>
+    /// </summary>
+    ReservoirVolume Imported)
 {
     public static CumulativeProduction None { get; } = new(
         new SurfaceVolume(0.0), new StandardGasVolume(0.0), new SurfaceVolume(0.0),
-        new ReservoirVolume(0.0), new ReservoirVolume(0.0));
+        new ReservoirVolume(0.0), new ReservoirVolume(0.0), new ReservoirVolume(0.0));
 
     public CumulativeProduction Plus(
         SurfaceVolume oil, StandardGasVolume gas, SurfaceVolume water,
-        ReservoirVolume influx, ReservoirVolume injected) =>
+        ReservoirVolume influx, ReservoirVolume injected, ReservoirVolume imported) =>
         new(new SurfaceVolume(Oil.CubicMetres + oil.CubicMetres),
             new StandardGasVolume(Gas.CubicMetres + gas.CubicMetres),
             new SurfaceVolume(Water.CubicMetres + water.CubicMetres),
             new ReservoirVolume(WaterInflux.CubicMetres + influx.CubicMetres),
-            new ReservoirVolume(Injected.CubicMetres + injected.CubicMetres));
+            new ReservoirVolume(Injected.CubicMetres + injected.CubicMetres),
+            new ReservoirVolume(Imported.CubicMetres + imported.CubicMetres));
 }

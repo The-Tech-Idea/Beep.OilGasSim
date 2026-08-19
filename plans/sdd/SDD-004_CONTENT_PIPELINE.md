@@ -285,6 +285,55 @@ public interface ICatalogSet
   `maxTemperature`, `rateRange`; there is no generic properties bag, because a
   bag is where unknown-key safety goes to die.
 
+> **R20c.9 amendment. Facility units are SIX kinds, and a ladder declares its
+> own order.**
+>
+> §6 lists `facility-unit` among the equipment kinds sharing `GatedDefinition`.
+> Implementing it showed one kind cannot carry six datasheets and stay closed: a
+> separator states two independent leg capacities, a vessel volume, a rated
+> efficiency and the rate that efficiency holds at; a manifold states a slot
+> count; a treater states a water-removal fraction. A single record spanning
+> those is the generic bag this section forbids, wearing a record's clothes —
+> every field optional, every reader branching on which ones arrived.
+>
+> So `facility-unit` resolves into six kinds — `separator`, `tank`, `treater`,
+> `gas-plant`, `export-line`, `manifold` — each a closed record over a shared
+> `FacilityUnitDefinition(Id, RequiresTech, AvailableFromEra, Rung)`. They share
+> the gate and the rung and nothing else, which is what §6's "the datasheet block
+> is kind-specific and closed" already says; the correction is only that the KIND
+> is what varies, not a block inside one.
+>
+> **They do NOT derive from `GatedDefinition`, and the missing member is the
+> reason.** That base requires `Fits : SlotKind`, which SDD-005 §4.0b defines as
+> how the system knows where a device plugs in *without branching on what it is*
+> — and `SlotKind` has no facility member. Adding one would make a `separator`
+> definition declare that it fits the separator slot, which is its own kind
+> restated: a second owner of one fact, which law L5 forbids. **For a facility
+> unit the KIND IS THE SLOT.** So these carry the gate pair explicitly and leave
+> `Fits` to the unlockables that genuinely need it — a lift method, a completion
+> fluid, a chemical — where one socket accepts several kinds of thing and the
+> answer cannot be read off the record's type.
+>
+> **A ladder is ORDERED, and `ICatalog.All` is not.** Catalogue order is the
+> id-sorted list, which is right for save stability and wrong for a progression:
+> `gas-plant-e1` sorts before `gas-plant-none`, and an upgrade path read off that
+> would let a player install a plant by buying nothing. Nor can era stand in —
+> two rungs of one ladder routinely share an era. **So every facility-unit
+> declares `rung`**, a non-negative integer, unique within its kind, and the
+> ladder is the kind's definitions sorted by it. Rung 0 is the absent state that
+> every ladder in this engine starts at: a field with no gas plant flares, and
+> "no gas plant" is a rung rather than a null.
+>
+> **Content loads BEFORE modules compose**, which §5 implies and nothing stated.
+> A module's `Compose` reads catalogues to build its equipment, so the catalogues
+> must exist first; `PluginRegistry`'s own header already says a plugin must not
+> be built during content load "which happens before the engine exists". The
+> sources therefore arrive on `EngineSettings`, beside the seed and the retention
+> policy — a host supplies them, and the engine never touches a disk. A load
+> failure is a composition refusal carrying the same `LoadFailure` list §5
+> defines, because a game that cannot read its own equipment has nothing to
+> start (G2).
+
 ## 7. Mods
 
 ```csharp

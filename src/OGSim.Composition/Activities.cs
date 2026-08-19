@@ -32,6 +32,35 @@ public sealed record ActivityTerms(
     Money Cost,
     int DurationTicks,
     EntityId<IRig>? Rig,
+
+    /// <summary>
+    /// The severity this work can be done in (SDD-016 §3's weatherClass). Days
+    /// rougher than this are STANDBY: committed, paid for, and buying no
+    /// progress.
+    ///
+    /// <para>PER TEMPLATE and required, with no default. A single engine-wide
+    /// limit was built and measured first, and it stops a seismic survey for the
+    /// same sea that stops a subsea lift — which is both wrong and expensive
+    /// (finding 214). A default would have hidden the same mistake behind a
+    /// number nobody chose.</para>
+    /// </summary>
+    double WeatherLimit,
+
+    /// <summary>
+    /// Whether this work needs the site to be REACHABLE to begin (SDD-016 §5b's
+    /// R22.6 amendment).
+    ///
+    /// <para>Separate from <see cref="WeatherLimit"/> and gating a different
+    /// thing: the limit costs standby days to work ALREADY UNDER WAY, and this
+    /// refuses work from STARTING. A rig, a vessel and a coil unit have to be
+    /// brought in; a build-up survey on a well that is already shut in does
+    /// not.</para>
+    ///
+    /// <para>Required, with no default, for the reason the limit beside it is:
+    /// a default would answer for every template that never chose.</para>
+    /// </summary>
+    bool RequiresAccess,
+
     OutcomeTable Outcomes)
 {
     /// <summary>
@@ -92,6 +121,20 @@ internal interface IActivity
     /// </summary>
     bool OnePerTarget { get; }
 
+    /// <summary>
+    /// Which line of the cash report this activity's spend belongs on
+    /// (R21 §2.4b).
+    ///
+    /// <para>DECLARED PER ACTIVITY, because it was inferred from
+    /// <see cref="LeavesAnAsset"/> and that inference was wrong: everything
+    /// leaving no asset was booked as EXPLORATION, so repairs, services, well
+    /// tests and monitoring kit all appeared in a player's report as money spent
+    /// looking for oil (finding 225). Capex-versus-opex and
+    /// exploration-versus-operating are two different questions and one boolean
+    /// cannot answer both.</para>
+    /// </summary>
+    MovementCategory Spend { get; }
+
     /// <summary>What it means that it finished. SDD-007 §5, executed.</summary>
     void Complete(CompletedActivity done, Tick tick);
 
@@ -123,6 +166,8 @@ internal abstract class Activity<TCommand> : IActivity
     public abstract bool LeavesAnAsset { get; }
 
     public abstract bool OnePerTarget { get; }
+
+    public abstract MovementCategory Spend { get; }
 
     /// <summary>What the order is aimed at, read off the command.</summary>
     public abstract (EntityRef Target, Length Depth) Aim(TCommand command);
@@ -193,17 +238,22 @@ internal sealed class ActivityState : IStateOwner
     private readonly OperationScheduler _scheduler;
     private readonly CompanyState _company;
 
+    private readonly OGSim.Company.MarketState _market;
+
     public ActivityState(
         OperationScheduler scheduler,
         CompanyState company,
-        IReadOnlyList<IActivity> catalogue)
+        IReadOnlyList<IActivity> catalogue,
+        OGSim.Company.MarketState market)
     {
         ArgumentNullException.ThrowIfNull(scheduler);
         ArgumentNullException.ThrowIfNull(company);
         ArgumentNullException.ThrowIfNull(catalogue);
+        ArgumentNullException.ThrowIfNull(market);
 
         _scheduler = scheduler;
         _company = company;
+        _market = market;
 
         for (int i = 0; i < catalogue.Count; i++)
         {
@@ -219,6 +269,9 @@ internal sealed class ActivityState : IStateOwner
 
     public int SchemaVersion => 1;
 
+    /// <summary>Nothing has to be back before this is (SDD-013 §2b).</summary>
+    public IReadOnlyList<StateKey> RestoreAfter => [];
+
     public OperationScheduler Scheduler => _scheduler;
 
     /// <summary>Everything the company could order. Walked in declared order (D-5).</summary>
@@ -228,6 +281,39 @@ internal sealed class ActivityState : IStateOwner
     public int InProgress => _running.Count;
 
     public IReadOnlyList<InFlight> Running => _running;
+
+    /// <summary>
+    /// WHAT THE COMPANY IS DOING — R21 §2.4b row 15, and the view SDD-017 §2 has
+    /// specified as `OperationView` since it was written (R21.6).
+    ///
+    /// <para>The read model published a COUNT. "Two activities running" cannot
+    /// answer the question the row exists for — which two, how far along, and
+    /// how much has been spent — so a player could see that the rig was busy and
+    /// not whether the well was nearly down or barely started.</para>
+    ///
+    /// <para>In the order they began, which is `_running`'s own order: two runs
+    /// of one save render the same list (D-5), and "what did I start first" is
+    /// the order a player thinks in.</para>
+    /// </summary>
+    public IReadOnlyList<OperationView> Operations()
+    {
+        var seen = new List<OperationView>(_running.Count);
+
+        for (int i = 0; i < _running.Count; i++)
+        {
+            InFlight flight = _running[i];
+
+            seen.Add(new OperationView(
+                new EntityRef(EntityKind.Operation, flight.Operation.Id.Value),
+                flight.Operation.Spec.Template.Value,
+                flight.Operation.State,
+                flight.Operation.ProgressDays,
+                flight.Operation.Outcome.EffectiveDurationDays,
+                flight.Operation.Accrued));
+        }
+
+        return seen;
+    }
 
     /// <summary>
     /// An activity by template id. A command naming one that is not composed is a
@@ -256,6 +342,18 @@ internal sealed class ActivityState : IStateOwner
         ActivityTerms terms = Of(template).Terms;
         double days = terms.DurationTicks * Duration.DaysPerTick;
 
+        // QUOTED AT TODAY'S RATES (SDD-009 §6's ED4). A catalogue price is a
+        // price in the opening year's money; what a rig actually costs depends
+        // on how many other companies want one, which is what the oil price has
+        // been doing for the last year.
+        //
+        // Fixed HERE, when the work is scheduled, and not re-priced afterwards:
+        // a company contracts at the rate it was quoted, and a boom that arrives
+        // mid-well is the contractor's problem rather than the operator's. That
+        // is also what makes committing early a real advantage rather than an
+        // accounting detail.
+        Money cost = _market.Quoted(terms.Cost);
+
         return new OperationSpec(
             Template: template,
             Target: target,
@@ -263,10 +361,10 @@ internal sealed class ActivityState : IStateOwner
             Costs: new CostProfile(
                 // Split so the money follows the work: an activity abandoned
                 // halfway has cost most of one, not all and not none (§3).
-                Mobilisation: Money.RoundHalfEven(terms.Cost.Cents * 0.15),
-                PerActiveDay: Money.RoundHalfEven(terms.Cost.Cents * 0.75 / days),
-                PerStandbyDay: Money.RoundHalfEven(terms.Cost.Cents * 0.20 / days),
-                Completion: Money.RoundHalfEven(terms.Cost.Cents * 0.10)),
+                Mobilisation: Money.RoundHalfEven(cost.Cents * 0.15),
+                PerActiveDay: Money.RoundHalfEven(cost.Cents * 0.75 / days),
+                PerStandbyDay: Money.RoundHalfEven(cost.Cents * 0.20 / days),
+                Completion: Money.RoundHalfEven(cost.Cents * 0.10)),
             Resources: new ResourceNeeds(terms.Rig, []),
             Requirements: new Requirements([], MinDetectClass: null, []),
             Rentals: [],
@@ -303,6 +401,9 @@ internal sealed class ActivityState : IStateOwner
         Money increment = activity.Operation.Accrued - activity.Posted;
         if (increment.Cents == 0) return;
 
+        // TWO QUESTIONS, TWO SOURCES. Whether the money bought an asset decides
+        // the ACCOUNT; what kind of work it was decides the CAUSE. Inferring the
+        // second from the first booked every repair as exploration (finding 225).
         bool capital = activity.Activity.LeavesAnAsset;
 
         _company.Ledger.Post(new Movement(
@@ -310,7 +411,7 @@ internal sealed class ActivityState : IStateOwner
             capital ? Account.Capex_PPE : Account.Opex,
             Account.Cash,
             increment,
-            capital ? MovementCategory.Development : MovementCategory.Exploration,
+            activity.Activity.Spend,
             Asset: null,
             Cause: cause));
 
@@ -322,6 +423,12 @@ internal sealed class ActivityState : IStateOwner
         ArgumentNullException.ThrowIfNull(writer);
 
         writer.WriteInt64("count", _running.Count);
+
+        // The identity sequence, which Reinstate can only partly rebuild:
+        // a finished operation leaves no id to restore, so the counter has
+        // to be carried or a reloaded game reissues ids the original had
+        // already spent (finding 215).
+        writer.WriteInt64("next-operation-id", (long)_scheduler.NextOperationId);
 
         for (int i = 0; i < _running.Count; i++)
         {
@@ -337,6 +444,16 @@ internal sealed class ActivityState : IStateOwner
             writer.WriteInt64(at + "progress-days", activity.Operation.ProgressDays);
             writer.WriteInt64(at + "accrued", activity.Operation.Accrued.Cents);
             writer.WriteInt64(at + "posted", activity.Posted.Cents);
+
+            // THE PRICE IT WAS CONTRACTED AT (finding 215). `SpecFor` quotes at
+            // TODAY's rates, which is right when the work is scheduled and wrong
+            // on a reload: rebuilding the spec re-priced a running job at
+            // whatever the market had moved to since, so a reloaded operation
+            // accrued a different cost per day than the one it had signed for.
+            writer.WriteInt64(at + "cost-mobilisation", activity.Operation.Spec.Costs.Mobilisation.Cents);
+            writer.WriteInt64(at + "cost-active-day", activity.Operation.Spec.Costs.PerActiveDay.Cents);
+            writer.WriteInt64(at + "cost-standby-day", activity.Operation.Spec.Costs.PerStandbyDay.Cents);
+            writer.WriteInt64(at + "cost-completion", activity.Operation.Spec.Costs.Completion.Cents);
             writer.WriteInt64(at + "state", (long)activity.Operation.State);
 
             // The OUTCOME, saved. It was drawn when the activity began
@@ -356,6 +473,8 @@ internal sealed class ActivityState : IStateOwner
 
         long count = reader.ReadInt64("count");
 
+        _scheduler.ResumeIdsFrom((ulong)reader.ReadInt64("next-operation-id"));
+
         for (long i = 0; i < count; i++)
         {
             string at = Prefix(i);
@@ -369,7 +488,18 @@ internal sealed class ActivityState : IStateOwner
             var startDay = (int)reader.ReadInt64(at + "start-day");
 
             IActivity activity = Of(template);
-            OperationSpec spec = SpecFor(template, target, depth);
+
+            // Quoted once, when the work was scheduled, and restored as quoted:
+            // a company contracts at the rate it was given and a boom that
+            // arrives mid-well is the contractor's problem (finding 215).
+            OperationSpec spec = SpecFor(template, target, depth) with
+            {
+                Costs = new CostProfile(
+                    Mobilisation: new Money(reader.ReadInt64(at + "cost-mobilisation")),
+                    PerActiveDay: new Money(reader.ReadInt64(at + "cost-active-day")),
+                    PerStandbyDay: new Money(reader.ReadInt64(at + "cost-standby-day")),
+                    Completion: new Money(reader.ReadInt64(at + "cost-completion"))),
+            };
             OutcomeRow row = RowFor(activity, (OutcomeGrade)reader.ReadInt64(at + "grade"));
 
             Operation operation = _scheduler.Reinstate(
@@ -421,9 +551,12 @@ internal sealed class ActivityState : IStateOwner
 /// </summary>
 internal sealed class ActivityOrders(
     CompanyState company,
+    OGSim.Company.MarketState market,
     FieldControl field,
     ActivityState activities,
-    SimulationClock clock)
+    SimulationClock clock,
+    OGSim.Environment.WeatherState weather,
+    OGSim.Capabilities.CapabilityState capabilities)
 {
     /// <summary>
     /// Every reason this order cannot be given, not the first. A player told only
@@ -435,7 +568,7 @@ internal sealed class ActivityOrders(
         IActivity activity = activities.Of(template);
         var reasons = new List<RejectionReason>();
 
-        if (company.Ledger.Cash < activity.Terms.Cost)
+        if (company.Ledger.Cash < market.Quoted(activity.Terms.Cost))
             reasons.Add(new RejectionReason(
                 "$loc:reject.insufficient-cash",
                 $"{template.Value} costs {activity.Terms.Cost.Cents} cents and the company " +
@@ -450,6 +583,24 @@ internal sealed class ActivityOrders(
             return reasons;
         }
 
+        // THE SITE HAS TO BE REACHABLE TO START (SDD-016 §5b's R22.6 amendment).
+        // Refused rather than deferred: a company that cannot move a rig until
+        // June must be told in January, because the whole decision a window
+        // creates is a deadline — and an order silently queued until the road
+        // opened would take that decision away and hand back a surprise.
+        //
+        // Only at the START. Work already under way continues through a closing
+        // window: the crew and the kit are on site, and the road shutting behind
+        // them does not stop the job. A mechanic that suspended running
+        // operations at a window boundary would strand every long job at the same
+        // moment each year.
+        if (activity.Terms.RequiresAccess
+            && !weather.AccessOpenIn(ActivityStage.FieldRegion, clock.Date))
+            reasons.Add(new RejectionReason(
+                "$loc:reject.access-closed",
+                $"the site cannot be reached in month {clock.Date.Month}; " +
+                $"{template.Value} has to be committed while the window is open"));
+
         if (activity.OnePerTarget && activities.IsRunning(template, target))
             reasons.Add(new RejectionReason(
                 "$loc:reject.already-under-way",
@@ -459,7 +610,14 @@ internal sealed class ActivityOrders(
         IReadOnlyList<string> refusals = activities.Scheduler.Refusals(
             activities.SpecFor(template, target, depth),
             startDay: Today,
-            availableCapabilities: [],
+            // WHAT THE COMPANY ACTUALLY HOLDS (SDD-005 §2's R20d.10 amendment).
+            // This was a hardcoded empty list at both call sites, standing in for
+            // `TechnologyState.Acquired`, so `Requirements.RequiredCapabilities`
+            // could neither refuse nor permit anything. No shipped template
+            // declares a requirement today, so this refuses nothing new — it is
+            // the difference between a gate that is open and one that is not
+            // connected (finding 233's shape, a third time).
+            availableCapabilities: capabilities.Technology.Acquired,
             targetExists: _ => true);
 
         for (int i = 0; i < refusals.Count; i++)
@@ -478,7 +636,14 @@ internal sealed class ActivityOrders(
         ScheduleResult result = activities.Scheduler.Submit(
             activities.SpecFor(template, target, depth),
             startDay: Today,
-            availableCapabilities: [],
+            // WHAT THE COMPANY ACTUALLY HOLDS (SDD-005 §2's R20d.10 amendment).
+            // This was a hardcoded empty list at both call sites, standing in for
+            // `TechnologyState.Acquired`, so `Requirements.RequiredCapabilities`
+            // could neither refuse nor permit anything. No shipped template
+            // declares a requirement today, so this refuses nothing new — it is
+            // the difference between a gate that is open and one that is not
+            // connected (finding 233's shape, a third time).
+            availableCapabilities: capabilities.Technology.Acquired,
             targetExists: _ => true);
 
         if (result is not Scheduled scheduled)
@@ -538,9 +703,15 @@ internal sealed class ActivityApplier<TCommand>(
 /// Stage 3. Every activity advances a month; the ones that finished apply their
 /// own meaning.
 /// </summary>
-internal sealed class ActivityStage(ActivityState activities, IAuditTrail audit) : ITickStage
+internal sealed class ActivityStage(
+    ActivityState activities,
+    IAuditTrail audit,
+    OGSim.Environment.WeatherState weather) : ITickStage
 {
     public StageId Id => StageId.Operations;
+
+    /// <summary>The one region this world has (SDD-016 §1).</summary>
+    internal const int FieldRegion = 0;
 
     public void Execute(TickContext context)
     {
@@ -555,9 +726,24 @@ internal sealed class ActivityStage(ActivityState activities, IAuditTrail audit)
 
             if (inFlight.Operation.State is OperationState.Scheduled) inFlight.Operation.Begin();
 
+            // WEATHER DOES NOT COST DAYS, and the reason is now a MEASUREMENT
+            // rather than a schedule (findings 214, 216). Both halves are ready —
+            // `WeatherState.DaysAbove` and the per-template `WeatherLimit` beside
+            // it — and joining them CRASHES THE TEST HOST partway through the
+            // forty-year suite, on a clean build, at a point that moves between
+            // runs. That is a process-level death rather than a failing
+            // assertion, so it is a defect in the join and not a fixture to
+            // adjust. R22.3 owns it.
             if (inFlight.Operation.State is OperationState.Active or OperationState.Standby)
+            {
+                int lost = weather.DaysAbove(
+                    FieldRegion, inFlight.Activity.Terms.WeatherLimit);
+
                 inFlight.Operation.Advance(
-                    activeDays: (int)Duration.DaysPerTick, standbyDays: 0, costIndex: 1.0);
+                    activeDays: (int)Duration.DaysPerTick - lost,
+                    standbyDays: lost,
+                    costIndex: 1.0);
+            }
 
             AuditId cause = audit.Record(
                 AuditCategory.StateTransition, subject: null, cause: null,

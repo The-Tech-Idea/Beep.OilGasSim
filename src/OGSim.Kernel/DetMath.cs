@@ -391,8 +391,21 @@ public static class DetMath
 /// </summary>
 public static class Friction
 {
-    private const int NewtonSteps = 20;
+    private const int NewtonSteps = 10;   // SDD-003 §6.2's R22.14 amendment
     private const double Seed = 0.02;
+
+    // COMPUTED ONCE, and it is a measurement that put them here. A live dump of
+    // the composition suite showed the solver inside `Friction.Factor` and
+    // `DetMath.Ln`, which is where a forty-year run spends its time: every
+    // Newton step costs a software logarithm, and this method runs per well, per
+    // solver iteration, per segment, per tick.
+    //
+    // Both of these are CONSTANTS that were being recomputed on every call —
+    // one `Ln` and one `Sqrt` out of the twenty-one and one the method needs.
+    // Hoisting them is bit-identical by construction: the same input to the same
+    // deterministic routine, evaluated once instead of a million times.
+    private static readonly double Ln10 = DetMath.Ln(10.0);
+    private static readonly double SeedX = 1.0 / DetMath.Sqrt(Seed);
 
     /// <summary>Reynolds number below which flow is laminar and Colebrook does
     /// not apply. The transition is genuinely discontinuous in nature, not an
@@ -415,14 +428,13 @@ public static class Friction
         //   x + 2·log10(ε/3.7D + 2.51x/Re) = 0
         // — linear enough in x that Newton cannot wander, which the same
         // equation in f is not.
-        double x = 1.0 / DetMath.Sqrt(Seed);
-        double ln10 = DetMath.Ln(10.0);
+        double x = SeedX;
 
         for (int i = 0; i < NewtonSteps; i++)
         {
             double inner = relativeRoughness / 3.7 + 2.51 * x / reynolds;
-            double g = x + 2.0 * (DetMath.Ln(inner) / ln10);
-            double dg = 1.0 + 2.0 * (2.51 / reynolds) / (inner * ln10);
+            double g = x + 2.0 * (DetMath.Ln(inner) / Ln10);
+            double dg = 1.0 + 2.0 * (2.51 / reynolds) / (inner * Ln10);
 
             x -= g / dg;
         }

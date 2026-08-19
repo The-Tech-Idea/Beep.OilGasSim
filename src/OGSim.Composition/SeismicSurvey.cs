@@ -11,6 +11,7 @@
 
 using OGSim.Contracts;
 using OGSim.Kernel;
+using OGSim.Company;
 
 namespace OGSim.Composition;
 
@@ -40,6 +41,9 @@ internal sealed class SeismicSurveyActivity(
     /// would let a company inflate its balance sheet by shooting seismic.
     /// </summary>
     public override bool LeavesAnAsset => false;
+
+    /// <summary>Looking for oil is what the line means (finding 225).</summary>
+    public override MovementCategory Spend => MovementCategory.Exploration;
 
     public override bool OnePerTarget => true;
 

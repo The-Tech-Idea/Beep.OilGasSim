@@ -237,6 +237,152 @@ public sealed record WorldParameters(
 > Capacity is the one quantity every structure has, so it is the one a survey can
 > sharpen before anybody drills.
 
+## 4c. Reloading a generated world (R20d.12, finding 195)
+
+**A generated game cannot be reloaded at all today.** `WorldState` is not an
+`IStateOwner`, so where the structures are, which prospect became which field
+and where the header went up reach no container. Hand-placed fixtures are
+unaffected — everything the rebuild reads from the world is absent in their
+original runs too — which is exactly why the save arc got as far as it did
+without noticing.
+
+**The split, and it is not what PSD2 appears to say.** What this module holds
+divides cleanly:
+
+```text
+regenerable   surface, harbours, climate, jurisdictions, prospects, their
+              positions and capacities — a pure function of the world seed,
+              which PV7 already asserts
+decisions     where the HEADER went up; which prospect a discovery turned into
+              which compartment — things the GAME did, reproducible from
+              nothing
+```
+
+**So a load regenerates and then restores the decisions**, rather than storing a
+heightfield. The seed is already in the header (§2), the generator is already
+called by `CreateNew`, and PV7 is already the guarantee that running it again
+gives the same world — a save that stored the terrain would be storing a
+function of a number it also stores, and every future generator change would
+silently fork old saves from new ones.
+
+**Design 11 §6's PSD2 recommends (a) store the generated truth**, on the
+grounds that "the world can be *modified* in play (production changes reservoir
+state), so regeneration alone is insufficient". **Read closely, that reasoning is
+about the SUBSURFACE and not the surface** — production changes compartment
+state, which `subsurface.compartments` has stored since R20c.7. Nothing in play
+moves a harbour. So regenerating the surface and storing the decisions honours
+PSD2's intent rather than contradicting it, and PSD2's wording should be
+narrowed to say so.
+
+**What the owner carries** — `world.decisions`, in Layer 4 beside the other
+composition-owned blocks: the header coordinate if one has been placed, and the
+prospect↔compartment links `Found` creates. **What it must NOT carry** is
+anything the generator produces, and the test that keeps it honest is PV7 turned
+on a reload: regenerate, restore, and assert the world matches the one saved.
+
+> **The split is clean in principle and NOT clean in the code, which is the
+> implementation note this section needs.** `DeclareKnownField` both PLACES a
+> prospect — appending to `_prospects`, `_at` and `_capacity`, the same lists the
+> generator fills — and LINKS it through `Found`. So one object interleaves
+> generated data with decided data in the same three lists, and a restore cannot
+> simply replay the second kind.
+>
+> **That is a seam to fix before the owner is written, not around it.** Writing
+> the owner first would mean guessing which entries in those lists a load should
+> recreate — and a guess there restores a world subtly unlike the one saved,
+> which is the failure mode this whole arc has been about.
+>
+> **The seam is a BOUNDARY, not a flag per entry.** Generation runs once, at
+> creation, before a game has done anything; every placement after it is a
+> decision. So `WorldState` records the count of prospects standing when
+> generation finished — one `int`, set by the same door the generator already
+> comes through (`WorldSink`) — and everything at or beyond that index is a
+> decision a save replays:
+>
+> ```text
+> [0 .. generated)   the generator's, reproduced by regenerating from the seed
+> [generated .. n)   declared in play — §4b's known field, and any later
+>                    placement — captured and replayed in order
+> ```
+>
+> A per-entry flag would say the same thing less well: it invites a placement
+> that is somehow both, and it leaves the ordering question open. The boundary
+> cannot, because generation is finished before the first tick.
+>
+> **A hand-placed fixture falls out correctly with no special case** — nothing
+> generated, so the boundary is zero and every prospect is a decision, which is
+> exactly what those scenarios are.
+>
+> **Built at R20d.12.9, and the last step is a REGENERATION CALL that does not
+> exist yet.** `SaveGame.Load` composes through `BuildAt`, which does not
+> generate — so a generated save meets an engine holding no basin, the boundary
+> check finds N against 0, and **the load is REFUSED naming the mismatch**. That
+> is the correct failure and a deliberate one: a generated campaign that cannot
+> be reloaded is a limitation, while one restored onto an empty basin is a
+> corrupted game that looks fine.
+>
+> **Closing it needs one input the save does not carry.** Generation takes
+> `WorldParameters` (`CreateNew(settings, world)`) and a save records only the
+> seed, so `Load` cannot call the generator without them. **They must come from
+> the SAVE and not from the caller**: a save that needed a host to remember which
+> world it was would put the burden exactly where PR5's "loading without them
+> fails explicitly" says it must not be.
+
+### 4c.1 Where the parameters live — R20d.12.12 amendment
+
+The paragraph above proposed the **header**, on the grounds that the parameters
+are a scenario's declaration and a handful of numbers. **They belong in
+`world.decisions` instead**, and the reason is that the objection to the block —
+that a load needs them *before* any owner is restored — turns out not to hold.
+
+`SaveGame` already reads a block without restoring it. `Rebuild` calls
+`WellsState.Saved(StateBlock.ReaderFor(...))` for exactly this situation: the
+owner cannot be told what it holds until the things it holds exist, so the
+loader reads the instructions out of the block first and lets the owner check
+its own work afterwards. `ReaderFor` exists for that, and carries no version
+check precisely because the owner performs it moments later. Regeneration is the
+same shape one step earlier.
+
+Given that door, the block is better on three counts:
+
+- **L5.** What a world was generated from is a fact *about the world*, and
+  `WorldState` is the thing that owns the boundary those parameters are one side
+  of. The header is the container's metadata — schema, engine and content
+  versions, mods, seed, tick, stream positions, digests — and every entry in it
+  is about the FILE.
+- **The container format does not move.** `SaveHeader`, `Manifest`,
+  `HeaderFrom` and `SaveFile.Validate` are untouched, so the save's schema
+  version does not turn over and no migration is owed for a change no reader of
+  the header cares about.
+- **It is digested with the world.** A block is covered by its per-module
+  digest, so tampered parameters are refused naming `world.decisions` — the same
+  refusal as tampering with the boundary they are checked against, which is the
+  right pairing since neither means anything without the other.
+
+**Recorded at the door that already seals the boundary.** `SealGeneration` is
+called from `CreateNew` at the one instant both halves of the split are true,
+and `CreateNew` is holding the `WorldParameters` when it calls it. So the seal
+takes them: `SealGeneration(parameters)`, one call, no second path for the world
+to learn what made it.
+
+**A hand-placed scenario carries none, and that is the flag.** It never seals,
+so it has no parameters, and a load regenerates only when the block says the
+world was generated — the same distinction the boundary already draws, rather
+than a second one beside it.
+
+> **One consequence to state rather than discover.** Regeneration at load runs
+> with the clock already restored to tick N, because `BuildAt` restores it before
+> the modules compose. The generator takes no clock and its beliefs are replaced
+> by the save's ([SDD-008](SDD-008_INFORMATION_AND_BELIEFS.md) §4b.1), so nothing
+> simulated differs — but its audit entries are stamped at N rather than at zero.
+> Cosmetic, and cheaper to write down than to rediscover from a trail that says a
+> basin was drawn in year forty.
+
+**Then the test §4c asks for becomes possible, and not before**: regenerate,
+restore, assert the `WorldView` matches the one saved. PV7 today asserts a seed
+reproduces a world; it says nothing about regenerate-then-restore, and those are
+different claims.
+
 ## 5. Test mapping
 
 R15-V1 (PV7 identity) · V2 (substreams) · V3/MB5 (size log-normality emerges

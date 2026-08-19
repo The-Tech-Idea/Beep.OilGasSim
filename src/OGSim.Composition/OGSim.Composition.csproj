@@ -24,6 +24,7 @@
     <ProjectReference Include="..\OGSim.World\OGSim.World.csproj" />
     <ProjectReference Include="..\OGSim.Capabilities\OGSim.Capabilities.csproj" />
     <ProjectReference Include="..\OGSim.Integrity\OGSim.Integrity.csproj" />
+    <ProjectReference Include="..\OGSim.Environment\OGSim.Environment.csproj" />
     <ProjectReference Include="..\OGSim.Persistence\OGSim.Persistence.csproj" />
     <ProjectReference Include="..\OGSim.Objectives\OGSim.Objectives.csproj" />
   </ItemGroup>

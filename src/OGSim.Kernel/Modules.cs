@@ -180,6 +180,26 @@ public interface IStateOwner
 {
     StateKey Key { get; }
     int SchemaVersion { get; }
+
+    /// <summary>
+    /// The keys this owner must be restored AFTER (SDD-001 §10, SDD-013 §2b,
+    /// design 11 §2.1).
+    ///
+    /// <para>CAPTURE ORDER AND RESTORE ORDER ARE DIFFERENT ORDERS, and only one
+    /// of them can be the key's. Capture walks keys so that composing modules
+    /// differently cannot change a byte, which is what PV1 rests on. Restore has
+    /// to follow dependencies instead, and a key says nothing about them:
+    /// <c>world.decisions</c> sorts after <c>wells.completions</c> and has to be
+    /// restored before it, because reopening a well measures its gathering line
+    /// against a header that block holds. The loader knew that only as a
+    /// hand-written phase, and got it wrong once (finding 201).</para>
+    ///
+    /// <para>Empty for most owners, and empty is a STATEMENT rather than an
+    /// omission: "nothing else has to be back before I am". No default is
+    /// supplied for it, so a new owner has to answer the question.</para>
+    /// </summary>
+    IReadOnlyList<StateKey> RestoreAfter { get; }
+
     void Capture(IStateWriter writer);
     void Restore(IStateReader reader);
 }

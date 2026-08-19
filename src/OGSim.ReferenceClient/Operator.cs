@@ -84,6 +84,13 @@ public sealed class Operator
 
             if (seen is not null)
             {
+                // BEFORE ANYTHING ELSE. A field with a broken separator makes
+                // nothing at all — the route law shuts in everything behind it
+                // — so there is no development decision worth taking while the
+                // chain is down, and a month spent drilling instead is a month
+                // the field earned zero.
+                MaintainTheChain(seen);
+
                 debottlenecked |= Develop(seen);
                 abandoned += CloseWhatIsFinished(seen);
             }
@@ -99,6 +106,65 @@ public sealed class Operator
             final.Outcome, final.Tick, final.Cash,
             final.Wellbores.Count, abandoned, debottlenecked);
     }
+
+    /// <summary>
+    /// Keep the chain running (SDD-012 §2–§3).
+    ///
+    /// <para>THE CLIENT CAN SEE THIS AT ALL because the chain view carries every
+    /// registered element with its condition, including the ones that did not
+    /// flow. A failed element is absent from the network by design, so a view
+    /// built from the solve alone would have shown the broken row simply
+    /// vanishing — the field stops earning and nothing on the surface says
+    /// why.</para>
+    ///
+    /// <para>CONDITION-BASED, which is the middle of SDD-012 §3's three
+    /// strategies and, since R20d.26.2, the one that pays: an emergency repair
+    /// costs three times a scheduled service, so a company that only ever
+    /// answers breakdowns buys every one of them at the emergency price. This
+    /// client played run-to-failure until then, and it was the right choice
+    /// while the two jobs cost the same.</para>
+    ///
+    /// <para>THE TRIGGER IS DELIBERATELY NOT THE BEST ONE. Measured across four
+    /// seeds the peak sits between 0.2 and 0.7 depending on the dice, and a
+    /// client tuned to a seed would be demonstrating a lucky number rather than
+    /// a surface. What matters here is that the read model carries the CONDITION
+    /// a decision needs — without it the choice is unmakeable from outside the
+    /// engine, which is the property this client exists to prove.</para>
+    ///
+    /// <para>AND SINCE R20d.26.4 THE CONDITION HAS TO BE BOUGHT. An element with
+    /// no monitoring kit reports a null condition, so this client instruments
+    /// first and services afterwards — which is the whole of C14's decision
+    /// expressed through the surface: spend a little to see wear, or spend
+    /// nothing and answer breakdowns at the emergency price.</para>
+    /// </summary>
+    private void MaintainTheChain(FieldReadModel seen)
+    {
+        IReadOnlyList<ChainElementView> chain = seen.Chain;
+
+        for (var i = 0; i < chain.Count; i++)
+        {
+            // ONE AT A TIME, and the refusals do the rest: the scheduler allows
+            // one job per target, so submitting for every element is either
+            // accepted or told why. Nothing here needs to track what is already
+            // under way — or which of the jobs an element is eligible for,
+            // because the validators are mutually exclusive on exactly that.
+            if (chain[i].Failed)
+                _engine.Commands.Submit(new RepairEquipmentCommand(chain[i].Element));
+
+            // NULL IS UNKNOWN, and the answer to not knowing is the instrument.
+            // A client that read null as "fine" would never instrument anything
+            // and would quietly be playing run-to-failure while believing it
+            // had a maintenance policy.
+            else if (chain[i].Condition is null)
+                _engine.Commands.Submit(new InstallMonitoringCommand(chain[i].Element));
+
+            else if (chain[i].Condition < ServiceBelow)
+                _engine.Commands.Submit(new ServiceEquipmentCommand(chain[i].Element));
+        }
+    }
+
+    /// <summary>The condition a scheduled service is ordered at (SDD-012 §3).</summary>
+    private const double ServiceBelow = 0.4;
 
     /// <summary>
     /// Drill while there is a rig free and a field worth developing, and answer
@@ -134,8 +200,42 @@ public sealed class Operator
         if (seen.Cash > ExportLineWorthBuildingAt)
             moved |= _engine.Commands.Submit(new ExpandExportCommand()) is Accepted;
 
+        FloodIfItIsWorthIt(seen);
+
         return moved;
     }
+
+    /// <summary>
+    /// Replace the voidage once the field is developed (SDD-003 §3.1d).
+    ///
+    /// <para>THE SIMPLEST POLICY THAT IS NOT ALWAYS WRONG: order a full
+    /// replacement and let the engine's two ceilings decide what it actually
+    /// buys. A field the aquifer already supports has almost no room, so the
+    /// flood costs it almost nothing; a field with no drive of its own has all
+    /// the room there is, and the water is what makes it worth anything at all
+    /// — 2.1% of the oil unflooded against 22.1% flooded.</para>
+    ///
+    /// <para>It is still a POLICY rather than the right answer, and deliberately
+    /// a crude one: an operator that measured its own pressure decline first
+    /// would spend less on the fields that never needed it. What matters here is
+    /// that a headless client can reach the lever at all — the read model
+    /// carries the target, what was bought and what room is left, so the whole
+    /// decision is expressible through `ReadModel` and `Commands` alone.</para>
+    ///
+    /// <para>Ordered ONCE and then refused, which is what the validator is for:
+    /// a set point that is already where it was asked to be is a rejection
+    /// rather than a silent no-op.</para>
+    /// </summary>
+    private void FloodIfItIsWorthIt(FieldReadModel seen)
+    {
+        if (seen.Wellbores.Count < _wellTarget) return;
+
+        _engine.Commands.Submit(new SetVoidageReplacementCommand(FullReplacement));
+    }
+
+    /// <summary>Replace every reservoir cubic metre the field takes out — VRR 1,
+    /// which is what a waterflood IS.</summary>
+    private const double FullReplacement = 1.0;
 
     /// <summary>
     /// What a client wants in the bank before committing to a bigger line.
@@ -158,11 +258,35 @@ public sealed class Operator
     /// reports production per field. That is a real limit of the current read
     /// model rather than a policy choice, and it is recorded here instead of
     /// worked around: a client inventing a per-well number would be guessing.</para>
+    ///
+    /// <para>A MONTH WITH THE CHAIN DOWN IS NOT EVIDENCE OF ANYTHING. The only
+    /// signal the surface offers is the cash BALANCE, so the flow computed here
+    /// is every movement there was — production, but also the repair bill and
+    /// the export line. A field whose separator is broken therefore looks
+    /// exactly like a field that has run out: it earns nothing and it is paying
+    /// a crew. Plugging on that is plugging a field for being under repair, and
+    /// it is what a 3× emergency price turned from a latent misreading into four
+    /// abandoned wells on the biggest field in the suite (R20d.26.2).</para>
+    ///
+    /// <para>So an outage month is skipped rather than counted. That is a
+    /// narrower answer than the real one: **the read model cannot say whether a
+    /// company is losing money on OPERATIONS**, because it publishes a balance
+    /// and not a cash flow split into what the field earned and what the company
+    /// chose to spend. Until it does, no client can tell a month of investment
+    /// from a month of decline, and this one is guessing carefully rather than
+    /// well.</para>
     /// </summary>
     private int CloseWhatIsFinished(FieldReadModel seen)
     {
         Money flow = seen.Cash - _lastSeenCash;
         _lastSeenCash = seen.Cash;
+
+        // NEITHER COUNTED NOR FORGIVEN. An outage month is no evidence that the
+        // field is finished, but it is no evidence that it is healthy either —
+        // and a field in terminal decline breaks OFTEN, so resetting the count
+        // here would let a dying field stay open for ever on the strength of its
+        // own unreliability. The month is skipped and the tally survives it.
+        if (ChainIsDown(seen)) return 0;
 
         // Still clearing the hurdle: nothing to close. A single bad month is not
         // a reason to plug a field either, so the shortfall has to persist.
@@ -190,6 +314,17 @@ public sealed class Operator
         }
 
         return closed;
+    }
+
+    /// <summary>Whether anything in the chain is out of service — in which case
+    /// the field is shut in behind it (SDD-002 §5) and this month says nothing
+    /// about whether the oil has run out.</summary>
+    private static bool ChainIsDown(FieldReadModel seen)
+    {
+        for (int i = 0; i < seen.Chain.Count; i++)
+            if (seen.Chain[i].Failed) return true;
+
+        return false;
     }
 
     private static int Producing(FieldReadModel seen)

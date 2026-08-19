@@ -4,245 +4,153 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-**OGSim** — a ground-up oil & gas company simulation engine in C# (.NET 10):
+**OGSim** is a ground-up oil & gas company simulation engine in C# (.NET 10):
 exploration → appraisal → development → production → processing → transport →
-export. Turn-based engine (one tick = one month), real-time-with-pause game.
-The engine is headless; a host renders it.
+export. It is a turn-based engine (one tick = one month) with real-time-with-pause gameplay; the engine is headless and a host renders it.
 
-The repository is **design-first**: `plans/` holds ~100 documents settled before
-code, and they are read rather than guessed at. `src/` now holds the built
-engine — the kernel, the contract layer, eleven domain modules, Layer 4
-composition and a reference client — plus `src/OGSim.Game`, the Godot host.
+The repository is design-first. `plans/` contains the authoritative design set and is read before code is changed. The current repo state is the result of the design work plus implementation progress; the single reliable source of truth for what is built, next, and bypassed is `plans/MASTER_TRACKER.md`.
 
-**The engine composes, advances a tick and plays**: a player drills, waits,
-finds oil or doesn't, produces, declines, and wins or goes broke. Current work
-is **R20d** — wiring subsystems that are built and tested but bypassed by the
-running tick — and R21.5, a host consuming the published surface. Read
-`plans/MASTER_TRACKER.md` before assuming anything about what exists: a phase
-mark means "built and tested against its SDD", not "used by the running engine".
+Treat counts in prose as stale until they are re-checked. The project is expected to evolve and some historical notes in this file are intentionally superseded by the live plan and the codebase itself.
 
-The previous engine in this repo's history (`OGGame.Core`, `Game/`,
-`Documentation/`) is **not an input**: not referenced, ported, or consulted.
+The previous engine in this repo's history (`OGGame.Core`, `Game/`, `Documentation/`) is not an input: it is not referenced, ported, or consulted.
 
 ## Commands
 
 ```bash
 dotnet build OGSim.slnx                 # must be 0 warnings — warnings are errors
-dotnet test  OGSim.slnx                 # xUnit; ~900 tests across 16 assemblies
-dotnet test  tests/OGSim.Wells.Tests/OGSim.Wells.Tests.csproj --no-build
+dotnet test  OGSim.slnx                 # xUnit — the gate, and the only complete answer
 dotnet test  OGSim.slnx --no-build --filter "FullyQualifiedName~Money_rounds_half_even"
-dotnet test  tests/OGSim.Architecture.Tests/OGSim.Architecture.Tests.csproj   # the laws
+
+# While iterating: skip the forty-year runs when needed
+# dotnet test tests/OGSim.Composition.Tests --no-build --filter "Speed!=Slow"
 ```
 
-Requires the .NET 10 SDK (`.slnx` solution format). There is no CI workflow —
-`.github/workflows/` is empty, so the build and the test run are the only gates.
+Requires the .NET 10 SDK (`.slnx` solution format). There is no CI workflow checked into this repo, so the build and test run are the practical gates.
 
-`src/OGSim.Game` is a **Godot 4.7 / net8.0 project and is deliberately not in
-`OGSim.slnx`**; it builds through Godot, not `dotnet build OGSim.slnx`.
+`src/OGSim.Game` is a Godot 4.x / net8.0 project and is deliberately not in `OGSim.slnx`; it builds through Godot rather than through `dotnet build OGSim.slnx`.
 
-The Bash tool here runs Git Bash, not cmd. `> nul` creates a literal file named
-`nul` in the repo (one already exists from a past slip) — use `/dev/null`.
+The Bash tool here runs Git Bash, not cmd. Use `/dev/null` instead of `> nul`.
 
 ## Where the answers live
 
-`plans/` is authoritative:
+`plans/` is authoritative and must be read rather than guessed at:
 
 | Need | Read |
 |---|---|
-| What is built, what is next, what is bypassed | `plans/MASTER_TRACKER.md` — phase status, execution order, open-item register |
+| What is built, what is next, what is bypassed | `plans/MASTER_TRACKER.md` |
 | Reading order for the design set | `plans/README.md` |
-| Layers, laws, modules, the tick | `plans/design/03_ARCHITECTURE.md` |
-| Signatures and algorithms to implement from | `plans/sdd/` (`SDD_INDEX.md` maps phase → SDD) |
-| Coding standards, determinism, CI gates | `plans/sdd/SDD-000_ENGINEERING_STANDARDS.md` |
-| Which contract a function belongs to, and its test pin | `plans/design/23_FUNCTION_MATRIX.md` |
+| Layers, laws, modules, and the tick | `plans/design/03_ARCHITECTURE.md` |
+| Signatures and algorithms to implement from | `plans/sdd/` and `plans/sdd/SDD_INDEX.md` |
+| Coding standards, determinism, and CI gates | `plans/sdd/SDD-000_ENGINEERING_STANDARDS.md` |
+| Which contract a function belongs to and its test pin | `plans/design/23_FUNCTION_MATRIX.md` |
 | Term definitions and naming law | `plans/design/19_GLOSSARY.md` |
-| What identifier `MB6` / `IR2` / `FV13` means | `plans/design/22_DESIGN_COHERENCE.md` §4 |
+| Meaning of identifiers such as `MB6`, `IR2`, and `FV13` | `plans/design/22_DESIGN_COHERENCE.md` §4 |
 | What one phase is for | `plans/phases/R<n>_*.md` |
-| Equipment, tiers, tech gates | `plans/catalog/` |
-| The Godot host's own plan and ground rules | `src/OGSim.Game/plans/` |
+| Equipment, tiers, and tech gates | `plans/catalog/` |
+| Godot host plan and rules | `src/OGSim.Game/plans/` |
 
-Comments in the source cite these by section (`// SDD-003 §6.1 — SI Darcy`,
-`// design 03 §6`). Follow the citation before changing the code.
+Comments in the source cite these by section, for example `// SDD-003 §6.1 — SI Darcy` and `// design 03 §6`. Follow the cited design before changing code.
 
 ## Architecture
 
 **Five layers, dependencies strictly downward** (03 §2):
-kernel → simulation services → domain modules → composition → host (outside the
-engine). Assembly boundaries *are* the enforcement: a layering violation is a
-missing project reference, and `Layering_DependenciesPointDownwardOnly` fails.
+kernel → simulation services → domain modules → composition → host (outside the engine). Assembly boundaries are the enforcement: a layering violation is a missing project reference and a failing architecture test.
 
-| Project | Holds |
-|---|---|
-| `OGSim.Kernel` | Quantities, Money, 30/360 time, identity, RNG, effects, content loading, the tick pipeline, composition machinery, `DetMath` |
-| `OGSim.Contracts` | Every domain interface and the whole `IEngine`/`ReadModel` surface |
-| `OGSim.Flow` | The one solver — network, solve state |
-| `OGSim.Subsurface` | Compartments, material balance, aquifer, drive mechanisms, water cut — **every type `internal`** |
-| `OGSim.Wells` | Completions, inflow/outflow, operating point, lift, injectors |
-| `OGSim.Facilities` | Separation, gas processing, tanks, manifolds, pipelines, spec gates, export terminal — transport lives here, not in its own project |
-| `OGSim.Operations` | Operations, scheduler, obligations |
-| `OGSim.Company` | Ledger, fiscal regimes, licences, rivals |
-| `OGSim.Information` | Belief store, observation, prospect risk — the door truth passes through |
-| `OGSim.World` | The causal world generator and its steps |
-| `OGSim.Capabilities` | Technology state, gating |
-| `OGSim.Integrity` | Bow-tie, degradation |
-| `OGSim.Persistence` | Canonical JSON, save file, state blocks |
-| `OGSim.Objectives` | Objective evaluation |
-| `OGSim.Composition` | Layer 4 — **the only project entitled to name a concrete type**: modules, engine builder, read-model projection, the production loop, activities, scenario |
-| `OGSim.ReferenceClient` | R21 §2.5 — a host that plays through `ReadModel` + `Commands` and nothing else. A reference to a module here is the defect it exists to catch |
-| `OGSim.Game` | The Godot host — outside the engine and outside the solution |
+The general project layout is:
 
-Not every planned project materialised: there is no `Environment`, `Transport`,
-`Hse` or `Advisor` assembly. HSE, the field, diagnostics and materials are
-modules declared in `Composition/Modules.cs` with no project of their own; R22
-(Environment) and R25 (Advisor) are unbuilt. There is **no shared
-`Common`/`Utils` project, ever** — a type two modules need is either a kernel
-type or a design smell.
+- `OGSim.Kernel`: primitives, quantities, money, time, identity, RNG, effects, and core utilities
+- `OGSim.Contracts`: domain interfaces and public engine surface contracts
+- `OGSim.Flow`: solver and flow state
+- `OGSim.Subsurface`: subsurface truth models and material-balance logic
+- `OGSim.Wells`: completions, inflow/outflow, lift, injectors, and operating points
+- `OGSim.Facilities`: separation, gas processing, tanks, manifolds, pipelines, and export
+- `OGSim.Operations`: operations and scheduling
+- `OGSim.Company`: ledger, fiscal regimes, licenses, and rivals
+- `OGSim.Information`: belief store, observations, and prospect risk
+- `OGSim.World`: world generation and causal simulation steps
+- `OGSim.Capabilities`: technology state and gating
+- `OGSim.Integrity`: degradation and bow-tie logic
+- `OGSim.Persistence`: save files, canonical JSON, and state blocks
+- `OGSim.Objectives`: objective evaluation
+- `OGSim.Composition`: layer 4 composition, engine builder, read-model projection, scenario wiring, and production loop
+- `OGSim.ReferenceClient`: a headless client outside the engine, which is used to validate the published surface
+- `OGSim.Game`: the Godot host, outside the engine and outside the solution
 
-**Contract-first, plugin-first.** Every replaceable capability is an interface
-listed in 03 §3.2 (`IInflowModel`, `IHydraulicModel`, `IFiscalRegime`,
-`IWorldGenerator`, `IFaultPolicy`, …); every implementation is registered at
-composition time. Rebalancing is a content edit; new behaviour is a new plugin
-plus the JSON naming it — **never an edit to existing engine code**.
+There is no shared `Common` / `Utils` project; if a second module needs a type, it should be a kernel type or a design smell.
 
-**Content is authored JSON** under `content/` (`materials/`, `property-kinds/`,
-`rock-types/`, `technologies/`). The loader and grammars exist in the kernel;
-the composed engine still carries its parameterisation as explicit `Defaults`
-in `EngineBuilder` until R20c.9 loads those files. Those are *values passed
-explicitly at the one layer entitled to*, not fallbacks — L2 forbids a
-defaulted dependency.
+**Contract-first, plugin-first.** Replaceable capabilities are interfaces; implementations are plugged in at composition time. Rebalancing is a content edit; new behavior is a new plugin plus the JSON naming it — not an edit to existing engine code.
 
-**Composition is all-or-nothing.** `IModule` declares Provides / Requires /
-OwnsState / Stages / Commands; `ModuleComposer` validates the whole set, then
-either builds the engine or refuses naming *every* problem. There is no
-partially-composed engine and no degraded mode. `EngineBuilder.CreateNew`
-returns `Built` or a refusal; `tests/OGSim.Composition.Tests/NewGameTests.cs`
-is the worked example of starting a game from `WorldParameters` and a seed.
+**Composition is all-or-nothing.** `IModule` declares `Provides`, `Requires`, `OwnsState`, `Stages`, and `Commands`; `ModuleComposer` validates the whole set and either builds the engine or refuses to start, naming every problem.
 
 **The tick is 14 stages in one declared order** (03 §6):
-Open → Commands → Environment → Operations → Availability/Hazards/Segmentation →
-SolveFlow (once per segment) → MaterialBalance → Custody → Economics → HSE →
-Information → Company → Objectives → Close. `StageId` in `Kernel/Modules.cs`
-pins the numbering. Stage 4 deliberately reads the *previous* tick's solved
-values (a defined one-tick lag, not a circular dependency). Only some stages do
-real work so far; MASTER_TRACKER says which.
+Open → Commands → Environment → Operations → Availability/Hazards/Segmentation → SolveFlow → MaterialBalance → Custody → Economics → HSE → Information → Company → Objectives → Close.
 
-**Commands in, read model out.** `IEngine` (`EngineSurface.cs`) is the entire
-public surface: `AdvanceTick`, `ReadModel`, `Commands`, `Events(tick)`, `Audit`,
-`World`, `WriteSave`. The read model is rebuilt each tick from **beliefs, never
-truth**, and is a copy taken at the close — a host re-reads it after every tick
-and never holds one across ticks. Events are outbound-only: there is
-deliberately no `Subscribe()`, and engine code cannot react to events. Every
-rejection is domain-typed, so a host renders a reason rather than inventing one.
+**Commands in, read model out.** The public engine surface is command-driven; a host submits commands and reads the read model produced each tick. The read model is rebuilt from beliefs, not truth, and the engine does not react to events via `Subscribe()`.
 
-**Truth vs belief is structural.** The subsurface truth model stays `internal`
-to `OGSim.Subsurface` — that assembly has no public type at all, and
-`Truth_SubsurfaceExposesNoPublicType` asserts exactly that. Beliefs cross
-through `Observation`, the same door every in-game measurement uses.
+**Truth vs belief is structural.** Subsurface truth stays internal to its assembly; beliefs cross through `Observation`, which is the same door used by in-game measurements.
 
 ### The kernel type system
 
-`OGSim.Kernel` makes whole defect classes inexpressible rather than tested-for:
+`OGSim.Kernel` is designed to make whole classes of defects inexpressible rather than merely tested for:
 
-- **Quantities** (`Quantities.cs`) — one `readonly record struct` per dimension,
-  canonical SI inside, factory-per-unit. Cross-dimension arithmetic does not
-  exist; legal products/quotients are declared operators. There is no
-  `Pressure * Pressure`.
-- **Volume conditions are types** (`Volumes.cs`) — `ReservoirVolume` +
-  `SurfaceVolume` is a compile error; conversion requires a
-  `FormationVolumeFactor` in hand. Gas has its own bridge
-  (`GasFormationVolumeFactor` → `StandardGasVolume`), never stock-tank.
-- **Money is a checked scaled integer** (`Money.cs`) — cash conservation is
-  exact with no tolerance; overflow throws. Exactly one double→Money rule:
-  half-even, once, at the ledger boundary.
-- **Time is 30/360** (`Time.cs`) — every month is exactly 30 days, so the
-  /30ths segment grid is exact for every tick. Labels stay real; leap years
-  do not exist.
-- **Identity is sequential and typed** (`Identity.cs`) — `EntityId<T>`,
-  `EntityRef`, `ContentId` (charset-validated kebab-case). No `Guid`.
-- **RNG is eight independent named streams** (`Random.cs`) — adding a draw in
-  one can never shift another.
-- **Transcendentals are `DetMath.cs`**, never `System.Math`.
-- **Effects are a sealed four-record vocabulary** (`Effects.cs`) — technology
-  and environment speak the same language, and a bare multiplier is not in it.
+- **Quantities**: one readonly record struct per dimension, canonical SI inside, factory-per-unit conversion
+- **Volume conditions are types**: `ReservoirVolume` and `SurfaceVolume` are not interchangeable without an explicit conversion step
+- **Money is a checked scaled integer**: exact cash conservation; no tolerance; overflow throws
+- **Time is 30/360**: every month is exactly 30 days
+- **Identity is sequential and typed**: `EntityId<T>`, `EntityRef`, `ContentId`, with no `Guid`
+- **RNG is eight independent named streams**: no cross-stream coupling
+- **Transcendentals are `DetMath`**, not `System.Math`
+- **Effects are a sealed four-record vocabulary**
 
 ## Rules that will trip you up
 
-These are laws, not style preferences, and most are **mechanically enforced** by
-`tests/OGSim.Architecture.Tests` — rules asserted over compiled metadata
-(`MetadataRules.cs`) and over Roslyn syntax (`SourceRules.cs`), chosen per rule
-by which instrument is honest for it. `EngineCorpus.cs` defines the corpus:
-every referenced engine assembly, and **every `.cs` file under `src/`** outside
-`bin`/`obj` — which now includes the Godot host and its addons.
+These are not style preferences; they are laws with mechanical enforcement in the architecture suite where applicable.
 
-Architecture laws (03 §1): **L1** no concrete type is ever a dependency ·
-**L2** no dependency has a default — no optional params, no `?? new X()`, no
-singleton, no static mutable state · **L3** no member exists without behaviour —
-no stubs, no `NotImplementedException`, no constant standing in for work ·
-**L4** no failure is discarded — every `catch` routes through `IFaultPolicy`,
-rethrows, or records a `LoadFailure` the caller receives · **L5** one owner per
-fact — derived values are computed, never mirrored.
+Architecture laws (03 §1):
+- **L1** no concrete type is ever a dependency
+- **L2** no dependency has a default; no optional params, no `?? new X()`, no singleton, no static mutable state
+- **L3** no member exists without behavior; no stubs, no `NotImplementedException`, no constant standing in for work
+- **L4** no failure is discarded; `catch` must route through `IFaultPolicy`, rethrow, or record a failure the caller receives
+- **L5** one owner per fact; derived values are computed, never mirrored
 
-Determinism (SDD-000 §3): all simulation arithmetic is `double` · **no
-`System.Math` transcendentals** in simulation code (they route to platform libm
-and are not bit-identical — use `DetMath`) · no `float`, no `decimal` in
-simulation · no LINQ in per-tick paths · `Dictionary`/`HashSet` may store but
-never be enumerated (only `List`/arrays/`SortedDictionary` keyed by `EntityId`) ·
-banned: `DateTime.Now/UtcNow`, `Random`, `Guid.NewGuid`, `Environment.TickCount`,
-`Stopwatch` · no parallelism inside a tick, and `async` appears nowhere in the
-engine · `InvariantCulture` on every parse and format.
+Determinism (SDD-000 §3):
+- all simulation arithmetic is `double`
+- no `System.Math` transcendentals in simulation code; use `DetMath`
+- no `float`, no `decimal` in simulation
+- no LINQ in per-tick paths
+- `Dictionary` / `HashSet` may store but must not be enumerated in per-tick logic; prefer `List` / arrays / `SortedDictionary` keyed by `EntityId`
+- banned: `DateTime.Now/UtcNow`, `Random`, `Guid.NewGuid`, `Environment.TickCount`, `Stopwatch`
+- no parallelism inside a tick, and no `async` in the engine
+- `InvariantCulture` on every parse and format
 
-Fidelity (SDD-000 §8) — the anti-hallucination rules:
+Fidelity (SDD-000 §8):
+- **F-1** Every public/internal member of an engine assembly is specified in a merged SDD before implementation
+- **F-2** No numeric literal in simulation code except `0` and `1`; constants live in `PhysicalConstants` or content
+- **F-3** Every formula cites the SDD section, and the behavior is pinned by an `MX*` or verification test
+- **F-4** If implementation shows an SDD is wrong, stop and update the SDD and design before changing code
+- **F-5** An amendment edits its block; it does not sit beneath it
+- **F-6** Identity is `EntityId<T>`; no per-entity id types
 
-- **F-1** Every public/internal member of an engine assembly is specified in a
-  merged SDD *before* it is implemented. Unspecified member → update the SDD
-  first, as its own reviewed change.
-- **F-2** No numeric literal in simulation code except 0 and 1. Constants live
-  in `PhysicalConstants` (`Quantities.cs`) with their SDD citation and unit, or
-  come from content.
-- **F-3** Every formula cites the SDD section stating its form and is pinned by
-  an `MX*` test against an independently computed value.
-- **F-4** **If implementation shows an SDD is wrong, stop.** Update the SDD (and
-  the design doc if the conflict reaches it), re-review, then code. Do not "fix
-  it in the code."
-- **F-5** an amendment edits its block, never sits beneath it · **F-6** identity
-  is `EntityId<T>`; no per-entity id types.
+Naming (19 §N1–N7):
+- one concept, one name everywhere
+- contracts are `I` + the domain noun (`IWell`, not `IWellEntity`)
+- no `Manager`, `Helper`, `Util`, `Service`, `Handler`, `Data`, or `Info` in any contract name
+- industry terms beat invented terms (`Perforation`, not `ReservoirConnection`)
+- a new term enters the glossary before it enters code
 
-Naming (19 §N1–N7): one concept, one name, everywhere · contracts are `I` + the
-domain noun (`IWell`, not `IWellEntity`) · **no `Manager`, `Helper`, `Util`,
-`Service`, `Handler`, `Data`, `Info` in any contract name** · industry terms beat
-invented ones (`Perforation`, not `ReservoirConnection`) · a new term enters the
-glossary before it enters code.
-
-Also binding: **no external packages in engine assemblies** — kernel through
-composition reference only the BCL; test assemblies may take packages (the
-architecture suite takes Roslyn) · `InternalsVisibleTo` only to a module's own
-test assembly, declared in the `.csproj` · **no regex sweeps, no batch
-find-and-replace, ever** · no compatibility shims or "kept so old call sites
-work".
+Also binding:
+- no external packages in engine assemblies
+- `InternalsVisibleTo` only to a module's own test assembly, declared in the project file
+- no regex sweeps or batch find-and-replace
+- no compatibility shims or code kept just for old call sites
 
 ## Working conventions
 
-- **A phase's first task is its SDD review** (`Rn.0`) — confirm the SDD still
-  matches the design set before writing code.
-- Comments explain **why** and cite design docs by section. No phase tags in
-  prose about chronology — git history owns that.
-- Verification-suite IDs appear verbatim in test names:
-  `FV5_the_separators_set_point_is_what_the_well_flows_against`,
-  `R20V4_a_well_can_be_shut_in_and_stops_producing`. Tests pinning a behaviour
-  rather than a suite ID are named as sentences.
-- Commits: `R<phase>.<task>: <what> (<tests before> -> <after>)`, e.g.
-  `R20d.8.8: the gathering line exists (906 -> 907)`. One task, one commit,
-  revertable — plus a `docs:` commit when a `MASTER_TRACKER.md` row ticks.
-- The Godot host never edits the engine: from `src/OGSim.Game`, engine state is
-  read-only, mutations go through `Commands.Submit`, and ticks are the only
-  source of time (`src/OGSim.Game/plans/README.md`).
-- **A stub, fallback, default dependency or swallowed exception is never the
-  answer.** If a phase appears to need one, that is a design gap — reopen the
-  design document rather than working around it.
+- **A phase's first task is its SDD review** (`Rn.0`): confirm the SDD still matches the design set before writing code.
+- Comments explain why and cite the design docs by section.
+- Verification-suite IDs appear verbatim in test names.
+- Commits follow `R<phase>.<task>: <what> (<tests before> -> <after>)`.
+- The Godot host never edits the engine; engine state is read-only from the host, mutations go through commands, and ticks are the only source of time.
+- **A stub, fallback, default dependency, or swallowed exception is never the answer.** If a phase appears to need one, that is a design gap; reopen the design document instead of working around it.
 
-Known divergences from the written standards, all fine to close when the
-relevant phase lands: `Directory.Build.props` carries the platform settings
-(`net10.0`, nullable, `TreatWarningsAsErrors`) but each `.csproj` also
-re-declares its TFM; the test projects use xUnit v2 where SDD-000 §1 specifies
-xUnit v3 + FsCheck + BenchmarkDotNet; and moving the Godot host under `src/`
-put non-engine C# inside the architecture suite's source corpus.
+Known divergences from the written standards are acceptable to leave alone until the relevant phase lands, but they should not be mistaken for the canonical rule set. Current examples include project-specific platform settings and the fact that the Godot host sits outside the engine solution while still being included in the broader repo source corpus.

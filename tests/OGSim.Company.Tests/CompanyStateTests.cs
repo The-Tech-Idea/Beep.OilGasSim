@@ -114,12 +114,30 @@ public sealed class CompanyStateTests
     }
 
     /// <summary>
-    /// The replay goes through <c>Post</c>, so a save that breaks the rules is
-    /// refused rather than loaded. Here: revenue credited by a cause that is not
-    /// a custody transfer — the invariant that gives revenue exactly one origin.
+    /// A REPLAY IS NOT AN ORIGINATION (SDD-009 §1's R20d.12 amendment), and this
+    /// test used to say the opposite.
+    ///
+    /// <para>It asserted that restoring a saved revenue credit re-asks the audit
+    /// trail whether its cause was a custody transfer, and it passed by handing
+    /// one predicate at capture and a stricter one at restore. **The real engine
+    /// cannot produce that pair.** It asks
+    /// <c>cause => IsCustodyTransfer(audit, cause)</c>, and a freshly composed
+    /// engine's trail is EMPTY — so every save with revenue in it was
+    /// unrestorable, and the test that should have caught it was instead pinning
+    /// the behaviour that caused it (finding 168's shape, finding 193).</para>
+    ///
+    /// <para>It could not be repaired by saving the trail either: detail is
+    /// retained on a window (design 09 §4.4), so a movement from tick 5 in a game
+    /// saved at tick 60 cites a cause the engine has already summarised away.
+    /// The check is unrepeatable by construction.</para>
+    ///
+    /// <para>What protects a restored ledger instead is what is repeatable: the
+    /// container's per-module DIGEST refuses an edited block, and INV2 refuses a
+    /// ledger whose numbers do not balance. Origination is checked where it
+    /// happens — at posting, on live entries.</para>
     /// </summary>
     [Fact]
-    public void A_save_that_breaks_a_posting_rule_is_refused_on_load()
+    public void A_saved_revenue_credit_is_replayed_without_re_asking_its_origin()
     {
         CompanyState captured = Fresh();
         captured.Ledger.Post(new Movement(
@@ -128,11 +146,29 @@ public sealed class CompanyStateTests
 
         JsonValue written = StateBlock.Capture(captured).Written();
 
-        // A different engine, where id 7 was never a sale. The bytes are
-        // identical; the world they claim is not one this build can hold.
-        var stricter = new CompanyState(Money.FromMillions(10.0), _ => false);
+        // The engine every load actually gets: one whose trail has never heard
+        // of cause 7, because it has never heard of anything.
+        var reloaded = new CompanyState(Money.FromMillions(10.0), _ => false);
 
-        Assert.Throws<InvariantFault>(() => StateBlock.Restore(stricter, written));
+        StateBlock.Restore(reloaded, written);
+
+        Assert.Equal(500L, reloaded.Ledger.BalanceOf(Account.Revenue).Cents * -1L);
+        Assert.Equal(new Money(500), reloaded.Ledger.Movements[^1].Amount);
+    }
+
+    /// <summary>
+    /// AND POSTING STILL REFUSES IT. Removing the check from the replay path did
+    /// not remove it — revenue that cites something other than a sale is still
+    /// unspellable on a live ledger, which is where the rule was always about.
+    /// </summary>
+    [Fact]
+    public void Revenue_still_cannot_be_posted_without_a_custody_transfer()
+    {
+        var ledger = new CostLedger(Money.FromMillions(10.0), _ => false);
+
+        Assert.Throws<InvariantFault>(() => ledger.Post(new Movement(
+            new Tick(1), Account.Cash, Account.Revenue, new Money(500),
+            MovementCategory.Production, null, new AuditId(7))));
     }
 
     /// <summary>Movement order is preserved past the point where ordinal key

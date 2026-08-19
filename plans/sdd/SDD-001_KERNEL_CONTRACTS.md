@@ -432,6 +432,25 @@ public sealed record AuditQuery(
 
 public interface IAuditTrail
 {
+    // R20d.12.23 — the trail comes back from a save (SDD-013 §1b/S013-4).
+    //
+    // ON THE CONCRETE `AuditTrail`, NOT ON `IAuditTrail`, exactly as `Prune` and
+    // `SimulationClock.Advance` are: a module that holds the interface must be
+    // able to record and query and must not be able to rewrite history. The one
+    // thing loading a save can.
+    //
+    // NOT VIA `Record`. That assigns the next id and refuses a cause it cannot
+    // resolve — both correct for a live entry and both wrong for a restore,
+    // which must reproduce the ids the save carries or every `Cause` in it
+    // points at the wrong entry. Ids restore verbatim and the counter resumes
+    // above the highest.
+    //
+    //   void RestoreFrom(IReadOnlyList<AuditEntry> entries);   // on AuditTrail
+    //
+    // Refuses a set whose causes do not resolve WITHIN it, because a chain that
+    // dangles after a load is 09 §4.3's "why?" stopping halfway with nothing to
+    // say it stopped — the same failure INV12 refuses at write time.
+
     AuditId Record(AuditCategory category, EntityRef? subject, AuditId? cause,
                    IReadOnlyDictionary<string, AuditValue> data);
     IReadOnlyList<AuditEntry> Query(AuditQuery query);     // entity / range / category / cause-walk
@@ -938,10 +957,31 @@ public interface IStateOwner
 {
     StateKey Key { get; }
     int SchemaVersion { get; }       // starts at 1, so an unset field cannot pass for valid
+
+    // R20d.12.14 — the keys this owner must be restored AFTER
+    // (SDD-013 §2b, design 11 §2.1). Empty for most owners, and empty is a
+    // STATEMENT: "nothing else has to be back before I am".
+    //
+    // Capture order and restore order are different orders and only one of them
+    // can be the key's. Capture walks keys so the bytes do not depend on how
+    // modules composed — that is what PV1 rests on. Restore has to follow
+    // dependencies, and key order says nothing about them: `world.decisions`
+    // sorts after `wells.completions` and must be restored before it, which the
+    // loader knew only as a hand-written phase until this member existed.
+    IReadOnlyList<StateKey> RestoreAfter { get; }
+
     void Capture(IStateWriter w);
     void Restore(IStateReader r);
 }
 ```
+
+`StateRegistry` exposes `RestoreOrder` beside `Owners`: the same set,
+topologically sorted, **with key order as the tie-break** so the result is total
+and deterministic (D-5) and adds an order only where a dependency states one. A
+cycle, or a key naming no owner, is a **composition-time refusal** naming every
+key involved — it is a fact about the module set, knowable when the set is
+validated, and §12b already refuses a set it cannot build rather than starting a
+degraded engine.
 
 Canonical writer (sorted keys, invariant formatting, no floats-as-strings
 ambiguity: doubles as 17-digit round-trip) is what makes the PV1 byte-identity
@@ -1135,7 +1175,7 @@ interfaces and therefore cannot.
 | # | Item | Trigger |
 |---|---|---|
 | S001-1 | `LogFields`: struct of spans vs pooled dictionary — decide on first profiler data | R4 benchmarks |
-| S001-2 | Audit trail storage: append-only file + in-memory index vs pure in-memory until save | R1.6 implementation |
-| S001-3 | ~~EntityRef shape~~ **Decided:** `readonly record struct EntityRef(EntityKind Kind, ulong Value)` — one struct with a kind tag; an interface would box in every event and audit entry | closed |
+| S001-2 | ~~Audit trail storage: append-only file + in-memory index vs pure in-memory until save~~ **DECIDED: pure in-memory until save** (R20d.12.23). R1.6 built it in memory and the question was never closed, so it has been answered in practice for several phases without being answered on paper. **What makes it the right answer rather than merely the built one** is the pair that landed today: `TickPipeline` prunes at every tick boundary (finding 207), so the in-memory trail is BOUNDED by design 09 §4.4's retention rather than growing for forty years — which was the whole case for an append-only file — and `SaveGame` writes `audit/trail.jsonl` and restores it with ids intact (S013-4), so the trail outlives the process without the engine owning a file handle. **An append-only file would now cost more than it buys**: it would put I/O in the tick, give retention a second place to enforce itself, and make the trail's durability independent of the save — so a game could be reloaded to a month whose trail described a future that no longer happened | ✅ |
+| S001-3 | ~~EntityRef shape~~ **Decided:** `readonly record struct EntityRef(EntityKind Kind, ulong Value)` — one struct with a kind tag; an interface would box in every event and audit entry | ✅ |
 | S001-4 | Whether `TickContext` exposes stage-scoped read isolation by interface-per-stage (strong, verbose) or by runtime assert (I-V5) | SDD-002 |
-| S001-5 | ~~Spatial primitives~~ **Resolved** — specified in §1.4 | closed |
+| S001-5 | ~~Spatial primitives~~ **Resolved** — specified in §1.4 | ✅ |

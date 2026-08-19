@@ -7,7 +7,10 @@
 
 using OGSim.Composition;
 using OGSim.Contracts;
+using OGSim.Company;
 using OGSim.Kernel;
+using OGSim.Persistence;
+using OGSim.ReferenceClient;
 
 namespace OGSim.Composition.Tests;
 
@@ -57,12 +60,18 @@ public sealed class NewGameTests
     /// mean these tests silently stop asking their question the first time step 6
     /// is tuned.
     /// </summary>
-    private static Engine BasinWithSeveralProspects()
+    private static Engine BasinWithSeveralProspects() => NewGame(SeedOfBasinWithSeveralProspects());
+
+    /// <summary>
+    /// The seed itself, because a SAVE needs it — <see cref="SaveGame.Write"/> is
+    /// told which world it is writing, and a test that walked seeds and kept only
+    /// the engine could not say.
+    /// </summary>
+    private static ulong SeedOfBasinWithSeveralProspects()
     {
         for (ulong seed = 1UL; seed < 40UL; seed++)
         {
-            Engine engine = NewGame(seed);
-            WorldState world = WorldOf(engine);
+            WorldState world = WorldOf(NewGame(seed));
 
             var discoveries = 0;
 
@@ -70,7 +79,7 @@ public sealed class NewGameTests
                 if (world.DistanceToMarket(world.Prospects[i]) is not null
                     && world.Beneath(world.Prospects[i]) is not null) discoveries++;
 
-            if (discoveries > 1) return engine;
+            if (discoveries > 1) return seed;
         }
 
         throw new InvalidOperationException(
@@ -78,6 +87,203 @@ public sealed class NewGameTests
     }
 
     // ------------------------------------------------- the world reaches the engine
+
+    /// <summary>
+    /// SDD-010 §4c's test, which was not possible until R20d.12.12: REGENERATE,
+    /// RESTORE, AND ASSERT THE WORLD IS THE ONE THAT WAS SAVED.
+    ///
+    /// <para>A generated campaign could not be reloaded AT ALL before this. The
+    /// save deliberately stores no heightfield — the surface is a pure function of
+    /// the seed, and storing it would fork old saves from new ones on every
+    /// generator change — but `Load` composes through `BuildAt`, which does not
+    /// generate. So a generated save met an engine holding no basin and the
+    /// boundary check refused it: N prospects against zero. Correct, and useless
+    /// (finding 195).</para>
+    ///
+    /// <para>PV7 says a seed reproduces a world. This says something else, and the
+    /// difference is the whole point: that regenerating and THEN restoring
+    /// decisions on top of it gives back the game that was played. The two are
+    /// separate claims and only one of them was ever asserted.</para>
+    ///
+    /// <para>What is compared is deliberately not the prospect list alone.
+    /// `DistanceToMarket` is a function of where a structure sits AND where the
+    /// harbours are, so comparing it for every prospect asks whether the SURFACE
+    /// came back — the part of the world that is never stored. `Beneath` asks the
+    /// other half: which structures charge reached, and which discovery the game
+    /// turned into which compartment.</para>
+    /// </summary>
+    [Fact]
+    public void R20d8V5_a_generated_world_reloads_as_the_world_it_was()
+    {
+        ulong seed = SeedOfBasinWithSeveralProspects();
+
+        Engine original = NewGame(seed);
+        WorldState before = WorldOf(original);
+
+        // DEVELOP ONE, so the save carries decisions as well as a basin: drilling
+        // places the header, lays the gathering line, and gives the reload
+        // something to be wrong about.
+        original.Provided.Resolve<FieldControl>()
+            .Drill(before.Beneath(Discovery(before, 0))!.Value, new Length(2000.0));
+
+        Fixture.Run(original, months: 12);
+
+        var container = new MemoryStream();
+        SaveGame.Write(original, seed, container);
+        container.Position = 0;
+
+        // THE HEADLINE: it loads. This was a refusal until the regeneration call
+        // existed, and the refusal was the correct behaviour of an engine that
+        // could not do this at all.
+        Engine reloaded = Assert.IsType<Built>(
+            SaveGame.Load(container, Fixture.Settings())).Engine;
+
+        // WHICH BLOCK DID NOT COME BACK. Saving the reloaded engine at the same
+        // tick and diffing per-module digests names the subsystem outright — the
+        // container already digests every block separately, so the answer is one
+        // comparison rather than an investigation.
+        var again = new MemoryStream();
+        SaveGame.Write(reloaded, seed, again);
+        again.Position = 0;
+
+        container.Position = 0;
+        var one = Assert.IsType<Loaded>(SaveGame.Read(container));
+        var two = Assert.IsType<Loaded>(SaveGame.Read(again));
+
+        var blocksApart = new List<string>();
+
+        foreach (KeyValuePair<string, string> digest in one.Header.ModuleDigests)
+            if (!two.Header.ModuleDigests.TryGetValue(digest.Key, out string? theirs)
+                || !string.Equals(digest.Value, theirs, StringComparison.Ordinal))
+                blocksApart.Add(digest.Key);
+
+        // AND THE STREAM POSITIONS, which are on the header rather than in any
+        // block — so the digest comparison above cannot see them. A reload that
+        // restored every block and left one stream astray would diverge on its
+        // first draw and agree on everything up to it, which is the failure PV2's
+        // own note warns about.
+        foreach (KeyValuePair<string, ulong> position in one.Header.RngPositions)
+            if (!two.Header.RngPositions.TryGetValue(position.Key, out ulong theirs)
+                || position.Value != theirs)
+                blocksApart.Add($"stream {position.Key} {position.Value}/{theirs}");
+
+        Assert.True(blocksApart.Count == 0,
+            "what did not survive the reload: " + string.Join(", ", blocksApart));
+
+        WorldState after = WorldOf(reloaded);
+
+        Assert.NotEmpty(after.Prospects);
+        Assert.Equal(before.Prospects.Count, after.Prospects.Count);
+
+        for (var i = 0; i < before.Prospects.Count; i++)
+        {
+            EntityId<IProspect> prospect = before.Prospects[i];
+
+            Assert.Equal(prospect, after.Prospects[i]);
+            Assert.Equal(before.PositionOf(prospect), after.PositionOf(prospect));
+
+            // The surface, asked indirectly: no harbour, no distance.
+            Assert.Equal(before.DistanceToMarket(prospect), after.DistanceToMarket(prospect));
+
+            // And what charge reached — including the one this game drilled.
+            Assert.Equal(before.Beneath(prospect), after.Beneath(prospect));
+        }
+
+        // CONTINUATION IS DELIBERATELY NOT ASSERTED HERE, and the reason is worth
+        // more than the check would be.
+        //
+        // Ticking both engines on shows the reloaded field producing LESS WATER
+        // in the very first month — `water-disposal` throughput 233,955 against
+        // 3,644 — so more of the same fluid is oil and revenue, royalty and tax
+        // all follow it. Every state block above is byte-identical, so this is
+        // not a field the save has lost: it is state no owner holds (S013-9,
+        // finding 201).
+        //
+        // It is the SAME divergence PV2 already admits as its one exception,
+        // arriving sooner. There it appears in a later month as `throughput` on
+        // `water-disposal`; a hand-built fixture takes years to break through,
+        // while a generated compartment carries a real water cut from the start.
+        //
+        // So asserting continuation here would either fail on a known open item
+        // or, admitted, quietly green-light it in a second place. The claim this
+        // test makes is the one it can prove outright: a generated world
+        // regenerates, restores, and comes back identical in every fact anything
+        // owns. The continuation claim belongs with S013-9 and lands when it does.
+    }
+
+    /// <summary>Every pipe on the chain, by length, in registration order —
+    /// which is where a gathering line's length is observable from.</summary>
+    private static List<double> Pipes(Engine engine)
+    {
+        IReadOnlyList<IFlowElement> registered =
+            engine.Provided.Resolve<IFlowElementRegistry>().Registered;
+
+        var lengths = new List<double>();
+
+        for (var i = 0; i < registered.Count; i++)
+            if (registered[i] is IPipeline pipe) lengths.Add(pipe.PipeLength.Metres);
+
+        return lengths;
+    }
+
+    /// <summary>
+    /// A reloaded field keeps the gathering lines it laid — a tieback is a live
+    /// flow element built at reopen time and held in no block, so nothing else in
+    /// this suite looks at one.
+    ///
+    /// <para>IT TAKES TWO FIELDS TO MEAN ANYTHING. The header goes up at the
+    /// FIRST field a company develops, so a one-field game measures zero metres
+    /// to it and every tieback is the floor whatever happens. The second
+    /// discovery is away from the header and has a real distance to it, which the
+    /// assertion above the save checks rather than assumes.</para>
+    ///
+    /// <para><b>THIS DOES NOT PIN THE RESTORE ORDER, and finding 201 said it
+    /// would.</b> The claim was that restoring `world.decisions` after
+    /// `wells.completions` drops every reopened tieback to its floor, because the
+    /// header would not be back when the wells measured against it. It does not:
+    /// `OpenWell` also calls `HeaderAt`, which is write-once, and the rebuild
+    /// reopens wells in the order the save lists them — so the first one
+    /// re-places the header at the field that placed it originally and the
+    /// lengths come out identical either way. Verified by removing the declared
+    /// dependency and watching this pass.</para>
+    ///
+    /// <para>The declaration is still right, for the narrower reason now written
+    /// on it: the well that sited the header may have been abandoned since, and
+    /// then a re-derived header lands somewhere else entirely. Pinning THAT needs
+    /// a fixture that abandons the first well, which is the test to write next.</para>
+    /// </summary>
+    [Fact]
+    public void R20d12V1_a_reloaded_field_keeps_the_gathering_lines_it_laid()
+    {
+        ulong seed = SeedOfBasinWithSeveralProspects();
+
+        Engine original = NewGame(seed);
+        WorldState world = WorldOf(original);
+        FieldControl field = original.Provided.Resolve<FieldControl>();
+
+        field.Drill(world.Beneath(Discovery(world, 0))!.Value, new Length(2000.0));
+        field.Drill(world.Beneath(Discovery(world, 1))!.Value, new Length(2000.0));
+
+        Fixture.Run(original, months: 6);
+
+        List<double> before = Pipes(original);
+
+        // THE FIXTURE DID THE THING: two tiebacks of different lengths, so the
+        // comparison below can tell a restored header from a missing one. With
+        // one field they would both be the floor and this would pass on nothing.
+        Assert.True(before.Distinct().Count() > 1,
+            "every pipe on this chain is the same length, so the second field is not " +
+            "actually away from the header and the check proves nothing");
+
+        var container = new MemoryStream();
+        SaveGame.Write(original, seed, container);
+        container.Position = 0;
+
+        Engine reloaded = Assert.IsType<Built>(
+            SaveGame.Load(container, Fixture.Settings())).Engine;
+
+        Assert.Equal(before, Pipes(reloaded));
+    }
 
     /// <summary>
     /// THE FINDING, stated as its opposite. A new game has compartments nobody
@@ -268,8 +474,7 @@ public sealed class NewGameTests
 
         EntityId<IReservoirCompartmentEntity> reservoir = world.Beneath(chosen)!.Value;
 
-        field.OpenWell(
-            Defaults.CompletionFor(field.NextWellId(), reservoir, new Length(2000.0)), reservoir);
+        field.Drill(reservoir, new Length(2000.0));
 
         Assert.Equal(expected.Metres, chain.Flowline.PipeLength.Metres, precision: 6);
     }
@@ -289,8 +494,7 @@ public sealed class NewGameTests
 
         EntityId<IReservoirCompartmentEntity> first = world.Beneath(Discovery(world, 0))!.Value;
 
-        field.OpenWell(
-            Defaults.CompletionFor(field.NextWellId(), first, new Length(2000.0)), first);
+        field.Drill(first, new Length(2000.0));
 
         Length laid = chain.Flowline.PipeLength;
 
@@ -299,8 +503,7 @@ public sealed class NewGameTests
         EntityId<IReservoirCompartmentEntity> elsewhere =
             world.Beneath(Discovery(world, 1))!.Value;
 
-        field.OpenWell(
-            Defaults.CompletionFor(field.NextWellId(), elsewhere, new Length(2000.0)), elsewhere);
+        field.Drill(elsewhere, new Length(2000.0));
 
         Assert.Equal(laid.Metres, chain.Flowline.PipeLength.Metres, precision: 6);
     }
@@ -730,8 +933,7 @@ public sealed class NewGameTests
         // The header goes up at the first field developed.
         EntityId<IReservoirCompartmentEntity> host = world.Beneath(Discovery(world, 0))!.Value;
 
-        field.OpenWell(
-            Defaults.CompletionFor(field.NextWellId(), host, new Length(2000.0)), host);
+        field.Drill(host, new Length(2000.0));
 
         engine.Pipeline.AdvanceTick();
 
@@ -740,8 +942,7 @@ public sealed class NewGameTests
         // A second discovery, somewhere else in the basin.
         EntityId<IReservoirCompartmentEntity> away = world.Beneath(Discovery(world, 1))!.Value;
 
-        field.OpenWell(
-            Defaults.CompletionFor(field.NextWellId(), away, new Length(2000.0)), away);
+        field.Drill(away, new Length(2000.0));
 
         engine.Pipeline.AdvanceTick();
 
@@ -766,5 +967,788 @@ public sealed class NewGameTests
         }
 
         throw new InvalidOperationException($"no element called {named} is on the network");
+    }
+
+    // ------------------------------------- a client that explores (R21.5)
+
+    /// <summary>
+    /// R21-V2, the half nobody had played. `Operator` is handed a field and
+    /// develops it; this reads a basin, decides what is worth a survey and what
+    /// is worth a hole, and finds out whether it was right — from the read model
+    /// and the command bus alone.
+    ///
+    /// <para>If a decision cannot be taken from that surface it cannot be taken
+    /// by a host either, which is the only thing a reference client is for.</para>
+    /// </summary>
+    [Fact]
+    [Trait("Speed", "Slow")]
+    public void R21V2_a_client_can_explore_a_basin_it_was_told_nothing_about()
+    {
+        Engine engine = BasinWithSeveralProspects();
+
+        DrillingSeason campaign = new Explorer(engine, drillAbove: 0.16, wellTarget: 3, buildBelow: double.MaxValue, borrows: false)
+            .Play(months: 360);
+
+        Assert.True(campaign.Drilled > 0, "the client never put a hole down");
+
+        // Exploration is a search, not an inventory (SDD-010 §4b): a company
+        // that drilled several structures in a basin the charge did not fill
+        // should have found some of both.
+        Assert.True(campaign.Discoveries + campaign.DryHoles == campaign.Drilled,
+            $"{campaign.Drilled} holes resolved into {campaign.Discoveries} discoveries and " +
+            $"{campaign.DryHoles} dry — a hole went unaccounted for");
+    }
+
+    /// <summary>
+    /// AND THE BEST BET IS SOMETIMES WRONG. A client that drills the highest
+    /// probability of success it can see still gets dry holes, because POS is a
+    /// BELIEF — built from how confidently a structure is mapped and what the
+    /// play has taught so far, neither of which is whether charge actually
+    /// arrived here.
+    ///
+    /// <para>If this ever passes with no dry holes across a dozen basins,
+    /// presence has stopped being read from truth and drilling has gone back to
+    /// being a formality (finding 169).</para>
+    ///
+    /// <para>This test is also finding 170's headstone. It faulted on first
+    /// writing — a marginal accumulation produced hard enough to drop its
+    /// pressure 41% in a month, which the material balance rightly refuses —
+    /// because every well was built with one fixed set of inflow conditions
+    /// whatever it was drilled into. It runs because a well is now built from
+    /// its own rock.</para>
+    /// </summary>
+    [Fact]
+    public void R21V2_the_best_prospect_on_the_board_is_sometimes_dry()
+    {
+        var dry = 0;
+        var found = 0;
+
+        // SIX BASINS AND FIVE YEARS, not thirteen and ten. Each month solves a
+        // network over every compartment the basin generated, so this test is
+        // the most expensive in the suite by an order of magnitude — and a suite
+        // nobody runs catches nothing. Six is still enough that a run in which
+        // every best-odds prospect held oil would be a genuine surprise.
+        for (ulong seed = 1UL; seed < 7UL; seed++)
+        {
+            DrillingSeason season = new Explorer(NewGame(seed), drillAbove: 0.0, wellTarget: 2, buildBelow: double.MaxValue, borrows: false)
+                .Play(months: 60);
+
+            dry += season.DryHoles;
+            found += season.Discoveries;
+        }
+
+        Assert.True(found > 0, "six basins produced no discovery at all");
+
+        Assert.True(dry > 0,
+            $"six campaigns drilled the best prospect on the board and never once " +
+            $"missed ({found} discoveries, {dry} dry); presence is not being read from truth");
+    }
+
+    // ----------------------------- the market is actionable (R20d.12 / R21.5)
+
+    /// <summary>
+    /// A COMPANY THAT WATCHES THE CYCLE BUILDS CHEAPER. Plant bought in a boom
+    /// costs what the boom says it costs, and the read model carries the index
+    /// that says so — which is the whole reason it is on the surface.
+    ///
+    /// <para>This is the test that says the cost index is ACTIONABLE. A market
+    /// a host can see and cannot act on would be scenery; if these two companies
+    /// ended level, the index would be a number with no decision behind it.</para>
+    ///
+    /// <para>Compared across basins and totalled, because one campaign is one
+    /// draw: patience is an edge in expectation, not a guarantee, and a client
+    /// that beat the market every single time would mean the market had stopped
+    /// being uncertain.</para>
+    /// </summary>
+    [Fact]
+    public void R20d12V1_a_client_that_waits_for_a_quiet_yard_keeps_more_of_what_it_earns()
+    {
+        Money patient = Money.Zero;
+        Money eager = Money.Zero;
+
+        // Four basins over seven years. Each month solves a network across
+        // every compartment a basin generated, so this and the campaign test are
+        // the two expensive ones in the suite — and a suite nobody runs catches
+        // nothing.
+        for (ulong seed = 1UL; seed < 5UL; seed++)
+        {
+            // The SAME world and the same market for both, so what is left
+            // between them is when they chose to spend.
+            patient += Earned(seed, buildBelow: 1.0);
+            eager += Earned(seed, buildBelow: double.MaxValue);
+        }
+
+        Assert.True(patient > eager,
+            $"waiting for a quiet yard earned {patient} against {eager} for building on " +
+            "sight; the cost index is not actionable through the read model");
+    }
+
+    private static Money Earned(ulong seed, double buildBelow, bool borrows = false) =>
+        new Explorer(NewGame(seed), drillAbove: 0.0, wellTarget: 2, buildBelow, borrows)
+            .Play(months: 84)
+            .Cash;
+
+    /// <summary>
+    /// A DISCOVERY TELLS YOU HOW MUCH, not just that there is some. The company
+    /// knew the trap's size before it drilled — seismic maps a closure — and
+    /// knew nothing at all about what was in it. One hole answers the second
+    /// question, which is the one a development decision is taken on.
+    ///
+    /// <para>Wide, and it should be: a single penetration has seen one point of
+    /// a field and the rest is inference. That gap is what appraisal wells are
+    /// for, and a strike that produced a certain number would leave them nothing
+    /// to do.</para>
+    /// </summary>
+    [Fact]
+    public void R20d7V6_a_discovery_well_says_how_much_it_found()
+    {
+        for (ulong seed = 1UL; seed < 60UL; seed++)
+        {
+            Engine engine = NewGame(seed);
+            WorldState world = WorldOf(engine);
+            IBeliefStore beliefs = engine.Provided.Resolve<IBeliefStore>();
+
+            var charged = -1;
+
+            for (int i = 0; i < world.Prospects.Count; i++)
+                if (world.Beneath(world.Prospects[i]) is not null) { charged = i; break; }
+
+            if (charged < 0) continue;
+
+            EntityId<IProspect> target = world.Prospects[charged];
+
+            engine.Commands.Submit(new DrillWellCommand(target, new Length(2000.0)));
+
+            for (var month = 0; month < 12; month++) engine.Pipeline.AdvanceTick();
+
+            if (engine.ReadModel!.Wells == 0) continue;      // the job was lost
+
+            var field = new EntityRef(
+                EntityKind.Compartment, world.Beneath(target)!.Value.Value);
+
+            Belief? inPlace = beliefs.Get(field, new ContentId("oil-in-place"));
+
+            Assert.NotNull(inPlace);
+
+            Assert.True(inPlace.Value.Sigma > 0.0,
+                "a discovery well returned a certain number; one hole has seen one point " +
+                "of a field and appraisal would have nothing left to do");
+
+            return;
+        }
+
+        Assert.Fail("sixty basins produced no discovery");
+    }
+
+    // ------------------------------- the plugging bill is earned (R20d.14)
+
+    /// <summary>
+    /// A WELL EARNS ITS OWN PLUGGING BILL, barrel by barrel (SDD-009 §2). The
+    /// cost is real from the day the hole is drilled, and a company that met it
+    /// only at the end would look profitable for thirty years and insolvent in
+    /// one — which is not a harder game, it is a game that lies until the last
+    /// month.
+    ///
+    /// <para>AND IT DOES NOT OVERSHOOT. Accrued against what the field will
+    /// ULTIMATELY give rather than against what is left, so the sum telescopes:
+    /// produce everything and the provision equals the bill. Against remaining
+    /// reserves it would accelerate as the field emptied and book a liability
+    /// larger than the one that exists.</para>
+    /// </summary>
+    [Fact]
+    public void R20d14V1_production_accrues_the_plugging_bill_without_overshooting()
+    {
+        for (ulong seed = 1UL; seed < 60UL; seed++)
+        {
+            Engine engine = NewGame(seed);
+            WorldState world = WorldOf(engine);
+
+            var charged = -1;
+
+            for (int i = 0; i < world.Prospects.Count; i++)
+                if (world.Beneath(world.Prospects[i]) is not null) { charged = i; break; }
+
+            if (charged < 0) continue;
+
+            engine.Commands.Submit(
+                new DrillWellCommand(world.Prospects[charged], new Length(2000.0)));
+
+            var company = engine.Provided.Resolve<CompanyState>();
+            var obligations = engine.Provided.Resolve<IObligationRegistry>();
+
+            for (var month = 0; month < 120; month++)
+            {
+                engine.Pipeline.AdvanceTick();
+
+                // A PROVISION, NOT A PAYMENT: what the company owes the future,
+                // recognised as it is earned and never more than it is.
+                // Credits are negative in this ledger, so what is HELD against
+                // the future is the negation of the balance.
+                Assert.True(
+                    -company.Ledger.BalanceOf(Account.AbandonmentProvision)
+                    <= obligations.TotalOutstanding,
+                    $"month {month}: the provision has passed the bill it provisions for");
+            }
+
+            if (engine.ReadModel!.Wells == 0) continue;      // the hole was lost
+
+            Assert.True(
+                -company.Ledger.BalanceOf(Account.AbandonmentProvision) > Money.Zero,
+                "ten years of production accrued nothing towards plugging the well");
+
+            return;
+        }
+
+        Assert.Fail("sixty basins produced no discovery to accrue against");
+    }
+
+    /// <summary>
+    /// PLANT WEARS OUT BY THE BARREL, not by the calendar (SDD-009 §2). A
+    /// platform does not get a year older every year; it gets a barrel older
+    /// every barrel — so a shut-in field depreciates nothing and a producing one
+    /// writes its capital down as it empties.
+    ///
+    /// <para>The carrying value can never go below nothing, and never below what
+    /// was actually spent: an asset cannot be worth less than written off.</para>
+    /// </summary>
+    [Fact]
+    public void R20d14V2_capital_is_written_down_by_what_it_produces()
+    {
+        for (ulong seed = 1UL; seed < 60UL; seed++)
+        {
+            Engine engine = NewGame(seed);
+            WorldState world = WorldOf(engine);
+
+            var charged = -1;
+
+            for (int i = 0; i < world.Prospects.Count; i++)
+                if (world.Beneath(world.Prospects[i]) is not null) { charged = i; break; }
+
+            if (charged < 0) continue;
+
+            engine.Commands.Submit(
+                new DrillWellCommand(world.Prospects[charged], new Length(2000.0)));
+
+            var company = engine.Provided.Resolve<CompanyState>();
+
+            Money peak = Money.Zero;
+
+            for (var month = 0; month < 120; month++)
+            {
+                engine.Pipeline.AdvanceTick();
+
+                Money carrying = company.Ledger.BalanceOf(Account.Capex_PPE);
+
+                if (carrying > peak) peak = carrying;
+
+                Assert.True(carrying >= Money.Zero,
+                    $"month {month}: the plant is carried at {carrying}, which is less than " +
+                    "written off");
+            }
+
+            if (engine.ReadModel!.Wells == 0) continue;      // the hole was lost
+
+            Assert.True(peak > Money.Zero, "a well was drilled and nothing was capitalised");
+
+            Assert.True(company.Ledger.BalanceOf(Account.Capex_PPE) < peak,
+                "ten years of production wrote nothing off the plant that produced it");
+
+            return;
+        }
+
+        Assert.Fail("sixty basins produced no discovery to depreciate");
+    }
+
+    // ------------------------------- borrowing against the ground (R20d.15)
+
+    /// <summary>
+    /// R21-V13. THE STANDING INDICATORS ARE IN EVERY SNAPSHOT, not fetched on
+    /// request (IR2, SDD-009 §4).
+    ///
+    /// <para>Both are what a player watches to see a liquidation spiral coming,
+    /// and an indicator that has to be asked for is one nobody looks at. So the
+    /// requirement is about the PROJECTION carrying them every month, which is
+    /// asserted by advancing rather than by reflecting over the type: a field
+    /// declared read-only tells you nothing about whether it is populated.</para>
+    ///
+    /// <para>RRR IS NULLABLE AND THAT IS NOT AN ESCAPE. `null` means not
+    /// measured — under twelve months of history, nothing produced, or nothing
+    /// booked (SDD-009 §4's R20d.12.34 amendment) — so a field that were
+    /// PERMANENTLY null would satisfy "present" while reporting nothing, which
+    /// is the vacuum this suite has been caught by before. The test therefore
+    /// requires it to become a real number once the company has a producing
+    /// discovery and a year of history behind it.</para>
+    /// </summary>
+    [Fact]
+    public void R21V13_the_standing_indicators_are_in_every_snapshot()
+    {
+        Engine engine = NewGame(7UL);
+        WorldState world = WorldOf(engine);
+
+        engine.Pipeline.AdvanceTick();
+
+        // Drill until something is found, because an indicator measured on a
+        // company with no reserves is the vacuous case.
+        var measured = false;
+
+        for (var attempt = 0; attempt < 8 && !measured; attempt++)
+        {
+            for (int i = 0; i < world.Prospects.Count; i++)
+                if (engine.Commands.Submit(
+                        new DrillWellCommand(world.Prospects[i], new Length(2000.0)))
+                    is Accepted) break;
+
+            for (var month = 0; month < 24; month++)
+            {
+                engine.Pipeline.AdvanceTick();
+
+                FieldReadModel seen = engine.ReadModel!;
+
+                // EVERY snapshot, not the last one: ESG standing is a real
+                // number the month a game starts and every month after.
+                Assert.True(double.IsFinite(seen.EsgStanding),
+                    $"ESG standing read {seen.EsgStanding} in month {seen.Tick.Value}; a " +
+                    "standing indicator cannot be absent from a snapshot");
+
+                if (seen.ReserveReplacementRatio is double rrr)
+                {
+                    Assert.True(double.IsFinite(rrr),
+                        $"RRR read {rrr}; not measured is null, never a non-finite number");
+
+                    measured = true;
+                }
+            }
+        }
+
+        Assert.True(measured,
+            "RRR was null in every snapshot of a company that drilled for eight " +
+            "attempts, so the field is present and reports nothing — which is what " +
+            "IR2 asks this test to rule out");
+    }
+
+    /// <summary>
+    /// A COMPANY CAN FUND A DEVELOPMENT OUT OF WHAT IT FOUND. A field pays for
+    /// itself and not before it is built, so a company that could only spend
+    /// what it had would develop at the speed of its smallest discovery.
+    ///
+    /// <para>And it is not free money: the base is a limit the bank refuses
+    /// past, and the interest is charged whether or not the field produces.</para>
+    /// </summary>
+    [Fact]
+    public void R20d15V2_a_discovery_can_be_borrowed_against()
+    {
+        for (ulong seed = 1UL; seed < 60UL; seed++)
+        {
+            Engine engine = NewGame(seed);
+            WorldState world = WorldOf(engine);
+
+            var charged = -1;
+
+            for (int i = 0; i < world.Prospects.Count; i++)
+                if (world.Beneath(world.Prospects[i]) is not null) { charged = i; break; }
+
+            if (charged < 0) continue;
+
+            engine.Pipeline.AdvanceTick();
+
+            // NOTHING FOUND, NOTHING TO LEND AGAINST. A bank secures on reserves,
+            // and an undrilled basin has none however promising it looks.
+            Assert.Equal(Money.Zero, engine.ReadModel!.Borrowing.BorrowingBase);
+            Assert.IsType<Rejected>(
+                engine.Commands.Submit(new BorrowCommand(Money.FromMillions(1.0))));
+
+            engine.Commands.Submit(
+                new DrillWellCommand(world.Prospects[charged], new Length(2000.0)));
+
+            for (var month = 0; month < 12; month++) engine.Pipeline.AdvanceTick();
+
+            if (engine.ReadModel!.Wells == 0) continue;      // the hole was lost
+
+            Money available = engine.ReadModel!.Borrowing.BorrowingBase;
+
+            Assert.True(available > Money.Zero,
+                "a discovery with reserves supported no borrowing at all");
+
+            // PAST THE BASE IS REFUSED. A facility a company could overdraw
+            // would make the covenant meaningless, because the breach would be
+            // the bank's doing rather than the player's.
+            Assert.IsType<Rejected>(
+                engine.Commands.Submit(new BorrowCommand(available + Money.FromMillions(1.0))));
+
+            Money before = engine.ReadModel!.Cash;
+
+            Assert.IsType<Accepted>(engine.Commands.Submit(new BorrowCommand(available)));
+
+            engine.Pipeline.AdvanceTick();
+
+            Assert.True(engine.ReadModel!.Cash > before, "the drawdown never reached the cash");
+            Assert.Equal(available, engine.ReadModel!.Debt);
+
+            // AND IT COSTS. Interest is charged on what is drawn, every month,
+            // whether or not the field has a good one.
+            Money owed = engine.ReadModel!.Debt;
+            Money cash = engine.ReadModel!.Cash;
+
+            engine.Pipeline.AdvanceTick();
+
+            Assert.Equal(owed, engine.ReadModel!.Debt);      // interest is not capitalised
+
+            Assert.IsType<Accepted>(
+                engine.Commands.Submit(new RepayCommand(Money.FromMillions(1.0))));
+
+            engine.Pipeline.AdvanceTick();
+
+            Assert.True(engine.ReadModel!.Debt < owed, "a repayment did not reduce the debt");
+
+            return;
+        }
+
+        Assert.Fail("sixty basins produced no discovery to borrow against");
+    }
+
+    /// <summary>
+    /// A COMPANY THAT USES ITS FACILITY DEVELOPS FASTER (SDD-009 §5). A field
+    /// pays for itself only once it is built, so a company waiting to afford the
+    /// next well out of revenue is waiting on the very thing that well would
+    /// provide — and on a declining asset, later is less.
+    ///
+    /// <para>This is the test that says the borrowing base is ACTIONABLE. A
+    /// facility a host can see and cannot use would be a number on a screen; if
+    /// these two companies ended level, the whole of R20d.15 would be
+    /// decoration.</para>
+    ///
+    /// <para>Compared across basins and totalled, because leverage is an edge in
+    /// expectation and not a guarantee: interest is charged whether or not the
+    /// month goes well, and a company that borrowed into a bad market pays for
+    /// it. A client that won every single time would mean debt was free.</para>
+    /// </summary>
+    [Fact]
+    public void R20d15V3_a_company_that_borrows_develops_faster_than_one_that_waits()
+    {
+        Money funded = Money.Zero;
+        Money unfunded = Money.Zero;
+
+        for (ulong seed = 1UL; seed < 5UL; seed++)
+        {
+            // The SAME world and the same market for both, so what is left
+            // between them is whether they used the facility.
+            funded += Earned(seed, buildBelow: double.MaxValue, borrows: true);
+            unfunded += Earned(seed, buildBelow: double.MaxValue, borrows: false);
+        }
+
+        Assert.True(funded > unfunded,
+            $"borrowing against reserves earned {funded} against {unfunded} for waiting; " +
+            "the borrowing base is not actionable through the read model");
+    }
+
+    /// <summary>
+    /// THE COVENANT, END TO END. Every piece of this was built separately and
+    /// the chain between them had never once been run: a field depletes, its
+    /// remaining reserves fall, the borrowing base falls with them, debt drawn
+    /// against yesterday's reserves is suddenly above today's base, and the
+    /// facility goes into cure.
+    ///
+    /// <para>That is the shape a leveraged company actually fails in, and it is
+    /// worth asserting as one sequence rather than four unit tests: each part
+    /// passing says nothing about whether the parts are connected, which is the
+    /// lesson findings 164–173 keep teaching.</para>
+    ///
+    /// <para>THE CURE WINDOW IS THE POINT. The bank does not call — it starts a
+    /// clock, and a company that pays down or produces its way back inside is
+    /// clear again. A breach that went straight to amortising would make a
+    /// depleting field an ambush.</para>
+    /// </summary>
+    [Fact]
+    [Trait("Speed", "Slow")]
+    public void R20d15V4_a_depleting_field_breaches_its_covenant_and_gets_a_window()
+    {
+        for (ulong seed = 1UL; seed < 60UL; seed++)
+        {
+            Engine engine = NewGame(seed);
+            WorldState world = WorldOf(engine);
+
+            var charged = -1;
+
+            for (int i = 0; i < world.Prospects.Count; i++)
+                if (world.Beneath(world.Prospects[i]) is not null) { charged = i; break; }
+
+            if (charged < 0) continue;
+
+            engine.Commands.Submit(
+                new DrillWellCommand(world.Prospects[charged], new Length(2000.0)));
+
+            for (var month = 0; month < 12; month++) engine.Pipeline.AdvanceTick();
+
+            if (engine.ReadModel!.Wells == 0) continue;      // the hole was lost
+
+            Money available = engine.ReadModel!.Borrowing.BorrowingBase;
+
+            if (available <= Money.Zero) continue;
+
+            // DRAWN TO THE LIMIT ON PURPOSE. A borrowing base falls as reserves
+            // deplete — they are what is LEFT — so a company drawn to the last
+            // cent breaches the month after, every time. That is the mechanism
+            // working, not a defect, and it is why a prudent company draws a
+            // fraction; this test wants the breach.
+            Assert.IsType<Accepted>(engine.Commands.Submit(new BorrowCommand(available)));
+
+            var sawCuring = false;
+
+            // Produce. Reserves are what is LEFT, so they fall as the field
+            // empties, and the base falls with them.
+            for (var month = 0; month < 480; month++)
+            {
+                engine.Pipeline.AdvanceTick();
+
+                CovenantStatus covenant = engine.ReadModel!.Covenant;
+
+                if (covenant.State == CovenantState.Curing)
+                {
+                    sawCuring = true;
+
+                    Assert.True(covenant.TicksRemaining > 0,
+                        "a cure window with no time left in it is a called loan");
+                }
+
+                // AMORTISING IS NEVER REACHED WITHOUT CURING FIRST. The bank
+                // does not call, and a company that had no warning could not
+                // have acted on one.
+                if (covenant.State == CovenantState.Amortising)
+                {
+                    Assert.True(sawCuring,
+                        "the facility went to amortisation without a cure window; the bank " +
+                        "called the loan, which SDD-009 §5 pins that it never does");
+
+                    return;
+                }
+            }
+
+            Assert.True(sawCuring,
+                "forty years of depletion against a fully drawn facility and the covenant " +
+                "never even went into cure; the base is not following the reserves");
+
+            return;
+        }
+
+        Assert.Fail("sixty basins produced no discovery worth lending against");
+    }
+
+    /// <summary>
+    /// AND A PRUDENT COMPANY STAYS OUT OF IT. The exploring client draws a
+    /// fraction of its base rather than all of it, so the base can fall as the
+    /// field empties without putting the facility into breach.
+    ///
+    /// <para>This is the assertion that was missing when the borrowing client
+    /// shipped: the earnings test compared two companies and never once looked
+    /// at the covenant, so a client living permanently in a cure window would
+    /// have passed it. Comparing outcomes is not the same as checking the state
+    /// they were reached from.</para>
+    /// </summary>
+    [Fact]
+    [Trait("Speed", "Slow")]
+    public void R20d15V4_a_client_that_borrows_prudently_does_not_live_in_breach()
+    {
+        Engine engine = BasinWithSeveralProspects();
+
+        new Explorer(engine, drillAbove: 0.0, wellTarget: 2,
+                     buildBelow: double.MaxValue, borrows: true)
+            .Play(months: 180);
+
+        Assert.Equal(CovenantState.Clear, engine.ReadModel!.Covenant.State);
+    }
+
+    /// <summary>
+    /// THE PROVISION IS RELEASED WHEN THE BILL IS PAID (SDD-009 §2). A company
+    /// accrues towards plugging a well for as long as it produces; when the well
+    /// is finally plugged, the money it set aside is what pays for it.
+    ///
+    /// <para>Held and never released, the liability sits on the balance sheet
+    /// after the obligation it was held against has gone — and the cost hits the
+    /// accounts TWICE, once as it was accrued and again as it was spent. A
+    /// company would report a loss it had already reported.</para>
+    ///
+    /// <para>Another chain nobody had run: accrual, obligation, abandonment and
+    /// discharge each had a passing test, and the join between the last two was
+    /// never made at all.</para>
+    /// </summary>
+    [Fact]
+    public void R20d14V3_abandoning_a_well_releases_the_provision_held_for_it()
+    {
+        for (ulong seed = 1UL; seed < 60UL; seed++)
+        {
+            Engine engine = NewGame(seed);
+            WorldState world = WorldOf(engine);
+
+            var charged = -1;
+
+            for (int i = 0; i < world.Prospects.Count; i++)
+                if (world.Beneath(world.Prospects[i]) is not null) { charged = i; break; }
+
+            if (charged < 0) continue;
+
+            engine.Commands.Submit(
+                new DrillWellCommand(world.Prospects[charged], new Length(2000.0)));
+
+            for (var month = 0; month < 60; month++) engine.Pipeline.AdvanceTick();
+
+            if (engine.ReadModel!.Wells == 0) continue;      // the hole was lost
+
+            var company = engine.Provided.Resolve<CompanyState>();
+            var obligations = engine.Provided.Resolve<IObligationRegistry>();
+
+            Money accrued = -company.Ledger.BalanceOf(Account.AbandonmentProvision);
+
+            Assert.True(accrued > Money.Zero, "five years of production accrued nothing");
+
+            // Plug it. Nothing else the company owns changes.
+            EntityRef well = engine.ReadModel!.Wellbores[0].Well;
+
+            Assert.IsType<Accepted>(engine.Commands.Submit(
+                new AbandonWellCommand(new EntityId<ICompletion>(well.Value))));
+
+            for (var month = 0; month < 24; month++) engine.Pipeline.AdvanceTick();
+
+            if (obligations.TotalOutstanding > Money.Zero) continue;     // the job failed
+
+            // The obligation is gone. What was held against it must be gone too.
+            Assert.Equal(
+                Money.Zero, -company.Ledger.BalanceOf(Account.AbandonmentProvision));
+
+            return;
+        }
+
+        Assert.Fail("sixty basins produced no well that could be drilled and plugged");
+    }
+
+    /// <summary>
+    /// SC6, END TO END: a market that falls writes reserves down, and the
+    /// borrowing base falls with them. Reserves stop where production stops
+    /// paying, so a lower price raises the economic limit, the tail of the
+    /// decline drops below it, and barrels beyond stop being reserves without
+    /// having gone anywhere.
+    ///
+    /// <para>THE WELL IS SHUT IN, and that is what makes this a test of the
+    /// market rather than of depletion. Reserves fall as a field produces too,
+    /// so a producing field cannot tell the two causes apart — with nothing
+    /// coming out, the only thing left that can move the base is the price.</para>
+    ///
+    /// <para>Each of these steps has its own passing test. Nothing had ever
+    /// checked that a price the engine actually generated moved a base the
+    /// engine actually offered.</para>
+    /// </summary>
+    [Fact]
+    public void R20d13V2_a_falling_market_writes_the_borrowing_base_down()
+    {
+        for (ulong seed = 1UL; seed < 60UL; seed++)
+        {
+            Engine engine = NewGame(seed);
+            WorldState world = WorldOf(engine);
+
+            var charged = -1;
+
+            for (int i = 0; i < world.Prospects.Count; i++)
+                if (world.Beneath(world.Prospects[i]) is not null) { charged = i; break; }
+
+            if (charged < 0) continue;
+
+            engine.Commands.Submit(
+                new DrillWellCommand(world.Prospects[charged], new Length(2000.0)));
+
+            for (var month = 0; month < 12; month++) engine.Pipeline.AdvanceTick();
+
+            if (engine.ReadModel!.Wells == 0) continue;      // the hole was lost
+
+            // SHUT IT IN. From here the field produces nothing, so remaining
+            // reserves cannot fall by depletion and the base can only move with
+            // the market.
+            EntityRef well = engine.ReadModel!.Wellbores[0].Well;
+
+            engine.Commands.Submit(
+                new SetWellChokeCommand(new EntityId<ICompletion>(well.Value), Open: false));
+
+            (Money Price, Money Base) high = (Money.Zero, Money.Zero);
+            (Money Price, Money Base) low = (Money.FromMillions(1.0e9), Money.Zero);
+
+            for (var month = 0; month < 96; month++)
+            {
+                engine.Pipeline.AdvanceTick();
+
+                if (engine.ReadModel!.Insolvent) break;
+
+                Money price = engine.ReadModel!.OilPrice;
+                Money bookable = engine.ReadModel!.Borrowing.BorrowingBase;
+
+                if (price > high.Price) high = (price, bookable);
+                if (price < low.Price) low = (price, bookable);
+            }
+
+            if (high.Base <= Money.Zero) continue;      // never had a base to write down
+
+            Assert.True(low.Base < high.Base,
+                $"the market ran from {low.Price} to {high.Price} and the borrowing base " +
+                $"did not move: {low.Base} against {high.Base}");
+
+            return;
+        }
+
+        Assert.Fail("sixty basins produced no discovery that could be shut in and watched");
+    }
+
+    // -------------------------------------------- one seed is one game (PV7)
+
+    /// <summary>
+    /// PV7 AT THE ENGINE, not at the generator. Two engines from one seed, given
+    /// the same orders, must agree on EVERYTHING a host can see after a decade:
+    /// the same wells, the same cash, the same price, the same cost index, the
+    /// same reserves, the same debt, the same gas burned, the same record, the
+    /// same odds on every prospect.
+    ///
+    /// <para>The determinism test that existed asserted wells and cash over six
+    /// months on a hand-built field, and it predates the market, reserves, the
+    /// ESG record, the gas plant and injection — every one of which draws or
+    /// accumulates. A save that reloaded into a different game would break the
+    /// one promise the whole design rests on, and nothing was checking most of
+    /// what could break it.</para>
+    ///
+    /// <para>Compared as WHOLE READ MODELS rather than field by field. A
+    /// hand-listed set of assertions is a list of the things somebody thought of,
+    /// and the next number added to the surface would not be on it.</para>
+    /// </summary>
+    [Fact]
+    [Trait("Speed", "Slow")]
+    public void PV7_one_seed_is_one_game_all_the_way_through()
+    {
+        Engine first = NewGame(seed: 20260811UL);
+        Engine second = NewGame(seed: 20260811UL);
+
+        var playFirst = new Explorer(first, drillAbove: 0.0, wellTarget: 3,
+                                     buildBelow: 1.05, borrows: true);
+
+        var playSecond = new Explorer(second, drillAbove: 0.0, wellTarget: 3,
+                                      buildBelow: 1.05, borrows: true);
+
+        playFirst.Play(months: 120);
+        playSecond.Play(months: 120);
+
+        Assert.Equal(first.ReadModel, second.ReadModel);
+    }
+
+    /// <summary>
+    /// AND A DIFFERENT SEED IS A DIFFERENT GAME. Stated separately because an
+    /// engine that ignored its seed entirely would satisfy the test above
+    /// perfectly — identical runs are only interesting if they were not
+    /// inevitable.
+    /// </summary>
+    [Fact]
+    [Trait("Speed", "Slow")]
+    public void PV7_a_different_seed_is_a_different_game()
+    {
+        Engine one = NewGame(seed: 11UL);
+        Engine other = NewGame(seed: 12UL);
+
+        new Explorer(one, 0.0, 3, 1.05, borrows: true).Play(months: 120);
+        new Explorer(other, 0.0, 3, 1.05, borrows: true).Play(months: 120);
+
+        Assert.NotEqual(one.ReadModel, other.ReadModel);
     }
 }

@@ -246,11 +246,50 @@ public sealed class ModuleComposer
 
         composition.AssertEveryPromiseKept(modules, problems);
 
+        // Check 5: the DECLARED RESTORE ORDER resolves (SDD-013 §2b). Asked here
+        // rather than at load because a cycle or a mistyped `RestoreAfter` key is
+        // a fact about the module set, knowable now — and design 03 §3.1 has no
+        // partially-composed engine to fall back on, so a set that could not be
+        // restored must not start. Owners exist only after Compose has run, which
+        // is why this follows the promises rather than joining checks 1–4.
+        foreach (StateOrderProblem problem in composition.State.RestoreOrderProblems())
+            problems.Add(new CompositionProblem(
+                CompositionProblemKind.DependencyCycle,
+                OwnerOf(modules, problem.Key),
+                problem.Detail));
+
         if (problems.Count > 0) return new CompositionRefused(problems);
 
         return new Composed(
             OrderByStage(modules), composition.OrderedStages(), composition.State,
             composition, composition.Registrations());
+    }
+
+    /// <summary>
+    /// Which module DECLARED a state key, so a restore-order problem is reported
+    /// against the manifest a reader can go and edit rather than against the set.
+    ///
+    /// <para>The registry knows owners and not modules — deliberately, since it
+    /// is a kernel facility and module names are the composer's business — so the
+    /// mapping is made here, from the same `OwnsState` claims check 3 already
+    /// validated as unique.</para>
+    /// </summary>
+    private static ModuleName OwnerOf(IReadOnlyList<IModule> modules, StateKey key)
+    {
+        for (int i = 0; i < modules.Count; i++)
+        {
+            IReadOnlyList<StateKey> owned = modules[i].Manifest.OwnsState;
+
+            for (int k = 0; k < owned.Count; k++)
+                if (owned[k] == key) return modules[i].Manifest.Name;
+        }
+
+        // Unreachable, and a fault rather than a fallback: `Own` refuses a key
+        // the module did not declare, so the registry holds nothing unclaimed.
+        // Naming an arbitrary module instead would put a wrong module name in a
+        // refusal a reader is about to act on, which is worse than stopping.
+        throw new InvariantFault("SDD-001 §10", null,
+            $"state key '{key.Value}' is registered but declared by no manifest");
     }
 
     /// <summary>

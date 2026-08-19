@@ -37,6 +37,13 @@ public sealed class ProductionLoopTests
                 InitialPressure: new Pressure(30.0e6),
                 Temperature: Temperature.FromCelsius(93.3),
                 Depth: new Length(2000.0)),
+            // GOOD ROCK, kept. This fixture is the one that always built its
+            // own well to match — 2e-13 and 30 m in both places — so it is the
+            // one place finding 170 never bit, and the facility-limited test
+            // below needs exactly this deliverability to have a separator to
+            // jam. The other fixtures declared this rock and drilled wells at
+            // Defaults.Inflow's 1e-13 and 20 m; those were brought down to what
+            // their wells actually were.
             permeability: new Permeability(2.0e-13),
             netThickness: new Length(30.0),
             drainageArea: new Area(2.0e5),
@@ -52,7 +59,7 @@ public sealed class ProductionLoopTests
         // exploration risk because there is nothing left to be wrong about.
         built.Engine.Provided.Resolve<WorldState>().DeclareKnownField(compartment, new ReservoirVolume(100.0e6));
 
-        built.Engine.Provided.Resolve<FieldControl>().OpenWell(Well(compartment), compartment);
+        built.Engine.Provided.Resolve<FieldControl>().Drill(compartment, new Length(2000.0));
 
         return (built.Engine, company);
     }
@@ -139,7 +146,18 @@ public sealed class ProductionLoopTests
     /// months when something else is binding would be asserting that the cap does
     /// not work.</para>
     /// </summary>
+    /// <summary>What the company's cash did over a run of months.</summary>
+    private static Money Earned(Engine engine, CompanyState company, int months)
+    {
+        Money before = company.Ledger.Cash;
+
+        for (var month = 0; month < months; month++) engine.Pipeline.AdvanceTick();
+
+        return company.Ledger.Cash - before;
+    }
+
     [Fact]
+    [Trait("Speed", "Slow")]
     public void Earnings_decline_as_the_reservoir_depletes()
     {
         (Engine engine, CompanyState company) = Field();
@@ -158,17 +176,18 @@ public sealed class ProductionLoopTests
 
         Assert.Empty(engine.ReadModel!.Bottlenecks);
 
-        Money before = company.Ledger.Cash;
-        engine.Pipeline.AdvanceTick();
-        Money firstMonth = company.Ledger.Cash - before;
+        // A YEAR AGAINST THE NEXT YEAR, not a month against the month after it.
+        // Weather is SEASONAL (SDD-016 §1): a January loses days a July does not,
+        // so two adjacent months differ by which months they are as well as by
+        // how depleted the reservoir is, and the pair can invert without decline
+        // having stopped. Twelve months contain one of each, so the comparison is
+        // of reservoirs rather than of calendars (finding 214).
+        Money firstYear = Earned(engine, company, months: 12);
+        Money secondYear = Earned(engine, company, months: 12);
 
-        before = company.Ledger.Cash;
-        engine.Pipeline.AdvanceTick();
-        Money secondMonth = company.Ledger.Cash - before;
-
-        Assert.True(secondMonth < firstMonth,
-            $"month two ({secondMonth.Cents}c) must earn less than month one " +
-            $"({firstMonth.Cents}c) — a well whose reservoir has fallen produces less");
+        Assert.True(secondYear < firstYear,
+            $"the second year ({secondYear.Cents}c) must earn less than the first " +
+            $"({firstYear.Cents}c) — a well whose reservoir has fallen produces less");
     }
 
     /// <summary>
@@ -206,6 +225,7 @@ public sealed class ProductionLoopTests
     /// months and then faults on an accumulating history is not a game either.
     /// </summary>
     [Fact]
+    [Trait("Speed", "Slow")]
     public void The_field_runs_for_forty_years()
     {
         (Engine engine, CompanyState company) = Field();
@@ -260,5 +280,222 @@ public sealed class ProductionLoopTests
             new AuditQuery(null, AuditCategory.CustodyTransfer, null, null));
 
         Assert.Contains(transfers, entry => entry.Id == revenue!.Cause);
+    }
+
+
+    /// <summary>
+    /// R23-V16, the reachability half. SDD-012 §4b's R23.1 amendment, and
+    /// <b>a company can clean up.</b> A
+    /// field that flares everything it produces is Ruined, buys the gas plant
+    /// that stops it, and its ESG standing RECOVERS — which is CI4's first exit
+    /// existing rather than being claimed in a comment.
+    ///
+    /// <para>Against the lifetime-cumulative record this test cannot pass, and
+    /// that is the point of it: a ratio of everything ever burned to everything
+    /// ever produced does not move for anything a player buys in year ten, so the
+    /// lender charged the worst spread to every company always, the gas plant
+    /// rewarded nothing, and an incident was subtracted from a number already
+    /// clamped at zero. One arithmetic defect wearing three faces
+    /// (findings 223, 228).</para>
+    ///
+    /// <para><c>HS12_the_loop_has_two_exits</c> claimed this row and proved only
+    /// that <c>Standing</c> is monotonic in its argument — true, and green for
+    /// the whole time the exit was unreachable. This is the half that was
+    /// missing: not that a clean record scores better, but that a company which
+    /// has been dirty can BECOME one.</para>
+    ///
+    /// <para>The recovery is SLOW on purpose — a decade of clean operation, not a
+    /// quarter — because the half-life is three years and the record is what a
+    /// lender has watched. Twenty-four clean months still measure 0.0000 here;
+    /// it is the tenth year that reaches 0.79. A standing that could be repaired
+    /// in a quarter would price behaviour nobody had to sustain.</para>
+    /// </summary>
+    [Fact]
+    [Trait("Speed", "Slow")]
+    public void R23V16_a_company_that_stops_flaring_recovers_its_standing()
+    {
+        (Engine engine, _) = Field();
+        engine.Commands.Submit(new InstallSeparatorCommand());
+
+        // A decade of burning everything the separator's gas leg produces.
+        Fixture.Run(engine, months: 120);
+
+        double ruined = engine.ReadModel!.EsgStanding;
+
+        Assert.Equal(0.0, ruined);
+
+        // The purchase the mechanic is supposed to reward.
+        engine.Commands.Submit(new InstallGasPlantCommand());
+        Fixture.Run(engine, months: 120);
+
+        double cleaned = engine.ReadModel!.EsgStanding;
+
+        Assert.True(cleaned > 0.5,
+            $"the standing recovered to {cleaned} after a clean decade; a record " +
+            "that cannot rise is a punishment rather than a decision (CI4)");
+    }
+
+    /// <summary>
+    /// R21-V6. <b>All seven audit-backed features of design 09 §7 are
+    /// answerable</b> — asked of one field that produced, jammed, learned,
+    /// broke and refused a command, because a feature is answerable only if a
+    /// game that DID the thing can be asked about it.
+    ///
+    /// <para>Seven, not eleven: §7's table has eleven rows and four of them name
+    /// something other than an audit entry as their backing — barrier status from
+    /// the integrity model, standing indicators from the read model, and the
+    /// weather account from the segment plan. This is the audit trail's share of
+    /// that table, which is what the verification row means by seven.</para>
+    ///
+    /// <para><b>Asserted on the DATA rather than on the count</b>, which is the
+    /// whole difference between this test and a green one. *Where did my money go
+    /// this quarter?* was backed by two hundred and forty entries a month apart
+    /// over twenty years, and every one of them carried an empty dictionary: the
+    /// operating cost added its three components together inside the method and
+    /// audited the sum as nothing at all. A test counting entries would have
+    /// passed against that (finding 230).</para>
+    /// </summary>
+    [Fact]
+    [Trait("Speed", "Slow")]
+    public void R21V6_every_audit_backed_feature_of_the_diagnostics_design_is_answerable()
+    {
+        (Engine engine, _) = Field();
+
+        // A command that cannot be honoured, so there is something to have got
+        // wrong: no element carries this id.
+        engine.Commands.Submit(new RepairEquipmentCommand(
+            new EntityRef(EntityKind.FlowElement, 999_999)));
+
+        engine.Commands.Submit(new InstallSeparatorCommand());
+
+        Fixture.Run(engine, months: 8);
+
+        // And something learned, which costs money and takes months.
+        engine.Commands.Submit(new WellTestCommand(new EntityId<IReservoirCompartmentEntity>(1)));
+
+        Fixture.Run(engine, months: 4);
+
+        // 1 — "Why is this well shut in?" and
+        // 3 — "Production loss report": the same entries, read two ways. The
+        // element names what refused and the deferred mass is what it cost.
+        AuditEntry binding = First(engine, AuditCategory.ConstraintBinding);
+
+        Assert.True(binding.Data.ContainsKey("element"), "a binding must name what bound");
+        Assert.True(binding.Data.ContainsKey("kind"), "and which limit it hit");
+        Assert.True(binding.Data.ContainsKey("deferred-kg"),
+            "and what it cost, or the loss report has nothing to attribute");
+        Assert.NotNull(binding.Subject);
+
+        // 2 — "Where did my money go this quarter?"
+        AuditEntry spend = Find(engine, AuditCategory.Financial, "spend", "field-operating");
+
+        Assert.True(spend.Data.ContainsKey("standing"), "the charge abandonment ends");
+        Assert.True(spend.Data.ContainsKey("lifting"), "what the barrels cost to lift");
+        Assert.True(spend.Data.ContainsKey("injection-water"), "and what the flood is drinking");
+
+        // 4 — "What did I learn from this well?"
+        AuditEntry learned = First(engine, AuditCategory.BeliefUpdate);
+
+        Assert.True(learned.Data.ContainsKey("subject"), "a belief is about something");
+        Assert.True(learned.Data.ContainsKey("posteriorMu"), "and it moved to somewhere");
+        Assert.True(learned.Data.ContainsKey("posteriorSigma"),
+            "with a confidence, or the company cannot tell a survey from a guess");
+
+        // 5 — "Field history timeline"
+        AuditEntry moved = First(engine, AuditCategory.StateTransition);
+
+        Assert.True(moved.Data.ContainsKey("state"), "a transition is to a state");
+
+        // 6 — "Was that fair?"
+        AuditEntry drawn = First(engine, AuditCategory.StochasticOutcome);
+
+        Assert.True(drawn.Data.ContainsKey("stream"), "which of the eight streams");
+        Assert.True(drawn.Data.ContainsKey("draw"), "what came up");
+        Assert.True(drawn.Data.ContainsKey("threshold"),
+            "and what it had to beat — all three, or 'was that fair' is unanswerable");
+
+        // 7 — "What did I do wrong?"
+        AuditEntry refused = First(engine, AuditCategory.Rejection);
+
+        Assert.True(refused.Data.ContainsKey("command"), "a refusal names the command");
+        Assert.True(refused.Data.ContainsKey("reason.0"),
+            "and gives a domain reason, not a status code");
+    }
+
+    /// <summary>The first entry of a category, with a failure that says which
+    /// feature went dark rather than "sequence contains no elements".</summary>
+    private static AuditEntry First(Engine engine, AuditCategory category)
+    {
+        IReadOnlyList<AuditEntry> found =
+            engine.Audit.Query(new AuditQuery(null, category, null, null));
+
+        Assert.True(found.Count > 0,
+            $"nothing in the trail is a {category} entry, so the design 09 §7 " +
+            "feature it backs cannot be answered at all");
+
+        return found[0];
+    }
+
+    /// <summary>The first entry of a category carrying a given field, for the
+    /// categories several different events share.</summary>
+    private static AuditEntry Find(
+        Engine engine, AuditCategory category, string key, string value)
+    {
+        IReadOnlyList<AuditEntry> found =
+            engine.Audit.Query(new AuditQuery(null, category, null, null));
+
+        for (int i = 0; i < found.Count; i++)
+            if (found[i].Data.TryGetValue(key, out AuditValue carried)
+                && carried.Value == value)
+                return found[i];
+
+        Assert.Fail($"no {category} entry carries {key}={value}");
+        return found[0];
+    }
+
+    /// <summary>
+    /// R22.7 / SDD-016 §3 — <b>the field solves at the weather it is having</b>,
+    /// not at a constant.
+    ///
+    /// <para>`SegmentContext.Ambient` is a real solver input — `Compressor`
+    /// derates on it through design 13 §3.3's k_derate — and the loop handed it a
+    /// fixed 15 °C every month of every game, with `WeatherSeverity: 0.0` beside
+    /// it, while `WeatherState` computed the seasonal values a few metres away
+    /// and only the read model read them (finding 233).</para>
+    ///
+    /// <para>Asserted through the READ MODEL, which is now the same number: the
+    /// projection used to ask `TemperatureOn` for the month's last day while the
+    /// solve used a per-segment mean, so a host was shown a temperature the field
+    /// never ran at. One fact, one owner, and the reason this test can see the
+    /// solver's input at all.</para>
+    ///
+    /// <para>A YEAR, and asserted on the SPREAD rather than on a shape: the
+    /// shipped climate is temperate and its baseline runs 15.4 °C in August to
+    /// 5.6 °C in February, so a field that solved at one temperature all year
+    /// would show a spread of zero. Which month is warmest is the content's
+    /// business and not this test's.</para>
+    /// </summary>
+    [Fact]
+    [Trait("Speed", "Slow")]
+    public void R22V15_the_field_solves_at_the_ambient_it_is_having()
+    {
+        (Engine engine, _) = Field();
+
+        var coldest = double.MaxValue;
+        var warmest = double.MinValue;
+
+        for (var month = 0; month < 12; month++)
+        {
+            engine.Pipeline.AdvanceTick();
+
+            double ambient = engine.ReadModel!.Weather.Ambient.Kelvin;
+
+            if (ambient < coldest) coldest = ambient;
+            if (ambient > warmest) warmest = ambient;
+        }
+
+        Assert.True(warmest - coldest > 5.0,
+            $"a year of solving spanned {warmest - coldest:F2} K, so the field is " +
+            "running at a constant rather than at its own weather");
     }
 }

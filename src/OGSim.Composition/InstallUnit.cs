@@ -18,6 +18,7 @@
 
 using OGSim.Contracts;
 using OGSim.Kernel;
+using OGSim.Company;
 
 namespace OGSim.Composition;
 
@@ -36,10 +37,18 @@ public sealed record InstallSeparatorCommand() : Command(Subject: null);
 internal sealed class InstallSeparatorActivity(
     ActivityTerms terms,
     OGSim.Facilities.Separator separator,
-    IReadOnlyList<OGSim.Facilities.SeparatorTier> ladder) : Activity<InstallSeparatorCommand>(terms)
+    IReadOnlyList<OGSim.Facilities.SeparatorTier> ladder,
+    FacilityLadders ladders,
+    OGSim.Capabilities.CapabilityState capabilities,
+    OGSim.Capabilities.EraCalendar eras,
+    IGatingValidator gate,
+    IEffectState effects) : Activity<InstallSeparatorCommand>(terms)
 {
     /// <summary>A vessel is PP&amp;E: the money buys something the company still
     /// owns next month (SDD-009 §1).</summary>
+    /// <summary>A rung on the surface ladder (finding 225).</summary>
+    public override MovementCategory Spend => MovementCategory.Development;
+
     public override bool LeavesAnAsset => true;
 
     /// <summary>
@@ -53,7 +62,7 @@ internal sealed class InstallSeparatorActivity(
 
     public override IReadOnlyList<RejectionReason> OwnRefusals(InstallSeparatorCommand command)
     {
-        if (NextRung() is not null) return [];
+        if (NextRung() is { } next) return RungGate.Buyable(next.Id, ladders, capabilities, eras, gate, effects);
 
         return
         [
@@ -94,5 +103,320 @@ internal sealed class InstallSeparatorActivity(
             if (ladder[i].Id == separator.Tier.Id) return ladder[i + 1];
 
         return null;
+    }
+}
+
+/// <summary>
+/// Fit the next gas plant up (SDD-006 §3b, finding 172).
+///
+/// <para>THE ANSWER TO A PENALTY. Flaring prices itself into the cost of debt
+/// (SDD-012 §4), and until there was a plant to buy that was a tax rather than a
+/// decision — a company could be charged for flaring and could do nothing about
+/// it but produce less oil.</para>
+/// </summary>
+public sealed record InstallGasPlantCommand() : Command(Subject: null);
+
+internal sealed class InstallGasPlantActivity(
+    ActivityTerms terms,
+    OGSim.Facilities.GasCapture plant,
+    IReadOnlyList<OGSim.Facilities.GasPlantTier> ladder,
+    FacilityLadders ladders,
+    OGSim.Capabilities.CapabilityState capabilities,
+    OGSim.Capabilities.EraCalendar eras,
+    IGatingValidator gate,
+    IEffectState effects) : Activity<InstallGasPlantCommand>(terms)
+{
+    /// <summary>A plant is PP&amp;E (SDD-009 §1) — and it now depreciates by the
+    /// barrel like everything else the company owns.</summary>
+    /// <summary>A rung on the surface ladder (finding 225).</summary>
+    public override MovementCategory Spend => MovementCategory.Development;
+
+    public override bool LeavesAnAsset => true;
+
+    public override bool OnePerTarget => true;
+
+    public override (EntityRef Target, Length Depth) Aim(InstallGasPlantCommand command) =>
+        (new EntityRef(EntityKind.FlowElement, plant.Id.Value), NoDepth);
+
+    public override IReadOnlyList<RejectionReason> OwnRefusals(InstallGasPlantCommand command)
+    {
+        if (NextRung() is { } next) return RungGate.Buyable(next.Id, ladders, capabilities, eras, gate, effects);
+
+        return
+        [
+            new RejectionReason(
+                "$loc:reject.top-of-the-ladder",
+                $"'{plant.Tier.Id.Value}' is the largest gas plant in the catalogue; the " +
+                "field cannot handle more gas than it already does"),
+        ];
+    }
+
+    public override void Complete(CompletedActivity done, Tick tick)
+    {
+        ArgumentNullException.ThrowIfNull(done);
+
+        if (!done.Succeeded) return;
+
+        if (NextRung() is OGSim.Facilities.GasPlantTier next) plant.Fit(next);
+    }
+
+    /// <summary>The rung above what is fitted, in the ladder's declared order
+    /// (D-5).</summary>
+    private OGSim.Facilities.GasPlantTier? NextRung()
+    {
+        for (int i = 0; i < ladder.Count - 1; i++)
+            if (ladder[i].Id == plant.Tier.Id) return ladder[i + 1];
+
+        return null;
+    }
+}
+
+/// <summary>
+/// Fit a bigger header (SDD-006 §1b, §0c).
+///
+/// <para>THE ANSWER THE DRILLING REFUSAL ALREADY PROMISED. A well with nowhere
+/// to tie in is refused with "a bigger header has to be installed first", and
+/// until now nothing could install one — the engine named a remedy it did not
+/// have. Eight slots is a long way into a field's life, which is why nobody
+/// reached it.</para>
+/// </summary>
+public sealed record InstallManifoldCommand() : Command(Subject: null);
+
+internal sealed class InstallManifoldActivity(
+    ActivityTerms terms,
+    OGSim.Facilities.Manifold header,
+    IReadOnlyList<OGSim.Facilities.ManifoldTier> ladder,
+    FacilityLadders ladders,
+    OGSim.Capabilities.CapabilityState capabilities,
+    OGSim.Capabilities.EraCalendar eras,
+    IGatingValidator gate,
+    IEffectState effects) : Activity<InstallManifoldCommand>(terms)
+{
+    /// <summary>Steel on a site: PP&amp;E (SDD-009 §1).</summary>
+    /// <summary>A rung on the surface ladder (finding 225).</summary>
+    public override MovementCategory Spend => MovementCategory.Development;
+
+    public override bool LeavesAnAsset => true;
+
+    public override bool OnePerTarget => true;
+
+    public override (EntityRef Target, Length Depth) Aim(InstallManifoldCommand command) =>
+        (new EntityRef(EntityKind.FlowElement, header.Id.Value), NoDepth);
+
+    public override IReadOnlyList<RejectionReason> OwnRefusals(InstallManifoldCommand command)
+    {
+        if (NextRung() is { } next) return RungGate.Buyable(next.Id, ladders, capabilities, eras, gate, effects);
+
+        return
+        [
+            new RejectionReason(
+                "$loc:reject.top-of-the-ladder",
+                $"'{header.Tier.Id.Value}' is the largest header in the catalogue; the field " +
+                "cannot take more wells than it already can"),
+        ];
+    }
+
+    public override void Complete(CompletedActivity done, Tick tick)
+    {
+        ArgumentNullException.ThrowIfNull(done);
+
+        if (!done.Succeeded) return;
+
+        if (NextRung() is OGSim.Facilities.ManifoldTier next) header.Fit(next);
+    }
+
+    /// <summary>The rung above what is fitted, in the ladder's declared order
+    /// (D-5).</summary>
+    private OGSim.Facilities.ManifoldTier? NextRung()
+    {
+        for (int i = 0; i < ladder.Count - 1; i++)
+            if (ladder[i].Id == header.Tier.Id) return ladder[i + 1];
+
+        return null;
+    }
+}
+
+/// <summary>
+/// Build more storage (SDD-006 §5).
+///
+/// <para>THE THIRD ANSWER TO A FULL TANK. Stage 6's own comment offers "more
+/// storage, more export and less production" as the choices a player has when
+/// the ullage constraint reaches back down the chain, and storage was the one
+/// nothing could buy — the other two shipped and this did not.</para>
+///
+/// <para>It buys TIME rather than throughput, which is what makes it a
+/// different decision from a bigger export line: storage carries a field
+/// through a gap, and a pipeline carries it faster for ever.</para>
+/// </summary>
+public sealed record InstallTankCommand() : Command(Subject: null);
+
+internal sealed class InstallTankActivity(
+    ActivityTerms terms,
+    OGSim.Facilities.Tank tank,
+    IReadOnlyList<OGSim.Facilities.TankTier> ladder,
+    FacilityLadders ladders,
+    OGSim.Capabilities.CapabilityState capabilities,
+    OGSim.Capabilities.EraCalendar eras,
+    IGatingValidator gate,
+    IEffectState effects) : Activity<InstallTankCommand>(terms)
+{
+    /// <summary>Civil work a company still owns next month: PP&amp;E
+    /// (SDD-009 §1).</summary>
+    /// <summary>A rung on the surface ladder (finding 225).</summary>
+    public override MovementCategory Spend => MovementCategory.Development;
+
+    public override bool LeavesAnAsset => true;
+
+    public override bool OnePerTarget => true;
+
+    public override (EntityRef Target, Length Depth) Aim(InstallTankCommand command) =>
+        (new EntityRef(EntityKind.FlowElement, tank.Id.Value), NoDepth);
+
+    public override IReadOnlyList<RejectionReason> OwnRefusals(InstallTankCommand command)
+    {
+        if (NextRung() is { } next) return RungGate.Buyable(next.Id, ladders, capabilities, eras, gate, effects);
+
+        return
+        [
+            new RejectionReason(
+                "$loc:reject.top-of-the-ladder",
+                $"'{tank.Tier.Id.Value}' is the largest tank farm in the catalogue; the field " +
+                "cannot hold more than it already can"),
+        ];
+    }
+
+    public override void Complete(CompletedActivity done, Tick tick)
+    {
+        ArgumentNullException.ThrowIfNull(done);
+
+        if (!done.Succeeded) return;
+
+        if (NextRung() is OGSim.Facilities.TankTier next) tank.Fit(next);
+    }
+
+    /// <summary>The rung above what is fitted, in the ladder's declared order
+    /// (D-5).</summary>
+    private OGSim.Facilities.TankTier? NextRung()
+    {
+        for (int i = 0; i < ladder.Count - 1; i++)
+            if (ladder[i].Id == tank.Tier.Id) return ladder[i + 1];
+
+        return null;
+    }
+}
+
+/// <summary>
+/// Fit a treater (SDD-006 §2, finding 173).
+///
+/// <para>THE ANSWER TO WET OIL. A field that waters out sells a stream the meter
+/// turns away, and until there was a treater to buy that was a tax on getting
+/// old rather than a decision. The oil is there and it is worth money; it just
+/// cannot be sold with the water still in it.</para>
+/// </summary>
+public sealed record InstallTreaterCommand() : Command(Subject: null);
+
+internal sealed class InstallTreaterActivity(
+    ActivityTerms terms,
+    OGSim.Facilities.Treater treater,
+    IReadOnlyList<OGSim.Facilities.TreaterTier> ladder,
+    FacilityLadders ladders,
+    OGSim.Capabilities.CapabilityState capabilities,
+    OGSim.Capabilities.EraCalendar eras,
+    IGatingValidator gate,
+    IEffectState effects) : Activity<InstallTreaterCommand>(terms)
+{
+    /// <summary>A rung on the surface ladder (finding 225).</summary>
+    public override MovementCategory Spend => MovementCategory.Development;
+
+    public override bool LeavesAnAsset => true;
+
+    public override bool OnePerTarget => true;
+
+    public override (EntityRef Target, Length Depth) Aim(InstallTreaterCommand command) =>
+        (new EntityRef(EntityKind.FlowElement, treater.Id.Value), NoDepth);
+
+    public override IReadOnlyList<RejectionReason> OwnRefusals(InstallTreaterCommand command)
+    {
+        if (NextRung() is { } next) return RungGate.Buyable(next.Id, ladders, capabilities, eras, gate, effects);
+
+        return
+        [
+            new RejectionReason(
+                "$loc:reject.top-of-the-ladder",
+                $"'{treater.Tier.Id.Value}' is the best treating in the catalogue; the field " +
+                "cannot dry its oil further than it already does"),
+        ];
+    }
+
+    public override void Complete(CompletedActivity done, Tick tick)
+    {
+        ArgumentNullException.ThrowIfNull(done);
+
+        if (!done.Succeeded) return;
+
+        if (NextRung() is OGSim.Facilities.TreaterTier next) treater.Fit(next);
+    }
+
+    private OGSim.Facilities.TreaterTier? NextRung()
+    {
+        for (int i = 0; i < ladder.Count - 1; i++)
+            if (ladder[i].Id == treater.Tier.Id) return ladder[i + 1];
+
+        return null;
+    }
+}
+
+/// <summary>
+/// Whether a rung can be bought, and why not (SDD-005 §2's R20d.10b amendment).
+///
+/// <para>TWO CHECKS AND TWO KINDS OF FACT. The era is a CALENDAR comparison made
+/// here, because an era that has not arrived is not something a company can go
+/// and get and would be a "missing item" with no remedy. The technology is a
+/// REQUIREMENT and goes through the one validator §2 specifies — the same road
+/// activity gating travels, so equipment cannot drift onto a second one.</para>
+///
+/// <para>Shared by all five install verbs rather than repeated in each: the
+/// question is identical and only the noun differs, and five copies would be
+/// five chances for one of them to forget a half.</para>
+/// </summary>
+internal static class RungGate
+{
+
+    public static IReadOnlyList<RejectionReason> Buyable(
+        ContentId rung,
+        FacilityLadders ladders,
+        OGSim.Capabilities.CapabilityState capabilities,
+        OGSim.Capabilities.EraCalendar eras,
+        IGatingValidator gate,
+        IEffectState effects)
+    {
+        ArgumentNullException.ThrowIfNull(ladders);
+        ArgumentNullException.ThrowIfNull(capabilities);
+        ArgumentNullException.ThrowIfNull(gate);
+
+        if (!ladders.InventedBy(rung, capabilities.Era))
+            return [ladders.NotYet(rung, capabilities.Era, eras)];
+
+        // NO RENTALS: a service rental is scoped to one operation (SDD-005 §2)
+        // and a vessel bolted to a deck is not an operation — it outlives the
+        // crew that fitted it, so renting the knowledge to install it would leave
+        // the company owning equipment it cannot run.
+        if (gate.Check(ladders.RequirementsOf(rung), capabilities.Technology, [], effects)
+            is not GateFail failed)
+            return [];
+
+        var reasons = new List<RejectionReason>(failed.Missing.Count);
+
+        // EVERY miss, never just the first (the R3-V2 principle) — and NAMED, so
+        // a player is told which technology to go and get rather than that
+        // requirements were not met (R17 §2.6b).
+        for (int i = 0; i < failed.Missing.Count; i++)
+            if (failed.Missing[i] is MissingTechnology missing)
+                reasons.Add(new RejectionReason(
+                    "$loc:reject.technology-not-held",
+                    $"'{rung.Value}' needs {missing.Tech.Value.Value}, which this " +
+                    "company has not acquired"));
+
+        return reasons;
     }
 }

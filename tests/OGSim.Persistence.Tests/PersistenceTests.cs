@@ -22,7 +22,7 @@ public static class Fx
 
         return new SaveHeader(
             schema, "1.0.0", "content-1.0", mods ?? [],
-            WorldSeed: 20240901UL, Tick: new Tick(12),
+            WorldSeed: 20240901UL, Epoch: new GameDate(1965, 1), Tick: new Tick(12),
             RngPositions: new Dictionary<string, ulong> { ["hazard"] = 42UL },
             ModuleDigests: perModule, StateDigest: state);
     }

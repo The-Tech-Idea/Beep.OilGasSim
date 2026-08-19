@@ -27,7 +27,8 @@ public sealed class SubsurfaceStateTests
                 Temperature.FromCelsius(10.0), Temperature.FromCelsius(180.0)));
 
     private static SubsurfaceState Fresh() =>
-        new(Fluid(), new SolutionGasDrive(), maxTickPressureDropFraction: 0.2);
+        new(Fluid(), new SolutionGasDrive(), Souring.SweetRock, Souring.TheRock,
+            Souring.SouringReference, maxTickPressureDropFraction: 0.2);
 
     /// <summary>A million cubic metres of pore volume at 30 MPa — a small field
     /// that depletes visibly over a handful of years.</summary>
@@ -70,6 +71,7 @@ public sealed class SubsurfaceStateTests
             Water: new SurfaceVolume(0.0),
             Influx: new ReservoirVolume(0.0),
             Injected: new ReservoirVolume(0.0),
+            Imported: new ReservoirVolume(0.0),
             ReservoirVolume: new ReservoirVolume(stockTankOil * 1.2));
 
     [Fact]
@@ -186,6 +188,113 @@ public sealed class SubsurfaceStateTests
         captured.CommitTick([Produce(id, 5_000.0)]);
         restored.CommitTick([Produce(id, 5_000.0)]);
 
+        Assert.Equal(
+            captured.TruePressureOf(id).Pascals,
+            restored.TruePressureOf(id).Pascals, 6);
+    }
+
+    /// <summary>
+    /// S013-9's decisive comparison, at the level it can actually be made.
+    ///
+    /// <para>A reloaded game plays differently while every state block is
+    /// byte-identical and every RNG stream is in the same place, and reloading
+    /// the reload reproduces it exactly — so the difference is not instability
+    /// but something the RESTORE reconstructs differently from what the original
+    /// built. This asks that question directly: a compartment made by
+    /// <c>Create</c> and advanced by withdrawals, against one made by
+    /// <c>RestoreTo</c> in a single step.</para>
+    ///
+    /// <para>WATER SATURATION, and exactly. The two tests above compare pressure
+    /// to six decimals and nothing compares saturation at all — which is the gap
+    /// this walks into, because water cut is <c>krw ∝ ((Sw−Swc)/(1−Swc−Sor))^nw</c>
+    /// and just above connate a fractional difference in saturation moves the CUT
+    /// by orders of magnitude. A tolerance of 1e-6 on saturation would hide a
+    /// 60-fold difference in produced water.</para>
+    /// </summary>
+    [Fact]
+    public void A_restored_compartment_holds_the_same_water_as_the_one_it_copied()
+    {
+        SubsurfaceState captured = Fresh();
+        EntityId<IReservoirCompartmentEntity> id = Add(captured);
+
+        // ENOUGH HISTORY TO MATTER, and water in it: saturation is what the two
+        // reconstruction paths could disagree about, so a run that produced only
+        // oil would compare two identical connate values and prove nothing.
+        //
+        // INJECTED rather than aquifer influx, because this fixture's drive is
+        // solution-gas and §4.2b's coherence check refuses a compartment
+        // carrying influx a drive does not admit (finding 192's guard, doing its
+        // job on the first attempt at this test). Injection is a human act and
+        // every drive admits it.
+        for (var month = 0; month < 12; month++)
+            captured.CommitTick(
+            [
+                new CompartmentWithdrawal(id,
+                    Oil: new SurfaceVolume(4_000.0),
+                    Gas: new StandardGasVolume(0.0),
+                    Water: new SurfaceVolume(250.0),
+                    Influx: new ReservoirVolume(0.0),
+                    Injected: new ReservoirVolume(900.0),
+                    Imported: new ReservoirVolume(0.0),
+                    ReservoirVolume: new ReservoirVolume(5_000.0)),
+            ]);
+
+        SubsurfaceState restored = Fresh();
+        StateBlock.Restore(restored, StateBlock.Capture(captured).Written());
+
+        var water = new Viscosity(0.5e-3);
+        var oil = new Viscosity(2.0e-3);
+
+        double before = captured.TrueWaterCutOf(id, water, oil);
+        double after = restored.TrueWaterCutOf(id, water, oil);
+
+        // THEY AGREE, AND NOT TO THE LAST BIT — and the gap is S013-9's cause.
+        //
+        // The captured compartment reached this pressure through twelve
+        // successive bisection solves; the restored one reached it in ONE. Both
+        // converge inside the root-finder's tolerance and neither lands on the
+        // same bits: 8.3891063623994589e-06 against 8.3891063623992776e-06, a
+        // relative difference of about 2e-13.
+        //
+        // That is harmless here and is not harmless downstream, because the cut
+        // ITSELF is near zero just above connate saturation. A relative wobble in
+        // an almost-zero quantity is what a reloaded field turns into 3,644 kg of
+        // produced water against the original's 233,955 — the `Chain` divergence
+        // PV2 has admitted as its one exception, and the reason six families of
+        // hypothesis were eliminated before this: every state block is identical,
+        // because the difference was never IN a block (finding 206).
+        // THEY AGREE TO THE LAST BIT, and getting here took closing an L5 breach
+        // rather than anything about the save (finding 206).
+        //
+        // Connate water saturation had TWO OWNERS: the compartment derived
+        // `Initial.ConnateWaterSaturation` as `1.0 - generated.OilSaturation`
+        // while the rock's curve carried its own `swc` from content. For a field
+        // generated at 0.7 against a curve declaring 0.30 those are
+        // 0.30000000000000004 and 0.3 — one physical fact, two doubles. `Capture`
+        // wrote one `swc` key and `Restore` read it into BOTH, so a reloaded
+        // compartment had them agreeing where the original had them differing.
+        //
+        // THE SAVE NEVER LOST A VALUE. It unified two that were never equal,
+        // which is why every state block compared byte-identical while a
+        // reloaded game played differently — and why the digest diff, the
+        // stream-position check and the double-reload self-consistency test were
+        // all structurally unable to find it. `krw` normalises by
+        // `(Sw − swc)`, and a producing field sits just above connate where a
+        // last-bit change in the denominator's origin is a large RELATIVE change
+        // in a near-zero cut: 3,644 kg of produced water against 233,955.
+        //
+        // Exact equality, not a tolerance. A tolerance here would have hidden the
+        // original defect completely — the gap it produced was 2e-13 relative.
+        Assert.Equal(before, after);
+
+        // The pressure, exactly — it depends on the cumulative volumes and not on
+        // the curve, and those DO round-trip. Stated to keep the finding narrow:
+        // one input is wrong, not the restore in general.
+        Assert.Equal(
+            captured.TruePressureOf(id).Pascals,
+            restored.TruePressureOf(id).Pascals);
+
+        // The pressure carries the same signature, for the same reason.
         Assert.Equal(
             captured.TruePressureOf(id).Pascals,
             restored.TruePressureOf(id).Pascals, 6);

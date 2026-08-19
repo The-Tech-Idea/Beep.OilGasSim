@@ -38,8 +38,15 @@ public interface IHazardModel
 
 /// <summary>
 /// SDD-012 §5 — the long-arc hazard.
-/// <c>H2S(t) = sourCurve(cumulative injected water ÷ pore volume)</c>, per
+/// <c>H2S(t) = sourCurve(cumulative IMPORTED water ÷ pore volume)</c>, per
 /// waterflooded compartment, with the curve content per rock type.
+///
+/// <para><b>Imported, not injected</b> (§5's R20d.25 amendment, finding 182).
+/// Reinjected produced water has already been through the reservoir: it is
+/// anoxic, reduced and stripped of the sulphate the bacteria eat, so it is the
+/// fluid that sours a reservoir LEAST. Sea water carries roughly 2,700 ppm of
+/// sulphate, and seawater flooding is what actually sours fields — so the ratio
+/// counts the water a company BOUGHT and not the water it put back.</para>
 ///
 /// <para><b>This is the tail on every waterflood.</b> A player fights decline by
 /// injecting water, the water sours the reservoir over years, and the rising H2S
@@ -60,5 +67,5 @@ public interface ISouringModel
     /// <summary>Hydrogen sulphide concentration in ppm at the current
     /// throughput ratio. Monotonic in the ratio — water already injected cannot
     /// un-sour a reservoir.</summary>
-    double HydrogenSulphidePpm(ContentId rockType, double injectedWaterOverPoreVolume);
+    double HydrogenSulphidePpm(ContentId rockType, double importedWaterOverPoreVolume);
 }

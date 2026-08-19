@@ -18,7 +18,6 @@
 using OGSim.Contracts;
 using OGSim.Kernel;
 
-using InPlace = OGSim.Kernel.MaterialInventory;
 
 namespace OGSim.Subsurface;
 
@@ -49,7 +48,6 @@ internal sealed class ReservoirCompartment : IReservoirCompartment
         // nothing has been produced, so §3.1's solve at zero withdrawal returns
         // Pi and this is that answer without running it.
         Pr = initial.Pressure;
-        InPlace = initial.Mass;
         Cumulative = CumulativeProduction.None;
     }
 
@@ -57,7 +55,6 @@ internal sealed class ReservoirCompartment : IReservoirCompartment
 
     public Pressure Pr { get; private set; }
 
-    public InPlace InPlace { get; private set; }
 
     public ContactSet Contacts { get; private set; }
 
@@ -87,6 +84,26 @@ internal sealed class ReservoirCompartment : IReservoirCompartment
     /// all of its movable water, and a saturation of 1.0000000001 would make the
     /// Corey normalisation report a negative oil permeability.</para>
     /// </summary>
+    /// <summary>
+    /// How much sea water this compartment has taken, as a fraction of its pore
+    /// volume — SDD-012 §5's throughput ratio.
+    ///
+    /// <para>The IMPORTED share and not the injected one. A compartment that
+    /// only ever reinjected the water it produced has been circulating a fluid
+    /// already stripped of sulphate, and does not sour however long it runs
+    /// (finding 182). This number is what separates a waterflood from a disposal
+    /// well.</para>
+    /// </summary>
+    public double ImportedPoreVolumes
+    {
+        get
+        {
+            double pore = Initial.PoreVolume.CubicMetres;
+
+            return pore <= 0.0 ? 0.0 : Cumulative.Imported.CubicMetres / pore;
+        }
+    }
+
     public double WaterSaturation
     {
         get
@@ -137,14 +154,26 @@ internal sealed class ReservoirCompartment : IReservoirCompartment
         SurfaceVolume water,
         ReservoirVolume influx,
         ReservoirVolume injected,
+
+        // PART OF `injected`, not extra to it (SDD-012 §5's R20d.25 amendment).
+        // The balance counts every cubic metre of water that arrives whatever
+        // its provenance; this says how much of it was sea water, which is the
+        // only water that sours the rock.
+        ReservoirVolume imported,
         ReservoirVolume withdrawnThisTick,
         IFluidPropertyModel fluid,
         double maxTickPressureDropFraction)
     {
         ArgumentNullException.ThrowIfNull(fluid);
 
+        if (imported.CubicMetres > injected.CubicMetres)
+            throw new InvariantFault("SDD-012 §5", null,
+                $"compartment {Id.Value} was committed {Format(imported.CubicMetres)} m³ of " +
+                $"bought water inside {Format(injected.CubicMetres)} m³ of injection; the " +
+                "imported share is part of the injected volume, never additional to it");
+
         Pressure startOfTick = Pr;
-        CumulativeProduction next = Cumulative.Plus(oil, gas, water, influx, injected);
+        CumulativeProduction next = Cumulative.Plus(oil, gas, water, influx, injected, imported);
 
         var input = new MaterialBalanceInput(
             InitialPressure: Initial.Pressure,
@@ -175,6 +204,47 @@ internal sealed class ReservoirCompartment : IReservoirCompartment
     }
 
     /// <summary>
+    /// How much more replacement volume this compartment can take before it is
+    /// back at discovery pressure (SDD-003 §3.1's R20d.24b amendment).
+    ///
+    /// <para><c>−Φ(Pi)</c>, and every expansion term is zero at Pi — so this is
+    /// the withdrawal the compartment has made, less the water that has already
+    /// come back to it from an aquifer or an injector. Floored at nothing: a
+    /// compartment that has produced nothing has no room, which is not a
+    /// negative amount of room.</para>
+    /// </summary>
+    private static string Format(double value) =>
+        value.ToString("R", System.Globalization.CultureInfo.InvariantCulture);
+
+    public ReservoirVolume VoidageRoom(IFluidPropertyModel fluid)
+    {
+        ArgumentNullException.ThrowIfNull(fluid);
+
+        var input = new MaterialBalanceInput(
+            InitialPressure: Initial.Pressure,
+            OriginalOilInPlace: Initial.OilInPlace,
+            GasCapRatio: Initial.GasCapRatio,
+            ConnateWaterSaturation: Initial.ConnateWaterSaturation,
+            WaterCompressibility: Initial.WaterCompressibility,
+            RockCompressibility: Rock.RockCompressibility,
+            CumulativeOilProduced: Cumulative.Oil,
+            CumulativeGasProduced: Cumulative.Gas,
+            CumulativeWaterProduced: Cumulative.Water,
+            CumulativeWaterInflux: Cumulative.WaterInflux,
+            CumulativeInjected: Cumulative.Injected,
+
+            // Neither reaches Φ. Named rather than defaulted because the record
+            // has no defaults (law L2), and the honest values for "how much room
+            // is there right now" are the position this compartment is in.
+            StartPressure: Pr,
+            WithdrawnThisTick: new ReservoirVolume(0.0));
+
+        double room = -MaterialBalance.Residual(input, fluid, Initial.Pressure);
+
+        return new ReservoirVolume(room > 0.0 ? room : 0.0);
+    }
+
+    /// <summary>
     /// Restores the position a save recorded, then re-derives the pressure from
     /// it rather than reading a stored one — the loaded reservoir is the one the
     /// material balance says it must be, so a save cannot carry a pressure the
@@ -183,14 +253,12 @@ internal sealed class ReservoirCompartment : IReservoirCompartment
     public void RestoreTo(
         CumulativeProduction cumulative,
         ContactSet contacts,
-        InPlace inPlace,
         IFluidPropertyModel fluid)
     {
         ArgumentNullException.ThrowIfNull(fluid);
 
         Cumulative = cumulative;
         Contacts = contacts;
-        InPlace = inPlace;
 
         var input = new MaterialBalanceInput(
             InitialPressure: Initial.Pressure,
@@ -208,10 +276,18 @@ internal sealed class ReservoirCompartment : IReservoirCompartment
             // The step limit is a statement about ONE tick, and a restore is not
             // a tick: the whole history arrives at once, so the step is measured
             // from initial conditions and no per-tick limit applies to it.
+            //
+            // THE SECOND HALF OF THAT WAS NOT IMPLEMENTED until R20d.12.17. The
+            // start pressure was set here correctly and the limit ran anyway, so
+            // a restore measured the ENTIRE depletion as one month and refused
+            // it — a compartment past a quarter of its initial pressure could not
+            // be loaded at all, which is every field that is small or old
+            // (finding 205). `SolveFromInitial` below is the half that was
+            // missing.
             StartPressure: Initial.Pressure,
             WithdrawnThisTick: new ReservoirVolume(0.0));
 
-        Pr = Drive.SolveEndPressure(input, fluid);
+        Pr = Drive.SolveFromInitial(input, fluid);
     }
 
     /// <summary>Where the contacts move to as volume is replaced (SDD-003 §3.2).</summary>

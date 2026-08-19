@@ -37,6 +37,9 @@ public sealed class CompanyState : IStateOwner
 
     public int SchemaVersion => 1;
 
+    /// <summary>Nothing has to be back before this is (SDD-013 §2b).</summary>
+    public IReadOnlyList<StateKey> RestoreAfter => [];
+
     public void Capture(IStateWriter writer)
     {
         ArgumentNullException.ThrowIfNull(writer);
@@ -99,7 +102,11 @@ public sealed class CompanyState : IStateOwner
                     (ulong)reader.ReadInt64(at + "asset-id"))
                 : null;
 
-            rebuilt.Post(new Movement(
+            // REPLAYED, not posted (SDD-009 §1's R20d.12 amendment). Re-asking a
+            // saved revenue credit to name a custody transfer asks the audit
+            // trail a question it cannot answer: a freshly composed engine's
+            // trail is empty, and a running one keeps detail on a window.
+            rebuilt.Replay(new Movement(
                 new Tick((int)reader.ReadInt64(at + "tick")),
                 (Account)reader.ReadInt64(at + "debit"),
                 (Account)reader.ReadInt64(at + "credit"),

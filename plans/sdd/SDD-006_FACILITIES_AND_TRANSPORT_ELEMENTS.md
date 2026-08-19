@@ -209,6 +209,41 @@ pressures — no special multi-stage code; recovery gain emerges (R8-V4).
 > raises manifold pressure and can shut in weaker wells however far away they
 > are.
 
+> **R20d.19 amendment (finding 173). The separation model cannot express wet
+> oil, so BS&W is structurally zero and the sales spec can never fail on it.**
+>
+> `SeparationEfficiency` carries three terms and all three move liquid and gas
+> across the gas/liquid boundary or knock water OUT of the liquid leg:
+>
+> ```text
+> LiquidFromGas    gas carried under, into the liquid
+> GasFromLiquid    liquid carried over, into the gas
+> WaterFromLiquid  water knocked OUT of the liquid, into the aqueous leg
+> ```
+>
+> There is no term for the direction that matters to a custody spec: water
+> carried INTO the oil. The fluid model's split puts produced water in the
+> aqueous phase and this model can only move more of it out, so the oil leaving a
+> vessel is dry by construction — at any efficiency, at any load, on any tier.
+>
+> **BS&W is therefore not a content number waiting to be set.** It is a quantity
+> the model has no way to produce, which is why `Defaults.SalesSpec` is empty and
+> why the custody point's reject leg has never fired. A treater installed against
+> it would have nothing to treat, which is this session's recurring finding in
+> advance rather than after the fact.
+>
+> The missing term is `WaterIntoLiquid` — a carry-under of the aqueous phase, and
+> the one that should rise with LOAD rather than sit at a rated constant, because
+> the mechanic worth having is "push the vessel past its design rate and the oil
+> goes off-spec". That is a change to this section and to `ISeparationModel`, and
+> it belongs to whoever builds treating rather than being smuggled in beside it.
+>
+> **Souring is the path that is NOT blocked.** SDD-012 §5's H2S curve reads
+> cumulative injected water over pore volume, which R20d.18 made real, and H2S
+> can enter as a MATERIAL — content, which this composition already parameterises
+> — rather than as a model term that does not exist. A sales spec that fails on
+> sourness needs no change here at all.
+
 ## 1b. Manifold / header — the commingling element
 
 > **R20d.1 declaration (finding 159).** [01](../design/01_CONCEPT_MATRIX.md) §C5
@@ -527,6 +562,181 @@ public interface ICustodyTransferPoint : IFlowElement
 property with a band**, because a sales-gas contract sets them independently and
 a stream can fail either end — rich gas is off-spec as surely as lean.
 
+### 7a. R20d.5.0 review — what §7 specifies and what exists
+
+The phase's first task is its SDD review, and §7 survives it: nothing below is
+wrong. What follows is the gap, because half of §7 is built and the half that is
+not has surface declared for it in three places.
+
+**Built and in the loop.** The custody meter meters, the spec gate gates and
+routes failures to Reject in full, the tank stores and binds (R8-V5), and an
+export terminal lifts. **Absent entirely: the berth, the cargo, laytime and
+demurrage.** Export is a RATE — `ExportTier.Offtake`, drawn against every tick —
+where §7 specifies a SCHEDULE: a berth occupied by one cargo at a time on the
+/30ths grid, loading at `min(loadingRate_berth, tankDrawCapacity)` over active
+days, with demurrage on the overrun.
+
+**Three declarations already point at the missing half, and each is joined to
+nothing** — the shape findings 200 and 202 both took:
+
+| Declared | Where | Produced by |
+|---|---|---|
+| `ConstraintKind.BerthOccupancy` | `FlowContracts.cs` | nothing, not even a test |
+| `LogisticsView.Berths` | SDD-017 §2's projection | nothing |
+| `LogisticsView.Nominations` | same | nothing |
+
+A constraint kind nothing produces is a case the read model can render and the
+engine can never reach; it costs nothing today and will quietly become wrong the
+day someone assumes it is populated.
+
+**The change is what the TANK is for.** Today it buffers a continuous draw, so
+ullage binds against a rate. With liftings it buffers *between* them, and ullage
+binds against a rhythm — a field that out-produces its lifting schedule fills
+and shuts in even though its average export capacity is ample. R8-V5 already
+proves the tank binds; this changes what it binds against, which is the whole
+reason berths are worth building rather than a bigger pipe.
+
+> **One L5 hazard to settle before any code.** `ExportTerminal.Tier` is
+> documented as *"the one fact about export capacity there is (law L5)"*. A berth
+> with a loading rate would be a second one, and the two would drift the first
+> time either was tuned. Either the berth's rate IS the terminal's tier — the
+> socket becomes the berth — or the terminal stops carrying a rate and becomes
+> the thing a berth is attached to. **The second is the honest reading of §7**,
+> which lists Terminal and Berth as separate nouns and gives the RATE to the
+> berth; it also makes `ExpandExportCommand` a berth upgrade rather than a pipe
+> one, which is a content change and not only a code change.
+
+### 7a.1 What makes R20d.5.1 expensive is not the code
+
+The draw itself is ONE LINE — `_tank.Draw(Tier.Offtake · tickSeconds)` in
+`StoreAndExport`. Replacing it with a cargo rhythm is a small edit. **What is
+expensive is that it moves the economics of every long-running test**, and this
+section exists so the next attempt expects that rather than discovering it.
+
+**Twenty-nine tests carry `Speed=Slow` in the composition suite** — fourteen in
+`ChainTests`, five each in `NewGameTests` and `SaveGameTests`, three in
+`ReferenceClientTests`, two in `ProductionLoopTests` — and the ones that play a
+whole field life all price a field that lifts continuously. Three files reach
+export directly (`ChainTests`, `RealityProfileTests`, `SaveGameTests`), and the
+rest reach it through cash. A gate cycle is about fifteen minutes.
+
+**Do NOT tune the cargo size to reproduce today's behaviour.** A parcel small
+enough to lift every tick is a continuous rate wearing a schedule's name, and a
+setting chosen to keep tests green is a compatibility shim — which this
+repository forbids by name. The behaviour is meant to change.
+
+**So the test movements must be predicted, not explained afterwards.** The
+invariant that should survive is the one the physics has not changed:
+
+```text
+holds     cumulative oil sold over a long run — a rhythm changes WHEN oil
+          leaves, not how much the field can ultimately sell
+holds     everything upstream of the tank: rates, pressures, water cut,
+          equipment condition, obligations
+MOVES     tank level and ullage, tick by tick
+MOVES     how often the tank binds and shuts wells in (R8-V5's subject)
+MOVES     cash TIMING, and therefore the covenant and borrowing tests that
+          sample it at a particular month
+```
+
+A movement outside that list is a defect and should be treated as one. A
+movement inside it is the feature, and the test that measured the old rhythm
+should be re-stated in terms of the new one rather than re-tuned to pass.
+
+**The sizing is the design work, and here are the numbers it starts from**
+(measured, R20d.5.0b):
+
+```text
+tank capacity        150.0e6 kg          (E1 tier)
+export offtake       20.0 kg/s  = 51.84e6 kg per 30-day tick
+tank holds           ~2.9 ticks of export capacity
+shipped field makes  ~12.1e6 kg per tick   (14,278 m³ at ~850 kg/m³)
+                     = 23% of export capacity, so export does not bind today
+time to fill tank    ~12 ticks
+```
+
+**A cargo sized at tank capacity ships once a year; one sized at a month's
+production ships monthly.** Those are very different games, and the choice is
+not a tuning constant — it decides whether storage is a buffer or the whole
+problem.
+
+**A fixed content size is the realistic answer and the interesting one.** Ships
+come in standard parcels; a field too small to fill one has a real decision to
+make — take worse terms on a part cargo, build more storage, or drill more —
+which is exactly the kind of pressure §7's laytime and demurrage exist to
+create. **What it must not be is a size chosen so the shipped field happens to
+lift every month**, because that is the continuous rate again with extra state.
+
+**So the shipped E1 parcel has to be small enough that the shipped field is not
+simply broken by it**, and that is a content judgement to make with the numbers
+above in hand rather than a default to pick and discover later.
+
+### 7a.2 Built, measured, REVERTED — what the attempt established
+
+R20d.5.1 was implemented end to end and backed out. It is worth recording
+because the blocker is not where §7a.1 predicted, and the next attempt should
+start from the decision rather than from the code.
+
+**The code was not the problem.** A berth with occupancy, cargo-sized lifting,
+laytime and demurrage, and the part-loaded cargo saved with its days alongside,
+came to roughly 150 lines across four files and built clean. The non-slow suite
+went from green to two failures, both in `GameplayTests`.
+
+**A parcel-sized float sits permanently unsold.** §7a.1 predicted that
+*cumulative oil sold over a long run holds* — it does not, and this is the
+prediction that was wrong. With parcel lifting the tank always holds up to one
+parcel that has not shipped, so lifetime revenue is permanently short by that
+much plus the timing of everything before it.
+
+**And the shipped scenario's win condition was calibrated on continuous
+lifting.** `first-field`'s objective is a CASH TARGET with a deadline, so
+deferring revenue is exactly what it measures. `A_player_who_develops_the_field_wins`
+went from `Met` to `Expired` at a 50×10⁶ kg parcel — and again at 20×10⁶ kg,
+under two months of the shipped field's production, which is what settles it:
+
+> **The size is not the problem. Any parcel-based lifting breaks a cash target
+> tuned against a continuous tap.** Shrinking the parcel until the old assertion
+> passes would be the shim this plan already forbids, arrived at by a third
+> route.
+
+**So the next attempt starts by deciding what the opening scenario should
+demand**, not by writing the berth. And the decision has a shape worth stating,
+because the obvious fix is the weak one:
+
+- **Move the target or the deadline.** Crude, and it hides the real point: it
+  would recalibrate a measure that has become wrong rather than fixing it.
+- **Value the oil.** A company holding a part-filled cargo is not POORER than
+  one that shipped yesterday — it is ILLIQUID. Cash alone mis-values a business
+  that has done the work and not yet been paid, and that is true of a real
+  operator whatever this scenario asks for.
+
+**The second is almost certainly right, and berths did not create the problem —
+they exposed it.** The objective measures cash because cash is what the read
+model publishes; finding 190 records the same gap from the other side (a balance
+and no operating cash flow, so no host can tell a month of investment from a
+month of decline). Storage inventory is one of the seventeen projections R21
+§2.4b requires and one of the eleven with no source.
+
+**So this is not really a scenario-balance task.** It is: publish what the field
+is worth as well as what it holds in cash, then let an objective measure
+performance rather than liquidity. Berths become safe to land the moment that
+exists — and until it does, ANY mechanic that defers revenue will read as a
+failure to the opening scenario, which is a trap the next such feature will walk
+into as well.
+
+**Order of work**, each landing green before the next:
+
+1. The berth carries the rate (§7a's L5 decision), with no schedule yet —
+   behaviour identical, tests unmoved, and the duplicate-rate hazard closed
+   before anything can depend on it.
+2. Cargoes and occupancy: the tank fills between liftings. **This is where the
+   slow suite moves**, and where the predictions above are checked.
+3. Laytime and demurrage — a cost, so it touches the ledger and the ESG/covenant
+   tests but not the flow.
+4. `ConstraintKind.BerthOccupancy` emitted, and `LogisticsView` populated
+   (finding 203's three dangling declarations, joined at the point where they
+   finally have a source).
+
 ## 7b. Export capacity — a socket, not a constant
 
 > **R20d.8 amendment (finding 165). The offtake rate was a constant and the
@@ -623,6 +833,86 @@ meter {σ}; berth {loadingRate}; power source {maxPower, η_driver, fuelType|gri
 meritRank}; flare {capacity, combustionEfficiency}; VRU {capacity,
 recoveryFraction}. **A field not listed here does not exist** —
 additions go through this SDD first (rule F-1).
+
+## 8b. `facilities.units` — what the chain owns between ticks (R20d.12)
+
+**Specified before it is implemented (F-1), because it does not exist and its
+absence undoes every upgrade a company buys** (finding 197). The save walks
+`StateRegistry.Owners`; facilities register no owner, so nothing in this
+document's element set reaches a container.
+
+```csharp
+// Layer 4, beside the flood's owner and for the same reason: a tier is
+// restored by NAME through the ladder that fitted it, and the ladders are
+// composition's (Defaults.SeparatorLadder …), exactly as a drive is restored
+// through SubsurfaceState.DriveNamed.
+internal sealed class FacilitiesState : IStateOwner   // key "facilities.units"
+```
+
+**What it carries, and why each is state rather than content:**
+
+```text
+tier per socket    manifold · separator · tank · gas plant · treater · export
+                   — §0c's refit: the socket keeps its identity and what is
+                   FITTED changes, so the fitted rung is the purchase
+tank contents      held inventory, its provenance allocation, promised mass —
+                   oil a company owns, and §5's ullage is computed from it
+pipeline linefill  §6's V7 term; a line restored empty delivers its first
+                   month's oil out of nowhere
+intake commanded   §7c.1's set point for the water the flood buys
+```
+
+**Tiers restore by CONTENT ID through the ladder, never by index.** A ladder is
+an authored progression (§7b) and its order may legitimately change between
+builds; an index would silently refit a different vessel. An id the current
+ladder does not contain is a REFUSAL naming it, like every other unresolvable
+reference on load (design 11 §2.1).
+
+**Restore order**: after the field is rebuilt, since a tank's provenance names
+compartments and a linefill is inventory in an element the rebuild creates.
+
+**Built at R20d.12. All six rungs round-trip**, each restored by id through its
+ladder with a refusal naming the rung when this build's ladder has no such id.
+Five sit in `facilities.units`; the EXPORT terminal has its own block,
+`field.export`, because the field module composes it rather than the chain
+carrying it — a second owner rather than a second copy, since one fact has one
+owner (L5) and the alternative would have two modules believing they hold the
+same element. Moving the terminal onto the chain so all six share a block is a
+composition restructure and its own change; shipping the most expensive purchase
+in the catalogue unsaved while that was designed would have been the wrong
+order.
+
+**The pipeline's LINEFILL and the intake's SET POINT are carried too**, written
+ordinal by ordinal with the count beside them: the catalogue assigns ordinals
+(SDD-004 §6), so a save assuming a fixed material set would silently re-key
+every mass the day one is added. Both types already exposed a getter and a
+setter, so neither needed a member invented for persistence.
+
+**The TANK's contents complete the block**: the held inventory and its
+provenance `Allocation`, restored through one `Tank.RestoreTo` — a barrel is
+credited to the compartment it came from, so a blend that had forgotten whose
+oil it was would allocate the next sale to the wrong reservoir. The PROMISED
+mass is deliberately NOT saved: `ForgetPromises` runs at the top of every tick
+before anything reserves against it, so it is scratch within a month rather than
+state across one, which is §4's never-saved rule applied rather than assumed.
+
+**Everything §8b names is now carried, and the last two elements were EXAMINED
+rather than assumed clean.** `Flare` holds nothing mutable at all — its capacity
+and combustion efficiency are readonly and what it has burned accumulates in the
+production loop's `CumulativeFlared`, which is saved. `CustodyTransferPoint`
+holds `LastBreaches`, and it is assigned on every `Transform` before it is read,
+so it is a report of the month just solved rather than state carried into the
+next one: per-tick scratch, and §4's never-saved rule applies.
+
+**The sweep is therefore closed rather than merely finished** — every element on
+the chain has been looked at, and the two that carry nothing say so here so the
+next reader does not have to check again.
+
+**The fixture is part of the specification, not an afterthought.** PV2 today
+drills and floods and never INSTALLS, which is why it passes while all of this
+is missing — a test comparing two engines for two years cannot see equipment
+nobody bought. The owner lands with a fixture that buys at least one rung and
+fills the tank, or it lands untested by anything that would notice.
 
 ## 9. Test mapping
 

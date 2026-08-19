@@ -71,7 +71,22 @@ public interface IPowerSource
 public readonly record struct SeparationEfficiency(
     double LiquidFromGas,
     double GasFromLiquid,
-    double WaterFromLiquid);
+    double WaterFromLiquid,
+
+    /// <summary>
+    /// Water carried INTO the oil (SDD-006 §2's R20d.19 amendment, finding 173).
+    ///
+    /// <para>The other three move liquid and gas across the gas/liquid boundary
+    /// or knock water OUT of the liquid leg, so oil leaving a vessel was dry by
+    /// construction at any efficiency, any load, any tier — and the sales spec
+    /// was empty because nothing could ever breach it.</para>
+    ///
+    /// <para>A RATED figure, at the vessel's design rate. What a separator
+    /// actually carries over rises with how hard it is pushed, and the vessel
+    /// applies that: residence time halved is water that did not have time to
+    /// fall out.</para>
+    /// </summary>
+    double WaterIntoLiquid);
 
 /// <summary>
 /// Design 03 §3.2 — fixed-efficiency split ↔ flash calculation.

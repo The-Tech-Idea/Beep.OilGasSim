@@ -120,7 +120,12 @@ public sealed class ManifoldTests
 
         Assert.Equal(4, inlets);
         Assert.Equal(4, header.Slots);
-        Assert.Equal(new PortId(4), header.Outlet);
+        // A FIXED id, not one past the last slot. It used to be the slot count,
+        // which made the outlet's identity depend on how many wells the header
+        // could take — so growing the header moved the outlet out from under the
+        // flowline already connected to it, in a registry that has no removal.
+        Assert.True(Manifold.Outlet.Index > header.Slots,
+            "the outlet must sit clear of any slot number, or growing the header moves it");
     }
 
     [Fact] // Asking for a slot that does not exist names the count, not "out of range"

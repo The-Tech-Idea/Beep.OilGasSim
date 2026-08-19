@@ -1,0 +1,7 @@
+{
+  "kind": "treater",
+  "id": "heater-treater-desalter",
+  "availableFromEra": "E2",
+  "rung": 2,
+  "waterRemoved": "98 pct"
+}

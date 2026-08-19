@@ -147,6 +147,23 @@ public interface IBeliefStore
     /// other stale — law L5, in the information layer.</para>
     /// </summary>
     void ReKey(EntityRef from, EntityRef to);
+
+    /// <summary>
+    /// SDD-008 §2d's staleness: widen what is believed about one subject,
+    /// because time has passed AND that subject has been produced from.
+    ///
+    /// <para>PER SUBJECT, which is §2d.2's decision in a signature. Drift is
+    /// charged to production rather than to the calendar — a pressure belief
+    /// goes stale because the pressure moved, and withdrawal is what moves it —
+    /// so a shut-in compartment's beliefs hold while the one next to it being
+    /// drained does not. Charging it to the clock would make WAITING a source of
+    /// uncertainty and re-measuring on a timer the optimal play.</para>
+    ///
+    /// <para>On the CONTRACT rather than on the store alone: the stage that
+    /// calls it takes this interface, and law L1 admits no concrete type as a
+    /// dependency.</para>
+    /// </summary>
+    void Age(EntityRef subject, ContentId propertyKind, double driftPerYear, double years);
 }
 
 // ILicence moved to CompanyContracts.cs at R16, per SDD-011 §1's standing note:

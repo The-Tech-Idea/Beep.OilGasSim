@@ -317,6 +317,85 @@ elements; an unavailable element is absent from the network
 ([04](../design/04_MATERIAL_AND_FLOW.md) §4). `Transform` being pure is what
 makes per-segment solving and whole-tick abandonment cheap.
 
+> **R20d.22 amendment (finding 180) — the available set is DOWNSTREAM-CLOSED.**
+>
+> Removing an element removes the connections touching it, and that is all
+> `ViewFor` does. What it leaves behind, if the element sat mid-chain, is a
+> source still flowing into a pipe that now ends nowhere — and **the solver
+> accepts it**. Measured, not argued: a source of 50 kg/s feeding a restrictor
+> whose sink was withdrawn solves in two elements, sources its 50 kg/s, and
+> delivers it to no one. Mass leaves the network by the back door.
+>
+> Downstream in this composition, that is the reservoir being drained for
+> nothing: the wells produce, stage 6 publishes the withdrawal against the
+> compartment, and no barrel reaches custody. A field whose separator broke
+> would lose its oil rather than stop producing it.
+>
+> **The law.** An element is available only if everything it feeds is available:
+>
+> ```text
+> available' = { e ∈ available : ∀ c ∈ connections, c.From = e ⇒ c.To ∈ available' }
+> ```
+>
+> the greatest fixed point, computed by removing upstream elements until nothing
+> more can be removed. `IFlowElementRegistry.Routed(available)` returns it, and
+> stage 4 applies it to whatever the hazard pass left standing.
+>
+> **This is what a bottleneck IS**, and it is worth stating as a gain rather than
+> as a safety property. Every element in the chain becomes a single point of
+> failure for everything behind it: the tank goes and the field shuts in, because
+> there is nowhere to put oil; the disposal well goes and the field shuts in,
+> because there is nowhere to put water. A player who wants a field that survives
+> its equipment has to buy the redundancy, which is the decision this engine is
+> made of.
+>
+> **Closure and not reachability**, which reads like the same rule and is not.
+> "Can this element reach a sink?" cannot tell a genuine terminal element from
+> one left dangling — both have no outgoing connection in the view. Closure asks
+> about each element's own declared connections, which the registry holds
+> whether or not the segment uses them, so the flare stays a sink and the
+> orphaned flowline does not become one.
+
+> **R22.4 amendment (finding 202): the law must say what it REMOVED, not only
+> what survived.** `Routed` returns the fixed point, which is what stage 4 needs
+> and is useless to design 09 §4.3's "why?": a well throttled to nothing this
+> month was shut in because something DOWNSTREAM of it went, and the set of
+> survivors does not name that something. The trail records the deferral with
+> `cause: null` for exactly this reason — there is no id to chain to, because the
+> element that caused it was never identified.
+>
+> **The closure already knows.** Each removal happens at one connection: `c.From`
+> goes because `c.To` is absent. That pairing is the causal edge, and it is
+> discarded today rather than unavailable.
+>
+> ```csharp
+> // Why one element left the available set: the connection that removed it.
+> public sealed record RouteExclusion(EntityRef Element, EntityRef Because);
+>
+> // The law's full answer.
+> public sealed record RouteClosure(
+>     IReadOnlyList<EntityRef> Routed,
+>     IReadOnlyList<RouteExclusion> Excluded);
+>
+> RouteClosure Close(IReadOnlyCollection<EntityRef> available);
+> ```
+>
+> **`Routed` stays and delegates to `Close`.** One implementation of the fixed
+> point, not two (law L5) — a second copy would be a second law, and the one that
+> drifts is whichever the reader did not open.
+>
+> **`Because` is the IMMEDIATE reason and deliberately not the root.** An element
+> removed in pass three names the element removed in pass two, which names the
+> one that failed. The chain is walked by following the entries, and recording a
+> root here would flatten a four-element outage into "the tank went" while
+> throwing away the path — which is the half of the answer a player is actually
+> asking about when they ask why a well stopped.
+>
+> **Elements absent from `available` on entry are NOT exclusions.** They are the
+> roots: something else — a hazard draw, an operation — took them out and audited
+> that with its own reason. The closure reports only what IT removed, so the two
+> records meet rather than overlap.
+
 ## 6. Network
 
 ```csharp

@@ -158,6 +158,8 @@ Content: `information-source` catalogue with costs, durations and error models.
 | R14-V12 | Compartment discovery | Pressure and production data reveal compartmentalisation the player was not told about |
 | R14-V13 | Wildcat success rate (MB4) | Across a generated basin, 10–35% |
 | R14-V14 | Detectability gate | A D2 accumulation under a 3-D-only survey spawns no lead and leaks nothing into the read model; adding attributes and re-screening the same acreage spawns it |
+| R14-V15 | Staleness widens what is not watched | A belief about a PRODUCING compartment's pressure has a wider σ after a year than it started with, and a belief about the rock does not — porosity is not a thing that goes out of date (SDD-008 §2d) |
+| R14-V16 | A shut-in field's pressure belief does not go stale | Drift is charged on what was PRODUCED FROM, so a compartment nobody is drawing on tells the company nothing new and its belief is no less true for the wait (SDD-008 §2d) |
 
 **R14-V12 is the phase's most satisfying test** and the direct realisation of
 open decision M1.

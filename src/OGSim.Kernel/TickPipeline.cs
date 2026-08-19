@@ -35,7 +35,7 @@ public sealed class TickPipeline
 {
     private readonly SimulationClock _clock;
     private readonly EventBus _events;
-    private readonly IAuditTrail _audit;
+    private readonly AuditTrail _audit;
     private readonly IFaultPolicy _faults;
     private readonly ILog _log;
     private readonly IReadOnlyList<ITickStage> _stages;
@@ -43,7 +43,13 @@ public sealed class TickPipeline
     public TickPipeline(
         SimulationClock clock,
         EventBus events,
-        IAuditTrail audit,
+
+        // THE CONCRETE TRAIL, on the same terms as the clock above it: `Prune`
+        // is on `AuditTrail` and not on `IAuditTrail`, so a module that takes
+        // the interface cannot prune the trail even by mistake, and the one
+        // thing that owns tick boundaries can. Exactly why `Advance` is on
+        // `SimulationClock` alone (SDD-001 §5).
+        AuditTrail audit,
         IFaultPolicy faults,
         ILog log,
         IReadOnlyList<ITickStage> stages)
@@ -123,6 +129,28 @@ public sealed class TickPipeline
         // Stage 13's closing act: the event set becomes observable exactly here
         // and not one statement earlier (EM2).
         _events.Seal();
+
+        // AND THE TRAIL IS PRUNED, which nothing in this engine did until
+        // R20d.12.21. Design 09 §4.4's retention was implemented, configured
+        // with a detail window at composition and handed to the trail — and
+        // `Prune` was called only by its own unit tests, so a forty-year game
+        // kept every entry it ever wrote (finding 207).
+        //
+        // HERE, at the tick boundary, because the window is measured in TICKS
+        // and the cause closure has to be computed against what is durable NOW.
+        // Pruning at query time would make the answer depend on when it was
+        // asked, which is the one thing a fairness record cannot afford.
+        //
+        // EVERY TICK, not on a cadence. The closure is O(entries), so pruning
+        // often is what keeps its own cost down — a cadence would let entries
+        // accumulate between runs and make each run more expensive than all the
+        // runs it replaced.
+        //
+        // After the seal rather than before it: an abandoned or halted tick
+        // returns above without reaching here, so the diagnostic explaining why
+        // it was discarded is never pruned in the same breath as being written.
+        _audit.Prune();
+
         return new TickCompleted();
     }
 

@@ -370,7 +370,7 @@ public class ObserveNeverInfluenceTests
     }
 
     [Fact] // Evaluation mutates only the objective's own state
-    public void R24V4_evaluation_does_not_touch_the_snapshot()
+    public void R24V18_evaluation_does_not_touch_the_snapshot()
     {
         var values = new Dictionary<string, double> { ["field.rate"] = 150.0 };
         var snapshot = new ObjectiveSnapshot(
@@ -389,7 +389,7 @@ public class ObserveNeverInfluenceTests
     }
 
     [Fact] // A validated path missing from the snapshot is an ENGINE bug, not a zero
-    public void R24V4_a_missing_snapshot_value_is_an_invariant_fault()
+    public void R24V18_a_missing_snapshot_value_is_an_invariant_fault()
     {
         var fault = Assert.Throws<InvariantFault>(() => new ObjectiveEvaluator().Evaluate(
             Fx.Obj(Fx.Above("company.rrr", 1.0)), Fx.Snapshot(), new PredicateState()));

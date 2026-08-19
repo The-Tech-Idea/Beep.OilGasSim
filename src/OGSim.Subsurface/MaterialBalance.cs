@@ -113,6 +113,31 @@ internal static class MaterialBalance
         return end;
     }
 
+    /// <summary>
+    /// The same root, without §3.1's per-tick honesty check — for a RESTORE,
+    /// which replays a whole history in one call (finding 205).
+    ///
+    /// <para>`Validate` still runs on everything that is not the step: the
+    /// inputs must be finite and positive whatever produced them. What is
+    /// skipped is precisely the claim that a single month's integration is
+    /// honest, which a restore is not making.</para>
+    /// </summary>
+    internal static Pressure SolveWithoutStepLimit(
+        MaterialBalanceInput input, IFluidPropertyModel fluid)
+    {
+        Validate(input, NoStepLimit);
+
+        return FindRoot(input, fluid);
+    }
+
+    /// <summary>
+    /// What `Validate` is handed when there is no step to bound. A fraction of
+    /// one is the whole of the initial pressure — the largest drop the balance
+    /// could express — so it passes validation without asserting anything about
+    /// a step, and it is not a magic number: it is the identity for this term.
+    /// </summary>
+    private const double NoStepLimit = 1.0;
+
     private static Pressure FindRoot(MaterialBalanceInput input, IFluidPropertyModel fluid)
     {
         double lowPa = BracketFloor.Pascals;

@@ -66,14 +66,30 @@ public sealed class Injector : IFlowElement
     /// `IFlowElement.EvaluateConstraints`, and nowhere else.</summary>
     public EntityId<IFlowElement> Id { get; }
 
-    /// <summary>One inlet, no outlets — water in, nothing out. A sink from the
-    /// network's point of view.</summary>
+    /// <summary>
+    /// Two inlets, no outlets — water in, nothing out. A sink from the network's
+    /// point of view.
+    ///
+    /// <para>The second is R20d.24's: produced water arrives on one port and
+    /// imported flood water on the other, and they are DECLARED ports rather
+    /// than an emergent commingle because §6's tree-toward-sink rule allows one
+    /// edge per port. Both go down the same hole against the same injectivity,
+    /// which is the trade — a flood competes with disposal for what the well
+    /// will take, and plugs it twice as fast.</para>
+    /// </summary>
     public IReadOnlyList<PortSpec> Ports { get; } =
-        [new PortSpec(new PortId(0), PortDirection.Inlet, PortRole.Water)];
+    [
+        new PortSpec(new PortId(0), PortDirection.Inlet, PortRole.Water),
+        new PortSpec(new PortId(1), PortDirection.Inlet, PortRole.Water),
+    ];
 
-    /// <summary>The one port, named so a caller wiring the chain never writes a
-    /// bare index.</summary>
+    /// <summary>Where produced water arrives, named so a caller wiring the chain
+    /// never writes a bare index.</summary>
     public static PortId Inlet { get; } = new(0);
+
+    /// <summary>Where imported flood water arrives (SDD-003 §3.1d's R20d.24
+    /// amendment).</summary>
+    public static PortId ImportInlet { get; } = new(1);
 
     /// <summary>
     /// The conditions it injects against, pushed in before the solve.
@@ -103,9 +119,15 @@ public sealed class Injector : IFlowElement
     {
         ArgumentNullException.ThrowIfNull(input);
 
-        Composition arriving = input.Inlets.Count > 0
-            ? input.Inlets[0].MassRates
-            : Composition.Zero(_materialCount);
+        // SUMMED, never indexed. The solver's inlet list is COMPACTED — a port
+        // whose upstream element is unavailable this segment is simply absent
+        // (SolveState.InletsFrom), so index 0 is the lowest CONNECTED port and
+        // not port zero. Reading a fixed index would silently drop the flood
+        // water on a segment where the separator was down, and drop the produced
+        // water on one where the intake was.
+        Composition arriving = Composition.Zero(_materialCount);
+        for (int i = 0; i < input.Inlets.Count; i++)
+            arriving = arriving.Plus(input.Inlets[i].MassRates);
 
         return new TransformResult(
             [],
@@ -133,12 +155,32 @@ public sealed class Injector : IFlowElement
 
         if (input.Inlets.Count == 0) return [];
 
-        double offered =
-            input.Inlets[0].MassRates[new MaterialId(_waterOrdinal)].KgPerSecond
-            / PhysicalConstants.WaterDensityKgPerM3;
+        // EVERY INLET, for the reason Transform sums them — and because the
+        // injectivity is the WELL's rather than a port's: produced water and
+        // flood water are the same water once they are past the wellhead, and a
+        // constraint evaluated on one of them would let the other in for free.
+        var offered = 0.0;
+        for (int i = 0; i < input.Inlets.Count; i++)
+            offered += input.Inlets[i].MassRates[new MaterialId(_waterOrdinal)].KgPerSecond;
 
-        return [ConstraintAt(_injectionPressure, _reservoirPressure, offered)];
+        return
+        [
+            ConstraintAt(
+                _injectionPressure, _reservoirPressure,
+                offered / PhysicalConstants.WaterDensityKgPerM3),
+        ];
     }
+
+    /// <summary>
+    /// What it will take right now, at the conditions it was last given
+    /// (SDD-003 §3.1d's R20d.24b amendment).
+    ///
+    /// <para>Asked by the layer that commands the intake, which has to know the
+    /// headroom BEFORE the solve — the solver cannot clamp a source that is not
+    /// a completion, so an intake commanded past this would report a violation
+    /// nothing could relieve.</para>
+    /// </summary>
+    public ReservoirRate Acceptance => AcceptanceAt(_injectionPressure, _reservoirPressure);
 
     public ReservoirVolume CumulativeInjected => new(_cumulativeInjectedM3);
 
@@ -209,6 +251,29 @@ public sealed class Injector : IFlowElement
     /// would make the decline free to ignore.</para>
     /// </summary>
     public void Remediate() => _cumulativeInjectedM3 = 0.0;
+
+    /// <summary>
+    /// Puts a restored injector back to what it has already taken (R20d.12).
+    ///
+    /// <para>THE PLUGGING IS THIS NUMBER. Impairment scales with the volume put
+    /// away against the reference, so an injector restored at zero comes back
+    /// with a clean formation however many years it has been used — which showed
+    /// up as a reloaded field disposing water at a different rate and, through
+    /// the severity terms, ageing its equipment differently.</para>
+    ///
+    /// <para>Separate from <see cref="Commit"/> for the reason every restore in
+    /// this engine is separate from its advance: restoring is allowed to jump,
+    /// and only before the engine ticks.</para>
+    /// </summary>
+    public void RestoreTo(ReservoirVolume injected)
+    {
+        if (injected.CubicMetres < 0.0 || !double.IsFinite(injected.CubicMetres))
+            throw new SaveDataFault("SDD-003 §6c", null,
+                "a save says this injector has taken a negative or non-finite volume; " +
+                "an injector cannot un-inject what it has put away");
+
+        _cumulativeInjectedM3 = injected.CubicMetres;
+    }
 
     private const double SteadyStateOffset = 0.75;
 

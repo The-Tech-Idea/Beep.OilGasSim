@@ -82,7 +82,126 @@ internal static class Defaults
         // charged on water as readily as on oil, because the pumps and the power
         // do not care which — and that is what eventually makes a watered-out
         // field uneconomic while it is still producing.
-        LiftingCostPerTonne: Money.FromMillions(15.0 * 6.29 / 0.85 / 1_000_000.0));
+        LiftingCostPerTonne: Money.FromMillions(15.0 * 6.29 / 0.85 / 1_000_000.0),
+
+        // ~$1/bbl of IMPORTED water — lift, filter, deaerate, pump. An ordinary
+        // figure, and a small one against a barrel of oil, which is honest: what
+        // makes a flood a decision in this engine is not mainly its bill. It is
+        // that the water raises the saturation and brings the water cut forward,
+        // that it shares one injectivity with the disposal duty and plugs the
+        // well faster, and that everything it buys arrives years after it is
+        // paid for.
+        InjectionWaterCostPerCubicMetre: Money.FromMillions(6.29 / 1_000_000.0));
+
+    /// <summary>
+    /// The market this game is played in (SDD-009 §6).
+    ///
+    /// <para>Reversion 0.02 a month is a half-life of about three years — long
+    /// enough that a downturn is something a company sits through rather than
+    /// waits out, and short enough that it ends inside a field's life.
+    /// Volatility 0.09 in log space is roughly a 9% monthly move, which is the
+    /// order oil actually does.</para>
+    ///
+    /// <para>A shock one month in fifty, at three times the ordinary move. Rare
+    /// enough to be an event a player remembers, big enough to change what they
+    /// were going to do — and drawn every month whether or not it fires, so
+    /// adding jumps cannot shift the sequence of ordinary moves.</para>
+    /// </summary>
+    public static IPriceModel Market { get; } = new OGSim.Company.MeanRevertingPrice(
+        longRunMean: Economics.OilPricePerTonne,
+        reversion: 0.02,
+        volatility: 0.09,
+        jumpChance: 0.02,
+        jumpScale: 0.27);
+
+    /// <summary>
+    /// The development type-curve this composition ships (SDD-009 §4). Content
+    /// in a finished game, like every other catalogue entry here.
+    ///
+    /// <para>18% a year with a hyperbolic exponent of 0.5 is an ordinary
+    /// onshore waterflood: steep at first and long-tailed, which is the shape
+    /// that makes a field's last decade produce a fifth of what its first did
+    /// and still be worth running.</para>
+    ///
+    /// <para>A recovery factor of 0.35 — a third of the oil, which is what a
+    /// supported reservoir actually gives up. The other two thirds staying in
+    /// the ground is not a rounding error, it is the single largest fact about
+    /// this industry.</para>
+    /// </summary>
+    public static OGSim.Company.ArpsReserves TypeCurve { get; } =
+        new(declinePerYear: 0.18, exponent: 0.5, recoveryFactor: 0.35);
+
+    /// <summary>
+    /// The facility this composition ships (SDD-009 §5).
+    ///
+    /// <para>Sixty per cent advance against the PV of proved reserves at a 10%
+    /// discount over fifteen years — a conventional borrowing base. The advance
+    /// rate is the bank's margin for the reserves being wrong, and reserves are
+    /// an estimate by construction.</para>
+    ///
+    /// <para>8% base, and up to 4% more for a company nobody wants to lend to.
+    /// Carried separately so a player can see WHY their debt got dearer.</para>
+    /// </summary>
+    public static OGSim.Company.ReserveBasedLending Lender { get; } = new(
+        advanceRate: 0.60,
+        discountPerYear: 0.10,
+        years: 15,
+        baseRate: 0.08,
+        esgSpreadAtWorst: 0.04,
+        TypeCurve,
+        () => Netback);
+
+    /// <summary>
+    /// What a cubic metre is worth to a lender after lifting it — the margin the
+    /// loan is actually secured on, not the headline price.
+    /// </summary>
+    private static Money Netback =>
+        Money.RoundHalfEven(
+            (Economics.OilPricePerTonne.Cents - Economics.LiftingCostPerTonne.Cents)
+            * SurfaceOilDensity.KgPerCubicMetre / 1000.0);
+
+
+    /// <summary>
+    /// What a tonne of sales gas fetches. Well below oil on an energy basis,
+    /// which is the whole reason associated gas gets flared: it is worth
+    /// something, and often not enough to build for.
+    /// </summary>
+    public static Money GasPricePerTonne { get; } = Money.FromMillions(120.0 / 1_000_000.0);
+
+    /// <summary>
+    /// What a well-run field flares, and what a badly-run one does
+    /// (SDD-012 §4), in kilograms of gas per cubic metre of oil.
+    ///
+    /// <para>MEASURED, not estimated. These were first set from a guess of
+    /// 0.09 kg of gas per cubic metre of oil, which was wrong by more than two
+    /// orders of magnitude: a solution ratio of 100 sm³/sm³ at gas density puts
+    /// it near 90, and a field flaring everything measures about 30 over five
+    /// years. Every company sat below the worst edge and scored zero, so the
+    /// record could not tell a clean operator from a filthy one and the penalty
+    /// priced nothing.</para>
+    ///
+    /// <para>Five is a field capturing most of its associated gas; forty is one
+    /// burning essentially all of it. Some flaring is unavoidable, and a scale on
+    /// which perfection was the only clean score would be unreachable and
+    /// therefore ignorable.</para>
+    /// </summary>
+    public static OGSim.Company.EsgRecord Record { get; } =
+        new(cleanIntensity: 5.0, worstIntensity: 40.0);
+
+    /// <summary>
+    /// How hard service costs follow the oil price (SDD-009 §6's ED4). At 0.35,
+    /// a doubling of oil over a year lifts the cost of everything by about a
+    /// third — enough that building into a boom hurts, short of making it
+    /// impossible.
+    /// </summary>
+    public const double CostElasticity = 0.35;
+
+    /// <summary>
+    /// The slow upward creep underneath it, per month. Small, and the reason a
+    /// field left undeveloped for twenty years is dearer to develop than it
+    /// looked.
+    /// </summary>
+    public const double CostDrift = 0.0008;
 
     /// <summary>
     /// The catalogue, as content would carry it. ONE material, because the chain
@@ -248,6 +367,14 @@ internal static class Defaults
     public static ContentId SeismicSource { get; } = new("seismic-3d");
 
     /// <summary>
+    /// THE HOLE ITSELF. A discovery well penetrates the column, logs it and
+    /// tests it, and a company walks away from a strike knowing roughly how much
+    /// is down there — which is a different and much sharper question than how
+    /// big the trap was.
+    /// </summary>
+    public static ContentId DiscoverySource { get; } = new("discovery-well");
+
+    /// <summary>
     /// Which space a kind's belief lives in (SDD-008 §2, content's
     /// <c>space</c> field).
     ///
@@ -281,6 +408,43 @@ internal static class Defaults
     /// same compartment ten times and becomes certain of a rock nobody can be
     /// certain of.</para>
     /// </summary>
+    /// <summary>
+    /// SDD-008 §2d.1 — how fast a belief about this kind goes stale, per year of
+    /// PRODUCTION (not of calendar: §2d.2).
+    ///
+    /// <para>The test for any kind is one question: does production change it? A
+    /// reservoir's pressure moves as fluid is withdrawn and its contacts rise and
+    /// fall with it. The porosity of a rock does not, nor does how much oil the
+    /// structure held to begin with — so those are ZERO, and zero is the answer
+    /// rather than the absence of one. A player must never have to re-log a well
+    /// to learn what its core already told them.</para>
+    ///
+    /// <para>Beside <see cref="SigmaFloorFor"/> because it is the same kind of
+    /// fact — content about a property kind, reaching the store as a lookup — and
+    /// the two are read together often enough that separating them would invite
+    /// a kind that has a floor and no drift by oversight.</para>
+    /// </summary>
+    public static double DriftPerYearFor(ContentId kind) =>
+        kind.Value switch
+        {
+            // Pascals per year. A gauge read two years ago is still a reading;
+            // it is a reading of a reservoir that has since been produced.
+            "reservoir-pressure" => 2.0e5,
+
+            // CONTACTS BELONG HERE AND ARE NOT LISTED, because they are not a
+            // belief kind yet: the five kinds this engine files beliefs under are
+            // pressure, porosity, permeability, oil-in-place and
+            // structure-capacity. §2d.1's table names GOC and OWC as drifting,
+            // and they join this switch the day something delivers an
+            // observation of one — listing them now would be content for a kind
+            // nothing can produce.
+
+            // AND EVERYTHING ELSE IS ZERO, deliberately. Rock properties, volumes
+            // in place and structure capacity are facts about a thing that is not
+            // changing — a company that stops looking at them does not know less.
+            _ => 0.0,
+        };
+
     public static double SigmaFloorFor(ContentId kind) =>
         kind.Value switch
         {
@@ -322,6 +486,10 @@ internal static class Defaults
         Cost: Money.FromMillions(8.0),
         DurationTicks: 4,
         Rig: TheRig,
+        WeatherLimit: 6.0,   // a rig on location: heave stops tripping pipe long before it stops the platform
+        // a rig has to be brought to location.
+        RequiresAccess: true,
+
         Outcomes: DrillingOutcomes);
 
     public static ActivityTerms WellTestTerms { get; } = new(
@@ -329,6 +497,10 @@ internal static class Defaults
         Cost: Money.FromMillions(0.4),
         DurationTicks: 1,
         Rig: TheRig,
+        WeatherLimit: 7.5,   // the well is shut in and a gauge is reading; little to do on deck
+        // the well is shut in and a gauge on site reads it.
+        RequiresAccess: false,
+
         Outcomes: WellTestOutcomes);
 
     /// <summary>Cheap, quick, and run on the rig that is already there.</summary>
@@ -337,6 +509,10 @@ internal static class Defaults
         Cost: Money.FromMillions(0.15),
         DurationTicks: 1,
         Rig: TheRig,
+        WeatherLimit: 6.5,   // a wireline unit needs a stable deck to run tools on a thin cable
+        // a logging unit and its cable arrive by boat.
+        RequiresAccess: true,
+
         Outcomes: WellTestOutcomes);
 
     /// <summary>Several times the price of a log for the same two properties,
@@ -346,6 +522,10 @@ internal static class Defaults
         Cost: Money.FromMillions(0.9),
         DurationTicks: 1,
         Rig: TheRig,
+        WeatherLimit: 6.0,   // coring is drilling, and slower
+        // cut from a rig that is already being mobilised.
+        RequiresAccess: true,
+
         Outcomes: WellTestOutcomes);
 
     /// <summary>
@@ -360,6 +540,10 @@ internal static class Defaults
         Cost: Money.FromMillions(2.5),
         DurationTicks: 2,
         Rig: null,
+        WeatherLimit: 5.5,   // streamers in the water are the most weather-limited thing offshore
+        // a survey vessel and its streamers.
+        RequiresAccess: true,
+
         Outcomes: SurveyOutcomes);
 
     /// <summary>
@@ -380,7 +564,10 @@ internal static class Defaults
     /// content can describe.
     /// </summary>
     public static Wells.Completion CompletionFor(
-        ulong id, EntityId<IReservoirCompartmentEntity> compartment, Length totalDepth)
+        ulong id,
+        EntityId<IReservoirCompartmentEntity> compartment,
+        Length totalDepth,
+        Wells.InflowConditions rock)
     {
         var tubing = new Wells.TubingGeometry(
             totalDepth, totalDepth, new Length(0.0889), 4.6e-5);
@@ -390,7 +577,11 @@ internal static class Defaults
             new EntityId<IWellbore>(id),
             [new Perforation(compartment, totalDepth, totalDepth + new Length(30.0),
                              Skin: 0.0, Isolated: false)],
-            new Wells.CompositeInflowModel(Inflow),
+            // THE ROCK THIS WELL IS ACTUALLY IN (SDD-008 §2c). It was
+            // `Defaults.Inflow` — one fixed set for every well ever drilled, so a
+            // marginal structure produced exactly like a giant one and the
+            // material balance eventually refused the step (finding 170).
+            new Wells.CompositeInflowModel(rock),
             new Wells.HydrostaticFrictionOutflowModel(
                 tubing, Density.FromSpecificGravity(0.85), lift: null),
             new Wells.CompletionFluid(
@@ -454,13 +645,28 @@ internal static class Defaults
     /// developed at all, which made every decision after the first one
     /// decoration (R20.4's first measurement).</para>
     ///
+    /// <para>AND IT WAS $600M UNTIL WEATHER COST DAYS (R22.2, finding 214). That
+    /// number was calibrated in a world where an operation never stood down: the
+    /// developed decade earned $918M against a bottlenecked $449M, and $600M sat
+    /// between them. With standby days the same two runs earn <b>$553.9M and
+    /// $271.1M</b> — so $600M stopped discriminating and simply always failed,
+    /// which is a scenario that cannot be won rather than one that is hard.</para>
+    ///
+    /// <para>Re-struck at the SAME GEOMETRY rather than at whatever made the test
+    /// pass: 65% of the developed run and about 134% of the bottlenecked one, the
+    /// proportions $600M held before. That keeps the property the target exists
+    /// for — answering the constraint wins, ignoring it loses — and it is the
+    /// only honest reason to move a goal. Both numbers above are measured, and
+    /// the comparison test beside this one asserts the ordering directly rather
+    /// than trusting either.</para>
+    ///
     /// <para>Declared BEFORE the scenario that reads it: static initialisers run
     /// in declaration order, so a target declared below would be zero when the
     /// objective is built — and "cash at least zero" is met in month one, which
     /// is a scenario that cannot be lost rather than a compile error. The same
     /// trap the activity terms above carry a note about.</para>
     /// </summary>
-    private static Money TargetCash { get; } = Money.FromMillions(600.0);
+    private static Money TargetCash { get; } = Money.FromMillions(360.0);
 
     /// <summary>
     /// The scenario this composition ships (SDD-014 §5). Content in a finished
@@ -538,6 +744,12 @@ internal static class Defaults
 
     public static EntityId<IFlowElement> TheTank { get; } = new(1_000_007);
 
+    public static EntityId<IFlowElement> TheGasPlant { get; } = new(1_000_008);
+
+    public static EntityId<IFlowElement> TheTreater { get; } = new(1_000_009);
+
+    public static EntityId<IFlowElement> TheWaterIntake { get; } = new(1_000_010);
+
     /// <summary>
     /// Where per-well gathering lines start numbering (SDD-006 §1c). Above the
     /// fixed chain elements by a clear margin, so a line laid for the
@@ -545,25 +757,6 @@ internal static class Defaults
     /// </summary>
     public const ulong FirstGatheringLine = 2_000_000UL;
 
-    /// <summary>
-    /// Storage at the terminal (SDD-006 §5, catalogue C12), 150,000 tonnes.
-    ///
-    /// <para><b>Sized against a MONTH, because the ullage constraint is a
-    /// rate.</b> A tank offers "remaining capacity ÷ the segment's seconds" as
-    /// the mass rate it can still accept, so a tank holding less than a tick's
-    /// throughput binds on the first tick whatever else is happening — which is
-    /// storage behaving like a restriction rather than a buffer. This is several
-    /// months of an E1 field, so it fills only when production genuinely runs
-    /// ahead of export.</para>
-    ///
-    /// <para>The boil-off is why storage is not free: oil sitting in a tank
-    /// evaporates slowly, so a field that stores rather than exports loses a
-    /// little of what it stored.</para>
-    /// </summary>
-    public static Facilities.TankTier TankTier { get; } = new(
-        new ContentId("tank-terminal-e1"),
-        Capacity: new Mass(150.0e6),
-        VapourLossRatePerTick: 0.001);
 
     /// <summary>
     /// What the export line contracts to take, kg/s.
@@ -578,21 +771,6 @@ internal static class Defaults
     /// </summary>
     public static MassRate ExportOfftake { get; } = new(20.0);
 
-    /// <summary>
-    /// The export ladder (SDD-006 §7b). The shipped line is what a company
-    /// signs for before it knows what it has found; the rungs above are what a
-    /// field earns the right to build.
-    ///
-    /// <para>DOUBLING, not creeping, because the decision has to be big enough
-    /// to be wrong. A rung that added a tenth would be an obvious yes at every
-    /// field size and therefore not a decision at all.</para>
-    /// </summary>
-    public static IReadOnlyList<Facilities.ExportTier> ExportLadder { get; } =
-    [
-        new(new ContentId("export-line-e1"), ExportOfftake),
-        new(new ContentId("export-line-e2"), new MassRate(40.0)),
-        new(new ContentId("export-line-e3"), new MassRate(80.0)),
-    ];
 
     /// <summary>
     /// What a bigger line costs and how long it takes. DEARER AND SLOWER than a
@@ -605,6 +783,10 @@ internal static class Defaults
         Cost: Money.FromMillions(45.0),
         DurationTicks: 9,
         Rig: null,
+        WeatherLimit: 5.0,   // pipeline and terminal work is heavy lift
+        // a lay barge, which is the largest mobilisation here.
+        RequiresAccess: true,
+
         Outcomes: SurveyOutcomes);
 
     /// <summary>
@@ -676,68 +858,8 @@ internal static class Defaults
     /// flaring an emissions problem rather than merely a waste one.</summary>
     public const double FlareCombustionEfficiency = 0.98;
 
-    /// <summary>
-    /// The field's header. Eight slots — a fixed manifold from catalogue C06's
-    /// bottom rung, which is a real limit on how many wells this field can carry
-    /// and the reason a ninth well is refused before it is paid for rather than
-    /// after.
-    /// </summary>
-    public static Facilities.ManifoldTier ManifoldTier { get; } =
-        new(new ContentId("manifold-fixed-8"), Slots: 8);
 
-    /// <summary>
-    /// The field's one vessel. 15 bar is the separator inlet pressure the loop
-    /// used to hard-code as a wellhead backpressure — the same number, now held
-    /// by the element that imposes it rather than by the stage that read it.
-    ///
-    /// <para><b>The liquid capacity BINDS, and that is the point.</b> A well on
-    /// this field delivers about 10 kg/s of liquid once it makes water as well
-    /// as oil, so the first vessel carries one well and is over capacity on the
-    /// second — the player sees the
-    /// separator refusing production on the read model and has to do something
-    /// about it. A vessel sized never to bind would make every downstream
-    /// mechanic — the throttle, the deferral attribution, the bottleneck report —
-    /// machinery that runs and is never felt.</para>
-    ///
-    /// <para>Which is the whole shape of an operations game: the constraint is
-    /// visible, it is nameable, and it is bought past. R20.4 owns where exactly
-    /// the number lands; that it binds at all is a design decision, not a balance
-    /// one.</para>
-    ///
-    /// <para>The efficiencies are perfect because there is one material and
-    /// nothing to carry over — a number below 1.0 would describe a separation
-    /// this content cannot express.</para>
-    /// </summary>
-    public static Facilities.SeparatorTier SeparatorTier { get; } = new(
-        new ContentId("separator-3phase-e1"),
-        GasCapacity: new MassRate(50.0),
-        LiquidCapacity: new MassRate(12.0),
-        Volume: new ReservoirVolume(30.0),
-        RatedEfficiency: new SeparationEfficiency(
-            LiquidFromGas: 0.0, GasFromLiquid: 0.0, WaterFromLiquid: 0.0),
-        DesignRate: new ReservoirRate(0.05),
-        OperatingPressure: Pressure.FromBar(15.0));
 
-    /// <summary>
-    /// The vessel ladder (catalogue C07), in the order a field climbs it.
-    ///
-    /// <para>DECLARED ORDER, not sorted by capacity: the rungs are a progression
-    /// a designer authored, and a bigger-is-later rule would silently reorder a
-    /// ladder whose rungs trade throughput against something else. The first rung
-    /// is what a field is built with.</para>
-    /// </summary>
-    public static IReadOnlyList<Facilities.SeparatorTier> SeparatorLadder { get; } =
-    [
-        SeparatorTier,
-        SeparatorTier with
-        {
-            Id = new ContentId("separator-3phase-e2"),
-            GasCapacity = new MassRate(150.0),
-            LiquidCapacity = new MassRate(40.0),
-            Volume = new ReservoirVolume(90.0),
-            DesignRate = new ReservoirRate(0.15),
-        },
-    ];
 
     /// <summary>
     /// What a bigger vessel costs and how long it takes. NO RIG (SDD-007 §1's
@@ -760,6 +882,10 @@ internal static class Defaults
         Cost: Money.FromMillions(3.0),
         DurationTicks: 2,
         Rig: null,
+        WeatherLimit: 6.0,   // rig-based, like the drilling it undoes
+        // the same rig, and a cement unit with it.
+        RequiresAccess: true,
+
         Outcomes: SurveyOutcomes);
 
     /// <summary>
@@ -774,11 +900,162 @@ internal static class Defaults
                 $"no abandonment template '{template.Value}' is priced; an obligation " +
                 "nobody can cost is a liability nobody can plan for");
 
+    /// <summary>
+    /// What a gas plant costs and how long it takes. DEARER THAN A SEPARATOR:
+    /// compression, dehydration and a tie-in to somewhere that will take the
+    /// gas, which is most of a small facility.
+    /// </summary>
+    public static ActivityTerms InstallGasPlantTerms { get; } = new(
+        Template: new ContentId("install-gas-plant"),
+        Cost: Money.FromMillions(18.0),
+        DurationTicks: 5,
+        Rig: null,
+        WeatherLimit: 5.0,   // heavy lift
+        // a module lifted onto the deck.
+        RequiresAccess: true,
+
+        Outcomes: SurveyOutcomes);
+
+
+
+    /// <summary>
+    /// What more storage costs and how long it takes. Cheap per tonne against a
+    /// pipeline, and slow — a tank is civil work, and the field goes on
+    /// producing around it.
+    /// </summary>
+    public static ActivityTerms InstallTankTerms { get; } = new(
+        Template: new ContentId("install-tank"),
+        Cost: Money.FromMillions(7.0),
+        DurationTicks: 6,
+        Rig: null,
+        WeatherLimit: 5.0,   // heavy lift
+        // the same, and heavier.
+        RequiresAccess: true,
+
+        Outcomes: SurveyOutcomes);
+
+
+    /// <summary>
+    /// What a bigger header costs and how long it takes. A header is steel and
+    /// tie-ins on a site that is already producing, so the work is done around a
+    /// live field — dearer than a vessel for its size, and slower.
+    /// </summary>
+    public static ActivityTerms InstallManifoldTerms { get; } = new(
+        Template: new ContentId("install-manifold"),
+        Cost: Money.FromMillions(9.0),
+        DurationTicks: 4,
+        Rig: null,
+        WeatherLimit: 4.5,   // a subsea lift is the least tolerant work in the catalogue
+        // a subsea structure set from a vessel.
+        RequiresAccess: true,
+
+        Outcomes: SurveyOutcomes);
+
+    /// <summary>What a treater costs and how long it takes.</summary>
+    public static ActivityTerms InstallTreaterTerms { get; } = new(
+        Template: new ContentId("install-treater"),
+        Cost: Money.FromMillions(5.0),
+        DurationTicks: 3,
+        Rig: null,
+        WeatherLimit: 5.0,   // heavy lift
+        // a skid delivered and tied in.
+        RequiresAccess: true,
+
+        Outcomes: SurveyOutcomes);
+
+    /// <summary>
+    /// What an acid job costs and how long it takes (R10-V4). Cheap against a
+    /// vessel and quick against a well — which is the point: it is the sort of
+    /// maintenance a company defers because it always looks affordable later,
+    /// and the plugging goes on either way.
+    /// </summary>
+    public static ActivityTerms RemediateInjectorTerms { get; } = new(
+        Template: new ContentId("remediate-injector"),
+        Cost: Money.FromMillions(1.2),
+        DurationTicks: 1,
+        Rig: null,
+        WeatherLimit: 6.5,   // a wellsite intervention, lighter than a rig job
+        // chemicals pumped from stock held on the platform.
+        RequiresAccess: false,
+
+        Outcomes: SurveyOutcomes);
+
+    /// <summary>
+    /// A PLANNED OVERHAUL (SDD-012 §3). A month and rather less than a new
+    /// vessel, because it is the same vessel: what is bought is the years of
+    /// hazard the decay curve was about to charge, not a capability the field
+    /// did not have.
+    ///
+    /// <para>Priced under every install in this catalogue on purpose. If keeping
+    /// equipment cost what replacing it costs, maintenance would never be the
+    /// answer to anything and §3's three strategies would collapse to one.</para>
+    /// </summary>
+    public static ActivityTerms ServiceEquipmentTerms { get; } = new(
+        Template: new ContentId("service-equipment"),
+        Cost: Money.FromMillions(0.8),
+        DurationTicks: 1,
+        Rig: null,
+        WeatherLimit: 8.0,   // planned maintenance happens inside the module it maintains
+        // planned work by the crew who are already there.
+        RequiresAccess: false,
+
+        Outcomes: SurveyOutcomes);
+
+    /// <summary>
+    /// A CONDITION-MONITORING KIT (catalogue C14, SDD-012 §3). Vibration and
+    /// temperature on one asset, which is what makes that asset's wear a fact
+    /// the company holds rather than a thing the engine happens to know.
+    ///
+    /// <para>A quarter of a planned service and a month to fit, because it is a
+    /// sensor and a wire rather than a crew and a crane. The decision is not
+    /// whether one kit is affordable — it obviously is — but whether
+    /// instrumenting a dozen elements is worth it before any of them has told
+    /// you anything.</para>
+    /// </summary>
+    public static ActivityTerms InstallMonitoringTerms { get; } = new(
+        Template: new ContentId("install-monitoring"),
+        Cost: Money.FromMillions(0.2),
+        DurationTicks: 1,
+        Rig: null,
+        WeatherLimit: 8.0,   // fitting a kit to equipment already in place, under cover
+        // kit that has to be carried out and fitted.
+        RequiresAccess: true,
+
+        Outcomes: SurveyOutcomes);
+
+    /// <summary>
+    /// AN EMERGENCY REPAIR (SDD-012 §3, R20d.26.2 amendment). Three times the
+    /// planned job, which is inside the 2–5× that unplanned industrial work
+    /// genuinely runs — parts freighted rather than stocked, a crew mobilised
+    /// rather than scheduled — and the same multiple the duration experiment
+    /// used before finding 187 reverted it.
+    ///
+    /// <para>The same month as the planned job, deliberately: the duration half
+    /// of the asymmetry is the lever this field cannot afford — a month of
+    /// outage is ~$12M at plateau against a worst-seed fifth-year margin of
+    /// $17M — so the asymmetry ships in money alone, and the measurement decides
+    /// whether that is enough to make preventive work a strategy.</para>
+    /// </summary>
+    public static ActivityTerms RepairEquipmentTerms { get; } = new(
+        Template: new ContentId("repair-equipment"),
+        Cost: Money.FromMillions(2.4),
+        DurationTicks: 1,
+        Rig: null,
+        WeatherLimit: 7.5,   // emergency work is done in weather planned work would wait out
+        // an emergency fix with the spares already aboard.
+        RequiresAccess: false,
+
+        Outcomes: SurveyOutcomes);
+
     public static ActivityTerms InstallSeparatorTerms { get; } = new(
         Template: new ContentId("install-separator"),
         Cost: Money.FromMillions(6.0),
         DurationTicks: 3,
         Rig: null,
+        WeatherLimit: 5.0,   // heavy lift
+        // a vessel craned into a socket.
+        RequiresAccess: true,
+
         Outcomes: SurveyOutcomes);
 
     /// <summary>
@@ -792,16 +1069,39 @@ internal static class Defaults
     /// (R20d.3). An empty spec passing everything is the correct answer for a
     /// stream that cannot be off-spec, not a disabled check.</para>
     /// </summary>
-    public static Specification SalesSpec { get; } = new([]);
+    public static Specification SalesSpec { get; } = new(
+    [
+        // HALF A PER CENT OF WATER, the ordinary crude sales limit. The spec was
+        // EMPTY and honestly so: until a separator could carry water into the
+        // oil, every limit that could have been written would have bounded a
+        // fraction that was structurally zero (finding 173).
+        new SpecLimit(SpecProperty.BasicSedimentAndWater, 0.005),
+    ]);
 
-    /// <summary>What the meter reads off a stream. Every fraction is zero because
-    /// the one material is oil: no water to be basic sediment, no H2S, no CO2, no
-    /// light ends. It becomes a measurement when there is a stream to measure
-    /// (R20d.3, R20d.4).</summary>
-    public static Facilities.StreamProperties MeasureStream(MaterialStream stream) =>
-        new(BasicSedimentAndWater: 0.0, H2SFraction: 0.0, Co2Fraction: 0.0,
+    /// <summary>
+    /// What the meter reads off a stream.
+    ///
+    /// <para>BS&amp;W IS MEASURED NOW — water mass over liquid mass, both of
+    /// which the catalogue carries. It read a hard zero with a comment promising
+    /// "it becomes a measurement when there is a stream to measure", and there
+    /// was one as soon as a separator could carry water into the oil.</para>
+    ///
+    /// <para>The rest stay zero because they remain structurally zero: no H2S
+    /// until souring makes some, no CO2, no light ends. That is the right answer
+    /// for a stream that cannot carry them, not a disabled check.</para>
+    /// </summary>
+    public static Facilities.StreamProperties MeasureStream(MaterialStream stream)
+    {
+        double water = stream.MassRates[WaterOrdinal].KgPerSecond;
+        double oil = stream.MassRates[OilOrdinal].KgPerSecond;
+        double liquid = water + oil;
+
+        return new Facilities.StreamProperties(
+            BasicSedimentAndWater: liquid <= 0.0 ? 0.0 : water / liquid,
+            H2SFraction: 0.0, Co2Fraction: 0.0,
             WaterInGasFraction: 0.0, LightEndsFraction: 0.0,
             Heating: new HeatingValue(0.0));
+    }
 
     /// <summary>
     /// Surface ambient, for the segment context. A stated value until R22 builds
@@ -955,9 +1255,170 @@ internal static class Defaults
             "fidelity nobody defined");
     }
 
+    /// <summary>
+    /// The one rock this composition ships (SDD-012 §5). Named rather than
+    /// implied, so the day there is a second one the curve is selected by an id
+    /// that already exists instead of by a field being invented.
+    /// </summary>
+    public static ContentId TheRock { get; } = new("sandstone-e1");
+
+    /// <summary>
+    /// SDD-012 §5's souring curve — <c>ppm = ultimate·r/(half + r)</c> against
+    /// the sea water a compartment has taken, in pore volumes.
+    ///
+    /// <para>2,000 ppm ultimate is a properly sour field: anything above about
+    /// 100 ppm needs sour-service metallurgy, and North Sea fields soured by
+    /// seawater flooding have reached thousands. A half-ratio of 0.25 pore
+    /// volumes puts the knee in the middle of a flood's life — R20d.24's own
+    /// measurement is 0.18 PV over forty years at VRR 1, so a flooded field
+    /// arrives at roughly 42% of the ultimate and an unflooded one at nothing.
+    /// That is the shape §5 asks for: the H2S turns up two decades after the
+    /// decision that bought it, and never on a field that never flooded.</para>
+    /// </summary>
+    public static ISouringModel SourCurve { get; } =
+        new Integrity.SaturatingSourCurve(
+            new ContentId("sour-curve-sandstone"), ultimatePpm: 2_000.0, halfRatio: 0.25);
+
+    /// <summary>
+    /// What this model calls fully sour service, in ppm (SDD-012 §5's R20d.25
+    /// amendment).
+    ///
+    /// <para>1,000 ppm — the concentration at which a wetted carbon-steel plant
+    /// is in genuinely aggressive service rather than merely sour. §1's
+    /// `SourFactor` is then a coefficient on a 0..1 fraction like every other
+    /// term, instead of a number of order a thousand whose only job would be to
+    /// undo the choice of ppm as a unit.</para>
+    /// </summary>
+    public const double SouringReferencePpm = 1_000.0;
+
+    public static IReadOnlyList<Integrity.Barrier> Barriers { get; } =
+    [
+        new(new ContentId("containment"), [TheSeparator, TheTank], IsPreventive: true),
+        new(new ContentId("shutdown"), [TheManifold], IsPreventive: true),
+        new(new ContentId("response"), [TheTreater, TheGasPlant], IsPreventive: false),
+    ];
+
+    public static ContentId ContainmentThreat { get; } = new("loss-of-containment");
+
+    public const double ThreatRateAtFailure = 0.15;
+
+    public const double TopEventPoints = 25.0;
+
+    public const double CrewCompetency = 0.9;
+
+    public const double ProcedureCompliance = 0.9;
+
+    /// <summary>
+    /// How long an incident stays on the record (SDD-012 §4b). Three years, so a
+    /// company that hurts someone carries it across several borrowing
+    /// redeterminations and a clean decade genuinely rehabilitates — the two
+    /// exits CI4 asks for, rather than a punishment with no way out.
+    /// </summary>
+    public const double EsgIncidentHalfLifeTicks = 36.0;
+
     public static Integrity.DegradationCoefficients Decay { get; } =
         new(BaseRatePerYear: 0.05, WaterCutFactor: 1.0, SourFactor: 2.0,
             DutyFactor: 0.5, TemperatureFactor: 1.5, ServiceIntervalFactor: 0.2);
+
+    /// <summary>
+    /// The one climate this world has (SDD-016 §1). A temperate offshore basin:
+    /// rough winters, workable summers, and a temperature curve that runs the
+    /// other way — the amplitude is NEGATIVE because a rough day is a cold one,
+    /// which is what makes the two curves over one x describe real weather
+    /// rather than two independent noises.
+    /// </summary>
+    /// <summary>
+    /// When each era starts (SDD-005 §2's R20d.10 amendment).
+    ///
+    /// <para>TECH_TREE's own line — *Eras: E1 1950s–60s · E2 70s–80s · E3
+    /// 90s–2000s · E4 2010s+* — transcribed rather than chosen here, because the
+    /// registry that assigns every node an era is the document entitled to say
+    /// when those eras are. A 1965 start begins fifteen years into E1 and reaches
+    /// E3 inside a forty-year run.</para>
+    /// </summary>
+    public static Capabilities.EraCalendar Eras { get; } =
+        new([(Era.E1, 1950), (Era.E2, 1970), (Era.E3, 1990), (Era.E4, 2010)]);
+
+    /// <summary>
+    /// The one licence this composition's company holds (SDD-011 §1's R20d.9
+    /// amendment) — on the same footing as <see cref="Climate"/> and
+    /// <see cref="Eras"/>: a single hand-authored instance of a mechanic this
+    /// composition ships one of, ahead of R20's jurisdiction content.
+    ///
+    /// <para>Proportional to what already exists rather than invented: the
+    /// bond is a small multiple of one well's cost
+    /// (<see cref="DrillWellTerms"/>), and the term spans this composition's
+    /// own forty-year test horizon so no shipped run expires the licence
+    /// mid-game and finds out what that means — a question this amendment
+    /// deliberately leaves unanswered (SDD-011 §1's R20d.9 amendment only
+    /// wires the commitment deadline, not bare expiry).</para>
+    ///
+    /// <para><b>The commitment falls due at month 60, not month 24</b> —
+    /// widened from a first cut that was measured rather than assumed to be
+    /// too tight. A lost licence refuses all further drilling (SDD-011's
+    /// R20d.9 amendment), so a company whose FIRST well came back dry — a real
+    /// outcome the shipped table gives real weight to — had no recourse at
+    /// all under a 24-month deadline: one early roll of bad luck ended the
+    /// game's development for good, which is a harsher reading of "loses the
+    /// acreage" than the mechanic is meant to enforce. Sixty months is margin
+    /// for several real attempts (each `DrillWellTerms.DurationTicks` long)
+    /// before the commitment binds, while staying meaningfully inside the
+    /// 480-month term rather than a formality.</para>
+    ///
+    /// <para><c>Relinquishment</c> is empty and stays that way: this field is
+    /// <c>DeclareKnownField</c>d from the first tick (SDD-010 §4b), so there is
+    /// no unexplored acreage to hand back.</para>
+    /// </summary>
+    public static Contracts.LicenceTerms LicenceTerms { get; } =
+        new(
+            TermMonths: 480,
+            WorkCommitment:
+            [
+                new Contracts.CommitmentItem(
+                    DrillWellTerms.Template, Quantity: 1.0, Due: new Tick(60)),
+            ],
+            Bond: Money.FromMillions(12.0),
+            Relinquishment: [],
+            FiscalRegime: new ContentId("concession"),
+
+            // NO CONSUMER YET (rule 7's own test: what reads this to make a
+            // decision). R16.6's own row already says the rules an HSE regime
+            // would name are R23's; this states plainly that naming it is not
+            // the same as enforcing it.
+            HseRegime: new ContentId("standard"));
+
+    public static Environment.ClimateProfile Climate { get; } =
+        new(new ContentId("temperate-offshore"),
+            Persistence: 0.75,
+            Baseline: [5.2, 5.0, 4.4, 3.6, 2.9, 2.4, 2.2, 2.5, 3.2, 4.1, 4.8, 5.1],
+            Amplitude: [1.6, 1.6, 1.4, 1.2, 1.0, 0.9, 0.9, 1.0, 1.2, 1.4, 1.5, 1.6],
+            TemperatureBaseline: [6.0, 5.6, 6.4, 8.2, 10.8, 13.4,
+                                  15.1, 15.4, 14.0, 11.6, 9.0, 7.0],
+            TemperatureAmplitude: -1.8,
+
+            // OPEN ALL YEAR, and that is a statement about this climate rather
+            // than a mechanic switched off. A temperate offshore field is reached
+            // by boat and helicopter in every month; what stops work there is the
+            // sea state on the day, which is what `WeatherLimit` already prices.
+            // A window belongs to an ice road or a monsoon coast, and this
+            // composition ships neither — so no shipped climate closes, and the
+            // refusal is proved against an arctic profile in the tests until R20
+            // authors a scenario that has one (SDD-016 §5b's R22.6 amendment).
+            AccessOpen: [true, true, true, true, true, true,
+                         true, true, true, true, true, true]);
+
+    /// <summary>
+    /// The severity an operation can work through (SDD-016 §3). ONE limit for
+    /// every template, which is a simplification the SDD names: §3 puts a
+    /// `weatherClass` on each template and each weather-exposed element, and that
+    /// arrives with the content pipeline (R20c.9). Until then a single limit is
+    /// honest about being one number rather than pretending to be a table.
+    ///
+    /// <para>Set at 6.0 against the climate above: a winter month averages 5.2
+    /// with an amplitude of 1.6, so roughly a third of January is lost and a
+    /// July is not — which is the seasonality the mechanic exists to create.</para>
+    /// </summary>
+    public const double OperationWeatherLimit = 6.0;
 }
 
 /// <summary>
@@ -1002,6 +1463,14 @@ internal sealed class RegionalObservationModel : IObservationModel
             // sits in it is not.
             ("seismic-2d", "structure-capacity") => 0.45,
             ("seismic-3d", "structure-capacity") => 0.25,
+
+            // A DISCOVERY WELL sees the oil itself — the column, the contacts,
+            // a sample of the rock — so it answers the question no surface
+            // survey can: how much is actually in there. Sharper than anything
+            // shot from above and still nowhere near certain, because one hole
+            // has seen one point of a field and the other kilometre of it is
+            // inference.
+            ("discovery-well", "oil-in-place") => 0.30,
 
             // A log reads porosity well and permeability only through a
             // transform, which is why 0.5 in log units — a factor of 1.65 — is
@@ -1064,7 +1533,47 @@ public sealed record EngineSettings(
     /// mid-game is a recompose, which is why 18 §5b.5 calls it "allowed and
     /// logged" rather than free.</para>
     /// </summary>
-    ContentId RealityProfile);
+    ContentId RealityProfile,
+
+    /// <summary>
+    /// Where the game's content comes from (SDD-004 §7, and §6's R20c.9
+    /// amendment).
+    ///
+    /// <para><b>A host supplies these and the engine never touches a disk.</b>
+    /// An <see cref="IContentSource"/> hands over files it has already read, so
+    /// the engine assemblies stay free of I/O and a host is free to ship content
+    /// from a directory, an archive or a download without composition knowing
+    /// which.</para>
+    ///
+    /// <para>Required, with no default: law L2, and the reason it matters here is
+    /// that a default would be an empty list, and an empty list is a game with no
+    /// equipment that composes anyway and fails later as a missing separator.
+    /// Content that will not load is a REFUSAL to start (design 10 §3, G2).</para>
+    ///
+    /// <para>Order fixes override precedence — base content is
+    /// <c>DeclaredOrder</c> 0 and a mod is higher (§7).</para>
+    /// </summary>
+    IReadOnlyList<IContentSource> Content)
+{
+    // Finding 131: the compiler compares a collection member by REFERENCE, so
+    // two settings naming the same sources would differ. Element equality is
+    // still reference equality here and correctly so — a source is a live object
+    // a host owns, not a value — but the LIST is compared by content, which is
+    // what the rule is about.
+    public bool Equals(EngineSettings? other) =>
+        other is not null
+        && Epoch == other.Epoch && WorldSeed == other.WorldSeed
+        && Retention == other.Retention && ReferenceEquals(LogSink, other.LogSink)
+        && MinimumLogLevel == other.MinimumLogLevel
+        && FaultHandling == other.FaultHandling
+        && RealityProfile == other.RealityProfile
+        && Structural.Equal(Content, other.Content);
+
+    public override int GetHashCode() =>
+        HashCode.Combine(
+            Epoch, WorldSeed, Retention, MinimumLogLevel, FaultHandling, RealityProfile,
+            Structural.HashOf(Content));
+}
 
 /// <summary>
 /// A composed engine: the validated module set, the tick it runs, and the two
@@ -1119,6 +1628,29 @@ public sealed record BuildRefused(EngineCompositionRefused Refusal) : BuildResul
     public IReadOnlyList<CompositionProblem> Problems => Refusal.Problems;
 }
 
+/// <summary>
+/// The content would not load, so there is no engine (design 10 §3's G2,
+/// SDD-004 §6's R20c.9 amendment).
+///
+/// <para>ITS OWN CASE rather than a <see cref="CompositionProblem"/>, because a
+/// <see cref="LoadFailure"/> names the file, the JSON path and the stage it
+/// failed at, and flattening that into a module-and-detail pair would throw away
+/// the half an author needs to fix it. A composition problem is about the module
+/// SET; this is about a datasheet.</para>
+///
+/// <para>Every failure, never just the first: §5's loader accumulates across all
+/// six stages and all files precisely so one broken sheet does not hide four
+/// more.</para>
+/// </summary>
+public sealed record BuildRefusedByContent(IReadOnlyList<LoadFailure> Failures) : BuildResult
+{
+    // Finding 131: a record carrying a collection compares it by reference.
+    public bool Equals(BuildRefusedByContent? other) =>
+        other is not null && Structural.Equal(Failures, other.Failures);
+
+    public override int GetHashCode() => Structural.HashOf(Failures);
+}
+
 /// <summary>Design 03 §8's Layer 4 — the one place that knows what implements what.</summary>
 public static class EngineBuilder
 {
@@ -1131,24 +1663,109 @@ public static class EngineBuilder
     /// same engine, which is the property that makes Requires worth declaring
     /// (SDD-001 §9, finding 126).</para>
     /// </summary>
+    /// <summary>
+    /// The facility catalogues, or null if the content will not load
+    /// (SDD-004 §6's R20c.9 amendment).
+    ///
+    /// <para>BEFORE THE MODULES, because a module's <c>Compose</c> fits its
+    /// equipment from a ladder and there is nothing to fit until the sheets are
+    /// read. <c>PluginRegistry</c>'s own header states the ordering the other way
+    /// round — a plugin must not be built during content load, "which happens
+    /// before the engine exists" — and this is that sentence's other half.</para>
+    /// </summary>
+    private static (FacilityLadders Ladders,
+                    IReadOnlyList<OGSim.Capabilities.TechnologyNode> Registry)? Ladders(
+        EngineSettings settings)
+    {
+        ContentLoadResult result = FacilityContent(settings);
+
+        return result is ContentLoaded loaded
+            ? (FacilityLadders.From(loaded.Catalogues), Registry(loaded.Catalogues))
+            : null;
+    }
+
+    /// <summary>Why it would not load, for the refusal to carry.</summary>
+    private static IReadOnlyList<LoadFailure> Failures(EngineSettings settings) =>
+        FacilityContent(settings) is ContentFailures failed ? failed.Failures : [];
+
+    /// <summary>
+    /// The technology registry, as a graph (SDD-005 §2's R20d.10 amendment).
+    ///
+    /// <para>Sixty-five nodes have shipped in <c>content/technologies/</c> since
+    /// R20c.9 and the ENGINE never read one: `CapabilitiesModule` composed
+    /// `AllCapabilities`, so the graph existed for a fixture test alone. This is
+    /// the same door the facility sheets come through.</para>
+    /// </summary>
+    private static IReadOnlyList<OGSim.Capabilities.TechnologyNode> Registry(
+        ICatalogSet catalogues)
+    {
+        IReadOnlyList<OGSim.Capabilities.TechnologyDefinition> all =
+            catalogues.Of<OGSim.Capabilities.TechnologyDefinition>().All;
+
+        var graph = new List<OGSim.Capabilities.TechnologyNode>(all.Count);
+
+        for (int i = 0; i < all.Count; i++)
+        {
+            OGSim.Capabilities.TechnologyDefinition node = all[i];
+
+            var prerequisites = new List<TechnologyId>(node.Prerequisites.Count);
+
+            for (int p = 0; p < node.Prerequisites.Count; p++)
+                prerequisites.Add(new TechnologyId(node.Prerequisites[p]));
+
+            graph.Add(new OGSim.Capabilities.TechnologyNode(
+                new TechnologyId(node.Id),
+                node.AvailableFrom,
+                node.DiffusionLagTicks,
+                prerequisites,
+                node.Effects,
+                node.GrantsDetectClass,
+                node.Routes));
+        }
+
+        return graph;
+    }
+
+    /// <summary>
+    /// The six facility kinds and the technology registry over the host's
+    /// sources.
+    ///
+    /// <para>No plugin binding: a facility datasheet names no model, so the
+    /// registry handed to the loader answers for nothing. It is still REQUIRED
+    /// rather than optional — stage 6 exists whether or not this content uses it,
+    /// and a loader that skipped a stage because today's content did not need it
+    /// would skip it tomorrow when the content did.</para>
+    /// </summary>
+    private static ContentLoadResult FacilityContent(EngineSettings settings) =>
+        new ContentLoader(
+            [
+                new SeparatorContentKind(), new TankContentKind(), new TreaterContentKind(),
+                new GasPlantContentKind(), new ExportLineContentKind(), new ManifoldContentKind(),
+                new OGSim.Capabilities.TechnologyContentKind(),
+            ],
+            new PluginRegistry())
+            .LoadAll(settings.Content);
+
     internal static IReadOnlyList<IModule> ShippedModules(
-        IAuditTrail audit, SimulationClock clock, IRandomSource random,
-        RealityProfile profile) =>
+        AuditTrail audit, SimulationClock clock, IRandomSource random,
+        RealityProfile profile, FacilityLadders ladders,
+        IReadOnlyList<OGSim.Capabilities.TechnologyNode> registry) =>
     [
         new SubsurfaceModule(),
         new WellsModule(),
         new FlowModule(),
-        new FacilitiesModule(),
+        new FacilitiesModule(ladders),
         new OperationsModule(),
         new CompanyModule(),
         new InformationModule(),
         new WorldModule(),
-        new CapabilitiesModule(),
+        new CapabilitiesModule(registry, Defaults.Eras, clock),
         new IntegrityModule(),
+        new EnvironmentModule(Defaults.Climate),
         new HseModule(),
         new ObjectivesModule(),
         new MaterialsModule(profile),
-        new FieldModule(),
+        new FieldModule(ladders),
         new DiagnosticsModule(audit, clock, random),
     ];
 
@@ -1196,6 +1813,18 @@ public static class EngineBuilder
             // (SDD-001 §4's eight named streams).
             ready.Engine.Provided.Resolve<IRandomSource>().Stream(StreamId.WorldGen));
 
+        // AND THE LINE IS DRAWN HERE (SDD-010 §4c). Everything the generator has
+        // just placed is a function of the seed and is regenerated on load;
+        // everything placed after this moment is a decision the game made and is
+        // replayed from the save. Sealed at the one instant both statements are
+        // true — after generation, before the first tick.
+        // AND WHAT IT WAS DRAWN FROM travels with the line (SDD-010 §4c.1),
+        // because a reload has to call this same generator with the same
+        // parameters and the save is the only thing that can tell it what they
+        // were. Recorded here rather than anywhere else for the same reason the
+        // boundary is: this is the one instant the caller is holding both.
+        ready.Engine.Provided.Resolve<WorldState>().SealGeneration(world);
+
         return built;
     }
 
@@ -1204,13 +1833,49 @@ public static class EngineBuilder
     {
         ArgumentNullException.ThrowIfNull(settings);
 
+        if (Ladders(settings) is not var (ladders, registry))
+            return new BuildRefusedByContent(Failures(settings));
+
         var clock = new SimulationClock(settings.Epoch);
         var audit = new AuditTrail(clock, settings.Retention);
 
         return Build(
             settings,
             ShippedModules(audit, clock, new RandomSource(settings.WorldSeed),
-                           Defaults.ProfileNamed(settings.RealityProfile)),
+                           Defaults.ProfileNamed(settings.RealityProfile), ladders, registry),
+            clock, audit);
+    }
+
+    /// <summary>
+    /// Composes the shipped set AS OF a tick — the door a load comes through
+    /// (SDD-013, R20d.12).
+    ///
+    /// <para>The clock is restored BEFORE the modules compose, not after. A
+    /// module that reads the date while being constructed would otherwise build
+    /// itself in month zero and then be told it is month sixty, and the
+    /// difference between those two is exactly the "restored as a value, not as
+    /// a live dependency" failure SDD-013 §4 opens with.</para>
+    ///
+    /// <para>Internal because a host does not choose a tick — a SAVE does.
+    /// Composition is the only layer entitled to build an engine that starts
+    /// anywhere but the beginning.</para>
+    /// </summary>
+    internal static BuildResult BuildAt(EngineSettings settings, Tick tick)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+
+        if (Ladders(settings) is not var (ladders, registry))
+            return new BuildRefusedByContent(Failures(settings));
+
+        var clock = new SimulationClock(settings.Epoch);
+        clock.RestoreTo(tick);
+
+        var audit = new AuditTrail(clock, settings.Retention);
+
+        return Build(
+            settings,
+            ShippedModules(audit, clock, new RandomSource(settings.WorldSeed),
+                           Defaults.ProfileNamed(settings.RealityProfile), ladders, registry),
             clock, audit);
     }
 

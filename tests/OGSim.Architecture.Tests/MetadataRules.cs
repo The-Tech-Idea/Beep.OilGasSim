@@ -133,6 +133,21 @@ public class MetadataRules
                 "OGSim.Flow", "OGSim.Subsurface", "OGSim.Wells", "OGSim.Facilities",
                 "OGSim.Operations", "OGSim.Company", "OGSim.Information", "OGSim.World",
                 "OGSim.Capabilities", "OGSim.Integrity", "OGSim.Objectives",
+
+                // Persistence was missing from this list until R20d.12, and its
+                // absence was an accurate record rather than an oversight:
+                // composition had never referenced it, because nothing assembled
+                // the state owners into a save (finding 188). It is a Layer 3
+                // module like every other name here — composition may reference
+                // it, and it may not reference composition.
+                "OGSim.Persistence",
+
+                // Environment joins at R22.1 on exactly the same terms: a Layer 3
+                // module that composition may reference and which may not
+                // reference composition. Its absence here was the same accurate
+                // record — the project did not exist, and stage 2 had sat in the
+                // declared tick order since R1 with no participant.
+                "OGSim.Environment",
             ],
         };
 
@@ -395,6 +410,95 @@ public class MetadataRules
         }
 
         EngineCorpus.AssertNone(violations, "truth boundary — OGSim.Subsurface exposes nothing");
+    }
+
+    /// <summary>
+    /// THE HOST SURFACE NAMES NO DOMAIN MODULE (design 03 §2, §8).
+    ///
+    /// <para>A host reads <c>FieldReadModel</c> and nothing else. If a member of
+    /// it is typed as something from `OGSim.Company` or `OGSim.Wells`, then
+    /// rendering a number means referencing a domain module — which is the one
+    /// direction the layering does not allow, and it happens by accident because
+    /// the type was already in scope where the read model is assembled.</para>
+    ///
+    /// <para>This rule exists because it caught nothing. `ReservesEstimate` was
+    /// declared in `OGSim.Company` at R20d.13 and put straight onto the read
+    /// model; the build was green, every test passed, and the violation was
+    /// found by reading the law rather than by running anything. A law enforced
+    /// by memory is a law that holds until somebody is tired.</para>
+    /// </summary>
+    [Fact]
+    public void Layering_TheReadModelNamesNoDomainModule()
+    {
+        Type readModel = EngineCorpus.Composition.GetType("OGSim.Composition.FieldReadModel")
+            ?? throw new InvalidOperationException("FieldReadModel is not where it was");
+
+        EngineCorpus.AssertNone(
+            DomainLeaks(readModel), "layering — the host surface names no domain module");
+    }
+
+    /// <summary>
+    /// AND THE RULE ABOVE ACTUALLY CATCHES. A rule that has never failed is a
+    /// rule nobody has tested; this hands it the shape it exists to refuse and
+    /// checks that it says so, which is the same standard
+    /// <see cref="N3_StillCatchesTheNamesItExistsFor"/> holds its own rule to.
+    /// </summary>
+    [Fact]
+    public void Layering_TheReadModelRuleStillCatchesWhatItExistsFor()
+    {
+        IReadOnlyList<string> caught = DomainLeaks(typeof(SurfaceWithADomainLeak));
+
+        Assert.NotEmpty(caught);
+        Assert.Contains(caught, complaint => complaint.Contains("OGSim.Company", StringComparison.Ordinal));
+    }
+
+    /// <summary>The exact shape R20d.13 shipped by accident: a read-model member
+    /// typed from a domain module.</summary>
+    private sealed record SurfaceWithADomainLeak(
+        Money Cash, OGSim.Company.MarketState Market);
+
+    private static IReadOnlyList<string> DomainLeaks(Type surface)
+    {
+        var violations = new List<string>();
+
+        foreach (PropertyInfo member in surface.GetProperties())
+        {
+            foreach (Type named in Mentioned(member.PropertyType))
+            {
+                string? assembly = named.Assembly.GetName().Name;
+
+                if (assembly is null) continue;
+                if (!assembly.StartsWith("OGSim.", StringComparison.Ordinal)) continue;
+
+                // Contracts and the kernel are BELOW everything, and the
+                // composition layer is where a read model legitimately lives.
+                if (assembly is "OGSim.Contracts" or "OGSim.Kernel" or "OGSim.Composition")
+                    continue;
+
+                violations.Add(
+                    $"{surface.Name}.{member.Name} is typed {named.Name} from {assembly}; " +
+                    "a host would have to reference a domain module to read it, which is " +
+                    "the one direction design 03 §2 does not allow");
+            }
+        }
+
+        return violations;
+    }
+
+    /// <summary>Every type a member's signature mentions, including the ones
+    /// inside a generic — a list of the wrong thing is still the wrong
+    /// thing.</summary>
+    private static IEnumerable<Type> Mentioned(Type type)
+    {
+        Type named = Unwrap(type);
+
+        yield return named;
+
+        if (!named.IsGenericType) yield break;
+
+        foreach (Type argument in named.GetGenericArguments())
+            foreach (Type inner in Mentioned(argument))
+                yield return inner;
     }
 
     // ------------------------------------------------------------- helpers

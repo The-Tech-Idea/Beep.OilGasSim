@@ -5,6 +5,7 @@
 // the player's side of the wall on purpose: everything they assert is something
 // a host could render, and nothing they touch is truth.
 
+using OGSim.Company;
 using OGSim.Composition;
 using OGSim.Contracts;
 using OGSim.Kernel;
@@ -28,8 +29,15 @@ public sealed class GameplayTests
                     InitialPressure: new Pressure(30.0e6),
                     Temperature: Temperature.FromCelsius(93.3),
                     Depth: new Length(2000.0)),
-                permeability: new Permeability(2.0e-13),
-                netThickness: new Length(30.0),
+                // Rock the shipped plant is sized for. It said 2e-13 and 30 m
+                // while every well was built from Defaults.Inflow's 1e-13 and
+                // 20 m — a compartment stating rock nobody read (finding 170).
+                // Now that a well is built from the rock it is in, the two have
+                // to agree or these fixtures would be testing a field three
+                // times more productive than the one the chain was designed
+                // against.
+                permeability: new Permeability(1.0e-13),
+                netThickness: new Length(20.0),
                 drainageArea: new Area(2.0e5),
                 rockCompressibility: 4.5e-10,
                 gasOilContact: new Length(1900.0),
@@ -54,6 +62,12 @@ public sealed class GameplayTests
     private static EntityId<IProspect> Structure(
         Engine engine, EntityId<IReservoirCompartmentEntity> field) =>
         engine.Provided.Resolve<WorldState>().ProspectFor(field);
+
+    /// <summary>What a well costs today — the catalogue price at the cost index
+    /// the read model is reporting (SDD-009 §6's ED4).</summary>
+    private static Money Quoted(Engine engine) =>
+        Money.RoundHalfEven(
+            Defaults.DrillWellTerms.Cost.Cents * engine.ReadModel!.CostIndex);
 
     private static DrillWellCommand Drill(
         Engine engine, EntityId<IReservoirCompartmentEntity> target, double depth = 2000.0) =>
@@ -255,9 +269,21 @@ public sealed class GameplayTests
     {
         (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled();
 
-        for (var month = 0; month < 145; month++) engine.Pipeline.AdvanceTick();
+        // RUN UNTIL THE COMPANY GENUINELY CANNOT AFFORD ONE, rather than for a
+        // fixed number of months. Since R20d.12 a quoted price moves with the
+        // cost index, so a burn calibrated against the catalogue price was
+        // asserting something the engine no longer claims — and a long enough
+        // slump makes a well CHEAPER, which is how this test started passing a
+        // drilling command it was written to see refused.
+        var months = 0;
 
-        Assert.True(engine.ReadModel!.Cash < Money.FromMillions(8.0));
+        while (engine.ReadModel is null || engine.ReadModel.Cash >= Quoted(engine))
+        {
+            engine.Pipeline.AdvanceTick();
+
+            Assert.True(++months < 600,
+                "fifty years of standing charges and the company can still afford a well");
+        }
 
         Rejected rejected = Assert.IsType<Rejected>(engine.Commands.Submit(Drill(engine, target)));
 
@@ -462,8 +488,11 @@ public sealed class GameplayTests
         Built built = Assert.IsType<Built>(EngineBuilder.Build(Fixture.Settings()));
         Engine engine = built.Engine;
 
-        // $50M at $300k a month — insolvency arrives, and not before it should.
-        for (var month = 0; month < 166; month++) engine.Pipeline.AdvanceTick();
+        // $50M at $300k a month, minus the $12M bond forfeited at month 24
+        // when the licence's one commitment goes unmet (R20d.9): insolvency
+        // now arrives around month 127, not month 166 — a real, one-time shift
+        // in the shipped economics rather than a defect in the mechanic.
+        for (var month = 0; month < 120; month++) engine.Pipeline.AdvanceTick();
         Assert.False(engine.ReadModel!.Insolvent, "the company is not out of money yet");
 
         for (var month = 0; month < 20; month++) engine.Pipeline.AdvanceTick();
@@ -508,19 +537,32 @@ public sealed class GameplayTests
     }
 
     /// <summary>
-    /// And a player who only drills does NOT win. The wells are there, the oil
-    /// is flowing, and the surface cannot carry it — so the decade runs out.
+    /// And a player who only drills does WORSE. The wells are there, the oil is
+    /// flowing, and the surface cannot carry it.
     ///
     /// <para>This is the test that says the constraint is load-bearing. If
-    /// drilling alone were enough, every facility decision in the game would be
+    /// drilling alone were as good, every facility decision in the game would be
     /// optional.</para>
+    ///
+    /// <para>ASKED AS A COMPARISON, not as an outcome, and the reason is
+    /// R20d.11: the oil price moves now, so "the decade runs out" became a
+    /// statement about the market as much as about the chain — a bottlenecked
+    /// field on a good run can still reach the target. Both companies here play
+    /// the same world at the same seed and therefore see exactly the same
+    /// prices, so what is left between them is the decision.</para>
     /// </summary>
     [Fact]
-    public void A_player_who_drills_and_never_debottlenecks_runs_out_of_time()
+    public void A_player_who_drills_and_never_debottlenecks_earns_less()
     {
-        (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled();
+        (Engine open, EntityId<IReservoirCompartmentEntity> openTarget) = Undrilled();
+        (Engine jammed, EntityId<IReservoirCompartmentEntity> jammedTarget) = Undrilled();
 
-        Assert.Equal(ObjectiveState.Expired, Play(engine, target, debottleneck: false));
+        Play(open, openTarget, debottleneck: true);
+        Play(jammed, jammedTarget, debottleneck: false);
+
+        Assert.True(open.ReadModel!.Cash > jammed.ReadModel!.Cash,
+            $"debottlenecking earned {open.ReadModel!.Cash} against {jammed.ReadModel!.Cash} " +
+            "for not bothering; the surface constraint is not load-bearing");
     }
 
     /// <summary>
@@ -549,6 +591,7 @@ public sealed class GameplayTests
             if (debottleneck && !upgraded && engine.ReadModel?.Wells >= 2)
                 upgraded = engine.Commands.Submit(new InstallSeparatorCommand()) is Accepted;
 
+            Fixture.Repair(engine);
             engine.Pipeline.AdvanceTick();
 
             if (engine.ReadModel!.Outcome != ObjectiveState.Pending) break;
@@ -670,5 +713,208 @@ public sealed class GameplayTests
         Assert.True(active.ReadModel!.Cash > idle.ReadModel!.Cash,
             $"drilling ({active.ReadModel.Cash.Cents}c) must beat sitting still " +
             $"({idle.ReadModel.Cash.Cents}c) — otherwise the decision is not a decision");
+    }
+
+    /// <summary>
+    /// R21.6 / R21 §2.4b row 5. WHAT THE FIELD IS HOLDING, AND THE ROOM LEFT.
+    ///
+    /// <para>The table has required tank levels and ullage since it was written
+    /// and nothing published them, so a host could see a cash balance and not
+    /// whether the company was poor or merely illiquid — the same gap finding
+    /// 190 records from the cash-flow side, and the reason any mechanic that
+    /// defers revenue currently reads as a failure to the opening scenario
+    /// (SDD-006 §7a.2).</para>
+    ///
+    /// <para>Asserted as a RELATIONSHIP rather than against a number, because a
+    /// figure copied from a run is a test of nothing: held plus ullage is the
+    /// tank's capacity by construction, and a producing field with an export
+    /// line that cannot keep up must be holding something.</para>
+    /// </summary>
+    [Fact]
+    public void R21V11_the_read_model_publishes_what_the_tank_holds_and_its_ullage()
+    {
+        (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled();
+
+        for (var well = 0; well < 3; well++)
+        {
+            while (engine.ReadModel is null || engine.ReadModel.ActivitiesRunning > 0)
+                engine.Pipeline.AdvanceTick();
+
+            engine.Commands.Submit(Drill(engine, target));
+        }
+
+        Fixture.Run(engine, months: 24);
+
+        StorageView storage = engine.ReadModel!.Storage;
+
+        Assert.True(storage.Ullage.Kilograms > 0.0,
+            "a tank with no room left would have shut this field in; the fixture is not " +
+            "measuring a producing field");
+
+        // Capacity from the engine's own ladder rather than a constant: content
+        // owns it since R20c.9.2, and the two would drift on the first rebalance.
+        Assert.Equal(
+            engine.Provided.Resolve<FacilityLadders>().Tank[0].Capacity.Kilograms,
+            storage.Held.Kilograms + storage.Ullage.Kilograms,
+            precision: 6);
+    }
+
+    /// <summary>
+    /// R21 §2.4b's "cost and revenue by cause for the period", and finding 190's
+    /// complaint stated as a test: A MONTH OF INVESTMENT AND A MONTH OF DECLINE
+    /// MUST NOT LOOK THE SAME.
+    ///
+    /// <para>The surface published a cash BALANCE and nothing about the period,
+    /// so falling cash read identically whether a company was building or dying.
+    /// The reference client plugged fields for being under repair and could not
+    /// have known better — there was nothing in the read model that would have
+    /// told it.</para>
+    ///
+    /// <para>Asserted on the SHAPE rather than on amounts: a month that drills
+    /// spends on Development, and a producing month takes money in on
+    /// Production. Amounts copied from a run would pin whatever the engine
+    /// happens to do; these two facts are what the row exists to make
+    /// visible.</para>
+    /// </summary>
+    [Fact]
+    public void R21V11_a_month_of_investment_does_not_look_like_a_month_of_decline()
+    {
+        (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled();
+
+        // A month that INVESTS: the drilling contract is signed and paid for.
+        engine.Commands.Submit(Drill(engine, target));
+        engine.Pipeline.AdvanceTick();
+
+        Money spentDeveloping = engine.ReadModel!.CashByCause[
+            IndexOf(MovementCategory.Development)];
+
+        Assert.True(spentDeveloping < Money.Zero,
+            $"a month that started a well shows {spentDeveloping.Cents} cents against " +
+            "Development; drilling is not free and the period has to show it");
+
+        // And a month that EARNS, once the well is in and flowing.
+        while (engine.ReadModel!.ProducedThisTick.CubicMetres <= 0.0)
+            engine.Pipeline.AdvanceTick();
+
+        Assert.True(
+            engine.ReadModel!.CashByCause[IndexOf(MovementCategory.Production)] > Money.Zero,
+            "a producing month brings nothing in against Production, so the row cannot " +
+            "distinguish earning from spending");
+
+        // One entry per declared cause, zeroes included: an absent row and a
+        // cause that did nothing this month are different claims.
+        Assert.Equal(CostLedger.Causes.Count, engine.ReadModel!.CashByCause.Count);
+    }
+
+    private static int IndexOf(MovementCategory cause)
+    {
+        for (var i = 0; i < CostLedger.Causes.Count; i++)
+            if (CostLedger.Causes[i] == cause) return i;
+
+        throw new InvalidOperationException($"{cause} is not a declared cause");
+    }
+
+    /// <summary>
+    /// R21 §2.4b row 15, using SDD-017 §2's `OperationView` — WHICH operations
+    /// are running, how far along, and what each has cost.
+    ///
+    /// <para>The read model published a COUNT. "Two activities running" cannot
+    /// answer "what is my company doing?": a player could see the rig was busy
+    /// and not whether a well was nearly down or barely started, and could not
+    /// tell a stalled operation from one progressing normally.</para>
+    ///
+    /// <para>Asserted as MOVEMENT rather than against a figure: an operation
+    /// under way has progress inside its own effective duration and has accrued
+    /// something, and after a month it has progressed further. Numbers copied
+    /// from a run would pin whatever the engine happens to do.</para>
+    /// </summary>
+    [Fact]
+    public void R21V11_the_read_model_says_what_each_operation_is_doing()
+    {
+        (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled();
+
+        engine.Commands.Submit(Drill(engine, target));
+        engine.Pipeline.AdvanceTick();
+
+        OperationView drilling = Assert.Single(engine.ReadModel!.Operations);
+
+        Assert.Equal(EntityKind.Operation, drilling.Operation.Kind);
+        Assert.True(drilling.EffectiveDurationDays > 0);
+        Assert.InRange(drilling.ProgressDays, 1, drilling.EffectiveDurationDays);
+
+        Assert.True(drilling.Accrued != Money.Zero,
+            "a month of drilling accrued nothing, so the cost column says nothing about " +
+            "what the rig has already committed");
+
+        // A MONTH LATER IT HAS MOVED, which is what distinguishes progress from
+        // a stalled operation — the whole reason the row is progress and not a
+        // running flag.
+        engine.Pipeline.AdvanceTick();
+
+        if (engine.ReadModel!.Operations.Count == 0) return;   // it finished, which is progress too
+
+        Assert.True(
+            engine.ReadModel!.Operations[0].ProgressDays > drilling.ProgressDays,
+            "a second month left the operation exactly where it was");
+    }
+
+    /// <summary>
+    /// R21-V1, the first verification R21 declares and the last of its thirteen
+    /// to be written: THE READ MODEL CANNOT BE MUTATED, AND NO LIVE REFERENCE
+    /// ESCAPES.
+    ///
+    /// <para>A snapshot is a statement about a month. If any of its collections
+    /// were the engine's own, a host that held last month's snapshot would watch
+    /// it change under it — and worse, an objective judged at stage 12 and a
+    /// host rendering at stage 13 could disagree about the same tick while both
+    /// read "the read model".</para>
+    ///
+    /// <para>Tested by ADVANCING rather than by reflection over the type. What
+    /// matters is not whether a field is declared read-only but whether the
+    /// values behind it move, and the only thing that moves them is the engine
+    /// running. So: take a snapshot, run a year, and require the snapshot to
+    /// still describe the month it was taken in.</para>
+    /// </summary>
+    [Fact]
+    public void R21V1_a_published_snapshot_does_not_change_when_the_engine_runs_on()
+    {
+        (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled();
+
+        for (var well = 0; well < 3; well++)
+        {
+            while (engine.ReadModel is null || engine.ReadModel.ActivitiesRunning > 0)
+                engine.Pipeline.AdvanceTick();
+
+            engine.Commands.Submit(Drill(engine, target));
+        }
+
+        Fixture.Run(engine, months: 12);
+
+        FieldReadModel taken = engine.ReadModel!;
+
+        // Everything a later tick could reach into: the lists are the ones a
+        // projection builds each month, and a live reference would show up here
+        // as a count or a value that moved.
+        Tick tick = taken.Tick;
+        int chain = taken.Chain.Count;
+        int wells = taken.Wellbores.Count;
+        int beliefs = taken.Beliefs.Count;
+        Money cash = taken.Cash;
+        Mass held = taken.Storage.Held;
+        IReadOnlyList<Money> byCause = [.. taken.CashByCause];
+
+        Fixture.Run(engine, months: 12);
+
+        Assert.NotEqual(tick, engine.ReadModel!.Tick);   // the engine really did move on
+
+        Assert.Equal(tick, taken.Tick);
+        Assert.Equal(chain, taken.Chain.Count);
+        Assert.Equal(wells, taken.Wellbores.Count);
+        Assert.Equal(beliefs, taken.Beliefs.Count);
+        Assert.Equal(cash, taken.Cash);
+        Assert.Equal(held, taken.Storage.Held);
+        Assert.True(Structural.Equal(byCause, taken.CashByCause),
+            "the cash-by-cause row moved after it was published, so the snapshot is holding " +
+            "the ledger's own working state rather than a statement about its month");
     }
 }

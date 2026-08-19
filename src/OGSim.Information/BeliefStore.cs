@@ -19,7 +19,7 @@ namespace OGSim.Information;
 /// <summary>
 /// SDD-008 §2. The store, and the wall.
 /// </summary>
-public sealed class BeliefStore : IBeliefStore
+public sealed class BeliefStore : IBeliefStore, IStateOwner
 {
     // ONE owner of the belief set (law L5), in the order the company learned
     // them; the dictionary is a lookup into it and holds no belief of its own.
@@ -162,36 +162,190 @@ public sealed class BeliefStore : IBeliefStore
     }
 
     /// <summary>
-    /// SDD-008 §2's staleness: sigma grows for DYNAMIC kinds only.
+    /// SDD-008 §2 / §2d's staleness: sigma grows for DYNAMIC kinds, on the
+    /// subject whose value actually moved.
     ///
-    /// <para>Pressure and contacts drift because production changes them; the
+    /// <para>Pressure and contacts drift because PRODUCTION changes them; the
     /// porosity of a rock does not become less certain by being ignored. Making
     /// everything drift would have the player re-log a well to learn what its
     /// core already told them.</para>
+    ///
+    /// <para>PER SUBJECT, and that is the whole of §2d.2's decision expressed in
+    /// a signature. This took a kind alone and widened every belief of that kind
+    /// wherever it was held, which cannot say "this compartment produced and that
+    /// one did not" — so a shut-in field would have gone stale at the same rate
+    /// as the one next to it that was being drained. Drift is charged to the
+    /// activity that invalidates the belief, not to the calendar.</para>
+    ///
+    /// <para>A subject with nothing known about it is left alone rather than
+    /// faulted: there is no belief to widen, which is a legitimate state and the
+    /// common one for a compartment nobody has measured.</para>
     /// </summary>
-    public void Age(ContentId propertyKind, double driftPerYear, double years)
+    public void Age(EntityRef subject, ContentId propertyKind, double driftPerYear, double years)
     {
         if (driftPerYear < 0.0)
-            throw new ModelFault("SDD-008 §2", null,
+            throw new ModelFault("SDD-008 §2", subject,
                 "staleness drift cannot be negative; a belief does not sharpen by waiting");
 
         if (driftPerYear == 0.0 || years <= 0.0) return;
 
-        // Walked over the insertion-ordered list, not the Dictionary (D-5).
+        // Indexed rather than walked: the store already keys (subject, kind), so
+        // the one entry this can touch is a lookup away. Walking would be a scan
+        // of every belief in the game, once per producing compartment, once a
+        // month, for forty years.
+        if (!_at.TryGetValue((subject, propertyKind), out int at)) return;
+
+        HeldBelief entry = _held[at];
+
+        _held[at] = entry with
+        {
+            Belief = entry.Belief with { Sigma = entry.Belief.Sigma + (driftPerYear * years) },
+        };
+    }
+
+    // ------------------------------------------------ the save (SDD-008 §4b)
+    //
+    // EVERYTHING IN THIS STORE WAS BOUGHT. A survey, a well test, a log, a core,
+    // a dry hole that re-priced a play — each cost money and moved a number, and
+    // none of it is recomputable from anything a reload has in hand. It was in no
+    // save until R20d.12.10, so a reloaded company was solvent, drilled,
+    // producing, and had forgotten every survey it had ever paid for
+    // (finding 198).
+    //
+    // IMPLEMENTED EXPLICITLY, and that is the whole reason this can exist at all.
+    // The header of this file says Apply is the only writer and that the ABSENCE
+    // of a bulk import is the enforcement. A restore is a bulk import. Behind an
+    // explicit implementation it is reachable only through a reference typed as
+    // IStateOwner — which is what a state registry holds and what nothing else in
+    // this engine does — so the surface every consumer sees is still Apply, Get,
+    // Held, ReKey, Age, and the door stays shut for them (SDD-008 §4b.2).
+    //
+    // The source is a PRIOR BELIEF SET, never truth: what a save holds got there
+    // through Apply, so restoring it cannot introduce a value the wall would have
+    // stopped.
+
+    StateKey IStateOwner.Key { get; } = new("information.beliefs");
+
+    int IStateOwner.SchemaVersion => 1;
+
+    /// <summary>Nothing has to be back before this is (SDD-013 §2b).</summary>
+    IReadOnlyList<StateKey> IStateOwner.RestoreAfter => [];
+
+    void IStateOwner.Capture(IStateWriter writer)
+    {
+        ArgumentNullException.ThrowIfNull(writer);
+
+        writer.WriteInt64("count", _held.Count);
+
+        // THE WHOLE SET, not a suffix. SDD-010 §4c splits the world into what the
+        // seed made and what the game decided, and the same split cannot be drawn
+        // here: a belief is updated IN PLACE, so a survey over a generated
+        // prospect rewrites the entry generation created rather than appending
+        // one. The learning happens inside the generated region, which is exactly
+        // what a boundary cannot express (SDD-008 §4b.1).
         for (int i = 0; i < _held.Count; i++)
         {
+            string at = Prefix(i);
             HeldBelief entry = _held[i];
-            if (entry.PropertyKind != propertyKind) continue;
 
-            _held[i] = entry with
-            {
-                Belief = entry.Belief with
-                {
-                    Sigma = entry.Belief.Sigma + driftPerYear * years,
-                },
-            };
+            writer.WriteInt64(at + "subject-kind", (long)entry.Subject.Kind);
+            writer.WriteInt64(at + "subject-id", (long)entry.Subject.Value);
+            writer.WriteString(at + "kind", entry.PropertyKind.Value);
+
+            writer.WriteDouble(at + "mu", entry.Belief.Mu);
+            writer.WriteDouble(at + "sigma", entry.Belief.Sigma);
+            writer.WriteInt64(at + "space", (long)entry.Belief.Space);
+
+            // The BEST contributor, which is what the belief carries — a cheap
+            // pass after an expensive core does not demote it (§2.1).
+            writer.WriteInt64(at + "source", (long)entry.Belief.BestSource);
+
+            writer.WriteInt64(at + "as-of-year", entry.Belief.AsOf.Year);
+            writer.WriteInt64(at + "as-of-month", entry.Belief.AsOf.Month);
         }
     }
+
+    /// <summary>
+    /// SDD-008 §4b.2. Written VERBATIM rather than replayed through
+    /// <see cref="Apply"/>: replaying would re-floor sigma, re-combine against
+    /// whatever stood there, and re-stamp the as-of date with the load date —
+    /// three silent corruptions of a number the player paid for.
+    /// </summary>
+    void IStateOwner.Restore(IStateReader reader)
+    {
+        ArgumentNullException.ThrowIfNull(reader);
+
+        // REPLACES. A restore is the belief set, not an addition to one: when a
+        // load regenerates a world, generation's initial beliefs are applied
+        // first and this overwrites them, correctly, because the save's set
+        // already contains them plus everything learned since (§4b.1).
+        _held.Clear();
+        _at.Clear();
+
+        long count = reader.ReadInt64("count");
+
+        for (long i = 0; i < count; i++)
+        {
+            string at = Prefix(i);
+
+            var subject = new EntityRef(
+                Kind(reader.ReadInt64(at + "subject-kind")),
+                (ulong)reader.ReadInt64(at + "subject-id"));
+
+            var propertyKind = new ContentId(reader.ReadString(at + "kind"));
+
+            var belief = new Belief(
+                reader.ReadDouble(at + "mu"),
+                reader.ReadDouble(at + "sigma"),
+                Space(reader.ReadInt64(at + "space")),
+                Source(reader.ReadInt64(at + "source")),
+
+                // GameDate validates its own month, so a corrupt one is refused
+                // here rather than surfacing forty ticks later as a belief that
+                // has been stale since month zero.
+                new GameDate(
+                    (int)reader.ReadInt64(at + "as-of-year"),
+                    (int)reader.ReadInt64(at + "as-of-month")));
+
+            // Two entries for one pair would leave the lookup pointing at one of
+            // them and the list holding both, which is the disagreement the
+            // header of this file keeps the two collections aligned to prevent.
+            if (!_at.TryAdd((subject, propertyKind), _held.Count))
+                throw new SaveDataFault("SDD-008 §4b.3", subject,
+                    $"the save holds two beliefs about '{propertyKind.Value}' for " +
+                    $"{subject.Kind}:{subject.Value}; one fact has one belief, and no " +
+                    "combination of two is correct");
+
+            _held.Add(new HeldBelief(subject, propertyKind, belief));
+        }
+    }
+
+    // Every enum crosses as its declared value and is CHECKED coming back. A
+    // straight cast of an out-of-range integer produces an enum with no name,
+    // which compares unequal to every member and reads as a valid value
+    // everywhere downstream — a corruption that surfaces as a belief nobody can
+    // explain rather than as a refused load.
+
+    private static EntityKind Kind(long value) =>
+        Enum.IsDefined((EntityKind)value)
+            ? (EntityKind)value
+            : throw new SaveDataFault("SDD-008 §4b.3", null,
+                $"the save names entity kind {value}, which this build does not declare");
+
+    private static BeliefSpace Space(long value) =>
+        Enum.IsDefined((BeliefSpace)value)
+            ? (BeliefSpace)value
+            : throw new SaveDataFault("SDD-008 §4b.3", null,
+                $"the save names belief space {value}, which this build does not declare");
+
+    private static Provenance Source(long value) =>
+        Enum.IsDefined((Provenance)value)
+            ? (Provenance)value
+            : throw new SaveDataFault("SDD-008 §4b.3", null,
+                $"the save names provenance {value}, which this build does not declare");
+
+    private static string Prefix(long index) =>
+        "belief." + index.ToString("D6", System.Globalization.CultureInfo.InvariantCulture) + ".";
 
     private Belief FromFirstObservation(Observation observation) =>
         new(observation.Value,

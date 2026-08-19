@@ -15,6 +15,7 @@
 // ONLY A COMPLETED ABANDONMENT DISCHARGES (SDD-007 §6). Not shutting in, not
 // walking away, not the licence expiring: the plug has to go in the hole.
 
+using OGSim.Company;
 using OGSim.Contracts;
 using OGSim.Kernel;
 
@@ -27,7 +28,8 @@ public sealed record AbandonWellCommand(
 internal sealed class AbandonWellActivity(
     ActivityTerms terms,
     FieldControl field,
-    IObligationRegistry obligations) : Activity<AbandonWellCommand>(terms)
+    IObligationRegistry obligations,
+    OGSim.Company.CompanyState company) : Activity<AbandonWellCommand>(terms)
 {
     /// <summary>
     /// NO. It removes an asset rather than leaving one — the money buys the end
@@ -36,6 +38,9 @@ internal sealed class AbandonWellActivity(
     /// by decommissioning itself.
     /// </summary>
     public override bool LeavesAnAsset => false;
+
+    /// <summary>Plugging a well is the liability it discharges, not operating cost (finding 225).</summary>
+    public override MovementCategory Spend => MovementCategory.Abandonment;
 
     public override bool OnePerTarget => true;
 
@@ -87,6 +92,26 @@ internal sealed class AbandonWellActivity(
         // open — which is what makes committing to it a decision rather than a
         // formality, and the same shape as a dry hole.
         if (!done.Succeeded) return;
+
+        // WHAT WAS SET ASIDE IS WHAT PAYS FOR IT (SDD-009 §2). The provision was
+        // accrued per barrel for as long as this well produced, and the plug is
+        // the event it was accrued FOR — so it is released here, BEFORE the
+        // obligation is discharged, because the registry is what knows how much
+        // was owed against this particular asset.
+        //
+        // Held and never released, the liability outlives the obligation it was
+        // held against and the cost hits the accounts twice: once as it was
+        // earned and again as it was spent. A company would report a loss it had
+        // already reported.
+        Money held = -company.Ledger.BalanceOf(Account.AbandonmentProvision);
+        Money owed = obligations.EstimatedCost(done.Target);
+
+        Money released = held < owed ? held : owed;
+
+        if (released > Money.Zero)
+            company.Ledger.Post(new Movement(
+                tick, Account.AbandonmentProvision, Account.Depreciation, released,
+                MovementCategory.Abandonment, Asset: done.Target, Cause: done.Cause));
 
         field.Abandon(new EntityId<ICompletion>(done.Target.Value), done.Cause);
     }

@@ -92,6 +92,25 @@ public sealed class OperationScheduler
 
     private ulong _nextOperationId = 1;
 
+    /// <summary>
+    /// The next id this scheduler will issue — SAVED STATE, not a derived value
+    /// (finding 215).
+    ///
+    /// <para><see cref="Reinstate"/> pushes the counter past every RUNNING
+    /// operation it restores, which is enough only while nothing has finished:
+    /// an operation that completed before the save is gone from the register, so
+    /// its id is not among those restored and the counter comes back LOWER than
+    /// the game it was saved from. The next job then takes an id its twin in the
+    /// original engine had already used, and two engines that agree about every
+    /// value disagree about identity.</para>
+    /// </summary>
+    public ulong NextOperationId => _nextOperationId;
+
+    /// <summary>Resumes the sequence, never rewinding it: the restored running
+    /// operations have already pushed it up, and their ids must stay unused.</summary>
+    public void ResumeIdsFrom(ulong next) =>
+        _nextOperationId = Math.Max(_nextOperationId, next);
+
     /// <param name="materialCount">How wide a composition is in this game.
     /// Operations that move mass (SDD-007 §5b) report one, and a zero movement
     /// is still a composition of a particular width — so the scheduler carries

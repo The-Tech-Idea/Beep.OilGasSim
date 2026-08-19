@@ -39,13 +39,45 @@ internal sealed class SubsurfaceState : IStateOwner
 
     private ulong _nextId;
 
+    private readonly ISouringModel _souring;
+    private readonly ContentId _rockType;
+    private readonly double _souringReferencePpm;
+
     public SubsurfaceState(
         IFluidPropertyModel fluid,
         IDriveMechanism drive,
+
+        /// <summary>SDD-012 §5's curve. Required rather than optional: a
+        /// compartment that could not answer how sour it is would make the
+        /// severity term unaskable, and law L2 forbids a dependency with a
+        /// default.</summary>
+        ISouringModel souring,
+
+        /// <summary>
+        /// WHICH ROCK, and it is held here because there is one.
+        ///
+        /// <para>§5 says the curve is content per rock type and the contract
+        /// takes one, but `RockTruth` carries no type today — this composition
+        /// ships a single rock. Holding the id here rather than inventing a
+        /// field on the rock keeps the seam honest: the day a second rock type
+        /// exists, this becomes a per-compartment read and the signature above
+        /// does not change.</para>
+        /// </summary>
+        ContentId rockType,
+
+        /// <summary>The concentration this model treats as fully sour service —
+        /// what §1's severity term is measured against.</summary>
+        double souringReferencePpm,
         double maxTickPressureDropFraction)
     {
         ArgumentNullException.ThrowIfNull(fluid);
         ArgumentNullException.ThrowIfNull(drive);
+        ArgumentNullException.ThrowIfNull(souring);
+
+        if (souringReferencePpm <= 0.0 || !double.IsFinite(souringReferencePpm))
+            throw new ContentFault("SDD-012 §5", null,
+                "the souring reference must be a positive concentration; the severity term " +
+                "divides by it");
 
         if (maxTickPressureDropFraction is <= 0.0 or >= 1.0)
             throw new ModelFault("SDD-003 §3.1", null,
@@ -55,12 +87,22 @@ internal sealed class SubsurfaceState : IStateOwner
 
         _fluid = fluid;
         _defaultDrive = drive;
+        _souring = souring;
+        _rockType = rockType;
+        _souringReferencePpm = souringReferencePpm;
         _maxTickPressureDropFraction = maxTickPressureDropFraction;
     }
 
     public StateKey Key { get; } = new("subsurface.compartments");
 
-    public int SchemaVersion => 1;
+    // 2: the compartment carries how much of its injected water was BOUGHT
+    // (SDD-012 §5's R20d.25 amendment). Souring cares which water it was, and
+    // the balance cannot tell — so the provenance is written beside the volume
+    // rather than derived from it, which is not possible after the fact.
+    public int SchemaVersion => 3;
+
+    /// <summary>Nothing has to be back before this is (SDD-013 §2b).</summary>
+    public IReadOnlyList<StateKey> RestoreAfter => [];
 
     public int Count => _compartments.Count;
 
@@ -124,6 +166,29 @@ internal sealed class SubsurfaceState : IStateOwner
             generated.Porosity, permeability, netThickness, drainageArea, rockCompressibility,
             wettability);
 
+        // ONE OWNER FOR CONNATE WATER (law L5, SDD-003 §3.1's R20d.12.18
+        // amendment, finding 206). This derived it as `1.0 - OilSaturation`
+        // while the curve carried its own `swc`, so a field generated at 0.7
+        // against a curve declaring 0.30 held 0.30000000000000004 and 0.3 — one
+        // physical fact, two doubles. The save wrote one key and restored both
+        // from it, which is how a reloaded reservoir came to produce a
+        // sixtieth of the water the original did: `krw` normalises by
+        // `(Sw − swc)`, and a producing field sits just above connate where a
+        // last-bit change in the denominator's origin is a large RELATIVE change
+        // in a near-zero cut.
+        //
+        // The rock owns it: irreducible water is capillary, and the curve cannot
+        // be evaluated without it while the compartment can simply read it.
+        if (Math.Abs(1.0 - generated.OilSaturation - wettability.ConnateWaterSaturation)
+            > ConnateAgreementTolerance)
+            throw new ContentFault("SDD-003 §3.1", null,
+                "this compartment is generated at oil saturation " +
+                $"{Number(generated.OilSaturation)}, which leaves " +
+                $"{Number(1.0 - generated.OilSaturation)} of water, and its rock curve " +
+                $"declares an irreducible {Number(wettability.ConnateWaterSaturation)}. " +
+                "At discovery, above the transition zone, those are the same number — so " +
+                "these are two statements about one reservoir and they disagree");
+
         var contacts = new ContactSet(gasOilContact, oilWaterContact);
 
         var id = new EntityId<IReservoirCompartmentEntity>(++_nextId);
@@ -145,9 +210,8 @@ internal sealed class SubsurfaceState : IStateOwner
             PoreVolume: generated.PoreVolume,
             GasInPlace: new StandardGasVolume(0.0),
             GasCapRatio: 0.0,
-            ConnateWaterSaturation: 1.0 - generated.OilSaturation,
-            WaterCompressibility: WaterCompressibility,
-            Mass: InPlace.Empty(materialCount: 0));
+            ConnateWaterSaturation: wettability.ConnateWaterSaturation,
+            WaterCompressibility: WaterCompressibility);
 
         var compartment = new ReservoirCompartment(
             id, initial, contacts, rock, DriveNamed(drive), []);
@@ -193,6 +257,89 @@ internal sealed class SubsurfaceState : IStateOwner
             : aquifer.InfluxDuring(Find(compartment).Pr, over);
     }
 
+    /// <summary>
+    /// How much more water this compartment can be given before it is back at
+    /// the pressure it was discovered at (SDD-003 §3.1's R20d.24b amendment).
+    ///
+    /// <para>THE BALANCE'S OWN CEILING, said as a volume. §3.1's bisection
+    /// searches [floor, Pi] and faults when there is no root in it — a
+    /// compartment given more replacement than it has voidage has been pushed
+    /// above discovery pressure, which this model cannot represent and correctly
+    /// refuses to guess at. A flood that ignored the ceiling would not produce a
+    /// wrong number; it would halt the tick.</para>
+    ///
+    /// <para>Every expansion term is zero at Pi, so Φ(Pi) is exactly
+    /// <c>We + Vinj − F(Pi)</c> and the room is its negation. Derived from the
+    /// balance rather than restated beside it (law L5): a second formula for the
+    /// same ceiling is a second formula to get wrong.</para>
+    ///
+    /// <para>It nets the AQUIFER off for free, which is why the flood needs no
+    /// separate influx term. A compartment held up by a strong aquifer has
+    /// little room, so a company that orders a flood on one buys almost nothing
+    /// — and that is the right answer rather than a special case: the water is
+    /// already arriving and nobody has to pay for it.</para>
+    /// </summary>
+    internal ReservoirVolume TrueVoidageRoomOf(EntityId<IReservoirCompartmentEntity> compartment) =>
+        Find(compartment).VoidageRoom(_fluid);
+
+    /// <summary>
+    /// How sour this compartment's fluid is, 0..1 (SDD-012 §5's R20d.25
+    /// amendment).
+    ///
+    /// <para>NORMALISED against a souring reference and not a raw mass fraction,
+    /// because every other term in <c>ServiceSeverity</c> is a fraction of one —
+    /// §0 divides the temperature term by a span for the same reason. H2S at ppm
+    /// scale on a sum whose base term is 1 would need a coefficient of order a
+    /// thousand, and a coefficient whose only job is to undo a unit choice is a
+    /// number nobody can review.</para>
+    ///
+    /// <para>Clamped at one: past the reference the service is as severe as this
+    /// model describes, and a curve is not evidence about concentrations beyond
+    /// the band it was fitted in.</para>
+    /// </summary>
+    internal double TrueSourFractionOf(EntityId<IReservoirCompartmentEntity> compartment) =>
+        SournessOf(Find(compartment));
+
+    /// <summary>
+    /// The SOUREST compartment in the field, 0..1.
+    ///
+    /// <para>Asked of every compartment rather than of the ones that produced,
+    /// and that is not a convenience. Sourness is a property of the ROCK: a
+    /// field whose wells were all shut in for a month is exactly as sour at the
+    /// end of it as at the start, and deriving it from a production list made it
+    /// read zero for any month the chain happened to be down — a soured
+    /// reservoir that healed itself every time a separator broke.</para>
+    ///
+    /// <para>The WORST and not an average, because the plant is one chain and
+    /// every compartment's fluid crosses it: what the metal sees is the sourest
+    /// thing arriving, and averaging would let a large sweet compartment hide a
+    /// small vicious one.</para>
+    ///
+    /// <para>Walked over the compartment LIST in issue order, never the
+    /// dictionary (rule D-5).</para>
+    /// </summary>
+    internal double TrueWorstSourFraction()
+    {
+        var worst = 0.0;
+
+        for (int i = 0; i < _compartments.Count; i++)
+        {
+            double here = SournessOf(_compartments[i]);
+            if (here > worst) worst = here;
+        }
+
+        return worst;
+    }
+
+    private double SournessOf(ReservoirCompartment compartment)
+    {
+        double ppm = _souring.HydrogenSulphidePpm(_rockType, compartment.ImportedPoreVolumes);
+
+        double fraction = ppm / _souringReferencePpm;
+
+        return fraction > 1.0 ? 1.0 : fraction;
+    }
+
     // Null MEANS no aquifer, and every compartment has an entry: a missing key
     // is a compartment that does not exist, which is a defect worth telling
     // apart from a field that simply has no water leg.
@@ -229,7 +376,8 @@ internal sealed class SubsurfaceState : IStateOwner
 
             compartment.CommitWithdrawal(
                 withdrawal.Oil, withdrawal.Gas, withdrawal.Water,
-                withdrawal.Influx, withdrawal.Injected, withdrawal.ReservoirVolume,
+                withdrawal.Influx, withdrawal.Injected, withdrawal.Imported,
+                withdrawal.ReservoirVolume,
                 _fluid, _maxTickPressureDropFraction);
         }
     }
@@ -255,6 +403,24 @@ internal sealed class SubsurfaceState : IStateOwner
     /// porous by being ignored, which is why SDD-008 §2 does not age it.</summary>
     internal double TruePorosityOf(EntityId<IReservoirCompartmentEntity> compartment) =>
         Find(compartment).Rock.Porosity;
+
+    /// <summary>
+    /// Net pay and drainage area — the other two thirds of what a well's inflow
+    /// is made of (SDD-008 §2c).
+    ///
+    /// <para>NOT a widening of what a player may see. These go into the solver,
+    /// where they decide what the well actually does; a company still learns its
+    /// field's rock by testing it. The door tells apart what is TRUE, which the
+    /// engine must compute with, and what is KNOWN, which only an observation
+    /// may say — and it had only ever been asked for the second, which is how a
+    /// well on a marginal structure came to have the productivity of a well on a
+    /// giant one (finding 170).</para>
+    /// </summary>
+    internal Length TrueNetThicknessOf(EntityId<IReservoirCompartmentEntity> compartment) =>
+        Find(compartment).Rock.NetThickness;
+
+    internal Area TrueDrainageAreaOf(EntityId<IReservoirCompartmentEntity> compartment) =>
+        Find(compartment).Rock.DrainageArea;
 
     internal Permeability TruePermeabilityOf(EntityId<IReservoirCompartmentEntity> compartment) =>
         Find(compartment).Rock.Permeability;
@@ -288,6 +454,17 @@ internal sealed class SubsurfaceState : IStateOwner
     /// </summary>
     internal SurfaceVolume TrueOilInPlaceOf(EntityId<IReservoirCompartmentEntity> compartment) =>
         Find(compartment).Initial.OilInPlace;
+
+    /// <summary>
+    /// How far apart a generated oil saturation and a declared irreducible one
+    /// may be before they are describing different reservoirs. They arrive as
+    /// independently-rounded decimals, so the two agree to about a part in 10^15
+    /// when content is coherent — this admits that and nothing wider.
+    /// </summary>
+    private const double ConnateAgreementTolerance = 1.0e-9;
+
+    private static string Number(double value) =>
+        value.ToString("R", System.Globalization.CultureInfo.InvariantCulture);
 
     private ReservoirCompartment Find(EntityId<IReservoirCompartmentEntity> compartment) =>
         _byId.TryGetValue(compartment, out ReservoirCompartment? found)
@@ -338,11 +515,38 @@ internal sealed class SubsurfaceState : IStateOwner
             writer.WriteDouble(at + "goc", compartment.Contacts.GasOilContact.Metres);
             writer.WriteDouble(at + "owc", compartment.Contacts.OilWaterContact.Metres);
 
+            // THE DRIVE, which decides which expansion terms this compartment
+            // even admits (SDD-003 §4.2b). Restoring every compartment onto the
+            // module's default drive silently changed a water-drive field into a
+            // solution-gas one — the physics of the reservoir, altered by a
+            // reload (finding 192). World generation picks a drive per
+            // compartment, so it is a property of the compartment and has to
+            // travel with it.
+            writer.WriteString(at + "drive", compartment.Drive.Id.Value);
+
+            // AND THE WATER BEHIND IT. `_aquifers` was filled by Create and by
+            // nothing else, so a restored compartment had no aquifer at all and
+            // the first tick asking for its influx faulted. Its three terms and
+            // the volume it has already delivered, because that last number IS
+            // the mechanic: an aquifer restored at zero comes back at full
+            // strength however long the field has been draining it.
+            bool hasAquifer = _aquifers[compartment.Id] is FetkovichAquifer;
+            writer.WriteInt64(at + "has-aquifer", hasAquifer ? 1L : 0L);
+
+            if (_aquifers[compartment.Id] is FetkovichAquifer aquifer)
+            {
+                writer.WriteDouble(at + "aq-j", aquifer.ProductivityIndex);
+                writer.WriteDouble(at + "aq-p0", aquifer.InitialPressure.Pascals);
+                writer.WriteDouble(at + "aq-wei", aquifer.MaximumInflux.CubicMetres);
+                writer.WriteDouble(at + "aq-we", aquifer.CumulativeInflux.CubicMetres);
+            }
+
             writer.WriteDouble(at + "np", compartment.Cumulative.Oil.CubicMetres);
             writer.WriteDouble(at + "gp", compartment.Cumulative.Gas.CubicMetres);
             writer.WriteDouble(at + "wp", compartment.Cumulative.Water.CubicMetres);
             writer.WriteDouble(at + "we", compartment.Cumulative.WaterInflux.CubicMetres);
             writer.WriteDouble(at + "vinj", compartment.Cumulative.Injected.CubicMetres);
+            writer.WriteDouble(at + "vimp", compartment.Cumulative.Imported.CubicMetres);
         }
     }
 
@@ -352,6 +556,7 @@ internal sealed class SubsurfaceState : IStateOwner
 
         _compartments.Clear();
         _byId.Clear();
+        _aquifers.Clear();
 
         long count = reader.ReadInt64("count");
         if (count < 0)
@@ -372,8 +577,7 @@ internal sealed class SubsurfaceState : IStateOwner
                 GasCapRatio: reader.ReadDouble(at + "gas-cap-ratio"),
                 ConnateWaterSaturation: reader.ReadDouble(at + "swc"),
                 WaterCompressibility: reader.ReadDouble(at + "cw"),
-                PoreVolume: new ReservoirVolume(reader.ReadDouble(at + "pv")),
-                Mass: InPlace.Empty(materialCount: 0));
+                PoreVolume: new ReservoirVolume(reader.ReadDouble(at + "pv")));
 
             var rock = new RockTruth(
                 reader.ReadDouble(at + "porosity"),
@@ -393,8 +597,15 @@ internal sealed class SubsurfaceState : IStateOwner
                 new Length(reader.ReadDouble(at + "goc")),
                 new Length(reader.ReadDouble(at + "owc")));
 
+            // ITS OWN DRIVE, resolved by name through the same door that created
+            // it. This read `_defaultDrive` and so restored every compartment
+            // onto whatever the module was composed with — a water-drive field
+            // came back as solution-gas, and the only reason it was not silent
+            // is that §4.2b's coherence check refuses a compartment carrying an
+            // influx term its drive does not admit (finding 192).
             var compartment = new ReservoirCompartment(
-                id, initial, contacts, rock, _defaultDrive, []);
+                id, initial, contacts, rock,
+                DriveNamed(new ContentId(reader.ReadString(at + "drive"))), []);
 
             compartment.RestoreTo(
                 new CumulativeProduction(
@@ -402,13 +613,31 @@ internal sealed class SubsurfaceState : IStateOwner
                     new StandardGasVolume(reader.ReadDouble(at + "gp")),
                     new SurfaceVolume(reader.ReadDouble(at + "wp")),
                     new ReservoirVolume(reader.ReadDouble(at + "we")),
-                    new ReservoirVolume(reader.ReadDouble(at + "vinj"))),
+                    new ReservoirVolume(reader.ReadDouble(at + "vinj")),
+                    new ReservoirVolume(reader.ReadDouble(at + "vimp"))),
                 contacts,
-                initial.Mass,
                 _fluid);
 
             _compartments.Add(compartment);
             _byId.Add(id, compartment);
+
+            // The aquifer, rebuilt from its own terms and seeked to what it has
+            // already given up. Absent is a legitimate answer and the common one
+            // — only a water drive admits influx at all.
+            if (reader.ReadInt64(at + "has-aquifer") == 0L)
+            {
+                _aquifers.Add(id, null);
+                continue;
+            }
+
+            var restored = new FetkovichAquifer(
+                reader.ReadDouble(at + "aq-j"),
+                new Pressure(reader.ReadDouble(at + "aq-p0")),
+                new ReservoirVolume(reader.ReadDouble(at + "aq-wei")));
+
+            restored.RestoreTo(new ReservoirVolume(reader.ReadDouble(at + "aq-we")));
+
+            _aquifers.Add(id, restored);
         }
     }
 
@@ -428,6 +657,10 @@ internal sealed record CompartmentWithdrawal(
     SurfaceVolume Water,
     ReservoirVolume Influx,
     ReservoirVolume Injected,
+
+    /// <summary>How much of <see cref="Injected"/> the company BOUGHT
+    /// (SDD-012 §5's R20d.25 amendment). Part of it, never added to it.</summary>
+    ReservoirVolume Imported,
     ReservoirVolume ReservoirVolume);
 
 /// <summary>

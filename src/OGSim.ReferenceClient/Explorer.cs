@@ -24,8 +24,13 @@ using OGSim.Kernel;
 
 namespace OGSim.ReferenceClient;
 
-/// <summary>What a campaign came to.</summary>
-public sealed record Campaign(
+/// <summary>
+/// What a drilling campaign came to.
+///
+/// <para>NOT `Campaign`, which is a scenario's chapters (SDD-014). One concept
+/// one name, and the other concept had the name first (rule N1).</para>
+/// </summary>
+public sealed record DrillingSeason(
     ObjectiveState Outcome,
     Tick Ended,
     Money Cash,
@@ -53,21 +58,46 @@ public sealed class Explorer
     private int _discoveries;
     private int _dryHoles;
 
+    // A hole is down and the answer has not come back yet.
+    private bool _awaitingResult;
+
     /// <summary>
     /// <paramref name="drillAbove"/> is the probability of success at which this
     /// company will commit a rig. Below it, the prospect is worth a survey and
     /// not a hole — which is the decision the five factors exist to inform.
     /// </summary>
-    public Explorer(Engine engine, double drillAbove, int wellTarget)
+    /// <summary>
+    /// <paramref name="buildBelow"/> is the cost index above which this company
+    /// will not commit capital (SDD-009 §6's ED4). A boom is a good time to
+    /// PRODUCE and a bad time to BUILD, and those are different verbs — a client
+    /// that cannot tell them apart pays cycle prices for everything it puts up.
+    ///
+    /// <para>`double.MaxValue` is a company that never looks at the market,
+    /// which is the comparison this exists to lose to.</para>
+    /// </summary>
+    /// <summary>
+    /// <paramref name="borrows"/> is whether this company will fund development
+    /// with debt (SDD-009 §5). A field pays for itself only after it is built,
+    /// so a company that will not borrow develops at the speed its cash allows —
+    /// which is slower, and on a declining asset slower is less.
+    /// </summary>
+    public Explorer(
+        Engine engine, double drillAbove, int wellTarget, double buildBelow, bool borrows)
     {
         ArgumentNullException.ThrowIfNull(engine);
 
         _engine = engine;
         _drillAbove = drillAbove;
         _wellTarget = wellTarget;
+        _buildBelow = buildBelow;
+        _borrows = borrows;
     }
 
-    public Campaign Play(int months)
+    private readonly bool _borrows;
+
+    private readonly double _buildBelow;
+
+    public DrillingSeason Play(int months)
     {
         for (var month = 0; month < months; month++)
         {
@@ -83,14 +113,14 @@ public sealed class Explorer
 
             _engine.Pipeline.AdvanceTick();
 
-            Account(wellsBefore);
+            Resolve(wellsBefore);
 
             if (_engine.ReadModel!.Outcome != ObjectiveState.Pending) break;
         }
 
         FieldReadModel final = _engine.ReadModel!;
 
-        return new Campaign(
+        return new DrillingSeason(
             final.Outcome, final.Tick, final.Cash,
             _surveyed, _drilled.Count, _discoveries, _dryHoles);
     }
@@ -114,7 +144,10 @@ public sealed class Explorer
             if (_engine.Commands.Submit(
                     new DrillWellCommand(
                         new EntityId<IProspect>(best.Prospect.Value), WellDepth)) is Accepted)
+            {
                 _drilled.Add(best.Prospect.Value);
+                _awaitingResult = true;
+            }
 
             return;
         }
@@ -175,6 +208,37 @@ public sealed class Explorer
             }
         }
 
+        // DRAW ON THE FACILITY BEFORE THE CASH RUNS OUT. A field pays for
+        // itself only once it is built, so a company waiting to afford the next
+        // well out of revenue is waiting on the very thing the well would
+        // provide. The bank has already booked the reserves; the headroom is
+        // there to be used.
+        //
+        // Against a FLOOR rather than at zero: a company that draws only when it
+        // is broke has no margin for the month the market turns, and interest is
+        // charged whether or not it does.
+        if (_borrows && seen.Cash < WorkingCash)
+        {
+            // NOT TO THE LIMIT. A borrowing base falls as reserves deplete —
+            // they are what is LEFT — so a company drawn to the last cent is in
+            // breach the month after, every time, and lives in a cure window it
+            // never leaves. Prudence here is not caution, it is the difference
+            // between using a facility and being owned by one.
+            Money ceiling = Money.RoundHalfEven(
+                seen.Borrowing.BorrowingBase.Cents * PrudentDrawFraction);
+
+            Money headroom = ceiling - seen.Debt;
+
+            if (headroom > Money.Zero) _engine.Commands.Submit(new BorrowCommand(headroom));
+        }
+
+        // WAIT FOR THE YARD TO BE QUIET. Plant bought in a boom costs what the
+        // boom says it costs, and the read model carries the index that says so
+        // — which is the whole reason it is on the surface. A field that is
+        // producing loses very little by deferring a vessel a few months, and a
+        // company that never defers pays a premium on everything it ever builds.
+        if (seen.CostIndex > _buildBelow) return;
+
         _engine.Commands.Submit(new InstallSeparatorCommand());
 
         if (seen.Cash > ExportLineWorthBuildingAt)
@@ -194,18 +258,38 @@ public sealed class Explorer
     /// <summary>
     /// Read the result off the surface: a well appeared, or it did not.
     ///
-    /// <para>A host cannot see the rock. What it can see is whether it now owns
-    /// a wellbore it did not own last month, which is exactly how a real company
-    /// learns the same thing — the news arrives as an asset or as a bill.</para>
+    /// <para>A HOST CANNOT SEE THE ROCK. What it can see is whether it now owns
+    /// a wellbore it did not own last month, and that is exactly how a real
+    /// company learns the same thing — the news arrives as an asset or as a
+    /// bill. Nothing here asks the engine what was down there.</para>
+    ///
+    /// <para>Read only once the rig is free, because a drill takes months and a
+    /// well that has not finished is not yet a dry hole.</para>
     /// </summary>
-    private void Account(int wellsBefore)
+    private void Resolve(int wellsBefore)
     {
-        var wellsNow = _engine.ReadModel!.Wells;
+        if (!_awaitingResult) return;
+        if (_engine.ReadModel!.ActivitiesRunning > 0) return;
 
-        if (wellsNow > wellsBefore) _discoveries++;
+        _awaitingResult = false;
+
+        if (_engine.ReadModel!.Wells > wellsBefore) _discoveries++;
+        else _dryHoles++;
     }
 
     private static Length WellDepth { get; } = new(2000.0);
 
     private static Money ExportLineWorthBuildingAt { get; } = Money.FromMillions(100.0);
+
+    /// <summary>
+    /// How much of the base a company will actually draw. Two thirds leaves room
+    /// for the base to fall as the field empties without putting the facility
+    /// into breach — which it does every month, because reserves are what
+    /// remains rather than what was ever there.
+    /// </summary>
+    private const double PrudentDrawFraction = 0.66;
+
+    /// <summary>The cash a company keeps in front of it. Below this it draws on
+    /// the facility rather than waiting for revenue it has not earned yet.</summary>
+    private static Money WorkingCash { get; } = Money.FromMillions(30.0);
 }

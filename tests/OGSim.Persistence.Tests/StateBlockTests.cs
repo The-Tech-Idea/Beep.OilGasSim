@@ -18,6 +18,8 @@ public sealed class StateBlockTests
 
         public int SchemaVersion => schemaVersion;
 
+        public IReadOnlyList<StateKey> RestoreAfter => [];
+
         public string Text { get; set; } = "";
         public long Whole { get; set; }
         public double Real { get; set; }
@@ -153,6 +155,8 @@ public sealed class StateBlockTests
         public StateKey Key { get; } = new("twice");
 
         public int SchemaVersion => 1;
+
+        public IReadOnlyList<StateKey> RestoreAfter => [];
 
         public void Capture(IStateWriter writer)
         {

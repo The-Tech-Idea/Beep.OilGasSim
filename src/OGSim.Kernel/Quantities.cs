@@ -187,6 +187,19 @@ public static class PhysicalConstants
     /// <summary>Reference water density for SG, kg/m³. SDD-001 §1.</summary>
     public const double WaterDensityKgPerM3 = 1000.0;
 
+    /// <summary>
+    /// Days in a year on the 30/360 calendar — twelve months of exactly
+    /// <see cref="Duration.DaysPerTick"/> (SDD-001 §3).
+    ///
+    /// <para>Here rather than at a call site because a per-year rate applied over
+    /// a tick needs the ratio, and a rate divided by a hand-written 360 is the
+    /// same constant written twice: the day the calendar changes, one of them
+    /// moves. Real years have 365 days and this engine's do not, deliberately —
+    /// the /30ths segment grid is exact only because every month is the same
+    /// length.</para>
+    /// </summary>
+    public const double DaysPerYear = 360.0;
+
     /// <summary>Standard gravity, m/s². SDD-003 §6.2 (hydrostatic term).</summary>
     public const double GravityMPerS2 = 9.80665;
 

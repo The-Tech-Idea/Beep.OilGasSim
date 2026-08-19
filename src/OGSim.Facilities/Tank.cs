@@ -29,7 +29,7 @@ public sealed record TankTier(
 /// </summary>
 public sealed class Tank : IFlowElement
 {
-    private readonly TankTier _tier;
+    private TankTier _tier;
     private readonly int _materialCount;
 
     private MaterialInventory _held;
@@ -69,7 +69,76 @@ public sealed class Tank : IFlowElement
     public Allocation Provenance => _provenance;
 
     /// <summary>Remaining capacity, kg. Zero is <c>tank.full</c>.</summary>
+    /// <summary>What is fitted now.</summary>
+    public TankTier Tier => _tier;
+
+    /// <summary>
+    /// Build more storage (SDD-006 §0c, §5). The socket keeps its identity and
+    /// what is already in it; the tank farm around it got bigger.
+    ///
+    /// <para>Only ever upward. Shrinking below what is HELD would leave a tank
+    /// containing more than it can contain, and the ullage that reaches back
+    /// down the chain would be negative — a constraint that pushes production
+    /// rather than limiting it.</para>
+    /// </summary>
+    public void Fit(TankTier tier)
+    {
+        ArgumentNullException.ThrowIfNull(tier);
+
+        if (tier.Capacity.Kilograms < _held.Total.Kilograms)
+            throw new ContentFault("SDD-006 §5", null,
+                $"tank tier '{tier.Id.Value}' holds {tier.Capacity.Kilograms} kg and the " +
+                $"tank already contains {_held.Total.Kilograms}; storage is never made " +
+                "smaller than what is in it");
+
+        _tier = tier;
+    }
+
     public Mass Ullage => new(Math.Max(0.0, _tier.Capacity.Kilograms - _held.Total.Kilograms));
+
+    // What earlier segments of THIS tick have already been allowed to send.
+    // Commit happens once, after every segment has solved (SDD-002 §9), so
+    // between them the tank holds no more mass than it did at the open — and
+    // without this each segment would be offered the same empty space twice.
+    private double _promisedKilograms;
+
+    /// <summary>
+    /// What a segment's solve was allowed to send here, told to the tank before
+    /// the next segment solves.
+    ///
+    /// <para>NOT A RECEIPT. Nothing enters the inventory until stage 6, and
+    /// provenance is not blended here: this is the room reserved against a
+    /// commit that has not happened yet, which is the difference between a tank
+    /// that is full and a tank that is about to be.</para>
+    /// </summary>
+    public void Promise(Mass mass) => _promisedKilograms += mass.Kilograms;
+
+    /// <summary>Start of a tick: last tick's promises were either committed or
+    /// abandoned with it, and either way they are not this tick's.</summary>
+    public void ForgetPromises() => _promisedKilograms = 0.0;
+
+    /// <summary>
+    /// Puts a restored tank back to what it is holding (SDD-006 §8b, R20d.12).
+    ///
+    /// <para>A tank's contents are OIL A COMPANY OWNS — inventory on its balance
+    /// sheet and the ullage every export decision is taken against — so a
+    /// reloaded tank that came back empty would hand back stock and free space
+    /// that was already spoken for.</para>
+    ///
+    /// <para>The PROMISED mass is not restored and is not saved: it is cleared
+    /// at the top of every tick before anything reserves against it, so it is
+    /// scratch within a month rather than state across one (SDD-013 §4's
+    /// never-saved rule).</para>
+    ///
+    /// <para>Separate from <see cref="Receive"/> for the reason every restore in
+    /// this engine is separate from its advance: restoring is allowed to jump,
+    /// and only before the engine ticks.</para>
+    /// </summary>
+    public void RestoreTo(MaterialInventory held, Allocation provenance)
+    {
+        _held = held;
+        _provenance = provenance;
+    }
 
     /// <summary>The ports by name, so a caller wiring the chain never writes a
     /// bare index.</summary>
@@ -135,7 +204,13 @@ public sealed class Tank : IFlowElement
         double seconds = input.Segment.DurationDays * SecondsPerDay;
         if (seconds <= 0.0) return [];
 
-        double acceptable = Ullage.Kilograms / seconds;
+        // The room LEFT, not the room at the tick's open. A month that splits
+        // into two segments solves this twice, and a tank that offered its whole
+        // ullage to each would let the pair commit twice what it can hold —
+        // which stage 6's own invariant then refused, correctly, by halting the
+        // engine.
+        double room = Math.Max(0.0, Ullage.Kilograms - _promisedKilograms);
+        double acceptable = room / seconds;
         double arriving = input.Inlets.Count > 0
             ? input.Inlets[0].MassRates.Total.KgPerSecond
             : 0.0;

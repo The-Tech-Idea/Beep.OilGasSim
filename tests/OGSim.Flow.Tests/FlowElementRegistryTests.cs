@@ -166,4 +166,67 @@ public sealed class FlowElementRegistryTests
 
         public IReadOnlyList<AuditEntry> Query(AuditQuery query) => [];
     }
+
+    // ------------------------------------------- the route law (SDD-002 §5)
+
+    /// <summary>
+    /// REMOVING THE MIDDLE SHUTS IN WHAT WAS BEHIND IT. Filtering alone leaves
+    /// the well feeding a pipe that ends nowhere, and the solver accepts that
+    /// happily — measured: a 50 kg/s source whose sink was withdrawn still
+    /// sources its 50 kg/s and delivers it to no one. In the shipped engine that
+    /// is the reservoir being drained for nothing, because stage 6 publishes the
+    /// withdrawal whether or not a barrel reached custody.
+    /// </summary>
+    [Fact]
+    public void R20d22V1_losing_an_element_shuts_in_what_fed_it()
+    {
+        FlowElementRegistry registry = Chain();
+
+        IReadOnlyList<EntityRef> routed = registry.Routed([Ref(1), Ref(3)]);
+
+        Assert.DoesNotContain(Ref(1), routed);
+
+        // The TANK stays: the law propagates upstream, and an element with an
+        // unfed inlet is a normal thing rather than a broken one.
+        Assert.Contains(Ref(3), routed);
+    }
+
+    /// <summary>
+    /// AND IT PROPAGATES ALL THE WAY. One pass would leave a three-deep chain
+    /// half shut in, which is the same defect one link further along.
+    /// </summary>
+    [Fact]
+    public void R20d22V1_the_shut_in_reaches_the_top_of_the_chain()
+    {
+        FlowElementRegistry registry = Chain();
+
+        Assert.Empty(registry.Routed([Ref(1), Ref(2)]));
+    }
+
+    /// <summary>
+    /// A WHOLE FIELD IS ROUTED, which is the case that runs every tick of every
+    /// game in which nothing has broken. If the law could not say yes it would
+    /// be a way to lose a field rather than a way to keep one.
+    /// </summary>
+    [Fact]
+    public void R20d22V1_a_field_with_nothing_broken_is_left_alone()
+    {
+        FlowElementRegistry registry = Chain();
+
+        Assert.Equal(3, registry.Routed([Ref(1), Ref(2), Ref(3)]).Count);
+    }
+
+    /// <summary>
+    /// CLOSURE AND NOT REACHABILITY. The tank is terminal and must survive being
+    /// asked; a reachability rule that looked for an outgoing connection in the
+    /// VIEW could not tell it from an element left dangling, and would shut in
+    /// the entire field every tick.
+    /// </summary>
+    [Fact]
+    public void R20d22V1_a_terminal_element_is_not_mistaken_for_a_dangling_one()
+    {
+        FlowElementRegistry registry = Chain();
+
+        Assert.Contains(Ref(3), registry.Routed([Ref(1), Ref(2), Ref(3)]));
+    }
 }

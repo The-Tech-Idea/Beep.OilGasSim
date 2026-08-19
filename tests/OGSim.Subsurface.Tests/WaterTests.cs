@@ -249,6 +249,7 @@ public class BreakthroughTests
                     new Pressure(500.0), new Pressure(60e6),
                     Temperature.FromCelsius(10.0), Temperature.FromCelsius(180.0))),
             new WaterDrive(),
+            Souring.SweetRock, Souring.TheRock, Souring.SouringReference,
             maxTickPressureDropFraction: 0.4);
 
         return state;
@@ -327,6 +328,7 @@ public class BreakthroughTests
                     new SurfaceVolume(0.0),
                     Influx: new ReservoirVolume(600.0),
                     Injected: new ReservoirVolume(0.0),
+                    Imported: new ReservoirVolume(0.0),
                     ReservoirVolume: new ReservoirVolume(1_200.0)),
             ]);
 
@@ -359,9 +361,12 @@ public class BreakthroughTests
                     new SurfaceVolume(0.0),
                     Influx: new ReservoirVolume(0.0),
                     Injected: new ReservoirVolume(0.0),
+                    Imported: new ReservoirVolume(0.0),
                     ReservoirVolume: new ReservoirVolume(120.0)),
             ]);
 
         Assert.Equal(0.0, state.TrueWaterCutOf(id, Water, Oil), precision: 12);
     }
+
+
 }

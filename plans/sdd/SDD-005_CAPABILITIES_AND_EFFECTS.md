@@ -42,6 +42,83 @@ public interface ICapabilitySet
 mechanism rivals use with their personality lag (SDD-011 §2.1). "Everything
 eventually becomes standard practice" is a date, not an event.
 
+> **R20d.10b amendment. The era gate is a CALENDAR check and is not part of
+> `Requirements`.**
+>
+> §2's `Requirements` block carries `Tech`, `MinDetectClass` and `Envelopes` —
+> and no era. That is correct and worth stating, because the obvious reading is
+> that `IGatingValidator` should answer the whole question and it cannot: a
+> requirement is something a company can go and GET, and every `MissingItem` the
+> validator returns names an action — acquire this node, rent it, get a bigger
+> rig. **An era has not arrived yet and no amount of spending changes that**, so
+> folding it into the validator would produce a "missing item" with no remedy and
+> teach a player that a refusal is a shopping list when this one is a date.
+>
+> So an equipment tier is purchasable when **both** hold, checked in two places
+> because they are two kinds of fact:
+>
+> - its `availableFromEra` has begun — a comparison against the calendar of the
+>   amendment below, made where the purchase is refused;
+> - its `requiresTech` is held or rented — `Requirements.Tech` through the one
+>   validator, as §2 already specifies.
+>
+> **The refusal names the era and the year**, per R17 §2.6b's rule that a domain
+> reason renders straight to the player: *this equipment is not invented yet, and
+> here is when it will be* is actionable — a player waits, or plans around it —
+> where *requirements not met* is not.
+
+> **R20d.10 amendment. What "era start" IS, and why the era is DERIVED.**
+>
+> §2 above prices diffusion at `era start + diffusionLag(node)` and no document
+> says when an era starts, so the one input the formula needs had no source.
+> [TECH_TREE](../catalog/TECH_TREE.md) states it and always has — *Eras: E1
+> 1950s–60s · E2 70s–80s · E3 90s–2000s · E4 2010s+* — so the boundaries are
+> **1950, 1970, 1990, 2010**, transcribed from the registry rather than chosen
+> here. They are a calendar, passed as a dependency like every other content
+> table; a game that starts in 1965 begins in E1 and reaches E3 inside a
+> forty-year run.
+>
+> **The era is a FUNCTION OF THE DATE and is therefore not state.** It was a
+> stored field on `CapabilityState`, captured into the save and set only by the
+> constructor and by `Restore` — which is law L5's mirrored derived value, and it
+> is why a 1965→2005 campaign stayed in E1 for forty years: nothing ever wrote
+> it, and nothing could, because there was no calendar to write from.
+>
+> This section's own note said the era is captured "because `Acquire` checks it:
+> replaying a late-era technology against a restored early era would refuse a save
+> that was legitimate when written." **Deriving it removes that hazard rather than
+> creating it** — a save restores at the tick it was taken at, so the derived era
+> is the era that authorised the acquisition, by construction. The stored copy was
+> protecting against a divergence only the stored copy could produce.
+>
+> **Diffusion is a per-tick pass, and it is what makes the calendar visible.**
+> Nothing called `ApplyDiffusion`, so the third acquisition route existed for its
+> unit tests alone. It runs with the era and its start tick, and grants what the
+> registry's Routes column marks **D** once the lag has elapsed — no draws, and
+> the same date in every game with the same start.
+>
+> **It runs at `StageId.Company` (11), NOT stage 2 — corrected here after
+> shipping it at the wrong one.** This amendment first placed `DiffusionStage`
+> beside weather at stage 2, reasoning by analogy — "the world does this to the
+> company" — without checking it against §4.2 two sections below, which already
+> states the correct answer and the reason for it: *"applied when acquisition
+> completes (a stage-11 state change), taking effect next tick — technology
+> never creates a segment boundary (R17 §2.7)."* At stage 2 a node diffusing
+> this month would be visible to stage 4's segmentation THIS SAME month; at
+> stage 11, after the solve has already run on last month's holdings, a newly
+> diffused node is genuinely a NEXT-tick fact, which is what "next tick" in
+> §4.2 has always meant. Currently unobservable — nothing yet reads
+> `EffectiveEnvelope` from inside a tick — which is exactly why it went
+> uncaught rather than evidence it did not matter: the first envelope-reading
+> consumer would have inherited the wrong timing silently.
+>
+> **The scheduler is told what the company actually holds.** It took
+> `availableCapabilities: []` at both call sites: a hardcoded empty list standing
+> in for `TechnologyState.Acquired`, so `Requirements.RequiredCapabilities` could
+> neither refuse nor permit anything. No shipped template declares a requirement
+> today, so this changes no refusal now and is the difference between a gate that
+> is open and a gate that is not connected.
+
 > **R20c.9 review corrections (findings 128, 129).** Writing the registry as
 > loadable content found the `tech` kind unspecified and diffusion ignoring the
 > one column that limits it.
@@ -280,6 +357,33 @@ public interface IEffectState
 capability-blind (§3 rule 2): a model asks what its effective envelope, plugin
 or parameter *is*, and has no way to ask who contributed it or whether the
 company owns a technology.
+
+> **R20d.10e amendment. Technology's effects are RECOMPUTED too, not applied
+> incrementally — and the two produce the same answer.**
+>
+> `TechnologyState.ActiveEffects()` already existed: every effect of every held
+> node, in acquisition order. `EffectState.Apply` was checked rather than
+> assumed to need calling once per acquisition: its three combinators are each
+> idempotent under a repeat — `MoveEnvelope` takes `Math.Max`/`Math.Min` against
+> the stored value (the SAME contribution twice leaves it unchanged, never
+> doubled), `UnlockOption` adds to a `HashSet` (`Add` on an existing member is a
+> no-op), `SetModelSelection`/`SetModelParameter` are plain dictionary
+> assignment (re-assigning the same value is a no-op). Nothing in this design
+> ever REVOKES a technology, so there is no case where an old contribution
+> needs to be withdrawn either.
+>
+> Given that, calling `effects.Apply(technology.ActiveEffects())` **every tick**
+> at stage 11 is equivalent in outcome to applying only the newly acquired
+> node's effects incrementally, and simpler: no diff against the previous
+> tick's holdings, no second list to keep in step. **"Next tick" is what the
+> STAGE PLACEMENT already guarantees** (this section's own words: technology
+> "never creates a segment boundary") — the solve at stage 5 has already run
+> against last month's holdings by the time stage 11 recomputes this month's,
+> so a full recompute at stage 11 arrives exactly as late as an incremental
+> apply would have. The distinction this section drew between "recomputed" and
+> "applied... taking effect next tick" is about where each source's effects
+> land in the tick, not about how the combinators inside `EffectState` are
+> invoked.
 
 ## 5. Detectability consumption
 

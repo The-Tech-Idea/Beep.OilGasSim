@@ -131,6 +131,17 @@ public sealed class TechnologyContentKind : IContentKind
             ? ParseEnum<DetectClass>(detect)
             : null;
 
+        // Effects is hardcoded empty (finding 241, SDD-005 §4.2's R20d.10e
+        // amendment) — no SDD specifies a JSON grammar for the four-record
+        // Effect vocabulary, and no shipped node needs one yet (SDD-005's own
+        // R20c.9 correction: a node carries an effect only where it changes "a
+        // number nobody bought", true of at most Arctic operations among the
+        // sixty-five shipped nodes, and that node's consumer — an
+        // environment-side restriction and an EnvelopeCheck on a real
+        // operation — does not exist either). Writing the parser before a real
+        // consumer exists would be the same defect this hardcode already is,
+        // moved one layer down (CLAUDE.md rule 6). Build it when a phase adds
+        // the first technology that genuinely needs one.
         return new TechnologyDefinition(id, era, lag, prerequisites, routes, grants, []);
     }
 

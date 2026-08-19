@@ -130,6 +130,61 @@ public sealed record FieldPosition(
 /// screen, and every entry in it was paid for by an activity that completed
 /// (R20d.7).</para>
 /// </summary>
+/// <summary>
+/// What the waterflood is doing (SDD-003 §3.1d, SDD-017 §2).
+///
+/// <para><c>Headroom</c> is the actionable one: it is what the injector will
+/// still take this month once the produced water has had its share, so a flood
+/// asking for more than that is being clamped and the answer is to unplug the
+/// well rather than to raise the target.</para>
+/// </summary>
+/// <summary>
+/// The weather a region just had, and what the process says about the week
+/// ahead (SDD-016 §1, §4).
+///
+/// <para>Severity and temperature are two content curves over ONE state, which
+/// is why a rough day is also a cold one here rather than by coincidence.</para>
+///
+/// <para><c>Forecast</c> is the analytic predictive distribution of the same
+/// AR(1) — <c>Expected</c> is ρ^h·x and <c>Sigma</c> grows with the horizon
+/// because ρ^h falls. There is no second forecast model to drift from the
+/// generator, so a host cannot show an optimism the engine does not share.</para>
+/// </summary>
+public sealed record WeatherView(
+    double Severity,
+    Temperature Ambient,
+    OGSim.Environment.Forecast Forecast);
+
+public sealed record WaterFloodView(
+    double Target,
+    ReservoirVolume Imported,
+    ReservoirVolume Headroom,
+
+    /// <summary>
+    /// How sour the field has become, 0..1 against the souring reference
+    /// (SDD-012 §5).
+    ///
+    /// <para>ON THE FLOOD VIEW, because that is what caused it. Sea water
+    /// carries the sulphate the bacteria eat, so souring is the delayed half of
+    /// the price of a flood — and a player who saw only "equipment is failing
+    /// more" would be watching a symptom with no cause on the screen beside
+    /// it.</para>
+    ///
+    /// <para>A BELIEF-SIDE number in the making. It is truth today, like the
+    /// rest of this view, and becomes a produced-fluid sample the day
+    /// observations carry composition (SDD-012 §5).</para>
+    /// </summary>
+    double Sourness);
+
+/// <summary>
+/// R21 §2.4b — what the field holds and what room is left (R21.6).
+///
+/// <para>Both, because either alone is unreadable: a mass held says nothing
+/// about whether the field is about to shut itself in, and ullage alone says
+/// nothing about what is waiting to be sold.</para>
+/// </summary>
+public readonly record struct StorageView(Mass Held, Mass Ullage);
+
 public sealed record FieldReadModel(
     Tick Tick,
     GameDate Date,
@@ -169,7 +224,162 @@ public sealed record FieldReadModel(
     /// a prospect is something a world GENERATED and a scenario that placed its
     /// reservoir directly has nothing to explore.</para>
     /// </summary>
-    IReadOnlyList<ProspectView> Prospects)
+    IReadOnlyList<ProspectView> Prospects,
+
+    /// <summary>
+    /// What a tonne of oil fetches this month (SDD-009 §6).
+    ///
+    /// <para>A read model that showed a company its cash and not the price it
+    /// was earning would let a player watch revenue fall and be unable to tell a
+    /// declining field from a falling market — which are the same number and
+    /// opposite decisions: one says build, the other says wait.</para>
+    /// </summary>
+    Money OilPrice,
+
+    /// <summary>
+    /// What a day of work costs, against the opening year (SDD-009 §6's ED4).
+    ///
+    /// <para>Carried because with a moving index the CATALOGUE price is no
+    /// longer the price: a player told a well costs eight million and charged
+    /// eleven has been misled by the surface, not by the market. A host
+    /// multiplies a listed cost by this to show what it would actually be
+    /// quoted.</para>
+    /// </summary>
+    double CostIndex,
+
+    /// <summary>
+    /// What the company can still get out and sell at a profit (SDD-009 §4) —
+    /// the number an oil company is actually valued on.
+    ///
+    /// <para>Cash and production between them cannot say this. A field run to
+    /// exhaustion improves both right up to the month it stops, and a player
+    /// watching only those would see a business getting healthier as it ran
+    /// out.</para>
+    ///
+    /// <para>It moves with the MARKET as well as with the rock, because reserves
+    /// end where production stops paying: a crash raises the economic limit,
+    /// the tail of the decline falls below it, and the barrels beyond stop being
+    /// reserves without having gone anywhere.</para>
+    /// </summary>
+    /// <summary>
+    /// What the weather is doing, and what it is expected to do (SDD-016 §1, §4).
+    ///
+    /// <para>Published rather than held, because a player deciding whether to
+    /// start a month-long job in November needs the same number the engine will
+    /// use. The forecast is the analytic predictive distribution of the same
+    /// process, so a host cannot be shown an optimism the engine does not
+    /// share.</para>
+    /// </summary>
+    WeatherView Weather,
+
+    ReservesEstimate Reserves,
+
+    /// <summary>
+    /// Additions over the trailing twelve months against what was produced in
+    /// them — IR2's standing indicator for the liquidation spiral (SDD-009 §4).
+    ///
+    /// <para>Reported on PROVED, because that is what the company's own lender
+    /// redetermines the borrowing base from: a ratio on 2P would include volumes
+    /// no bank will lend against, so a company could show replacement above one
+    /// while its facility shrank every quarter.</para>
+    ///
+    /// <para>NULL means not defined rather than zero — under twelve months of
+    /// history there is no window to measure, and a company that produced
+    /// nothing has an empty denominator. Reporting 0.0 in either case would
+    /// state a replacement failure that did not happen.</para>
+    /// </summary>
+    double? ReserveReplacementRatio,
+
+    /// <summary>
+    /// What the bank will lend and at what price (SDD-009 §5). A company that
+    /// could not see its own borrowing base could not tell whether a development
+    /// was fundable, which is the decision the facility exists to enable.
+    /// </summary>
+    BorrowingTerms Borrowing,
+
+    /// <summary>
+    /// Where the company stands against its covenant. The CURE WINDOW is the
+    /// point: a breach starts a clock rather than calling the loan, and a player
+    /// who could not see the clock would experience the amortisation as an
+    /// ambush rather than as the consequence of ignoring a warning.
+    /// </summary>
+    CovenantStatus Covenant,
+
+    /// <summary>How much is drawn.</summary>
+    Money Debt,
+
+    /// <summary>
+    /// Everything this company has ever burned, and its record (SDD-012 §4).
+    ///
+    /// <para>Both, because one without the other cannot be acted on. The mass
+    /// says what is happening; the standing says what it is costing, and a
+    /// player charged a spread they could not trace to a cause would be paying a
+    /// penalty they had no way to answer — which is the whole of finding
+    /// 172.</para>
+    /// </summary>
+    Mass Flared,
+
+    double EsgStanding,
+
+    /// <summary>
+    /// The flood: what was asked for, what was bought, and what room is left
+    /// (SDD-003 §3.1d's R20d.24 amendment).
+    ///
+    /// <para>All three, because a target MET and a target CLAMPED are different
+    /// situations with opposite answers — the first says the flood is working
+    /// and the second says the injector is full, and what to do about the second
+    /// is an acid job rather than a bigger number. A player shown only the
+    /// target could not tell which they had.</para>
+    /// </summary>
+    WaterFloodView Flood,
+
+    /// <summary>
+    /// What the field is HOLDING and what room is left to hold it — R21 §2.4b's
+    /// "tank levels and ullage", which that table has required since it was
+    /// written and nothing published (R21.6).
+    ///
+    /// <para>A cash balance says what the company has been PAID; this says what
+    /// it has produced and not yet sold. The two are different questions and
+    /// only the first was answerable, so a host could not distinguish a company
+    /// that is poor from one that is merely illiquid — which is the same gap
+    /// finding 190 records from the cash-flow side, and the reason any mechanic
+    /// that defers revenue currently reads as a failure (SDD-006 §7a.2).</para>
+    ///
+    /// <para>Ullage rather than capacity, because what a player acts on is the
+    /// room left: a tank at 90% and a tank at 10% of a vessel ten times the size
+    /// hold the same oil and are in completely different trouble.</para>
+    /// </summary>
+    StorageView Storage,
+
+    /// <summary>
+    /// WHERE THE MONEY WENT THIS MONTH, by cause — R21 §2.4b's "cost and revenue
+    /// by cause for the period", and finding 190's other half.
+    ///
+    /// <para>The surface published a cash BALANCE and nothing about the period,
+    /// so nothing could tell a month of investment from a month of decline. The
+    /// reference client plugged fields for being under repair, and could not
+    /// have known better: falling cash looks the same whether a company is
+    /// dying or building.</para>
+    ///
+    /// <para>In `CostLedger.Causes` order, one entry per cause including the
+    /// zeroes — a host renders a row that reads nothing this month, and an
+    /// absent row would be indistinguishable from a cause that does not
+    /// exist.</para>
+    /// </summary>
+    IReadOnlyList<Money> CashByCause,
+
+    /// <summary>
+    /// WHAT THE COMPANY IS DOING — R21 §2.4b row 15, using SDD-017 §2's
+    /// `OperationView`, which has been specified since that document was written
+    /// and filled by nothing (R21.6).
+    ///
+    /// <para>`ActivitiesRunning` counted them. A count cannot answer the question
+    /// the row exists for — WHICH operations, how far along, and what each has
+    /// cost so far — so a player could see the rig was busy and not whether a
+    /// well was nearly down or barely started, and could not tell an operation
+    /// that had stalled from one progressing normally.</para>
+    /// </summary>
+    IReadOnlyList<OperationView> Operations)
 {
     /// <summary>Where the chain is jammed, if anywhere — the elements that
     /// refused production this tick.</summary>
@@ -199,7 +409,9 @@ public sealed record FieldReadModel(
         && Insolvent == other.Insolvent && Progress == other.Progress
         && Structural.Equal(Beliefs, other.Beliefs)
         && Structural.Equal(Chain, other.Chain)
-        && Structural.Equal(Wellbores, other.Wellbores);
+        && Structural.Equal(Wellbores, other.Wellbores)
+        && Structural.Equal(CashByCause, other.CashByCause)
+        && Structural.Equal(Operations, other.Operations);
 
     public override int GetHashCode() =>
         HashCode.Combine(Tick, Date, Cash, Wells, ActivitiesRunning, ProducedThisTick,
@@ -223,8 +435,24 @@ internal sealed class FieldProjection(
     ActivityState activities,
     IBeliefStore beliefs,
     WorldState world,
-    OGSim.Information.ProspectRisks risks)
+    OGSim.Information.ProspectRisks risks,
+    ReservesBook reserves,
+    Bank bank,
+    ReserveHistory history,
+    OGSim.Environment.WeatherState weather,
+    EsgAssessment esg)
 {
+    /// <summary>The one region this world has (SDD-016 §1).</summary>
+    private const int FieldRegion = 0;
+
+    /// <summary>The last day of the month just closed: the projection is built at
+    /// the close, so "today" is day 29 of the thirty just simulated.</summary>
+    private const int DayJustEnded = (int)Duration.DaysPerTick - 1;
+
+    /// <summary>A week ahead — long enough to matter to a decision about starting
+    /// a job, short enough that ρ^h has not collapsed to the seasonal mean.</summary>
+    private const int ForecastHorizonDays = 7;
+
     public FieldPosition Take(Tick tick, GameDate date, bool insolvent) =>
         new(tick, date, company.Ledger.Cash, field.WellCount, activities.InProgress,
             loop.ProducedThisTick, insolvent);
@@ -232,7 +460,30 @@ internal sealed class FieldProjection(
     public FieldReadModel Publish(FieldPosition position, ScenarioProgress progress) =>
         new(position.Tick, position.Date, position.Cash, position.Wells,
             position.ActivitiesRunning, position.ProducedThisTick, position.Insolvent,
-            progress, Project(beliefs), loop.Chain(), field.Wells(), Prospects());
+            progress, Project(beliefs), loop.Chain(), field.Wells(), Prospects(),
+            loop.Market.OilPrice, loop.Market.CostIndex,
+            // WHAT THE FIELD RAN AT, taken from the loop rather than recomputed
+            // here. This asked `TemperatureOn(lastDayOfTheMonth)` while the solve
+            // used a per-segment mean, so a host was shown a temperature the
+            // field never ran at — one fact with two owners (L5), and the kind
+            // that never fails a test because both answers are plausible.
+            new WeatherView(
+                loop.SeverityThisTick,
+                loop.AmbientThisTick,
+                weather.Look(FieldRegion, ForecastHorizonDays)),
+            reserves.Remaining(loop.CumulativeProduced),
+            history.Ratio(
+                reserves.Remaining(loop.CumulativeProduced).Proved,
+                loop.CumulativeProduced),
+            bank.Terms, bank.Covenant, bank.Drawn,
+            loop.CumulativeFlared,
+            esg.Of(),
+            new WaterFloodView(
+                loop.VoidageReplacement, loop.ImportedThisTick, loop.InjectionHeadroom,
+                loop.SourFraction),
+            loop.Storage,
+            company.Ledger.CashByCause(position.Tick),
+            activities.Operations());
 
     /// <summary>
     /// The undrilled structures, in the order the world placed them (D-5).

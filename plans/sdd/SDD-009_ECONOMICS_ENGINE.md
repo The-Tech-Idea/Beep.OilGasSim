@@ -36,6 +36,36 @@ tick, and Cash equals opening + movements — exactly, in integers. Revenue may 
 credited **only** with a `custody.transferred` cause (R13-V2, architecture-
 tested).
 
+> **R20d.12 amendment — the origination check runs at POSTING and never at
+> RESTORE, because a restore is not an origination and the check cannot be
+> repeated anyway.**
+>
+> The rule above is about the moment revenue is CREATED: it exists so no code
+> path can credit revenue for anything but a metered sale. `CompanyState.Restore`
+> replayed a saved ledger through the same `Post`, so every historical movement
+> was re-asked to justify itself — and **a freshly composed engine has an empty
+> audit trail**, so the first restored revenue credit failed on a cause the trail
+> had never heard of. That is not a defect in the save; it is the check being
+> asked a question it cannot answer.
+>
+> **It could not answer it even within one session.** The trail is retained on a
+> WINDOW (`AuditRetention.DetailWindowTicks`, design 09 §4.4), so a movement from
+> tick 5 in a game saved at tick 60 cites a cause the running engine has already
+> summarised away. Re-validating history against a windowed record is
+> structurally unsound whether or not a save is involved, and saving the trail
+> would not fix it — the window is the point.
+>
+> So the ledger gains a **replay** path used only by `Restore`: same arithmetic,
+> same accounts, same `Movement` records, and **no origination check**. What
+> still runs at restore is **INV2**, which is repeatable by construction because
+> it is a property of the numbers rather than of a trail — and it is the check
+> that would actually catch a corrupted or truncated ledger.
+>
+> **This was invisible until something composed the owners together** (finding
+> 188). `CompanyState`'s own round-trip test supplies a predicate that answers
+> true, so it verified that a ledger's VALUES survive and could not have
+> discovered that its restore path is unreachable in a real engine.
+
 ## 2. Accrual overlays
 
 - **Depreciation — units of production** (the industry method, pinned):
@@ -47,6 +77,43 @@ tested).
 - **Inventory** valued at declared standard lifting cost (content) — a stated
   simplification: mark-to-market inventory would inject price volatility into
   the balance sheet for no decision value.
+
+> **R20d.14 amendment. The provision accrues per FIELD until a company can have
+> two.** The formula above is per asset — `EstimatedCost(asset) · produced(tick)
+> / EUR_2P(asset)` — and it is right, because over a life the sum telescopes to
+> exactly the asset's cost. What it needs is `EUR_2P(asset)`: the ultimate
+> recovery attributable to one well.
+>
+> Nothing computes that and nothing honestly can yet. §4 forecasts a FIELD's
+> decline from a type-curve; splitting it between the wells on that field would
+> need an allocation nobody has specified, and dividing by well count would be a
+> number invented at the call site (rule F-2's spirit — a figure with no
+> derivation behind it).
+>
+> So the accrual is taken against the company's total outstanding obligation and
+> its 2P reserves:
+>
+> ```text
+> provision(tick) = TotalOutstanding · produced(tick) / reserves2P
+> ```
+>
+> The telescoping property survives — a field that produces its reserves accrues
+> its whole abandonment cost — and the per-asset split becomes meaningful at the
+> same moment as the rest of it: when a company can hold two fields with separate
+> gathering systems, which is SDD-006 §7c's remaining half.
+>
+> **Depreciation reads the same way, and for the same reason.** Units of
+> production needs `PPE_remaining(asset)` and the ledger tracks capital by
+> ACCOUNT — `Capex_PPE` is one balance, not a balance per well — so the charge is
+> taken against the company's capital and its remaining 2P. Per-asset splitting
+> arrives with the same change as the provision's.
+>
+> **Against REMAINING reserves, where the provision is against ULTIMATE, and
+> that is not an inconsistency.** A provision is charged against what a field
+> will ever give because the bill is fixed and the sum has to telescope to it.
+> Depreciation is charged against what is LEFT because the value being written
+> off is also what is left — both sides of the fraction shrink together, which is
+> what stops a nearly-spent field carrying its plant at cost.
 
 ## 3. Fiscal regimes — the exact algorithms
 
@@ -151,6 +218,46 @@ RRR(year) = Σ additions(2P) / Σ production        (integer volumes, exact)
 Price sensitivity (SC6) needs no extra code: step 3's truncation moves with
 price, so a crash mechanically writes reserves down.
 
+> **R20d.12.34 amendment (finding 208, and an F-4 stop): RRR is reported on
+> PROVED, not 2P.** The line above said 2P and finding 208 recorded the decision
+> as Proved without either noticing the other — the finding argued from the code
+> and the SDD was never opened. That is the conflict F-4 exists for, so it is
+> settled here before anything is implemented rather than in the implementation.
+>
+> **Proved wins on three counts.** `Lending.Redetermine` takes a parameter named
+> `provedReserves` and `Bank.Settle` passes `Remaining(...).Proved`, so the
+> borrowing base already moves on 1P — an RRR on 2P would score a company on a
+> measure its own lender ignores, in the one indicator IR2 names for the
+> LIQUIDATION SPIRAL, which is a credit phenomenon before it is a geological one.
+> It is also the convention every reporting company follows, which is why the
+> lender was written that way. And 2P includes volumes a bank will not lend
+> against, so a company could show replacement above one while its facility
+> shrank every quarter — the exact false comfort a standing indicator must not
+> give.
+>
+> **The formula is unchanged**, because "additions" already means what the
+> implementation computes: additions over a period are the change in booked
+> reserves plus what was produced from them, so
+>
+> ```text
+> RRR = (proved_now − proved_then + produced_between) / produced_between
+> ```
+>
+> is the same statement with the identity substituted, and is the form to
+> implement because a period's ADDITIONS are not separately recorded anywhere.
+>
+> **Period: a trailing twelve months** (finding 208). IR2 calls RRR a *standing*
+> indicator, and a since-inception ratio converges and stops moving — a company
+> sliding into the spiral would watch it drift by thousandths. Twelve months is
+> also the rhythm the bank already redetermines on.
+>
+> **`produced_between` of zero leaves RRR UNDEFINED, and it is published as
+> undefined.** A field that produced nothing replaced nothing, and the ratio's
+> denominator is what it did not do; reporting 0.0 would state a replacement
+> failure that did not happen, and reporting 1.0 would state a success. The
+> projection carries `double?` and a host shows "—", which is the same rule §5's
+> refusals follow: a fallback answers "unknown" and never invents a number.
+
 ## 5. Reserve-based lending
 
 ```text
@@ -214,9 +321,31 @@ Realised = benchmark + qualityDiff(API, sulphur bands) + locationDiff(network
   distance to the sales point — the generated transport graph prices this)
 Gas/NGL: separate benchmarks, same machinery; gas adds a seasonal sine term
   (amplitude content) — the winter premium.
-Cost index (ED4): costIndex(t+1) = costIndex(t) · (1 + η·priceYoY(t) + drift)
+Cost index (ED4): costIndex(t+1) = costIndex(t) · (1 + η·priceYoY(t)/12 + drift)
   applied to day rates, capex classes and service prices; η, drift content.
 ```
+
+> **R20d.12 amendment (F-4). The cost index divides the year-on-year move by
+> twelve, and the version without it was wrong.** Written as
+> `costIndex · (1 + η·priceYoY + drift)` and stepped MONTHLY, a year-on-year
+> signal is applied twelve times over: a market sitting 50% above where it was a
+> year ago lifts costs 17.5% in the first month, then again on the new figure,
+> and again — sevenfold across the year rather than 17.5%.
+>
+> Measured before it was believed. A decade of the shipped market produced an
+> index of 1.78 and a company that earned $76M against a $600M target, which
+> reads as a punishing market and is an arithmetic error. `η·yoy` is an ANNUAL
+> adjustment, so a monthly tick applies a twelfth of it; the same decade now
+> gives 1.18.
+>
+> The recurrence is otherwise unchanged and η keeps its meaning: the fraction of
+> a year's price move that ends up in the price of a rig.
+>
+> **A FLOOR belongs with it**, and it is not a tuning fudge. Costs are sticky
+> downwards — rigs are stacked rather than scrapped and crews are kept on — so
+> without one a long enough slump drives the index towards zero and makes
+> everything free, turning the worst market in the game into the best time to
+> build anything.
 
 ## 7. Contracts, hedges, insurance
 

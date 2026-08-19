@@ -1,0 +1,7 @@
+{
+  "kind": "gas-plant",
+  "id": "gas-plant-e1",
+  "availableFromEra": "E1",
+  "rung": 1,
+  "capacity": "3 kg/s"
+}

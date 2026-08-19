@@ -31,7 +31,7 @@ namespace OGSim.Integrity;
 /// </summary>
 public sealed record Barrier(
     ContentId Id,
-    IReadOnlyList<EntityId<IWellComponent>> Elements,
+    IReadOnlyList<EntityId<IFlowElement>> Elements,
     bool IsPreventive)
 {
     // Finding 131.
@@ -43,7 +43,7 @@ public sealed record Barrier(
         HashCode.Combine(Id, IsPreventive, Structural.HashOf(Elements));
 
     public double StrengthGiven(
-        Func<EntityId<IWellComponent>, double> conditionOf,
+        Func<EntityId<IFlowElement>, double> conditionOf,
         double crewCompetency,
         double procedureCompliance)
     {
@@ -136,6 +136,17 @@ public sealed class BowTie
     /// <para>Barrier independence is a stated simplification (design 14): the
     /// bow-tie carries the decision, not the correlation structure.</para>
     /// </summary>
+    /// <summary>Whether a threat materialises this tick (SDD-012 §4). One draw,
+    /// from the `hazard` stream, before any barrier is sampled.</summary>
+    public bool Materialises(double ratePerTick)
+    {
+        if (!double.IsFinite(ratePerTick) || ratePerTick <= 0.0 || ratePerTick > 1.0)
+            throw new ModelFault("SDD-012 §4", null,
+                $"a threat rate is a probability in (0, 1]; got {ratePerTick}");
+
+        return _hazard.NextUnit() < ratePerTick;
+    }
+
     public ThreatResolution Resolve(
         ContentId threat,
         IReadOnlyList<Barrier> barriers,
@@ -237,10 +248,18 @@ public sealed class BowTie
 /// rehabilitates. Without the decay, one bad year would price a company's debt
 /// forever and the loop would have no exit, which design rule CI4 forbids.</para>
 /// </summary>
-public sealed class EsgStanding
+public sealed class EsgStanding : IStateOwner
 {
     private readonly double _halfLifeTicks;
     private double _incidentPoints;
+
+    // THE INTENSITY WINDOW (SDD-012 §4b's R23.1 amendment). Kilograms and cubic
+    // metres rather than the quantity types, because these are not measurements
+    // of anything — they are an exponentially weighted accumulator whose units
+    // survive only in the ratio. `WindowedFlared`/`WindowedProduced` put them
+    // back into the type system at the boundary.
+    private double _flaredWindow;
+    private double _producedWindow;
 
     public EsgStanding(double halfLifeTicks)
     {
@@ -254,6 +273,33 @@ public sealed class EsgStanding
 
     public double IncidentPoints => _incidentPoints;
 
+    /// <summary>What the record currently remembers burning, aged.</summary>
+    public Mass WindowedFlared => new(_flaredWindow);
+
+    /// <summary>And what it remembers producing over the same window, so the two
+    /// divide into an intensity the band table can score.</summary>
+    public SurfaceVolume WindowedProduced => new(_producedWindow);
+
+    /// <summary>
+    /// One month's flaring and production enter the window (SDD-012 §4b's R23.1
+    /// amendment).
+    ///
+    /// <para>The declared order within a tick is OBSERVE (stage 8) then AGE
+    /// (stage 9): the month lands in the window, the lender prices against a
+    /// record that includes it, and the whole window — the new month with the
+    /// rest — then ages by one tick. Numerator and denominator move together at
+    /// every step, which is what keeps this a ratio rather than two series.</para>
+    /// </summary>
+    public void Observe(Mass flared, SurfaceVolume produced)
+    {
+        if (flared.Kilograms < 0.0 || produced.CubicMetres < 0.0)
+            throw new ModelFault("SDD-012 §4b", null,
+                "a month cannot un-burn gas or un-produce oil");
+
+        _flaredWindow += flared.Kilograms;
+        _producedWindow += produced.CubicMetres;
+    }
+
     /// <summary>An incident adds points. They are what a clean record has to work off.</summary>
     public void RecordIncident(double points)
     {
@@ -264,13 +310,26 @@ public sealed class EsgStanding
         _incidentPoints += points;
     }
 
-    /// <summary>Exponential decay on the declared half-life — the rehabilitation.</summary>
+    /// <summary>
+    /// Exponential decay on the declared half-life — the rehabilitation.
+    ///
+    /// <para>ONE CLOCK FOR BOTH TERMS (SDD-012 §4b's R23.1 amendment). The
+    /// intensity window ages by the same factor as the incident record, which is
+    /// what makes "reduce the intensities" a reachable exit rather than a comment
+    /// claiming one. Numerator and denominator are aged TOGETHER, so a field that
+    /// changes nothing keeps the ratio it had: decaying only the flaring would
+    /// forgive a company for continuing to flare.</para>
+    /// </summary>
     public void Age(Duration dt)
     {
         if (dt.Days <= 0.0) return;
 
         double ticks = dt.Days / Duration.DaysPerTick;
-        _incidentPoints *= DetMath.Pow(0.5, ticks / _halfLifeTicks);
+        double remaining = DetMath.Pow(0.5, ticks / _halfLifeTicks);
+
+        _incidentPoints *= remaining;
+        _flaredWindow *= remaining;
+        _producedWindow *= remaining;
     }
 
     /// <summary>
@@ -289,5 +348,44 @@ public sealed class EsgStanding
             penalty += intensities[i].Weight * intensities[i].BandScore;
 
         return Math.Clamp(100.0 - penalty - _incidentPoints, 0.0, 100.0);
+    }
+
+    // ------------------------------------------------------- SDD-013 §4
+
+    /// <summary>
+    /// The incident record, which is STATE and not a derivation: `Age` multiplies
+    /// it by its own previous value, so it is the same shape as the covenant
+    /// clock and the reserve ring (findings 210, 208). A reload that resumed
+    /// from zero would hand back a spotless company however recently it had hurt
+    /// someone — and the rehabilitation this decay models is the whole point of
+    /// keeping the number.
+    /// </summary>
+    public StateKey Key { get; } = new("integrity.esg");
+
+    public int SchemaVersion => 2;
+
+    /// <summary>Nothing: one scalar that depends on no other owner.</summary>
+    public IReadOnlyList<StateKey> RestoreAfter => [];
+
+    public void Capture(IStateWriter writer)
+    {
+        ArgumentNullException.ThrowIfNull(writer);
+
+        writer.WriteDouble("incident-points", _incidentPoints);
+
+        // The window is state for the same reason the incident record is: `Age`
+        // multiplies each by its own previous value, so a reload that resumed
+        // from zero would hand back a company that had never flared.
+        writer.WriteDouble("flared-window-kg", _flaredWindow);
+        writer.WriteDouble("produced-window-m3", _producedWindow);
+    }
+
+    public void Restore(IStateReader reader)
+    {
+        ArgumentNullException.ThrowIfNull(reader);
+
+        _incidentPoints = reader.ReadDouble("incident-points");
+        _flaredWindow = reader.ReadDouble("flared-window-kg");
+        _producedWindow = reader.ReadDouble("produced-window-m3");
     }
 }

@@ -704,4 +704,70 @@ public class WorldGenerationTests
         Assert.True(rich > lean,
             $"charging four times as hard filled no more traps ({rich} against {lean})");
     }
+
+    // ------------------------------------ the source has to have cooked (R20d.10)
+
+    /// <summary>
+    /// R15-V5. A BASIN CAN BE DRY, and that is design 06 §5's promise of
+    /// "elephants, marginal fields, dry basins" made real. Charge is what a
+    /// source rock generated, and a source rock that never reached the oil
+    /// window generated nothing — however many fine structures sit above it.
+    ///
+    /// <para>Until this every basin had charge in proportion to its traps, so
+    /// the answer to "is there anything here at all?" was always yes and only
+    /// the amount varied. A player could not be wrong about a whole basin, which
+    /// is the largest way to be wrong there is.</para>
+    /// </summary>
+    [Fact]
+    public void R15V5_a_basin_whose_source_never_cooked_holds_nothing()
+    {
+        var barren = 0;
+        var productive = 0;
+
+        for (ulong seed = 1; seed <= 40; seed++)
+        {
+            RecordingSink world = Generate(seed);
+
+            // Structures either way — this is about charge, not about geometry.
+            Assert.NotEmpty(world.Accumulations);
+
+            if (Charged(world).Count == 0) barren++; else productive++;
+        }
+
+        Assert.True(productive > 0, "forty basins and none of them held any oil");
+
+        Assert.True(barren > 0,
+            "forty basins and every one of them held oil; maturity is not reaching charge, " +
+            "so 'is there anything here?' is a question with one answer");
+    }
+
+    /// <summary>
+    /// AND A DRY BASIN STILL HAS PROSPECTS. The structures are real, they are
+    /// mappable, and regional data reports their size exactly as it would in a
+    /// basin full of oil — because gravity sees a trap and not what is in it
+    /// (SDD-010 §4b).
+    ///
+    /// <para>That is what makes a barren basin a way of LOSING rather than a
+    /// screen that says "nothing here": the company has to drill to find
+    /// out.</para>
+    /// </summary>
+    [Fact]
+    public void R15V5_a_dry_basin_looks_exactly_like_a_full_one_from_the_surface()
+    {
+        for (ulong seed = 1; seed <= 40; seed++)
+        {
+            RecordingSink world = Generate(seed);
+
+            if (Charged(world).Count > 0) continue;
+
+            // D0 structures in a barren basin still deliver regional readings.
+            var visible = world.Accumulations.Count(a => a.Subtlety == DetectClass.D0);
+
+            Assert.Equal(visible, world.Observations.Count);
+
+            if (visible > 0) return;
+        }
+
+        Assert.Fail("no barren basin with a D0 structure in forty seeds");
+    }
 }

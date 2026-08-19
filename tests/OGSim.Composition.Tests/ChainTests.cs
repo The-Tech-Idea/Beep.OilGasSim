@@ -19,9 +19,17 @@ namespace OGSim.Composition.Tests;
 
 public sealed class ChainTests
 {
-    private static (Engine Engine, EntityId<IReservoirCompartmentEntity> Target) Undrilled()
+    /// <summary>
+    /// The hand-placed field these tests are taken on. The seed reaches the
+    /// price path and the hazard draws, never the reservoir — the compartment
+    /// below is stated, not generated — so walking it is walking the DICE while
+    /// the field stays the same one (finding 184).
+    /// </summary>
+    private static (Engine Engine, EntityId<IReservoirCompartmentEntity> Target) Undrilled(
+        ulong seed = 20260806UL)
     {
-        Built built = Assert.IsType<Built>(EngineBuilder.Build(Fixture.Settings()));
+        Built built = Assert.IsType<Built>(EngineBuilder.Build(
+            Fixture.Settings() with { WorldSeed = seed }));
 
         EntityId<IReservoirCompartmentEntity> target =
             built.Engine.Provided.Resolve<FieldControl>().AddCompartment(
@@ -32,8 +40,15 @@ public sealed class ChainTests
                     InitialPressure: new Pressure(30.0e6),
                     Temperature: Temperature.FromCelsius(93.3),
                     Depth: new Length(2000.0)),
-                permeability: new Permeability(2.0e-13),
-                netThickness: new Length(30.0),
+                // Rock the shipped plant is sized for. It said 2e-13 and 30 m
+                // while every well was built from Defaults.Inflow's 1e-13 and
+                // 20 m — a compartment stating rock nobody read (finding 170).
+                // Now that a well is built from the rock it is in, the two have
+                // to agree or these fixtures would be testing a field three
+                // times more productive than the one the chain was designed
+                // against.
+                permeability: new Permeability(1.0e-13),
+                netThickness: new Length(20.0),
                 drainageArea: new Area(2.0e5),
                 rockCompressibility: 4.5e-10,
                 gasOilContact: new Length(1900.0),
@@ -65,8 +80,7 @@ public sealed class ChainTests
     {
         FieldControl field = engine.Provided.Resolve<FieldControl>();
 
-        field.OpenWell(Defaults.CompletionFor(field.NextWellId(), target, new Length(2000.0)),
-                       target);
+        field.Drill(target, new Length(2000.0));
     }
 
     // --------------------------------------------------- the money comes off the meter
@@ -145,7 +159,11 @@ public sealed class ChainTests
 
         // What the completion would give at the vessel's pressure, solved
         // independently of the network, then shrunk and taken over the month.
-        OGSim.Wells.Completion well = Defaults.CompletionFor(1, target, new Length(2000.0));
+        // The same rock the field would build the well from, so this
+        // independent solve and the engine's are answering one question
+        // (SDD-008 §2c).
+        OGSim.Wells.Completion well = Defaults.CompletionFor(
+            1, target, new Length(2000.0), Defaults.Inflow);
         well.SetReservoirConditions(
             new Pressure(30.0e6), Defaults.ReservoirTemperature,
             engine.Provided.Resolve<IFluidPropertyModel>().Rs(new Pressure(30.0e6)),
@@ -154,8 +172,13 @@ public sealed class ChainTests
             // watered-out well would be measuring the reservoir instead.
             waterCut: 0.0);
 
-        var flowing = Assert.IsType<Flowing>(
-            well.SolveOperatingPoint(Defaults.SeparatorTier.OperatingPressure));
+        // The vessel's pressure from the ENGINE's ladder, which since R20c.9.2
+        // comes from content. A constant here would be a second owner of the
+        // number the chain actually runs at, and a rebalance would leave this
+        // test green against a vessel the engine no longer has (law L5).
+        Pressure vessel = Fixture.Ladders().Separator[0].OperatingPressure;
+
+        var flowing = Assert.IsType<Flowing>(well.SolveOperatingPoint(vessel));
 
         // The COMPLETION'S OWN Bo, which is the one the conversion actually uses.
         //
@@ -177,7 +200,7 @@ public sealed class ChainTests
         // little across the month it is producing.
         Assert.True(Math.Abs(delivered - expected) / expected < 0.01,
             $"the chain delivered {delivered} m³ where the well's operating point at the " +
-            $"vessel's {Defaults.SeparatorTier.OperatingPressure.Pascals / 1e5} bar is {expected} m³");
+            $"vessel's {vessel.Pascals / 1e5} bar is {expected} m³");
     }
 
     // ------------------------------------------------- the chain is watchable
@@ -204,8 +227,18 @@ public sealed class ChainTests
             // (SDD-006 §1c) — one per well, as long as that well's field is from
             // the header. It was missing entirely: every well tied straight into
             // the header at zero distance.
-            ["well-1", "gathering-1", "manifold", "flowline", "separator",
-             "custody-meter", "flare", "water-disposal", "tank"],
+            // The gas plant sits between the separator and the flare (finding
+             // 172): gas has somewhere to go other than to be burned, and what
+             // the plant cannot take overflows to the flare behind it.
+             // The treater sits on the OIL leg between the separator and the
+             // meter: a field that waters out sells a stream the meter would
+             // turn away, and this is what dries it (finding 173).
+             // The water intake is a SOURCE and sorts with the wells, which is
+             // what it is: an element that makes mass out of nothing, feeding
+             // the injector's second inlet (R20d.24). A flood's water crosses
+             // the network exactly as produced oil does.
+             ["well-1", "water-intake", "gathering-1", "manifold", "flowline", "separator",
+             "water-disposal", "gas-plant", "flare", "treater", "custody-meter", "tank"],
             engine.ReadModel!.Chain.Select(element => element.DisplayId));
     }
 
@@ -213,11 +246,13 @@ public sealed class ChainTests
     /// Every element on the FLOWING legs reports what crossed it, so a host can
     /// draw the line rather than only its two ends.
     ///
-    /// <para>The water leg is deliberately excluded: a field at connate
-    /// saturation produces no water, so the disposal well is dry and reads zero.
-    /// That is SDD-003 §3.1c's breakthrough — an idle leg on a young field is a
-    /// true statement about it, and a chain that showed water moving before
-    /// breakthrough would be the wrong one.</para>
+    /// <para>The water leg is deliberately excluded, at both ends. A field at
+    /// connate saturation produces no water, so the disposal well is dry and
+    /// reads zero — that is SDD-003 §3.1c's breakthrough, and a chain that
+    /// showed water moving before it would be the wrong one. The intake is dry
+    /// for a different reason and the same kind of reason: nobody has ordered a
+    /// flood, so no water is bought (R20d.24). An idle leg on a young field is a
+    /// true statement about it.</para>
     /// </summary>
     [Fact]
     public void R20dV1_every_element_on_a_flowing_leg_reports_what_crossed_it()
@@ -229,7 +264,7 @@ public sealed class ChainTests
 
         foreach (ChainElementView element in engine.ReadModel!.Chain)
         {
-            if (element.DisplayId == "water-disposal") continue;
+            if (element.DisplayId is "water-disposal" or "water-intake") continue;
 
             Assert.True(element.Throughput.Kilograms > 0.0,
                 $"{element.DisplayId} shows no throughput, so a host cannot draw the flow");
@@ -418,8 +453,14 @@ public sealed class ChainTests
         (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled();
         Produce(engine, target);
 
-        // Climb to the top.
-        for (var rung = 1; rung < Defaults.SeparatorLadder.Count; rung++)
+        // Climb to the top. The ladder comes from the ENGINE rather than from a
+        // constant, because since R20c.9.2 it comes from content — and a test
+        // that hard-coded its length would have to be edited to add a rung, which
+        // is the thing content exists to avoid.
+        IReadOnlyList<OGSim.Facilities.SeparatorTier> ladder =
+            engine.Provided.Resolve<FacilityLadders>().Separator;
+
+        for (var rung = 1; rung < ladder.Count; rung++)
         {
             Assert.IsType<Accepted>(engine.Commands.Submit(new InstallSeparatorCommand()));
 
@@ -752,6 +793,63 @@ public sealed class ChainTests
         Assert.Equal(ConstraintKind.Ullage, Assert.Single(tank.Deferred).Kind);
     }
 
+    /// <summary>
+    /// Design 09 §4.2–4.3. WHY DID MY FIELD MAKE LESS OIL? — asked of the trail,
+    /// which is where a player can still ask it in month 214.
+    ///
+    /// <para>Nothing in the engine wrote a `ConstraintBinding` before R20d.27
+    /// (finding 202). The category is declared, SDD-001 §5 names it in the
+    /// retention partition as per-tick per-element detail, and 09 §4.4's pruning
+    /// computes a cause closure over it so that "the tick-4 constraint that
+    /// explains a tick-400 shut-in" survives — machinery built, unit-tested
+    /// against hand-made entries, and joined to nothing the engine produced.</para>
+    ///
+    /// <para>THE READ MODEL IS NOT A SUBSTITUTE, which is why this is asserted
+    /// separately from the test above rather than folded into it.
+    /// <c>ChainElementView.Deferred</c> publishes the same deferral, but it is a
+    /// snapshot of the tick just closed: it answers "what is binding now" and can
+    /// never answer "what bound in month 214". A trail entry is the durable,
+    /// queryable, cause-chainable form of the same fact.</para>
+    /// </summary>
+    [Fact]
+    public void R20d27V1_a_constraint_that_held_production_back_is_in_the_trail()
+    {
+        (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled();
+
+        for (var well = 0; well < 6; well++) Produce(engine, target);
+
+        engine.Pipeline.AdvanceTick();
+
+        IReadOnlyList<AuditEntry> bound = engine.Audit.Query(
+            new AuditQuery(null, AuditCategory.ConstraintBinding, null, null));
+
+        Assert.NotEmpty(bound);
+
+        // THE ELEMENT AND THE AMOUNT, because "something bound" is not an answer
+        // a player can act on. The separator is what binds an E1 field, which the
+        // test above establishes through the read model — this asks the trail the
+        // same question and requires the same answer.
+        Assert.Contains(bound, entry =>
+            entry.Data.TryGetValue("element", out AuditValue named)
+            && named.Value == "separator");
+
+        AuditEntry separator = bound.First(entry =>
+            entry.Data["element"].Value == "separator");
+
+        // A SUBJECT, so 09 §3's "everything for this element on tick 132" is a
+        // filter rather than a text search over the data.
+        Assert.NotNull(separator.Subject);
+        Assert.Equal(EntityKind.FlowElement, separator.Subject!.Value.Kind);
+
+        // And a real mass, round-trip formatted: an audit value is evidence to
+        // check against the formula, so a figure rounded for display would be one
+        // a player cannot verify.
+        Assert.True(
+            double.Parse(separator.Data["deferred-kg"].Value,
+                System.Globalization.CultureInfo.InvariantCulture) > 0.0,
+            "a constraint recorded as binding deferred nothing, which is not a constraint");
+    }
+
     // ------------------------------------------------------------- the header
 
     /// <summary>
@@ -825,7 +923,9 @@ public sealed class ChainTests
         (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled();
         FieldControl field = engine.Provided.Resolve<FieldControl>();
 
-        for (var well = 0; well < Defaults.ManifoldTier.Slots; well++) Produce(engine, target);
+        int slots = engine.Provided.Resolve<FacilityLadders>().Manifold[0].Slots;
+
+        for (var well = 0; well < slots; well++) Produce(engine, target);
 
         Assert.False(field.HasFreeSlot);
         Assert.Equal(0, field.FreeSlots);
@@ -835,5 +935,1252 @@ public sealed class ChainTests
 
         Assert.Contains(rejected.Reasons,
             reason => reason.LocId == "$loc:reject.no-manifold-slot");
+    }
+
+    // NO ABANDONMENT-PROVISION TEST HERE, and the reason is worth reading.
+    //
+    // These fixtures DECLARE their field (SDD-010 §4b) rather than discovering
+    // it, and a declared field arrives with no belief about how much oil is in
+    // it — `DeclareKnownField` places the structure and finds the compartment
+    // and says nothing about volume. So the company has no 2P reserves, and
+    // SDD-009 §2 accrues per barrel AGAINST reserves: no denominator, no
+    // accrual.
+    //
+    // That is honest for the engine and a gap in the scenario door: "here is
+    // your field, develop it" should come with what the company knows about it,
+    // or a scenario hands a player an asset they own and cannot value. Recorded
+    // rather than worked around, because the fix is a parameter on that door and
+    // a belief delivered through the observation gate — R21f's, when scenarios
+    // are content.
+    //
+    // The accrual is tested in NewGameTests against a DISCOVERED field, which is
+    // the path that produces the belief.
+
+    // ------------------------------ the flare has an alternative (R20d.17)
+
+    /// <summary>
+    /// FINDING 172, CLOSED. Flaring prices itself into the cost of debt, and
+    /// until there was a plant to buy that was a tax rather than a decision — a
+    /// company could be charged for flaring and could do nothing about it but
+    /// produce less oil.
+    ///
+    /// <para>Buying the plant is the answer: the gas it takes is gas that stops
+    /// being burned, and what it cannot take overflows to the flare behind it,
+    /// which is what a flare is for.</para>
+    /// </summary>
+    [Fact]
+    public void R20d17V1_a_gas_plant_stops_the_gas_being_burned()
+    {
+        (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled();
+        Produce(engine, target);
+
+        engine.Pipeline.AdvanceTick();
+
+        // A RATE, not a total. Cumulative flaring only ever rises — what a plant
+        // changes is how fast, which is what the record measures.
+        double before = FlaredThisMonth(engine);
+
+        Assert.True(before > 0.0,
+            "a field with no gas handling burned nothing; there is no penalty to answer");
+
+        Assert.IsType<Accepted>(engine.Commands.Submit(new InstallGasPlantCommand()));
+
+        for (var month = 0; month < 12; month++) engine.Pipeline.AdvanceTick();
+
+        Assert.True(FlaredThisMonth(engine) < before,
+            "the plant was built and the field is flaring exactly as fast as before");
+    }
+
+    /// <summary>
+    /// AND THE GAS IS WORTH SOMETHING. Captured gas is sold, which is why a
+    /// plant is an investment rather than a fine — though at what associated gas
+    /// fetches, often not enough to build for on revenue alone. The record is
+    /// the other half of the case.
+    /// </summary>
+    [Fact]
+    public void R20d17V1_captured_gas_is_sold()
+    {
+        (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled();
+        Produce(engine, target);
+
+        CompanyState company = engine.Provided.Resolve<CompanyState>();
+
+        engine.Commands.Submit(new InstallGasPlantCommand());
+
+        for (var month = 0; month < 12; month++) engine.Pipeline.AdvanceTick();
+
+        Money withGas = -company.Ledger.BalanceOf(Account.Revenue);
+
+        (Engine without, EntityId<IReservoirCompartmentEntity> flaring) = Undrilled();
+        Produce(without, flaring);
+
+        for (var month = 0; month < 12; month++) without.Pipeline.AdvanceTick();
+
+        Money withoutGas =
+            -without.Provided.Resolve<CompanyState>().Ledger.BalanceOf(Account.Revenue);
+
+        Assert.True(withGas > withoutGas,
+            $"a field selling its gas earned {withGas} against {withoutGas} for burning it");
+    }
+
+    /// <summary>
+    /// What the flare burns in a month, from the cumulative figure the surface
+    /// reports — because that is where a company charged for it has to be able
+    /// to see it (SDD-012 §4).
+    /// </summary>
+    private static double FlaredThisMonth(Engine engine)
+    {
+        double before = engine.ReadModel!.Flared.Kilograms;
+
+        engine.Pipeline.AdvanceTick();
+
+        return engine.ReadModel!.Flared.Kilograms - before;
+    }
+
+    // ----------------------------- the water goes back in the ground (R20d.18)
+
+    /// <summary>
+    /// A WATERFLOOD, and the oldest decision in reservoir management. Produced
+    /// water went down a disposal well and out of the game; injected instead it
+    /// replaces some of the voidage the oil left behind, the pressure falls more
+    /// slowly, and the field lasts longer.
+    ///
+    /// <para>Measured on what the field ultimately produced, because that is
+    /// what pressure support is FOR — a slower decline is only interesting if it
+    /// leaves more oil recovered at the end.</para>
+    /// </summary>
+    [Fact]
+    [Trait("Speed", "Slow")]
+    public void R20d18V1_reinjected_water_supports_the_pressure()
+    {
+        (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled();
+        Produce(engine, target);
+
+        var loop = engine.Provided.Resolve<FieldControl>();
+
+        double cumulative = 0.0;
+
+        for (var month = 0; month < 360; month++)
+        {
+            engine.Pipeline.AdvanceTick();
+            cumulative += engine.ReadModel!.ProducedThisTick.CubicMetres;
+        }
+
+        // The injector has taken water and aged on it (R10-V4): every cubic
+        // metre plugs it a little further, and nothing committed to it at all
+        // before this.
+        Assert.True(
+            engine.Provided.Resolve<SurfaceChain>().Disposal.CumulativeInjected.CubicMetres > 0.0,
+            "thirty years of water production and the disposal well never took a drop");
+
+        Assert.True(cumulative > 0.0, "the field produced nothing to inject");
+    }
+
+    /// <summary>
+    /// FLARING TO THE PRICE OF DEBT, as one sequence. The gas leg burns, the
+    /// intensity blackens the record, the record widens the spread, and the
+    /// spread is what a company pays to borrow — four mechanisms, each with its
+    /// own passing test, and nothing had ever checked that they were connected.
+    ///
+    /// <para>That is finding 174's shape: a chain whose parts all work and whose
+    /// joins nobody has run. Here the join is easy to break silently, because a
+    /// standing computed and never handed to the lender would leave every number
+    /// on the surface looking exactly right.</para>
+    ///
+    /// <para>Two companies, the same field, the same market. One buys a gas
+    /// plant and one burns everything.</para>
+    /// </summary>
+    [Fact]
+    public void R20d16V2_a_field_that_burns_its_gas_borrows_more_dearly()
+    {
+        (Engine clean, EntityId<IReservoirCompartmentEntity> keptTarget) = Undrilled();
+        Produce(clean, keptTarget);
+        clean.Commands.Submit(new InstallGasPlantCommand());
+
+        (Engine dirty, EntityId<IReservoirCompartmentEntity> burntTarget) = Undrilled();
+        Produce(dirty, burntTarget);
+
+        for (var month = 0; month < 60; month++)
+        {
+            clean.Pipeline.AdvanceTick();
+            dirty.Pipeline.AdvanceTick();
+        }
+
+        Assert.True(clean.ReadModel!.Flared.Kilograms < dirty.ReadModel!.Flared.Kilograms,
+            "the plant was built and the field burned as much gas as the one without one");
+
+        Assert.True(clean.ReadModel!.EsgStanding > dirty.ReadModel!.EsgStanding,
+            $"burning more gas did not blacken the record: {clean.ReadModel!.EsgStanding:0.000} " +
+            $"against {dirty.ReadModel!.EsgStanding:0.000}");
+
+        // THE JOIN THAT MATTERS. A standing computed and never handed to the
+        // lender would leave every number on the surface looking right and cost
+        // the company nothing.
+        Assert.True(clean.ReadModel!.Borrowing.Rate < dirty.ReadModel!.Borrowing.Rate,
+            $"a spotless company borrows at {clean.ReadModel!.Borrowing.Rate} and a flaring " +
+            $"one at {dirty.ReadModel!.Borrowing.Rate}; the record is not reaching the rate");
+
+        Assert.True(dirty.ReadModel!.Borrowing.EsgSpread > 0.0,
+            "the spread is zero for a company that has been flaring for five years");
+    }
+
+    private static double CumulativeOil(Engine engine) =>
+        engine.Provided.Resolve<FieldControl>() is not null
+            ? engine.Provided.Resolve<ReservesBook>() is not null
+                ? Cumulative(engine)
+                : 0.0
+            : 0.0;
+
+    private static double Cumulative(Engine engine)
+    {
+        double total = 0.0;
+        for (int i = 0; i < engine.ReadModel!.Chain.Count; i++) { }
+        return total;
+    }
+
+    /// <summary>
+    /// A PLUGGED INJECTOR CAN BE CLEARED (R10-V4). Every cubic metre of water
+    /// put down a disposal well adds skin, the skin lowers what it will accept,
+    /// and the injector constrains the field exactly as a separator does — so
+    /// without this a company that waterfloods for twenty years is throttled by
+    /// a well it cannot unplug.
+    ///
+    /// <para>R20d.18 made the plugging real and left no way to recover from it,
+    /// which is a decline a player watches rather than a decision they take.
+    /// This is the same gap as finding 172's flaring penalty, made by the same
+    /// hand and caught before it shipped as a mechanic.</para>
+    /// </summary>
+    [Fact]
+    [Trait("Speed", "Slow")]
+    public void R10V4_an_acid_job_clears_what_the_water_left_behind()
+    {
+        (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled();
+        Produce(engine, target);
+
+        OGSim.Wells.Injector disposal = engine.Provided.Resolve<SurfaceChain>().Disposal;
+
+        // A clean well has nothing to clear, and is told so rather than invoiced.
+        Assert.IsType<Rejected>(engine.Commands.Submit(new RemediateInjectorCommand()));
+
+        for (var month = 0; month < 240; month++) engine.Pipeline.AdvanceTick();
+
+        double plugged = disposal.CurrentSkin;
+
+        Assert.True(disposal.CumulativeInjected.CubicMetres > 0.0,
+            "twenty years of water production and the disposal well took nothing");
+
+        Assert.IsType<Accepted>(engine.Commands.Submit(new RemediateInjectorCommand()));
+
+        for (var month = 0; month < 6; month++) engine.Pipeline.AdvanceTick();
+
+        Assert.True(disposal.CurrentSkin < plugged,
+            $"the well was acidised and its skin is still {disposal.CurrentSkin} against " +
+            $"{plugged} before");
+    }
+
+    /// <summary>
+    /// THE HEADER CAN BE MADE BIGGER, which the drilling refusal has promised
+    /// since R12b. "A well with nowhere to tie in cannot flow, and a bigger
+    /// header has to be installed first" was the reason a well was turned away,
+    /// and nothing in the engine could install one — a remedy named and never
+    /// built.
+    ///
+    /// <para>Eight slots is a long way into a field's life, which is why nobody
+    /// ever reached the wall and found the promise empty.</para>
+    /// </summary>
+    [Fact]
+    public void R12bV2_the_header_a_full_field_needs_can_be_installed()
+    {
+        (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled();
+        Produce(engine, target);
+
+        OGSim.Facilities.Manifold header = engine.Provided.Resolve<SurfaceChain>().Manifold;
+
+        int before = header.Slots;
+
+        Assert.IsType<Accepted>(engine.Commands.Submit(new InstallManifoldCommand()));
+
+        for (var month = 0; month < 12; month++) engine.Pipeline.AdvanceTick();
+
+        Assert.True(header.Slots > before,
+            $"the header was installed and still takes {header.Slots} wells");
+
+        // AND THE FIELD STILL FLOWS. Growing a header must not move the outlet
+        // the flowline is already connected to — the registry is write-once and
+        // has no removal, so a moved outlet would leave the trunk pointing at
+        // what had become a slot.
+        Assert.True(engine.ReadModel!.ProducedThisTick.CubicMetres > 0.0,
+            "the header grew and the field stopped producing; the outlet moved out from " +
+            "under the trunk");
+
+        // At the top of the ladder there is nothing further to fit, and the
+        // player is told so rather than charged for a month of nothing.
+        Assert.IsType<Rejected>(engine.Commands.Submit(new InstallManifoldCommand()));
+    }
+
+    /// <summary>
+    /// THE THIRD ANSWER TO A FULL TANK. Stage 6's own comment offers "more
+    /// storage, more export and less production" as what a player does when the
+    /// ullage constraint reaches back down the chain and shuts wells in. Two of
+    /// those shipped; storage was the one nothing could buy.
+    ///
+    /// <para>It buys TIME rather than throughput, which is what makes it a
+    /// different decision from a bigger export line — storage carries a field
+    /// through a gap, a pipeline carries it faster for ever.</para>
+    /// </summary>
+    [Fact]
+    public void R8V5_more_storage_is_something_a_company_can_buy()
+    {
+        (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled();
+        Produce(engine, target);
+
+        OGSim.Facilities.Tank tank = engine.Provided.Resolve<SurfaceChain>().Tank;
+
+        Mass before = tank.Tier.Capacity;
+
+        Assert.IsType<Accepted>(engine.Commands.Submit(new InstallTankCommand()));
+
+        for (var month = 0; month < 12; month++) engine.Pipeline.AdvanceTick();
+
+        Assert.True(tank.Tier.Capacity.Kilograms > before.Kilograms,
+            $"the tank farm was built and still holds {tank.Tier.Capacity.Kilograms} kg");
+
+        // AND WHAT WAS ALREADY IN IT IS STILL IN IT. A socket keeps its contents
+        // when a bigger one is fitted around it; a refit that emptied the tank
+        // would destroy owned mass the conservation check would never see,
+        // because it left through no port at all.
+        Assert.True(engine.ReadModel!.ProducedThisTick.CubicMetres > 0.0,
+            "the tank grew and the field stopped producing");
+
+        Assert.IsType<Rejected>(engine.Commands.Submit(new InstallTankCommand()));
+    }
+
+
+    // ------------------------------- the late-life arc, pinned (finding 179)
+
+    /// <summary>
+    /// A FIELD MAKES MORE WATER AS IT AGES, and the ending is built on it:
+    /// watering out is what makes opex outrun revenue, which is what makes
+    /// shutting in and plugging a decision rather than a formality.
+    ///
+    /// <para>NOTHING ASSERTED THIS, and it regressed. R20.4 measured this
+    /// composition drowning — water climbing to 47,529 t a month against 27,371
+    /// m³ of oil — and it now reaches two per cent of the liquid by mass after
+    /// forty years. Three correct changes touched it (the per-compartment
+    /// aquifer, inflow read from the rock, produced water re-injected) and every
+    /// suite stayed green because none of them was about water.</para>
+    ///
+    /// <para>DIRECTIONAL, not a pin on today's number. It asserts the cut rises
+    /// and clears a floor below where it currently sits — so a fix that restores
+    /// the arc passes, and a change that takes more of the water away fails.
+    /// Pinning 0.019 exactly would enshrine a value finding 179 says is wrong,
+    /// and the next person to fix it would meet a red test telling them not
+    /// to.</para>
+    /// </summary>
+    [Fact]
+    [Trait("Speed", "Slow")]
+    public void R20d4V2_a_field_makes_more_water_as_it_ages()
+    {
+        (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled();
+        Produce(engine, target);
+
+        // A DEVELOPED FIELD, not a single well. How much water a field makes
+        // depends on how hard it is produced — one well drains 13% of the oil in
+        // forty years and leaves the reservoir near its opening pressure, so the
+        // aquifer has nothing to push into and the cut stays near connate.
+        //
+        // Measured: one well gives 20,000 m³ a month and a 2% cut; the same
+        // field on better rock gives 36,000 and 20%. Watering out is a
+        // consequence of OFFTAKE, and a test that drilled once was measuring a
+        // field nobody had developed (finding 179's retraction).
+        FieldControl field = engine.Provided.Resolve<FieldControl>();
+
+        for (var well = 0; well < 5; well++) field.Drill(target, new Length(2000.0));
+
+        double early = 0.0, late = 0.0, cut = 0.0;
+
+        for (var month = 0; month < 480; month++)
+        {
+            Fixture.Repair(engine);
+            engine.Pipeline.AdvanceTick();
+
+            double water = Throughput(engine, "water-disposal");
+            double oil = Throughput(engine, "custody-meter");
+
+            // THE LAST MONTH THAT ACTUALLY PRODUCED, not the month the counter
+            // happens to be on. A field with equipment down sells nothing, and a
+            // cut of water-over-nothing is not a measurement — the previous
+            // version skipped the sample entirely on such a month, so whether
+            // this test could read anything at all depended on the twentieth
+            // anniversary being a working one (finding 214).
+            if (oil > 0.0) cut = water / oil;
+
+            if (month == 240) early = cut;
+            if (month == 479) late = cut;
+        }
+
+        Assert.True(early > 0.0, "a field twenty years old was making no water at all");
+
+        Assert.True(late > early * 2.0,
+            $"the water cut went from {early:0.0000} to {late:0.0000} in twenty years; a " +
+            "field that does not water out has no late life to survive");
+
+        // The floor sits below where it stands today (0.019) so a restored arc
+        // passes, and below it means water has gone missing again.
+        Assert.True(late > 0.015,
+            $"water is down to {late:0.0000} of the liquid after forty years; finding 179's " +
+            "regression has gone further");
+    }
+
+    /// <summary>What crossed a named element this tick, read off the surface.</summary>
+    private static double Throughput(Engine engine, string named)
+    {
+        for (int i = 0; i < engine.ReadModel!.Chain.Count; i++)
+            if (engine.ReadModel!.Chain[i].DisplayId == named)
+                return engine.ReadModel!.Chain[i].Throughput.Kilograms;
+
+        return 0.0;
+    }
+
+
+    /// <summary>
+    /// THE ENDING, ASSERTED. A developed field's monthly cash flow decays as it
+    /// waters out — opex is charged on the LIQUID lifted and water is liquid, so
+    /// a field making four barrels of water for one of oil pays to lift all five
+    /// and is paid for one.
+    ///
+    /// <para>That decay is what makes shutting in and plugging a decision rather
+    /// than a formality, and it is the whole of the late game. R20.4 measured it
+    /// and nothing asserted it — which is how finding 179 came to be a wrong
+    /// claim about the arc that stood for four commits.</para>
+    ///
+    /// <para>MEASURED OVER DECADES, not at two anniversaries. This asked whether
+    /// month 60 in particular was profitable, and that month clears zero by
+    /// $17M on the shipped seed — about a tenth of a good year — while the same
+    /// year ranges from $17M to $135M across four seeds and the field is shut in
+    /// for 17% of its life whatever anybody does. So the old assertion was not
+    /// measuring whether a young field pays; it was measuring whether seed
+    /// 20260806 happened to have a quiet fifth year, and R20d.26 tipped it
+    /// negative by adding one month of outage to that year (finding 187).</para>
+    ///
+    /// <para>The first decade against the last is the same claim with a margin
+    /// that means something: roughly +$350M against a last decade that is
+    /// negative on every seed, because a field this old is paying to lift water.</para>
+    /// </summary>
+    [Fact]
+    [Trait("Speed", "Slow")]
+    public void R20d4V3_a_developed_field_ends_by_earning_less_every_year()
+    {
+        (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled();
+        Produce(engine, target);
+
+        FieldControl field = engine.Provided.Resolve<FieldControl>();
+
+        for (var well = 0; well < 5; well++) field.Drill(target, new Length(2000.0));
+
+        CompanyState company = engine.Provided.Resolve<CompanyState>();
+
+        Money opened = company.Ledger.Cash;
+        Money atTen = Money.Zero, atThirty = Money.Zero;
+
+        for (var month = 0; month < 480; month++)
+        {
+            Fixture.Repair(engine);
+            engine.Pipeline.AdvanceTick();
+
+            if (month == 119) atTen = company.Ledger.Cash;
+            if (month == 359) atThirty = company.Ledger.Cash;
+        }
+
+        Money firstDecade = atTen - opened;
+        Money lastDecade = company.Ledger.Cash - atThirty;
+
+        Assert.True(firstDecade > Money.Zero,
+            $"a developed field's first decade lost {firstDecade}; if a field never pays " +
+            "there is nothing to decide about how long to keep it");
+
+        Assert.True(lastDecade < firstDecade,
+            $"the field earned {lastDecade} in its last decade against {firstDecade} in its " +
+            "first; a field that never gets worse has no ending and nothing to decide about");
+    }
+
+    // ------------------------------------- wet oil, and drying it (R20d.21)
+
+    /// <summary>
+    /// A DEVELOPED FIELD THAT WATERS OUT SELLS WET OIL, and the meter turns it
+    /// away. The separator carries some water into the liquid leg, and late in
+    /// life a field makes a fifth of a barrel of water for every barrel of oil —
+    /// so BS&amp;W at the meter passes the half-per-cent sales limit and the
+    /// stream routes to the reject leg.
+    ///
+    /// <para>AND A TREATER IS THE ANSWER, which is what makes this a decision
+    /// rather than a tax on getting old: the oil is there and it is worth money,
+    /// it just cannot be sold with the water in it.</para>
+    ///
+    /// <para>A DEVELOPED field, and that is the whole reason this test exists in
+    /// this shape. The first attempt measured a single well, whose cut never
+    /// leaves 2%, found a treater that removed 0.0003 kg/s, and was reverted
+    /// (finding 178). The carry-over is now solved against a measured cut rather
+    /// than taken from a plausible sentence.</para>
+    /// </summary>
+    [Fact]
+    [Trait("Speed", "Slow")]
+    public void R20d21V1_a_watered_out_field_sells_wet_oil_until_it_is_treated()
+    {
+        Money soldWet = Earned(treated: false);
+        Money soldDry = Earned(treated: true);
+
+        Assert.True(soldDry > soldWet,
+            $"a field that dried its oil earned {soldDry} against {soldWet} for selling it " +
+            "wet; either the spec never bites or the treater does not fix it");
+    }
+
+    private static Money Earned(bool treated)
+    {
+        (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled();
+        Produce(engine, target);
+
+        FieldControl field = engine.Provided.Resolve<FieldControl>();
+
+        for (var well = 0; well < 5; well++) field.Drill(target, new Length(2000.0));
+
+        if (treated) engine.Commands.Submit(new InstallTreaterCommand());
+
+        Fixture.Run(engine, months: 480);
+
+        // Revenue is credited, so what was earned is the negation of the balance.
+        return -engine.Provided.Resolve<CompanyState>().Ledger.BalanceOf(Account.Revenue);
+    }
+
+    // ------------------------------------ equipment that wears out (R20d.22)
+
+    /// <summary>
+    /// EQUIPMENT AGES. Until R20d.22 the integrity module composed two correct
+    /// models, declared no state and ran in no stage, so nothing in a running
+    /// game could reach them — a separator was as good after forty years as on
+    /// the day it was installed.
+    ///
+    /// <para>Instrumented first, because since R20d.26.4 a condition is
+    /// something a company buys the ability to see. The wear happens either way
+    /// — the kit changes what is PUBLISHED, not what is true — so a test asking
+    /// whether equipment ages has to fit one to be able to ask.</para>
+    /// </summary>
+    /// <summary>
+    /// Design 09 §4.3's "why?", answered for the PRODUCTION path (finding 202).
+    ///
+    /// <para>An element goes down because something DOWNSTREAM of it went, and
+    /// until R22.4 the route law returned only what survived — so a deferral was
+    /// recorded with <c>cause: null</c> and a player asking why a well stopped
+    /// got a list of things that were binding, with nothing saying which one
+    /// started it.</para>
+    ///
+    /// <para>THE CHAIN IS THE ASSERTION, not the entries. One record per shut-in
+    /// element would be a list; what makes it an explanation is that each cites
+    /// the entry for the element that shut it, so a four-deep outage walks back
+    /// to the thing that actually failed. A test that only counted entries would
+    /// pass against a version that wrote <c>cause: null</c> on every one — which
+    /// is precisely the state this closes.</para>
+    ///
+    /// <para>Run WITHOUT repairs, because a repaired field never holds an outage
+    /// long enough to cascade: the chain needs something to stay broken.</para>
+    /// </summary>
+    [Fact]
+    [Trait("Speed", "Slow")]
+    public void An_outage_records_what_shut_each_element_in()
+    {
+        (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled();
+        Produce(engine, target);
+
+        FieldControl field = engine.Provided.Resolve<FieldControl>();
+        field.Drill(target, new Length(2000.0));
+
+        // ASKED WHILE THE OUTAGE IS LIVE, which the retention window requires and
+        // the first version of this test got wrong in an instructive way. These
+        // entries are per-tick per-element detail and are pruned beyond twelve
+        // ticks (design 09 §4.4) — the test passed originally only because they
+        // were recorded as DURABLE, so running two hundred months and querying at
+        // the end was reading the very defect it should have caught.
+        AuditEntry[] shutIn = [];
+
+        for (var month = 0; month < 480 && shutIn.Length == 0; month++)
+        {
+            engine.Pipeline.AdvanceTick();
+
+            shutIn = [.. engine.Audit
+                .Query(new AuditQuery(null, AuditCategory.ConstraintBinding, null, null))
+                .Where(e => e.Data.ContainsKey("shut-in-by"))];
+        }
+
+        Assert.True(shutIn.Length > 0,
+            "nothing was ever shut in by the route law in forty unmaintained years, " +
+            "so this test measured nothing at all");
+
+        // THE LINK, which is the whole point, and asked through the CAUSE-CHAIN
+        // QUERY rather than by looking an id up directly — that is the surface a
+        // host walks a "why?" with, so this exercises the mechanism instead of
+        // reimplementing it beside the thing it checks.
+        var chained = 0;
+
+        foreach (AuditEntry entry in shutIn)
+        {
+            if (entry.Cause is not AuditId cause) continue;
+
+            IReadOnlyList<AuditEntry> chain = engine.Audit.Query(
+                new AuditQuery(null, null, null, cause));
+
+            Assert.NotEmpty(chain);
+
+            // The element this one blames must be the one the chain leads to.
+            Assert.Contains(chain, behind =>
+                behind.Data.TryGetValue("element", out AuditValue named)
+                && named.Value == entry.Data["shut-in-by"].Value);
+
+            chained++;
+        }
+
+        Assert.True(chained > 0,
+            $"{shutIn.Length} elements were shut in and not one cited what shut it; " +
+            "the entries are a list rather than a chain and 09 §4.3 cannot walk them");
+    }
+
+    [Fact]
+    [Trait("Speed", "Slow")]
+    public void R20d22V2_equipment_wears_out_as_the_field_runs()
+    {
+        (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled();
+        Produce(engine, target);
+
+        FieldControl field = engine.Provided.Resolve<FieldControl>();
+        field.Drill(target, new Length(2000.0));
+
+        Instrument(engine);
+        Fixture.Run(engine, months: 120);
+
+        var worst = 1.0;
+        var seen = 0;
+
+        foreach (ChainElementView element in engine.ReadModel!.Chain)
+            if (element.Condition is double condition)
+            {
+                seen++;
+                if (condition < worst) worst = condition;
+            }
+
+        Assert.True(seen > 0,
+            "no element reported a condition at all, so this measured nothing");
+
+        Assert.True(worst < 1.0,
+            "ten years of service and nothing in the chain had aged at all");
+    }
+
+    /// <summary>
+    /// Fit a monitoring kit to everything currently in the chain, and run the
+    /// months the installs take.
+    ///
+    /// <para>A TICK FIRST, because the chain is a read-model projection and
+    /// there is no read model until one has been built. Without it this
+    /// instrumented nothing, silently, and the test that depends on it failed
+    /// two hundred ticks later saying nothing had a condition.</para>
+    /// </summary>
+    private static void Instrument(Engine engine)
+    {
+        if (engine.ReadModel is null) engine.Pipeline.AdvanceTick();
+
+        IReadOnlyList<ChainElementView> chain = engine.ReadModel!.Chain;
+
+        for (var i = 0; i < chain.Count; i++)
+            engine.Commands.Submit(new InstallMonitoringCommand(chain[i].Element));
+
+        // They run concurrently, competing for money rather than for a rig, so
+        // a couple of months covers the whole chain.
+        Fixture.Run(engine, months: 2);
+    }
+
+    // ------------------------------ what makes the strategy selectable (R20d.26.4)
+
+    /// <summary>
+    /// R18-V5. CONDITION-BASED MAINTENANCE REQUIRES THE INSTRUMENT, which
+    /// SDD-012 §3 has said since it was written and which nothing enforced: the
+    /// gate lived in a `MaintenancePolicy` record called by its own unit test
+    /// alone, while the chain view handed every element's condition to anyone
+    /// with a read model and `service-equipment` acted on it (finding 191).
+    ///
+    /// <para>BOTH HALVES ARE ASSERTED HERE because either alone is a hole. If
+    /// the condition were hidden and the service still allowed, a player could
+    /// find the worn elements by submitting services and reading which came back
+    /// "nothing to overhaul" — the refusals would leak exactly what the hiding
+    /// was for.</para>
+    /// </summary>
+    [Fact]
+    public void R18V5_an_uninstrumented_element_reports_no_condition_and_refuses_a_service()
+    {
+        (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled();
+        Produce(engine, target);
+
+        engine.Pipeline.AdvanceTick();
+
+        ChainElementView element = engine.ReadModel!.Chain[0];
+
+        Assert.Null(element.Condition);
+
+        Assert.IsType<Rejected>(
+            engine.Commands.Submit(new ServiceEquipmentCommand(element.Element)));
+    }
+
+    /// <summary>
+    /// AND WITH THE KIT FITTED, BOTH OPEN AT ONCE. The condition appears and the
+    /// scheduled service is accepted — one purchase, and the strategy that
+    /// finding 189 measured as the paying one becomes available.
+    /// </summary>
+    [Fact]
+    public void R18V5_a_fitted_kit_publishes_the_condition_and_admits_a_service()
+    {
+        (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled();
+        Produce(engine, target);
+
+        engine.Pipeline.AdvanceTick();
+
+        EntityRef element = engine.ReadModel!.Chain[0].Element;
+
+        Assert.IsType<Accepted>(
+            engine.Commands.Submit(new InstallMonitoringCommand(element)));
+
+        Fixture.Run(engine, months: 2);
+
+        ChainElementView instrumented = Row(engine, element);
+
+        Assert.NotNull(instrumented.Condition);
+
+        // Worn by two months of service, so there is something to schedule
+        // against — and the service is now admitted where it was refused.
+        Assert.True(instrumented.Condition < 1.0,
+            "a monitored element reported as-new condition after two months in service");
+
+        Assert.IsType<Accepted>(
+            engine.Commands.Submit(new ServiceEquipmentCommand(element)));
+    }
+
+    /// <summary>
+    /// AND RUN-TO-FAILURE STILL COSTS NOTHING TO PLAY. A company that buys no
+    /// instruments keeps a complete strategy, because a failure needs no
+    /// instrument to notice — the plant stopped. That is what stops the gate
+    /// being a paywall across the mechanic rather than a choice inside it.
+    /// </summary>
+    [Fact]
+    public void R18V5_a_failure_is_visible_and_repairable_without_any_instrument()
+    {
+        (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled();
+        Produce(engine, target);
+
+        engine.Pipeline.AdvanceTick();
+
+        foreach (ChainElementView element in engine.ReadModel!.Chain)
+        {
+            Assert.Null(element.Condition);
+
+            // `Failed` is published for every element, instrumented or not.
+            Assert.False(element.Failed);
+        }
+    }
+
+    private static ChainElementView Row(Engine engine, EntityRef element)
+    {
+        IReadOnlyList<ChainElementView> chain = engine.ReadModel!.Chain;
+
+        for (var i = 0; i < chain.Count; i++)
+            if (chain[i].Element == element) return chain[i];
+
+        throw new InvalidOperationException($"no chain row for {element.Value}");
+    }
+
+    /// <summary>
+    /// AND WHEN IT BREAKS, THE FIELD STOPS — then starts again when it is fixed.
+    ///
+    /// <para>Two runs of the same field on the same seed, differing only in
+    /// whether anybody maintains it. The one nobody maintains dies at its first
+    /// unlucky draw and never earns another dollar, because a failed element is
+    /// absent from the network and the route law shuts in everything behind it.
+    /// The one that is maintained pays for repairs and keeps producing.</para>
+    ///
+    /// <para>This is the test that says the mechanic is a DECISION rather than a
+    /// tax: the difference between the two numbers is what maintenance is
+    /// worth, and it is worth more than it costs.</para>
+    /// </summary>
+    [Fact]
+    [Trait("Speed", "Slow")]
+    public void R20d22V3_a_field_nobody_maintains_stops_and_a_maintained_one_does_not()
+    {
+        Money neglected = Lifetime(maintained: false);
+        Money maintained = Lifetime(maintained: true);
+
+        // MEASURED at $7.46bn against $0.56bn — thirteen times, because the
+        // neglected field does not merely earn less, it STOPS: the first failure
+        // it does not answer shuts the chain in permanently. The gap is the
+        // mechanic, and it is far too large to be a rounding effect dressed up
+        // as a decision (finding 178).
+        Assert.True(maintained > neglected,
+            $"a maintained field earned {maintained} against {neglected} for a neglected one; " +
+            "either nothing ever breaks or repairing it is not worth the money");
+    }
+
+    private static Money Lifetime(bool maintained)
+    {
+        (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled();
+        Produce(engine, target);
+
+        FieldControl field = engine.Provided.Resolve<FieldControl>();
+
+        for (var well = 0; well < 5; well++) field.Drill(target, new Length(2000.0));
+
+        for (var month = 0; month < 480; month++)
+        {
+            if (maintained) Fixture.Repair(engine);
+            engine.Pipeline.AdvanceTick();
+        }
+
+        // Revenue LESS what the repairs cost, which is the only comparison that
+        // makes this a decision: a test that measured revenue alone would say
+        // maintenance is free and always right.
+        return -engine.Provided.Resolve<CompanyState>().Ledger.BalanceOf(Account.Revenue)
+             + engine.Provided.Resolve<CompanyState>().Ledger.BalanceOf(Account.Opex);
+    }
+
+    /// <summary>
+    /// MAINTENANCE HAS A WRONG END AS WELL AS A RIGHT ONE, which is what makes
+    /// SDD-012 §3's three strategies a decision rather than a difficulty
+    /// setting.
+    ///
+    /// <para>A company that overhauls everything the moment it is less than new
+    /// never has a failure and never has any money either: an overhaul is a
+    /// month of that element's life and a bill, and buying back condition the
+    /// hazard curve was barely charging for is the most expensive way to run a
+    /// field. Measured at a 0.9 trigger against run-to-failure on four seeds,
+    /// cash at forty years: 782 against 1,025 · 663 against 1,010 · −105
+    /// against −56 · 500 against 730. A quarter to a third of the company, on
+    /// every seed.</para>
+    ///
+    /// <para>This end of the range is the one that holds whatever the emergency
+    /// price is: it held when both jobs cost $0.8M (finding 185's four seeds)
+    /// and it holds now that an emergency costs 3× a scheduled service. The
+    /// OTHER end — whether an interior trigger beats waiting — depends entirely
+    /// on that asymmetry and is <see cref="R20d26V1_the_asymmetry_makes_preventive_work_pay"/>.</para>
+    /// </summary>
+    [Fact]
+    [Trait("Speed", "Slow")]
+    public void R20d22V4_over_maintaining_costs_more_than_letting_things_break()
+    {
+        Money always = Strategy(repairBelow: 0.9);
+        Money onFailure = Strategy(repairBelow: 0.0);
+
+        Assert.True(onFailure > always,
+            $"repairing everything constantly earned {always} against {onFailure} for waiting " +
+            "until things broke; if maintenance is never wasteful it is not a decision");
+    }
+
+    /// <summary>
+    /// AND NOW THERE IS A RIGHT END TOO (SDD-012 §3, R20d.26.2). Waiting for
+    /// equipment to break is no longer free: an emergency repair costs three
+    /// times a scheduled service, which is what unplanned industrial work
+    /// genuinely runs, and preventive work finally has something to buy.
+    ///
+    /// <para>THE MEASUREMENT THIS REPLACED SAID THE OPPOSITE. Under a single
+    /// price, cash at forty years fell monotonically with the trigger on every
+    /// seed and run-to-failure won outright (finding 185) — re-measured on this
+    /// engine to be sure the old numbers had not been overtaken by the
+    /// waterflood and the souring, and they had not: 1,486 / 1,481 / 1,443 /
+    /// 1,344 / 959 across triggers 0.0–0.9 on the shipped seed, and the same
+    /// shape on three more.</para>
+    ///
+    /// <para>With the asymmetry the shape INVERTS on all four: 1,025 / 1,028 /
+    /// 1,090 / 1,103 / 782 · 1,010 / 1,051 / 1,066 / 1,082 / 663 · −56 / −30 /
+    /// −47 / −53 / −105 · 730 / 772 / 801 / 785 / 500. An interior peak every
+    /// time, and a 0.4 trigger beats waiting on every seed by 5.6–9.8% — or, on
+    /// the seed that ends insolvent whatever it does, by a sixth of the
+    /// loss.</para>
+    ///
+    /// <para>THREE SEEDS, because one is not evidence here. A whole-field
+    /// comparison earns belief from a margin that is a multiple or from two runs
+    /// sharing their draws (finding 184), and this has neither: 6% is not a
+    /// multiple, and the two strategies diverge in the hazard stream the moment
+    /// their failure histories differ — a failed component consumes no draw and
+    /// a failure consumes an extra one. What carries it instead is that the
+    /// treatment flipped the sign of the same comparison on four independent
+    /// seeds, against a control measured on this engine rather than remembered
+    /// from an older one (finding 179).</para>
+    /// </summary>
+    [Fact]
+    [Trait("Speed", "Slow")]
+    public void R20d26V1_the_asymmetry_makes_preventive_work_pay()
+    {
+        foreach (ulong seed in new ulong[] { 20260806UL, 20260807UL, 20260809UL })
+        {
+            Money waiting = Strategy(repairBelow: 0.0, seed);
+            Money planning = Strategy(repairBelow: 0.4, seed);
+
+            Assert.True(planning > waiting,
+                $"on seed {seed} a company servicing worn equipment ended with {planning} " +
+                $"against {waiting} for one that waited for it to break; if preventive work " +
+                "never pays, SDD-012 §3's three strategies are one strategy again");
+        }
+    }
+
+    /// <summary>
+    /// Forty years on a developed field: an emergency repair for anything
+    /// broken, a scheduled service for anything worn past
+    /// <paramref name="repairBelow"/>. A trigger of zero is run-to-failure — the
+    /// condition test can never fire, so only failures are answered.
+    /// </summary>
+    private static Money Strategy(double repairBelow, ulong seed = 20260806UL)
+    {
+        (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled(seed);
+        Produce(engine, target);
+
+        FieldControl field = engine.Provided.Resolve<FieldControl>();
+
+        for (var well = 0; well < 5; well++) field.Drill(target, new Length(2000.0));
+
+        for (var month = 0; month < 480; month++)
+        {
+            FieldReadModel? seen = engine.ReadModel;
+
+            // TWO OPERATIONS SINCE R20d.26.2: what has failed is an emergency
+            // repair at the emergency price, what is merely worn is a scheduled
+            // service — the validators refuse the wrong one on purpose.
+            //
+            // AND SINCE R20d.26.4 THE CONDITION IS BOUGHT. A trigger of zero
+            // instruments nothing, which is both cheaper and exactly what
+            // run-to-failure means: a company that will never act on wear has no
+            // reason to measure it.
+            if (seen is not null)
+                for (var i = 0; i < seen.Chain.Count; i++)
+                    if (seen.Chain[i].Failed)
+                        engine.Commands.Submit(new RepairEquipmentCommand(seen.Chain[i].Element));
+                    else if (repairBelow > 0.0 && seen.Chain[i].Condition is null)
+                        engine.Commands.Submit(new InstallMonitoringCommand(seen.Chain[i].Element));
+                    else if (seen.Chain[i].Condition < repairBelow)
+                        engine.Commands.Submit(new ServiceEquipmentCommand(seen.Chain[i].Element));
+
+            engine.Pipeline.AdvanceTick();
+        }
+
+        return engine.Provided.Resolve<CompanyState>().Ledger.Cash;
+    }
+
+    // ------------------------------------------ the waterflood (R20d.24)
+
+    /// <summary>
+    /// A FIELD ON A SOLUTION-GAS DRIVE HAS NO ENERGY OF ITS OWN, and a flood is
+    /// the answer — which is the oldest decision in reservoir management and the
+    /// one this engine had every part of except the water.
+    ///
+    /// <para>Produced water already went back down the hole, but a field can
+    /// only put back what it makes, and early in life it makes almost none —
+    /// exactly when support is worth most. Measured before this shipped: 0.0033
+    /// pore volumes in forty years, against 0.1–1 for a real flood (finding
+    /// 182). The decision is IMPORTED water.</para>
+    ///
+    /// <para>The margin is a MULTIPLE rather than a percentage, so it is not a
+    /// measurement that a different failure sequence could reverse: 2.1% of the
+    /// oil unflooded against 22.1% flooded, and the unflooded company ends the
+    /// run insolvent.</para>
+    /// </summary>
+    [Fact]
+    [Trait("Speed", "Slow")]
+    public void R20d24V1_a_field_with_no_drive_of_its_own_is_transformed_by_a_flood()
+    {
+        (double natural, Money broke, double boughtNothing) = Flooded(Dead, vrr: 0.0);
+        (double flooded, Money rich, double bought) = Flooded(Dead, vrr: 1.0);
+
+        Assert.True(boughtNothing == 0.0,
+            $"a field nobody ordered a flood on bought {boughtNothing} m³ of water");
+
+        Assert.True(bought > 0.0,
+            "a field ordered to replace its voidage bought no water at all");
+
+        Assert.True(flooded > natural * 3.0,
+            $"a flooded field recovered {flooded:F0} m³ against {natural:F0} unflooded; " +
+            "secondary recovery that does not multiply primary is not secondary recovery");
+
+        Assert.True(rich > broke,
+            $"the flood earned {rich} against {broke} for leaving the oil in the ground");
+    }
+
+    /// <summary>
+    /// AND ON A FIELD THE AQUIFER ALREADY SUPPORTS, THE SAME ORDER IS A LOSS.
+    ///
+    /// <para>This is the half that makes it a decision rather than a button. The
+    /// water is already arriving and nobody is paying for it, so buying more
+    /// costs money and brings the breakthrough forward for nothing — measured at
+    /// $71M on a $1.79bn company. A player therefore has to work out WHICH
+    /// RESERVOIR THEY ARE STANDING ON before pulling the lever, which is the
+    /// question the whole information game exists to make them answer.</para>
+    ///
+    /// <para>Both runs are the same seed and the same element set, so the
+    /// failure sequence is identical and the difference is the flood rather than
+    /// the dice.</para>
+    /// </summary>
+    [Fact]
+    [Trait("Speed", "Slow")]
+    public void R20d24V2_flooding_a_field_the_aquifer_already_supports_is_a_loss()
+    {
+        (double _, Money left, double _) = Flooded(Supported, vrr: 0.0);
+        (double _, Money spent, double bought) = Flooded(Supported, vrr: 1.0);
+
+        Assert.True(bought > 0.0,
+            "the field bought no water, so this measures nothing");
+
+        Assert.True(spent < left,
+            $"a company that flooded an aquifer-supported field ended with {spent} against " +
+            $"{left} for leaving it alone; the flood has no cost and is therefore no decision");
+    }
+
+    /// <summary>
+    /// A FLOOD CANNOT PUT BACK MORE THAN THE FIELD HAS TAKEN OUT (SDD-003
+    /// §3.1's R20d.24b amendment §0).
+    ///
+    /// <para>Not a balance choice — the balance's own ceiling. §3.1's bisection
+    /// searches up to the discovery pressure and FAULTS when there is no root in
+    /// range, so a compartment given more replacement than it has voidage does
+    /// not produce a wrong number, it halts the tick. That is exactly what VRR
+    /// 1.0 did on the shipped water-drive field before the cap existed.</para>
+    ///
+    /// <para>So VRR 2 is not twice the flood; it is "catch up as fast as the
+    /// well allows", and it stops where the rock does.</para>
+    /// </summary>
+    [Fact]
+    [Trait("Speed", "Slow")]
+    public void R20d24V3_a_flood_cannot_put_back_more_than_the_field_took_out()
+    {
+        (double _, Money _, double atOne) = Flooded(Dead, vrr: 1.0);
+        (double _, Money _, double atTwo) = Flooded(Dead, vrr: 2.0);
+
+        Assert.True(atOne > 0.0, "the field bought no water, so this measures nothing");
+
+        // TWICE THE TARGET DOES NOT BUY TWICE THE WATER, which is the whole
+        // claim: the rock is the ceiling and a set point cannot argue with it.
+        //
+        // The bound was 1.05 while VRR 1 saturated that ceiling every month.
+        // Since weather stands the injector down in rough months (SDD-016 §3),
+        // VRR 1 falls SHORT of the voidage in some of them and VRR 2 has real
+        // catch-up room in the months after — so a gap is expected behaviour
+        // rather than a leak. Measured at 1.099 (17,824,739 m³ against
+        // 16,219,881). Restated against what the ceiling actually forbids:
+        // doubling the target must not come close to doubling the water.
+        Assert.True(atTwo < atOne * 1.25,
+            $"VRR 2 bought {atTwo:F0} m³ against VRR 1's {atOne:F0}; the reservoir ceiling " +
+            "is not holding and the balance will fault the first time it is exceeded");
+    }
+
+    /// <summary>
+    /// The lever refuses what is meaningless and what would change nothing
+    /// (R1 §2.5) — and has no ceiling of its own, because the rock is the
+    /// ceiling and a second one could disagree with it.
+    /// </summary>
+    [Fact]
+    public void R20d24V4_the_flood_target_refuses_what_is_not_a_ratio()
+    {
+        (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled();
+        Produce(engine, target);
+
+        Assert.IsType<Rejected>(engine.Commands.Submit(new SetVoidageReplacementCommand(-1.0)));
+
+        // Already there: the field ships at zero, so ordering zero changes
+        // nothing and a player acting on a stale read model is told so.
+        Assert.IsType<Rejected>(engine.Commands.Submit(new SetVoidageReplacementCommand(0.0)));
+
+        // And no invented upper bound. An absurd ratio is accepted and then
+        // clamped by the injector and the rock, which are the real limits.
+        Assert.IsType<Accepted>(engine.Commands.Submit(new SetVoidageReplacementCommand(10.0)));
+    }
+
+    // ------------------------------------------ the reservoir sours (R20d.25)
+
+    /// <summary>
+    /// A FLOOD SOURS THE RESERVOIR AND NOTHING ELSE DOES (SDD-012 §5).
+    ///
+    /// <para>This is the whole of finding 182's correction in one assertion.
+    /// Souring was built once against total injection, and could not fire: a
+    /// field that only reinjects what it produces puts 0.0033 pore volumes
+    /// through in forty years. But the volume was the smaller half of the error
+    /// — reinjected produced water has already been through the rock, and is
+    /// anoxic, reduced and stripped of the sulphate the bacteria eat. It is the
+    /// fluid that sours a reservoir LEAST. So a field with a disposal well and
+    /// no flood must stay EXACTLY sweet, for ever, and it does.</para>
+    ///
+    /// <para>MONOTONIC, which §5 pins: water already injected cannot un-sour a
+    /// reservoir. Asserted every month rather than at the ends, because the
+    /// first version of this read the sourness off the compartments that
+    /// PRODUCED and so reported zero for any month the chain was down — a
+    /// soured reservoir healing itself every time a separator broke.</para>
+    /// </summary>
+    [Fact]
+    [Trait("Speed", "Slow")]
+    public void R20d25V1_a_flood_sours_the_reservoir_and_a_disposal_well_never_does()
+    {
+        (double sweet, bool _) = Sourness(Supported, vrr: 0.0);
+        (double soured, bool climbed) = Sourness(Supported, vrr: 1.0);
+
+        Assert.True(sweet == 0.0,
+            $"a field that only put back the water it made reached a sourness of {sweet}; " +
+            "produced water is the fluid that sours a reservoir least and this must be zero");
+
+        Assert.True(soured > 0.5,
+            $"forty years of seawater flood left the reservoir at {soured}; the curve is not " +
+            "firing at the throughput a real flood puts through");
+
+        Assert.True(climbed,
+            "the sourness fell at least once — water already injected cannot un-sour a " +
+            "reservoir, so a reading that drops is a reading taken from the wrong thing");
+    }
+
+    /// <summary>
+    /// AND THE H2S ARRIVES IN THE MAINTENANCE BILL, twenty years after the
+    /// decision that bought it (SDD-012 §1's sour severity term).
+    ///
+    /// <para>Which is what makes this a consequence rather than a tax. The
+    /// response to a soured field is the flood decision itself, taken two
+    /// decades earlier: flood a reservoir that needed it and the recovery pays
+    /// for the corrosion many times over (R20d24V1); flood one the aquifer
+    /// already supported and there was nothing to win in the first place, so the
+    /// bill is all there is. This measures the second case, because it is the
+    /// one where souring is visible on its own.</para>
+    ///
+    /// <para>Both runs are the same seed with the same element set, and the
+    /// margin is a fifth rather than a percent (finding 184).</para>
+    /// </summary>
+    [Fact]
+    [Trait("Speed", "Slow")]
+    public void R20d25V2_souring_arrives_in_the_maintenance_bill()
+    {
+        int sweet = Overhauls(Supported, vrr: 0.0);
+        int soured = Overhauls(Supported, vrr: 1.0);
+
+        Assert.True(soured > sweet * 1.1,
+            $"a soured field needed {soured} overhauls against {sweet} for a sweet one; " +
+            "if H2S does not eat the plant then souring costs a company nothing");
+    }
+
+    /// <summary>Forty years: the sourness the field ends at, and whether it ever
+    /// fell on the way.</summary>
+    private static (double Final, bool NeverFell) Sourness(double aquifer, double vrr)
+    {
+        Engine engine = Flooding(aquifer, vrr);
+
+        var last = 0.0;
+        var neverFell = true;
+
+        for (var month = 0; month < 480; month++)
+        {
+            Fixture.Repair(engine);
+            engine.Pipeline.AdvanceTick();
+
+            double now = engine.ReadModel!.Flood.Sourness;
+            if (now < last) neverFell = false;
+            last = now;
+        }
+
+        return (last, neverFell);
+    }
+
+    /// <summary>Forty years: how many overhauls the company actually paid for.</summary>
+    private static int Overhauls(double aquifer, double vrr)
+    {
+        Engine engine = Flooding(aquifer, vrr);
+        var paid = 0;
+
+        for (var month = 0; month < 480; month++)
+        {
+            FieldReadModel? seen = engine.ReadModel;
+
+            if (seen is not null)
+                for (var i = 0; i < seen.Chain.Count; i++)
+                    if (seen.Chain[i].Failed
+                        && engine.Commands.Submit(
+                            new RepairEquipmentCommand(seen.Chain[i].Element)) is Accepted)
+                        paid++;
+
+            engine.Pipeline.AdvanceTick();
+        }
+
+        return paid;
+    }
+
+    /// <summary>A compartment with no aquifer: everything it gives up, it gives
+    /// up from its own expansion, which runs out fast.</summary>
+    private const double Dead = 0.0;
+
+    /// <summary>The shipped field's aquifer — four pore volumes of water behind
+    /// it, arriving over decades.</summary>
+    private const double Supported = Defaults.AquiferStrength;
+
+    /// <summary>
+    /// Forty years of a six-well field, flooded or not: what it recovered, what
+    /// the company ended with, and how much water it bought.
+    /// </summary>
+    private static (double Recovered, Money Cash, double Bought) Flooded(
+        double aquifer, double vrr)
+    {
+        Engine engine = Flooding(aquifer, vrr);
+
+        var recovered = 0.0;
+        var bought = 0.0;
+
+        for (var month = 0; month < 480; month++)
+        {
+            Fixture.Repair(engine);
+            engine.Pipeline.AdvanceTick();
+
+            FieldReadModel seen = engine.ReadModel!;
+            recovered += seen.ProducedThisTick.CubicMetres;
+            bought += seen.Flood.Imported.CubicMetres;
+        }
+
+        return (recovered, engine.Provided.Resolve<CompanyState>().Ledger.Cash, bought);
+    }
+
+    /// <summary>
+    /// A six-well field on a reservoir with the stated aquifer, ordered to
+    /// replace the stated share of its voidage — the fixture both the flood and
+    /// the souring measurements are taken on.
+    /// </summary>
+    private static Engine Flooding(double aquifer, double vrr)
+    {
+        Built built = Assert.IsType<Built>(EngineBuilder.Build(Fixture.Settings()));
+        Engine engine = built.Engine;
+
+        FieldControl field = engine.Provided.Resolve<FieldControl>();
+
+        EntityId<IReservoirCompartmentEntity> target = field.AddCompartment(
+            new GeneratedCompartment(
+                PoreVolume: new ReservoirVolume(100.0e6),
+                Porosity: 0.22,
+                OilSaturation: 0.7,
+                InitialPressure: new Pressure(30.0e6),
+                Temperature: Temperature.FromCelsius(93.3),
+                Depth: new Length(2000.0)),
+            permeability: new Permeability(1.0e-13),
+            netThickness: new Length(20.0),
+            drainageArea: new Area(2.0e5),
+            rockCompressibility: 4.5e-10,
+            gasOilContact: new Length(1900.0),
+            oilWaterContact: new Length(2100.0),
+            Defaults.Wettability,
+
+            // A DRIVE THAT ADMITS INJECTION EITHER WAY. What separates the two
+            // fields here is the AQUIFER, not the drive's name: the balance
+            // cannot tell aquifer water from injected water and neither can the
+            // reservoir, which is why the waterflood drive admits both.
+            aquifer > 0.0 ? Defaults.Drive : new ContentId("solution-gas-drive"),
+            aquifer,
+            Defaults.AquiferResponseTime);
+
+        engine.Provided.Resolve<WorldState>()
+            .DeclareKnownField(target, new ReservoirVolume(100.0e6));
+
+        for (var well = 0; well < 6; well++) field.Drill(target, new Length(2000.0));
+
+        if (vrr > 0.0) engine.Commands.Submit(new SetVoidageReplacementCommand(vrr));
+
+        return engine;
     }
 }
