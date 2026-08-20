@@ -1122,8 +1122,11 @@ internal sealed class FieldModule(FacilityLadders ladders) : EngineModule(Declar
         // the composer holds the two lists against each other (finding 139) — so
         // a template added to the catalogue and forgotten in the manifest refuses
         // to compose rather than shipping an order nothing listens to.
+        // No FieldControl: the shared refusals no longer ask what the field holds
+        // (SDD-007 §2's GC-4 amendment), and a dependency nothing reads is one
+        // more thing that has to be true at composition for no reason (L2).
         var orders = new ActivityOrders(
-            company, composition.Require<OGSim.Company.MarketState>(), field, activities,
+            company, composition.Require<OGSim.Company.MarketState>(), activities,
             composition.Require<SimulationClock>(),
             composition.Require<OGSim.Environment.WeatherState>(),
             composition.Require<OGSim.Capabilities.CapabilityState>());

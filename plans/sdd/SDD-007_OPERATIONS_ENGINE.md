@@ -203,11 +203,46 @@ lands in.
 > `ICommandApplier<TCommand>` pair and the module never switches on a concrete
 > command type to do it.
 >
-> **What is shared stays shared.** One `ActivityOrders` holds the refusals every
-> activity has (the cash, the target, the scheduler's own answer on contention)
-> and books the operation when there are none; `Refuse` adds only what is true of
-> *that* activity — a drilling envelope, a wellbore to test in. One generic
-> validator asks both, in that order, and reports every reason (R1 §2.5).
+> **What is shared stays shared, and a target is not shared.** One
+> `ActivityOrders` holds the refusals every activity really does have — the cash,
+> reachability, and the scheduler's own answer on contention — and books the
+> operation when there are none; `Refuse` adds only what is true of *that*
+> activity, including **what it is aimed at**. One generic validator asks both, in
+> that order, and reports every reason (R1 §2.5).
+>
+> **AMENDMENT (R20d, finding GC-4). The shared refusals must not ask whether the
+> FIELD has a compartment.** They did, and it was wrong in the way that is hardest
+> to see: the check reads as a sensible "is there anything to work on", and for
+> well-work it is — a well test, a wireline log and a core all name an
+> `EntityId<IReservoirCompartmentEntity>` and cannot mean anything without one.
+> But it was applied to **every** activity, and for the two that open a game it is
+> exactly backwards.
+>
+> **DRILL AND SEISMIC HAVE NO WORLD PRE-REQUISITE.** Drilling a structure is how a
+> compartment comes to exist, and a survey is what a company does *before* there
+> is anything downhole. Gating either on a compartment already existing means a
+> player may only drill once they have already found something — which inverts the
+> loop this whole engine is built around: commit capital under uncertainty, wait,
+> find out.
+>
+> Measured: on 2 of 12 generated basins nothing was charged, so no accumulation
+> produced a compartment, so `CompartmentCount` was zero — while the read model
+> published **eleven and twelve structures with probabilities of success
+> attached**. Every seismic and every drill was refused for ten years with "there
+> is nothing here to work on", against structures the same engine was advertising.
+> The run reported a tidy `Expired` and was indistinguishable from a balance
+> result.
+>
+> **A basin with no charge is a legitimate outcome and must stay playable.** The
+> company should be able to spend its money finding that out — that is the game —
+> rather than being told the answer for free by a validator. An order refused
+> because the world is empty is the engine answering the question the player is
+> paying to ask.
+>
+> So: the target check moves into `OwnRefusals`, where each activity refuses on
+> **its own** unresolvable subject. Well-work refuses a compartment id that does
+> not resolve, and says so in those words. Drill and seismic refuse nothing on
+> these grounds at all.
 >
 > **The register holds activities, not template ids.** `InFlight` carries the
 > `IActivity`, so completion calls `activity.Complete(…)` directly and §3's
