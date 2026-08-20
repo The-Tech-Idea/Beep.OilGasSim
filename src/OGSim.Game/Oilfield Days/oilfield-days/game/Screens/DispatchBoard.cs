@@ -1,6 +1,7 @@
 #nullable enable
 
 using System;
+using Beep.ECS.UI;
 using Godot;
 using OGSim.Composition;
 using OGSim.Contracts;
@@ -89,7 +90,143 @@ public sealed partial class DispatchBoard : Control
             "A higher export ceiling", false,
             _ => true,
             _ => new ExpandExportCommand()),
+
+        // A failure without a repair is an ending, not a mechanic — the engine's
+        // own words above RepairEquipment. The hazard pass takes an element out
+        // and the route law shuts in everything behind it, so a field with no
+        // repair order on the board stops for good the first unlucky month.
+        new("Repair failed equipment", "mobile-crane-truck",
+            "Emergency work on something that has already stopped. The chain behind it is shut in " +
+            "until it is back, and the crew is mobilised rather than scheduled, so it is dear.",
+            "Maintenance crew", "mobile-crane-truck",
+            "The chain moving again", false,
+            s => Broken(s) is not null,
+            s => Broken(s) is ChainElementView e ? new RepairEquipmentCommand(e.Element) : null),
+
+        new("Overhaul working equipment", "mobile-crane-truck",
+            "Planned work on the worst thing still running. Cheaper than the emergency job, and it " +
+            "only exists as a choice while the equipment still works.",
+            "Maintenance crew", "mobile-crane-truck",
+            "Condition back to new, at the planned price", false,
+            s => Worn(s) is not null,
+            s => Worn(s) is ChainElementView e ? new ServiceEquipmentCommand(e.Element) : null),
+
+        new("Fit condition monitoring", "well-testing-skid",
+            "Instrument a vessel so its wear can be read. Without a kit fitted the company does not " +
+            "know what condition anything is in — the engine publishes nothing it has not paid to measure.",
+            "Instrument crew", "wireline-service-truck",
+            "A condition reading where there was none", false,
+            s => Unmonitored(s) is not null,
+            s => Unmonitored(s) is ChainElementView e ? new InstallMonitoringCommand(e.Element) : null),
+
+        new("Install a manifold", "pipeline-manifold",
+            "Another manifold, so the gathering system stops being the thing that decides the rate.",
+            "Construction crew", "mobile-crane-truck",
+            "Gathering capacity", false,
+            _ => true,
+            _ => new InstallManifoldCommand()),
+
+        new("Install a gas plant", "gas-compressor-unit",
+            "Somewhere for the gas to go other than the flare.",
+            "Construction crew", "mobile-crane-truck",
+            "Gas processing capacity", false,
+            _ => true,
+            _ => new InstallGasPlantCommand()),
+
+        new("Install a treater", "three-phase-separator",
+            "Take the water out to sales specification so the oil can be sold.",
+            "Construction crew", "mobile-crane-truck",
+            "Treating capacity", false,
+            _ => true,
+            _ => new InstallTreaterCommand()),
+
+        new("Install a tank", "crude-oil-storage-tank",
+            "Storage, so a stoppage downstream does not immediately stop the wells.",
+            "Construction crew", "mobile-crane-truck",
+            "Storage between production and export", false,
+            _ => true,
+            _ => new InstallTankCommand()),
+
+        new("Remediate the injector", "water-injection-pump",
+            "Clean up an injector that has stopped taking water.",
+            "Well services", "wireline-service-truck",
+            "Injection back where it was", false,
+            _ => true,
+            _ => new RemediateInjectorCommand()),
+
+        new("Borrow $20M", "crude-oil-storage-tank",
+            "Take on debt. It is spendable this month and it is owed with interest whatever the field does.",
+            "The bank", "metering-station",
+            "$20M now, a liability after", false,
+            _ => true,
+            _ => new BorrowCommand(Money.FromMillions(20.0))),
+
+        new("Start the water flood", "water-injection-pump",
+            "Replace every reservoir cubic metre the field takes out. It holds pressure up, and the " +
+            "water is charged by the cubic metre in the month it is lifted.",
+            "Injection plant", "water-injection-pump",
+            "Reservoir pressure held, at a cost per cubic metre", false,
+            _ => true,
+            _ => new SetVoidageReplacementCommand(1.0)),
+
+        new("Stop the water flood", "water-injection-pump",
+            "Take the injection back to nothing and stop paying for the water.",
+            "Injection plant", "water-injection-pump",
+            "No more water bill, and pressure left to decline", false,
+            _ => true,
+            _ => new SetVoidageReplacementCommand(0.0)),
+
+        new("Repay $20M", "crude-oil-storage-tank",
+            "Pay debt down while the field is earning, so the interest stops.",
+            "The bank", "metering-station",
+            "Less owed", false,
+            s => s.Cash >= Money.FromMillions(20.0),
+            _ => new RepayCommand(Money.FromMillions(20.0))),
     };
+
+    /// <summary>The first element the engine reports out of service.</summary>
+    private static ChainElementView? Broken(FieldReadModel snapshot)
+    {
+        for (int i = 0; i < snapshot.Chain.Count; i++)
+            if (snapshot.Chain[i].Failed) return snapshot.Chain[i];
+
+        return null;
+    }
+
+    /// <summary>
+    /// The worst-condition element that is still running.
+    /// </summary>
+    /// <remarks>
+    /// Only elements whose condition is <b>known</b> are candidates. A null
+    /// condition is not "as new", it is unmeasured — the company has not fitted
+    /// the kit — and treating it as a number would report truth nobody bought.
+    /// </remarks>
+    private static ChainElementView? Worn(FieldReadModel snapshot)
+    {
+        ChainElementView? worst = null;
+
+        for (int i = 0; i < snapshot.Chain.Count; i++)
+        {
+            ChainElementView element = snapshot.Chain[i];
+
+            if (element.Failed || element.Condition is not double condition)
+                continue;
+
+            if (worst is null || condition < worst.Condition)
+                worst = element;
+        }
+
+        return worst;
+    }
+
+    /// <summary>The first element whose wear nobody can read.</summary>
+    private static ChainElementView? Unmonitored(FieldReadModel snapshot)
+    {
+        for (int i = 0; i < snapshot.Chain.Count; i++)
+            if (snapshot.Chain[i].Condition is null) return snapshot.Chain[i];
+
+        return null;
+    }
 
     private VBoxContainer _cards = null!;
     private VBoxContainer _detail = null!;
@@ -102,7 +239,13 @@ public sealed partial class DispatchBoard : Control
     public override void _Ready()
     {
         SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
-        AddChild(ScreenChrome.Backdrop());
+
+        // The board covers the world, so it needs a ground of its own rather than
+        // a dim over the yard: the supplied dispatch mockup is a full screen, not
+        // a window onto one.
+        var ground = new ColorRect { Color = new Color(KitTheme.Void, 0.96f) };
+        ground.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
+        AddChild(ground);
 
         BuildBoard();
         BuildDetail();
@@ -119,68 +262,102 @@ public sealed partial class DispatchBoard : Control
         }
     }
 
+    /// <summary>The strip across the top of the board — the run, in four readings.</summary>
+    internal static Control Header(FieldReadModel snapshot)
+    {
+        Container inset = SlateChrome.Frame(new Vector2(1500, 0));
+        Control panel = SlateChrome.PanelOf(inset);
+        panel.SetAnchorsPreset(LayoutPreset.CenterTop);
+        panel.Position = new Vector2(-750, 12);
+
+        var row = new HBoxContainer();
+        row.AddThemeConstantOverride("separation", 10);
+        inset.AddChild(row);
+
+        row.AddChild(SlateChrome.Line("THE COMPANY", 20, KitTheme.Amber));
+        row.AddChild(new Control { SizeFlagsHorizontal = SizeFlags.ExpandFill });
+
+        row.AddChild(Stamp($"{snapshot.Date.Year}-{snapshot.Date.Month:00}", KitTheme.Ink));
+        row.AddChild(Stamp($"${snapshot.Cash.Cents / 100.0 / 1e6:N1}M", KitTheme.Green.Lightened(0.4f)));
+        row.AddChild(Stamp($"{snapshot.Wells} wells", KitTheme.Sky));
+
+        row.AddChild(Stamp(
+            snapshot.ActivitiesRunning > 0 ? $"{snapshot.ActivitiesRunning} running" : "idle",
+            snapshot.ActivitiesRunning > 0 ? KitTheme.Amber : KitTheme.Muted));
+
+        return panel;
+    }
+
     private void BuildBoard()
     {
-        PanelContainer board = ScreenChrome.Sign(
-            "DISPATCH BOARD", new Vector2(600, 540), LayoutPreset.CenterLeft, new Vector2(40, -300));
+        Container inset = SlateChrome.Frame(new Vector2(680, 640), "AVAILABLE WORK", UiSurface.Role.Warning);
+        Control panel = SlateChrome.PanelOf(inset);
+        panel.SetAnchorsPreset(LayoutPreset.CenterLeft);
+        panel.Position = new Vector2(40, -300);
+        AddChild(panel);
 
-        AddChild(board);
+        var scroll = new ScrollContainer { HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled };
+        inset.AddChild(scroll);
 
-        var scroll = new ScrollContainer { CustomMinimumSize = new Vector2(566, 452) };
-        _cards = new VBoxContainer { CustomMinimumSize = new Vector2(552, 0) };
-        _cards.AddThemeConstantOverride("separation", 8);
+        _cards = new VBoxContainer { CustomMinimumSize = new Vector2(600, 0) };
+        _cards.AddThemeConstantOverride("separation", 6);
         scroll.AddChild(_cards);
-        ScreenChrome.ContentOf(board).AddChild(scroll);
     }
 
     private void BuildDetail()
     {
-        PanelContainer sign = ScreenChrome.Sign(
-            "THE ORDER", new Vector2(560, 540), LayoutPreset.CenterRight, new Vector2(-40, -300));
+        Container inset = SlateChrome.Frame(new Vector2(620, 640), "ORDER DETAILS", UiSurface.Role.Info);
+        Control panel = SlateChrome.PanelOf(inset);
+        panel.SetAnchorsPreset(LayoutPreset.CenterRight);
+        panel.Position = new Vector2(-660, -300);
+        AddChild(panel);
 
-        sign.GrowHorizontal = GrowDirection.Begin;
-        AddChild(sign);
+        var column = new VBoxContainer();
+        column.AddThemeConstantOverride("separation", 10);
+        inset.AddChild(column);
 
-        VBoxContainer column = ScreenChrome.ContentOf(sign);
+        var scroll = new ScrollContainer
+        {
+            CustomMinimumSize = new Vector2(580, 420),
+            HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled,
+        };
 
-        var paper = new PanelContainer { CustomMinimumSize = new Vector2(524, 330) };
-        paper.AddThemeStyleboxOverride("panel", ScreenChrome.PaperBox());
-
-        _detail = new VBoxContainer();
-        _detail.AddThemeConstantOverride("separation", 10);
-        paper.AddChild(_detail);
-        column.AddChild(paper);
+        _detail = new VBoxContainer { CustomMinimumSize = new Vector2(566, 0) };
+        _detail.AddThemeConstantOverride("separation", 8);
+        scroll.AddChild(_detail);
+        column.AddChild(scroll);
 
         var buttons = new HBoxContainer();
-        buttons.AddThemeConstantOverride("separation", 12);
+        buttons.AddThemeConstantOverride("separation", 10);
 
-        _dispatch = ScreenChrome.Action("DISPATCH", ScreenChrome.Good, new Vector2(330, 52));
+        _dispatch = SlateChrome.Chunk("DISPATCH", UiSurface.Role.Success, new Vector2(380, 50));
         _dispatch.Pressed += () => Send(Catalogue[_selected]);
         buttons.AddChild(_dispatch);
 
-        Button back = ScreenChrome.Action("BACK", ScreenChrome.Bad, new Vector2(180, 52));
+        Button back = SlateChrome.Chunk("BACK", UiSurface.Role.Danger, new Vector2(170, 50));
         back.Pressed += () => SceneRouter.Instance.CloseOverlay();
         buttons.AddChild(back);
 
         column.AddChild(buttons);
 
-        _status = ScreenChrome.Text(string.Empty, 15, ScreenChrome.Cream);
+        _status = SlateChrome.Caption(string.Empty);
         _status.AutowrapMode = TextServer.AutowrapMode.WordSmart;
-        _status.CustomMinimumSize = new Vector2(524, 0);
+        _status.CustomMinimumSize = new Vector2(566, 0);
         column.AddChild(_status);
     }
 
     private void BuildFleetStrip()
     {
-        PanelContainer strip = ScreenChrome.Sign(
-            "EQUIPMENT", new Vector2(640, 0), LayoutPreset.CenterBottom, new Vector2(-320, -14));
-
-        strip.GrowVertical = GrowDirection.Begin;
-        AddChild(strip);
+        Container inset = SlateChrome.Frame(new Vector2(600, 0), "EQUIPMENT", UiSurface.Role.Neutral);
+        Control panel = SlateChrome.PanelOf(inset);
+        panel.SetAnchorsPreset(LayoutPreset.CenterBottom);
+        panel.Position = new Vector2(-300, -16);
+        panel.GrowVertical = GrowDirection.Begin;
+        AddChild(panel);
 
         _fleet = new HBoxContainer();
-        _fleet.AddThemeConstantOverride("separation", 10);
-        ScreenChrome.ContentOf(strip).AddChild(_fleet);
+        _fleet.AddThemeConstantOverride("separation", 8);
+        inset.AddChild(_fleet);
     }
 
     private void Refresh()
@@ -193,7 +370,9 @@ public sealed partial class DispatchBoard : Control
         if (_topBar is not null && IsInstanceValid(_topBar))
             _topBar.QueueFree();
 
-        _topBar = ScreenChrome.TopBar(Line(snapshot));
+        // The board's own header, in the shell's register rather than the yard's:
+        // a board is a company screen, and the wood belongs to the field.
+        _topBar = Header(snapshot);
         AddChild(_topBar);
 
         foreach (Node child in _cards.GetChildren())
@@ -208,17 +387,14 @@ public sealed partial class DispatchBoard : Control
 
             (string? stamp, Color stampColour) = Difficulty(order, snapshot);
 
-            Button card = ScreenChrome.IconCard(
-                order.Icon,
-                order.Title,
-                [order.Equipment, order.Reward],
+            Button card = Card(
+                order,
                 !possible ? "LOCKED" : rigBusy ? "RIG OUT" : "AVAILABLE",
-                !possible ? ScreenChrome.Faded : rigBusy ? ScreenChrome.Gold : ScreenChrome.Good,
+                !possible ? UiSurface.Role.Neutral : rigBusy ? UiSurface.Role.Warning : UiSurface.Role.Success,
                 stamp,
                 stampColour,
                 i == _selected,
-                !possible || rigBusy,
-                new Vector2(552, 84));
+                !possible || rigBusy);
 
             card.Pressed += () =>
             {
@@ -240,26 +416,23 @@ public sealed partial class DispatchBoard : Control
 
         Order order = Catalogue[_selected];
 
-        _detail.AddChild(ScreenChrome.Text(order.Title.ToUpperInvariant(), 24, ScreenChrome.Ink));
+        var head = new HBoxContainer();
+        head.AddThemeConstantOverride("separation", 10);
+        head.AddChild(SlateChrome.Icon(order.Icon, 42.0f));
+        head.AddChild(SlateChrome.Line(order.Title.ToUpperInvariant(), 20, KitTheme.Amber));
+        _detail.AddChild(head);
+        _detail.AddChild(SlateChrome.Rule());
+
         _detail.AddChild(Section("Objective", order.Objective));
 
-        var equipment = new HBoxContainer();
-        equipment.AddThemeConstantOverride("separation", 10);
-        equipment.AddChild(ScreenChrome.Icon(order.EquipmentIcon, 46.0f));
+        _detail.AddChild(SlateChrome.Row2("Equipment", order.Equipment, UiSurface.Role.Info, order.EquipmentIcon));
+        _detail.AddChild(SlateChrome.Row2("Destination", Destination(order, snapshot), UiSurface.Role.Neutral));
+        _detail.AddChild(SlateChrome.Row2("Reward", order.Reward, UiSurface.Role.Success));
 
-        var lines = new VBoxContainer();
-        lines.AddChild(ScreenChrome.Text("Required equipment", 14, new Color(0.45f, 0.40f, 0.34f)));
-        lines.AddChild(ScreenChrome.Text(order.Equipment, 18, ScreenChrome.Ink));
-        equipment.AddChild(lines);
-        _detail.AddChild(equipment);
-
-        _detail.AddChild(Section("Destination", Destination(order, snapshot)));
-        _detail.AddChild(Section("Reward", order.Reward));
-        _detail.AddChild(Section(
-            "Time",
-            order.NeedsRig
-                ? "Months, and the rig is out for all of them."
-                : "It runs alongside whatever else is happening."));
+        _detail.AddChild(SlateChrome.Row2(
+            "Rig time",
+            order.NeedsRig ? "months, and the rig is out" : "runs alongside everything else",
+            order.NeedsRig ? UiSurface.Role.Warning : UiSurface.Role.Neutral));
 
         bool rigBusy = order.NeedsRig && snapshot.ActivitiesRunning > 0;
         _dispatch.Disabled = !order.Possible(snapshot);
@@ -281,34 +454,134 @@ public sealed partial class DispatchBoard : Control
         _fleet.AddChild(Chip("tanker-truck", "Tanker", "ready", true));
     }
 
+    /// <summary>
+    /// One row of the board: icon, title, what it needs and what it pays, with
+    /// the state plate and difficulty stamp the mockup puts on the right.
+    /// </summary>
+    private Button Card(
+        Order order, string state, UiSurface.Role stateRole, string? stamp, Color stampColour,
+        bool selected, bool locked)
+    {
+        var card = new Button { CustomMinimumSize = new Vector2(596, 74), Disabled = locked };
+
+        // Selection lifts the field plate rather than swapping in a button plate
+        // — see SlateChrome.Slab for why a coloured plate under a list row reads
+        // as a button and not as a selection.
+        card.AddThemeStyleboxOverride("normal", SlateChrome.Row(selected));
+        card.AddThemeStyleboxOverride("hover", SlateChrome.Row(true));
+        card.AddThemeStyleboxOverride("pressed", SlateChrome.Row(true));
+        card.AddThemeStyleboxOverride("disabled", SlateChrome.Row(false));
+        card.AddThemeStyleboxOverride("focus", SlateChrome.Nothing);
+
+        var row = new HBoxContainer { MouseFilter = MouseFilterEnum.Ignore };
+        SlateChrome.LayAcross(row, "field");
+        row.AddThemeConstantOverride("separation", 12);
+        card.AddChild(row);
+
+        TextureRect icon = SlateChrome.Icon(order.Icon, 42.0f);
+
+        if (locked)
+            icon.Modulate = new Color(1.0f, 1.0f, 1.0f, 0.4f);
+
+        row.AddChild(icon);
+
+        var lines = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        lines.AddThemeConstantOverride("separation", 1);
+        lines.AddChild(Trimmed(order.Title, 17, locked ? KitTheme.Muted : selected ? KitTheme.Amber : KitTheme.Ink));
+        // The equipment alone. The reward was on this line too and would not fit
+        // beside the stamps — and it is already the row a player reads in ORDER
+        // DETAILS, so the second copy bought an ellipsis and nothing else.
+        lines.AddChild(Trimmed(order.Equipment, 13, KitTheme.Muted));
+        row.AddChild(lines);
+
+        if (stamp is not null)
+            row.AddChild(Stamp(stamp, stampColour));
+
+        row.AddChild(Stamp(state, Tint(stateRole)));
+
+        return card;
+    }
+
+    /// <summary>
+    /// A line that gives way rather than pushing its neighbours off the card.
+    /// </summary>
+    /// <remarks>
+    /// A Label reports its full text as its minimum width, so a long reward
+    /// description grows the row until the stamps on the right are clipped by the
+    /// panel. Clipping the text instead puts the loss where a reader can see it —
+    /// an ellipsis — rather than in a stamp that silently vanished.
+    /// </remarks>
+    private static Label Trimmed(string text, int size, Color colour)
+    {
+        Label label = SlateChrome.Line(text, size, colour);
+        label.ClipText = true;
+        label.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis;
+        label.CustomMinimumSize = new Vector2(150, 0);
+
+        return label;
+    }
+
+    /// <summary>A small plate carrying one word, as the mockup stamps its rows.</summary>
+    private static Control Stamp(string text, Color colour)
+    {
+        var plate = new PanelContainer
+        {
+            CustomMinimumSize = new Vector2(94, 28),
+            SizeFlagsVertical = SizeFlags.ShrinkCenter,
+            MouseFilter = MouseFilterEnum.Ignore,
+        };
+
+        plate.AddThemeStyleboxOverride("panel", SlateChrome.FieldPlate());
+
+        Label label = SlateChrome.Line(text, 13, colour);
+        label.HorizontalAlignment = HorizontalAlignment.Center;
+        plate.AddChild(label);
+
+        return plate;
+    }
+
+    private static Color Tint(UiSurface.Role role) => role switch
+    {
+        UiSurface.Role.Success => KitTheme.Green.Lightened(0.4f),
+        UiSurface.Role.Warning => KitTheme.Amber,
+        UiSurface.Role.Danger => KitTheme.Red.Lightened(0.35f),
+        _ => KitTheme.Muted,
+    };
+
     private static Control Chip(string icon, string name, string state, bool ready)
     {
-        var panel = new PanelContainer { CustomMinimumSize = new Vector2(112, 92) };
-        panel.AddThemeStyleboxOverride("panel", ScreenChrome.PaperBox(ready ? ScreenChrome.Good : ScreenChrome.Faded));
+        var plate = new PanelContainer { CustomMinimumSize = new Vector2(106, 94) };
+        plate.AddThemeStyleboxOverride("panel", SlateChrome.FieldPlate());
 
-        var column = new VBoxContainer();
+        var column = new VBoxContainer { Alignment = BoxContainer.AlignmentMode.Center };
         column.AddThemeConstantOverride("separation", 2);
-        column.AddChild(ScreenChrome.Icon(icon, 38.0f));
-        column.AddChild(ScreenChrome.Text(name, 14, ScreenChrome.Ink, HorizontalAlignment.Center));
-        column.AddChild(ScreenChrome.Text(
-            ready ? "OK - " + state : state,
-            13,
-            ready ? ScreenChrome.Cash : new Color(0.5f, 0.45f, 0.4f),
-            HorizontalAlignment.Center));
 
-        panel.AddChild(column);
+        TextureRect art = SlateChrome.Icon(icon, 34.0f);
+        art.SizeFlagsHorizontal = SizeFlags.ShrinkCenter;
+        column.AddChild(art);
 
-        return panel;
+        Label title = SlateChrome.Line(name, 13, ready ? KitTheme.Ink : KitTheme.Muted);
+        title.HorizontalAlignment = HorizontalAlignment.Center;
+        column.AddChild(title);
+
+        Label reading = SlateChrome.Line(state, 12, ready ? KitTheme.Green.Lightened(0.4f) : KitTheme.Muted);
+        reading.HorizontalAlignment = HorizontalAlignment.Center;
+        column.AddChild(reading);
+
+        plate.AddChild(column);
+
+        return plate;
     }
 
     private static Control Section(string heading, string body)
     {
         var column = new VBoxContainer();
         column.AddThemeConstantOverride("separation", 2);
-        column.AddChild(ScreenChrome.Text(heading, 14, new Color(0.45f, 0.40f, 0.34f)));
+        column.AddChild(SlateChrome.Caption(heading));
 
-        Label text = ScreenChrome.Body(body, 17);
-        text.CustomMinimumSize = new Vector2(492, 0);
+        Label text = SlateChrome.Line(body, 15, KitTheme.Ink);
+        text.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+        text.CustomMinimumSize = new Vector2(556, 0);
         column.AddChild(text);
 
         return column;
@@ -411,18 +684,12 @@ public sealed partial class DispatchBoard : Control
             $"{left / 12}y {left % 12}m left");
     }
 
-    private static ProspectView Best(FieldReadModel snapshot)
-    {
-        ProspectView best = snapshot.Prospects[0];
-
-        for (int i = 1; i < snapshot.Prospects.Count; i++)
-        {
-            if (snapshot.Prospects[i].ProbabilityOfSuccess > best.ProbabilityOfSuccess)
-                best = snapshot.Prospects[i];
-        }
-
-        return best;
-    }
+    /// <summary>
+    /// The structure an order aims at: the most promising one nothing has been
+    /// sunk into yet, falling back to the best overall once they all have.
+    /// </summary>
+    private static ProspectView Best(FieldReadModel snapshot) =>
+        EngineHost.Instance.Drilled.BestUndrilled(snapshot) ?? snapshot.Prospects[0];
 
     private static EntityId<IReservoirCompartmentEntity>? Compartment(FieldReadModel snapshot)
     {

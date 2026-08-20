@@ -1,0 +1,9 @@
+{
+  "kind": "tech",
+  "id": "multi-stage-fracturing",
+  "name": "$loc:tech.multi-stage-fracturing",
+  "availableFrom": "E4",
+  "diffusionLagTicks": 0,
+  "prerequisites": ["hydraulic-fracturing"],
+  "routes": ["Research", "Licence", "ServiceRental"]
+}

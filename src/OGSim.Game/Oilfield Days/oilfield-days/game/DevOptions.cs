@@ -59,6 +59,27 @@ public static class DevOptions
     /// <summary>A screen to open once the game is up: a board, or a whole scene.</summary>
     public static string? Screen => Value("--screen=");
 
+    /// <summary>Play the run for this many months with the development policy.</summary>
+    public static int Play =>
+        Value("--play=") is string raw && int.TryParse(raw, out int months) ? months : 0;
+
+    /// <summary>Save the run once the fast-forward has finished.</summary>
+    public static bool Save => Has("--save");
+
+    /// <summary>Open the newest save instead of creating a world.</summary>
+    public static bool LoadNewest => Has("--load");
+
+    private static bool Has(string flag)
+    {
+        foreach (string argument in OS.GetCmdlineUserArgs())
+        {
+            if (argument == flag)
+                return true;
+        }
+
+        return false;
+    }
+
     /// <summary>Camera zoom, for looking at the whole basin at once.</summary>
     public static float? Zoom =>
         Value("--zoom=") is string raw
@@ -66,6 +87,9 @@ public static class DevOptions
             System.Globalization.CultureInfo.InvariantCulture, out float z)
             ? z
             : null;
+
+    /// <summary>Reality profile override, for comparing composed model sets.</summary>
+    public static string? Profile => Value("--profile=");
 
     private static string? Value(string flag)
     {

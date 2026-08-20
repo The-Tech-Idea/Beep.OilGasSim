@@ -1,0 +1,8 @@
+{
+  "kind": "property-kind",
+  "id": "oil-in-place",
+  "dimension": "SurfaceVolume",
+  "space": "Log",
+  "minimumValid": 1.0e3,
+  "maximumValid": 1.0e11
+}

@@ -1,0 +1,9 @@
+{
+  "kind": "tech",
+  "id": "waterflood",
+  "name": "$loc:tech.waterflood",
+  "availableFrom": "E2",
+  "diffusionLagTicks": 120,
+  "prerequisites": [],
+  "routes": ["Research", "Licence", "Diffusion"]
+}

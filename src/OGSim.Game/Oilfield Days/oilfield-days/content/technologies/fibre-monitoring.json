@@ -1,0 +1,9 @@
+{
+  "kind": "tech",
+  "id": "fibre-monitoring",
+  "name": "$loc:tech.fibre-monitoring",
+  "availableFrom": "E4",
+  "diffusionLagTicks": 0,
+  "prerequisites": ["downhole-gauges"],
+  "routes": ["Research", "Licence", "ServiceRental"]
+}

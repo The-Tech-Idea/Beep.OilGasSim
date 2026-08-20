@@ -1,0 +1,10 @@
+{
+  "kind": "tech",
+  "id": "3-d-seismic",
+  "name": "$loc:tech.3-d-seismic",
+  "availableFrom": "E2",
+  "diffusionLagTicks": 120,
+  "prerequisites": ["2-d-seismic"],
+  "routes": ["Research", "Licence", "ServiceRental", "Diffusion"],
+  "grantsDetectClass": "D1"
+}

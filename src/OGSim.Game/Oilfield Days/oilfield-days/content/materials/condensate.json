@@ -1,0 +1,11 @@
+{
+  "kind": "material",
+  "id": "condensate",
+  "phase": "Liquid",
+  "sold": true,
+  "properties": {
+    "density": "740 kg/m3",
+    "viscosity": "0.6 cP",
+    "heating-value": "44.9 MJ/kg"
+  }
+}

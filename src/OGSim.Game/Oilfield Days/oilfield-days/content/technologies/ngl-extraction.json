@@ -1,0 +1,9 @@
+{
+  "kind": "tech",
+  "id": "ngl-extraction",
+  "name": "$loc:tech.ngl-extraction",
+  "availableFrom": "E2",
+  "diffusionLagTicks": 0,
+  "prerequisites": ["multi-stage-separation"],
+  "routes": ["Research", "Licence"]
+}

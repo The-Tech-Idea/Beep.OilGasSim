@@ -1,0 +1,10 @@
+{
+  "kind": "material",
+  "id": "nitrogen",
+  "phase": "Gas",
+  "sold": false,
+  "properties": {
+    "density": "1.17 kg/m3",
+    "viscosity": "0.018 cP"
+  }
+}

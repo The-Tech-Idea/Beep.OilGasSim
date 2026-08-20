@@ -1,0 +1,9 @@
+{
+  "kind": "tech",
+  "id": "pm-motor-esp",
+  "name": "$loc:tech.pm-motor-esp",
+  "availableFrom": "E4",
+  "diffusionLagTicks": 0,
+  "prerequisites": ["high-temp-gassy-esp"],
+  "routes": ["Research", "Licence"]
+}

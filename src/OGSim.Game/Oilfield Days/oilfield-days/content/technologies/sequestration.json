@@ -1,0 +1,9 @@
+{
+  "kind": "tech",
+  "id": "sequestration",
+  "name": "$loc:tech.sequestration",
+  "availableFrom": "E4",
+  "diffusionLagTicks": 0,
+  "prerequisites": ["carbon-capture", "co2-flood"],
+  "routes": ["Research", "Licence"]
+}

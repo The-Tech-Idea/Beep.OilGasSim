@@ -1,0 +1,9 @@
+{
+  "kind": "tech",
+  "id": "gas-injection",
+  "name": "$loc:tech.gas-injection",
+  "availableFrom": "E2",
+  "diffusionLagTicks": 0,
+  "prerequisites": ["waterflood"],
+  "routes": ["Research", "Licence"]
+}

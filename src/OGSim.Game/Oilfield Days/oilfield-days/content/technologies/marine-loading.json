@@ -1,0 +1,9 @@
+{
+  "kind": "tech",
+  "id": "marine-loading",
+  "name": "$loc:tech.marine-loading",
+  "availableFrom": "E2",
+  "diffusionLagTicks": 0,
+  "prerequisites": [],
+  "routes": ["Research", "Licence"]
+}

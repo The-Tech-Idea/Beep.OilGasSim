@@ -1,0 +1,9 @@
+{
+  "kind": "tech",
+  "id": "sour-service-metallurgy",
+  "name": "$loc:tech.sour-service-metallurgy",
+  "availableFrom": "E2",
+  "diffusionLagTicks": 120,
+  "prerequisites": [],
+  "routes": ["Research", "Licence", "Diffusion"]
+}

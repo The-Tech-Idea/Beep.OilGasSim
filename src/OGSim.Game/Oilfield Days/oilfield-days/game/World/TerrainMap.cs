@@ -35,7 +35,17 @@ public sealed class TerrainMap
     private readonly Ground[] _ground;
     private readonly bool[] _dry;
 
-    public TerrainMap(int tiles, ulong seed)
+    /// <param name="landFraction">
+    /// How much of the basin is dry land, straight off the world draft. It moves
+    /// the shoreline, so the ground a player previews at setup is the ground the
+    /// world is built from rather than a picture of a different basin.
+    /// </param>
+    /// <param name="climateSeverity">
+    /// How hard the climate is, 0 to 1. It moves the line between green country
+    /// and burnt country; it does not move the shoreline, because a severe
+    /// climate makes a basin drier, not smaller.
+    /// </param>
+    public TerrainMap(int tiles, ulong seed, double landFraction, double climateSeverity)
     {
         Size = tiles;
         _ground = new Ground[tiles * tiles];
@@ -87,6 +97,10 @@ public sealed class TerrainMap
 
         Bitmap = Image.CreateEmpty(tiles, tiles, false, Image.Format.Rgb8);
 
+        int count = tiles * tiles;
+        float[] heights = new float[count];
+        float[] moist = new float[count];
+
         for (int y = 0; y < tiles; y++)
         {
             for (int x = 0; x < tiles; x++)
@@ -94,33 +108,65 @@ public sealed class TerrainMap
                 // Noise runs -1..1; the game thinks in 0..1.
                 float h = (height.GetNoise2D(x, y) + 1.0f) * 0.5f;
                 float r = (ridge.GetNoise2D(x, y) + 1.0f) * 0.5f;
-                float m = (moisture.GetNoise2D(x, y) + 1.0f) * 0.5f;
 
                 // The ridges only bite where the ground is already high, so the
                 // lowlands stay smooth and the tops break up.
                 h = Mathf.Lerp(h, Mathf.Max(h, r), Mathf.Clamp((h - 0.55f) / 0.25f, 0.0f, 1.0f));
 
-                // Pull the edges of the basin down a little so a field does not
-                // start halfway up a cliff at the map border.
-                float edge = EdgeFalloff(x, y, tiles);
-                h *= edge;
-
-                Ground ground = h switch
-                {
-                    < 0.30f => Ground.Water,
-                    < 0.36f => Ground.Sand,
-                    < 0.74f => Ground.Grass,
-                    _ => Ground.Rock,
-                };
+                // Pull the edges of the basin down so a field does not start
+                // halfway up a cliff at the map border.
+                h *= EdgeFalloff(x, y, tiles);
 
                 int i = (y * tiles) + x;
-                _ground[i] = ground;
-                _dry[i] = m < 0.42f;
-
-                Bitmap.SetPixel(x, y, new Color(h, m, (float)ground / 3.0f));
+                heights[i] = h;
+                moist[i] = (moisture.GetNoise2D(x, y) + 1.0f) * 0.5f;
             }
         }
+
+        // Sea level is read off the terrain rather than guessed at: sort the
+        // heights and cut where the asked-for fraction is above the line. Land
+        // fraction then means what it says on the setup screen — 0.4 gives a
+        // basin that is 40% dry, on any seed, at any size — instead of naming a
+        // threshold whose effect depends on how the noise happened to fall.
+        float[] sorted = (float[])heights.Clone();
+        System.Array.Sort(sorted);
+
+        float sea = sorted[Mathf.Clamp(
+            (int)((1.0 - Mathf.Clamp(landFraction, 0.05, 0.98)) * count), 0, count - 1)];
+
+        // The same trick for the wet/dry line: severity is the share of the
+        // basin that comes up burnt.
+        float[] wetness = (float[])moist.Clone();
+        System.Array.Sort(wetness);
+
+        float arid = wetness[Mathf.Clamp(
+            (int)(Mathf.Clamp(climateSeverity, 0.0, 1.0) * count), 0, count - 1)];
+
+        // Rock starts a fixed way up what is left above the water, so a drowned
+        // basin does not turn its few remaining hills into a mountain range.
+        float rockLine = sea + ((1.0f - sea) * RockHeadroom);
+
+        for (int i = 0; i < count; i++)
+        {
+            float h = heights[i];
+
+            Ground ground = h < sea ? Ground.Water
+                : h < sea + BeachWidth ? Ground.Sand
+                : h < rockLine ? Ground.Grass
+                : Ground.Rock;
+
+            _ground[i] = ground;
+            _dry[i] = moist[i] < arid;
+
+            Bitmap.SetPixel(i % tiles, i / tiles, new Color(h, moist[i], (float)ground / 3.0f));
+        }
     }
+
+    /// <summary>How much beach there is between water and grass.</summary>
+    private const float BeachWidth = 0.06f;
+
+    /// <summary>How far up the dry ground rock takes over.</summary>
+    private const float RockHeadroom = 0.62f;
 
     public int Size { get; }
 

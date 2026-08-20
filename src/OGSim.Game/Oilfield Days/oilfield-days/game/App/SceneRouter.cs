@@ -19,7 +19,10 @@ public sealed partial class SceneRouter : Node
 {
     public static SceneRouter Instance { get; private set; } = null!;
 
+    public const string Splash = "res://scenes/Splash.tscn";
     public const string MainMenu = "res://scenes/MainMenu.tscn";
+    public const string Options = "res://scenes/Options.tscn";
+    public const string LoadGame = "res://scenes/Load.tscn";
     public const string NewGame = "res://scenes/NewGame.tscn";
     public const string Gameplay = "res://scenes/Gameplay.tscn";
     public const string Result = "res://scenes/Result.tscn";
@@ -39,6 +42,20 @@ public sealed partial class SceneRouter : Node
     {
         Instance = this;
 
+        // The kit's widgets read their colours from the theme, so the theme has
+        // to exist before the first screen draws. An autoload's _EnterTree is the
+        // earliest point at which the window root exists to hang it on.
+        KitTheme.Install(this);
+
+        // A development knife, before anything draws: cut the supplied UI atlases
+        // into pieces and quit. It writes art into the project, so it never runs
+        // in a game.
+        if (DevAtlasSlice.RunIfRequested())
+        {
+            GetTree().Quit();
+            return;
+        }
+
         // One layer above everything the gameplay scene draws, created once so a
         // board can survive the frame its opener was disposed in.
         _overlays = new CanvasLayer { Name = "Overlays", Layer = 40 };
@@ -51,17 +68,39 @@ public sealed partial class SceneRouter : Node
     {
         // A development switch can open any top-level scene straight away, so a
         // screen can be looked at without clicking through the flow to reach it.
+        // Deferred: the main scene is still being added when an autoload becomes
+        // ready, and swapping it out mid-add is refused by the tree.
+        if (DevOptions.Screen is not null)
+            CallDeferred(MethodName.OpenDevScreen);
+    }
+
+    private void OpenDevScreen()
+    {
         switch (DevOptions.Screen)
         {
+            case "splash":
+                Go(Splash);
+                break;
+
             case "menu":
                 Go(MainMenu);
+                break;
+
+            case "options":
+                Go(Options);
+                break;
+
+            case "load":
+                Go(LoadGame);
                 break;
 
             case "newgame":
                 Go(NewGame);
                 break;
 
-            case "gameplay":
+            // Everything else names a board, and a board opens over the running
+            // game — so the game is what gets loaded, and it opens the board.
+            default:
                 Go(Gameplay);
                 break;
         }

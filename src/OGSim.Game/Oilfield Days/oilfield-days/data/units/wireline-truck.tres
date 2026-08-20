@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="UnitKind" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://game/World/UnitKind.cs" id="1_script"]
+[ext_resource type="Texture2D" path="res://assets/props/pipe-handling-trailer.png" id="2_art"]
+
+[resource]
+script = ExtResource("1_script")
+DisplayName = "Wireline truck"
+Carries = 4
+Art = ExtResource("2_art")
+DrawHeight = 84.0
+Speed = 1120.0
+YardStand = Vector2(-1.3, 7.8)
+WorkingFrames = 1

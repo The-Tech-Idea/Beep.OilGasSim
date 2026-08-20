@@ -1,0 +1,8 @@
+{
+  "kind": "property-kind",
+  "id": "heating-value",
+  "dimension": "HeatingValue",
+  "space": "Linear",
+  "minimumValid": 0.0,
+  "maximumValid": 60000000.0
+}

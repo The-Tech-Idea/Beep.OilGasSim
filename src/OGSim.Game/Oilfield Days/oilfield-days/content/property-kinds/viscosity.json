@@ -1,0 +1,8 @@
+{
+  "kind": "property-kind",
+  "id": "viscosity",
+  "dimension": "Viscosity",
+  "space": "Log",
+  "minimumValid": 1e-6,
+  "maximumValid": 10.0
+}

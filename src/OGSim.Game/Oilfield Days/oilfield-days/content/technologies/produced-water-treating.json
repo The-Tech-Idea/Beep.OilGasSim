@@ -1,0 +1,9 @@
+{
+  "kind": "tech",
+  "id": "produced-water-treating",
+  "name": "$loc:tech.produced-water-treating",
+  "availableFrom": "E3",
+  "diffusionLagTicks": 0,
+  "prerequisites": [],
+  "routes": ["Research", "Licence"]
+}

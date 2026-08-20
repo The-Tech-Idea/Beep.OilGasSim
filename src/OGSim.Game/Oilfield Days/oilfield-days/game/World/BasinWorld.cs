@@ -4,6 +4,7 @@ using System;
 using System.Collections.Generic;
 using Godot;
 using OGSim.Composition;
+using OilfieldDays.App;
 using OGSim.Contracts;
 using OGSim.Kernel;
 
@@ -49,6 +50,9 @@ public sealed partial class BasinWorld : Node2D
 
     private const int WellPadTiles = 5;
     private const int ProspectPadTiles = 3;
+    /// <summary>How wide the plant may run before the packer wraps a row.</summary>
+    private const int YardTilesAcross = 26;
+
     private const int PlantPadWide = 16;
     private const int PlantPadTall = 9;
     private const int RoadWidth = 2;
@@ -71,8 +75,20 @@ public sealed partial class BasinWorld : Node2D
     private Node2D _sceneryLayer = null!;
     private Node2D _markerLayer = null!;
     private Node2D _plantLayer = null!;
+    private Node2D _risingLayer = null!;
     private Node2D _yardLayer = null!;
     private RoadTruck _traffic = null!;
+
+    private readonly PlantYard _yard = new();
+
+    /// <summary>Where each yard building stands, and the board it opens.</summary>
+    private readonly List<(Vector2 At, string Opens)> _yardDoors = new();
+
+    /// <summary>Where each plant structure ended up, and how much ground it holds.</summary>
+    private IReadOnlyList<PlantYard.Placed> _plots = System.Array.Empty<PlantYard.Placed>();
+
+    /// <summary>Which chain element is standing on each plot, once one is drawn.</summary>
+    private readonly List<(Vector2 At, ChainElementView Element)> _standing = new();
 
     private int _tiles;
     private int _wellsLastSeen;
@@ -92,14 +108,14 @@ public sealed partial class BasinWorld : Node2D
     /// coordinates, so the host picks one place to build it and keeps it.</summary>
     public Vector2 PlantSite { get; private set; }
 
-    public void Build(int basinKilometres, ulong seed)
+    public void Build(int basinKilometres, ulong seed, double landFraction, double climateSeverity)
     {
         _tiles = basinKilometres * TilesPerKilometre;
         _ground = new WorldMap(_tiles, _tiles);
 
         // The ground is generated from the same seed the engine generated the
         // basin from, so a run's field and its landscape are one world.
-        _terrain = new TerrainMap(_tiles, seed);
+        _terrain = new TerrainMap(_tiles, seed, landFraction, climateSeverity);
 
         // The yard sits in the middle of the basin's south, where one road can
         // reach every structure without crossing the whole field.
@@ -123,6 +139,9 @@ public sealed partial class BasinWorld : Node2D
         AddChild(_sceneryLayer);
         AddChild(_yardLayer);
         AddChild(_plantLayer);
+
+        _risingLayer = new Node2D { Name = "Rising", YSortEnabled = true };
+        AddChild(_risingLayer);
         AddChild(_markerLayer);
 
         _traffic = new RoadTruck { Name = "Traffic" };
@@ -143,19 +162,24 @@ public sealed partial class BasinWorld : Node2D
     /// </remarks>
     private void BuildYard()
     {
-        (string art, string name, float dx, float dy, float tall)[] yard =
+        // Each building stands for something, and clicking it opens that thing —
+        // the office is the dispatch board, the warehouse is the fleet. A base a
+        // player can only read is scenery; a base they can use is the game.
+        (string art, string name, float dx, float dy, float tall, string opens)[] yard =
         {
-            ("control-room-cabin", "Control Room", -7.5f, -3.4f, 2.4f),
-            ("maintenance-workshop", "Maintenance Workshop", -4.4f, -3.6f, 2.6f),
-            ("equipment-warehouse", "Equipment Warehouse", 4.8f, -3.6f, 2.6f),
-            ("worker-accommodation-cabin", "Crew Quarters", 7.6f, -3.2f, 2.2f),
-            ("fuel-tank", "Fuel", -7.4f, 2.8f, 1.6f),
-            ("frac-tank", "Water", 7.6f, 2.8f, 1.6f),
-            ("site-lighting-pole", string.Empty, 0.0f, -3.8f, 2.2f),
-            ("security-checkpoint", "Gate", -1.8f, 4.4f, 1.8f),
+            ("control-room-cabin", "Control Room", -7.5f, -3.4f, 2.4f, SceneRouter.DispatchBoard),
+            ("maintenance-workshop", "Maintenance Workshop", -4.4f, -3.6f, 2.6f, SceneRouter.DispatchBoard),
+            ("equipment-warehouse", "Equipment Warehouse", 4.8f, -3.6f, 2.6f, SceneRouter.FleetBoard),
+            ("worker-accommodation-cabin", "Crew Quarters", 7.6f, -3.2f, 2.2f, SceneRouter.FleetBoard),
+            ("fuel-tank", "Fuel", -7.4f, 2.8f, 1.6f, ""),
+            ("frac-tank", "Water", 7.6f, 2.8f, 1.6f, ""),
+            ("site-lighting-pole", string.Empty, 0.0f, -3.8f, 2.2f, ""),
+            ("security-checkpoint", "Gate", -1.8f, 4.4f, 1.8f, SceneRouter.LeaseBoard),
         };
 
-        foreach ((string art, string name, float dx, float dy, float tall) in yard)
+        _yardDoors.Clear();
+
+        foreach ((string art, string name, float dx, float dy, float tall, string opens) in yard)
         {
             var texture = GD.Load<Texture2D>($"res://assets/props/{art}.png");
 
@@ -171,6 +195,9 @@ public sealed partial class BasinWorld : Node2D
             // yard is a row of sheds and a player has to guess which is which.
             if (name.Length > 0)
                 prop.AddChild(Caption(name));
+
+            if (opens.Length > 0)
+                _yardDoors.Add((prop.Position, opens));
 
             _yardLayer.AddChild(prop);
         }
@@ -188,7 +215,7 @@ public sealed partial class BasinWorld : Node2D
 
         if (_groundDirty)
         {
-            PaintGround(snapshot);
+            PaintGround(snapshot.Prospects);
             _groundDirty = false;
         }
 
@@ -199,6 +226,45 @@ public sealed partial class BasinWorld : Node2D
     public static Vector2 ToWorld(Coordinate at) => new(
         (float)(at.X / MetresPerCell * TilesPerKilometre * TileSize),
         (float)(at.Y / MetresPerCell * TilesPerKilometre * TileSize));
+
+    /// <summary>
+    /// The board a yard building opens, if a point lands on one.
+    /// </summary>
+    /// <remarks>
+    /// A tighter reach than a structure gets: the yard's buildings stand close
+    /// together, and a generous radius would have the office answering for the
+    /// workshop next door.
+    /// </remarks>
+    public string? DoorNear(Vector2 point, float reach)
+    {
+        string? opens = null;
+        float best = reach;
+
+        for (int i = 0; i < _yardDoors.Count; i++)
+        {
+            float distance = _yardDoors[i].At.DistanceTo(point);
+
+            if (distance > best)
+                continue;
+
+            opens = _yardDoors[i].Opens;
+            best = distance;
+        }
+
+        return opens;
+    }
+
+    /// <summary>
+    /// Where a well stands, for a crew to drive to.
+    /// </summary>
+    /// <remarks>
+    /// From the host's own record of where it sent the rig: the read model
+    /// carries no coordinate for a well, only for the structure it was drilled
+    /// into, so this is the client recalling its own orders rather than reading
+    /// engine state.
+    /// </remarks>
+    public Vector2? SiteOf(ulong well) =>
+        _wellSites.TryGetValue(well, out Coordinate at) ? ToWorld(at) : null;
 
     /// <summary>The prospect nearest a point, within reach, or null.</summary>
     public ProspectView? ProspectNear(Vector2 point, float reach, FieldReadModel snapshot)
@@ -261,7 +327,23 @@ public sealed partial class BasinWorld : Node2D
     /// visiting, which is how a field actually grows: access is built to what
     /// has been found.
     /// </remarks>
-    private void PaintGround(FieldReadModel snapshot)
+    /// <summary>
+    /// Lay the ground with no run behind it — the setup screen's preview.
+    /// </summary>
+    /// <remarks>
+    /// The same painter the game uses, given no prospects, because at setup
+    /// there is no engine and therefore nothing known about the subsurface. That
+    /// is not a limitation worked around here: GAME-SDD-002 §7A.4 requires the
+    /// preview to be surface only, and a painter with an empty prospect list is
+    /// exactly a surface.
+    /// </remarks>
+    public void PaintBareGround()
+    {
+        PaintGround(System.Array.Empty<ProspectView>());
+        _groundDirty = false;
+    }
+
+    private void PaintGround(IReadOnlyList<ProspectView> prospects)
     {
         _ground.Fill(new Rect2I(0, 0, _tiles, _tiles), TerrainKind.Grass);
 
@@ -271,8 +353,8 @@ public sealed partial class BasinWorld : Node2D
         // ground, and the noise does not get a vote on where the rig goes.
         _terrain.Level(Around(plant, PlantPadWide + 2, PlantPadTall + 2));
 
-        for (int i = 0; i < snapshot.Prospects.Count; i++)
-            _terrain.Level(Around(ToTile(snapshot.Prospects[i].At), ProspectPadTiles + 2, ProspectPadTiles + 2));
+        for (int i = 0; i < prospects.Count; i++)
+            _terrain.Level(Around(ToTile(prospects[i].At), ProspectPadTiles + 2, ProspectPadTiles + 2));
 
         foreach (KeyValuePair<ulong, Coordinate> pair in _wellSites)
             _terrain.Level(Around(ToTile(pair.Value), WellPadTiles + 2, WellPadTiles + 2));
@@ -283,13 +365,35 @@ public sealed partial class BasinWorld : Node2D
         foreach (KeyValuePair<ulong, Coordinate> pair in _wellSites)
             _ground.Road(ToTile(pair.Value), plant, RoadWidth);
 
-        for (int i = 0; i < snapshot.Prospects.Count; i++)
-            _ground.Road(ToTile(snapshot.Prospects[i].At), plant, RoadWidth);
+        for (int i = 0; i < prospects.Count; i++)
+            _ground.Road(ToTile(prospects[i].At), plant, RoadWidth);
 
-        _ground.Fill(Around(plant, PlantPadWide, PlantPadTall), TerrainKind.GravelPad);
+        // Gravel under each structure's own plot rather than one slab under the
+        // lot: the clearance a kind asks for is drawn as ground, which is what
+        // makes the gaps read as access rather than as a mistake.
+        if (_plots.Count == 0)
+        {
+            _ground.Fill(Around(plant, PlantPadWide, PlantPadTall), TerrainKind.GravelPad);
+        }
+        else
+        {
+            for (int i = 0; i < _plots.Count; i++)
+            {
+                Rect2I plot = _plots[i].Plot;
 
-        for (int i = 0; i < snapshot.Prospects.Count; i++)
-            _ground.Fill(Around(ToTile(snapshot.Prospects[i].At), ProspectPadTiles, ProspectPadTiles), TerrainKind.GravelPad);
+                var onGround = new Rect2I(
+                    plant.X + plot.Position.X,
+                    plant.Y + plot.Position.Y,
+                    plot.Size.X,
+                    plot.Size.Y);
+
+                _terrain.Level(onGround.Grow(1));
+                _ground.Fill(onGround, TerrainKind.GravelPad);
+            }
+        }
+
+        for (int i = 0; i < prospects.Count; i++)
+            _ground.Fill(Around(ToTile(prospects[i].At), ProspectPadTiles, ProspectPadTiles), TerrainKind.GravelPad);
 
         for (int i = 0; i < _dryHoles.Count; i++)
             _ground.Fill(Around(ToTile(_dryHoles[i]), ProspectPadTiles, ProspectPadTiles), TerrainKind.GravelPad);
@@ -541,9 +645,15 @@ public sealed partial class BasinWorld : Node2D
                     FitSprite(sprite, WorldHeight(well.Status));
                 }
 
+                // A well that made nothing this month is drawn cold. It is the
+                // one thing about a producing field that should be readable
+                // without opening a panel, and it renders a published number
+                // rather than a judgement: ProducedThisTick, or the lack of it.
                 sprite.Modulate = well.Status == WellStatus.Abandoned
                     ? new Color(0.65f, 0.65f, 0.65f)
-                    : Colors.White;
+                    : well.ProducedThisTick.CubicMetres <= 0.0
+                        ? new Color(0.72f, 0.74f, 0.78f)
+                        : Colors.White;
 
                 continue;
             }
@@ -567,15 +677,37 @@ public sealed partial class BasinWorld : Node2D
         foreach (Node child in _plantLayer.GetChildren())
             child.QueueFree();
 
-        int perRow = Mathf.Max(1, Mathf.CeilToInt(snapshot.Chain.Count / 2.0f));
-        float spacing = TileSize * 2.2f;
-        float rowHeight = TileSize * 3.2f;
-        float left = PlantSite.X - (spacing * (perRow - 1) * 0.5f);
-        float top = PlantSite.Y - (rowHeight * 0.5f);
+        var ids = new List<string>(snapshot.Chain.Count);
+
+        for (int i = 0; i < snapshot.Chain.Count; i++)
+            ids.Add(snapshot.Chain[i].DisplayId);
+
+        // Each structure gets the ground its own kind asks for, and the plots
+        // never overlap. The old layout dealt every element the same slot
+        // whatever it was, so a storage tank and a metering station stood on the
+        // same patch and everything touched.
+        IReadOnlyList<PlantYard.Placed> plots = _yard.Lay(ids, PlantSite, YardTilesAcross);
+
+        if (!SamePlots(plots))
+        {
+            _plots = plots;
+
+            // The apron under the plant is part of the layout, so a change to it
+            // is a repaint rather than something that quietly stops matching.
+            _groundDirty = true;
+        }
+
+        int at = 0;
+        _standing.Clear();
 
         for (int i = 0; i < snapshot.Chain.Count; i++)
         {
             ChainElementView element = snapshot.Chain[i];
+
+            if (_yard.KindFor(element.DisplayId) is null || at >= _plots.Count)
+                continue;
+
+            PlantYard.Placed plot = _plots[at++];
             double held = 0.0;
 
             for (int d = 0; d < element.Deferred.Count; d++)
@@ -585,20 +717,122 @@ public sealed partial class BasinWorld : Node2D
                 ? $"{element.DisplayId}\n{element.Throughput.Kilograms / 1000.0:N0} t · {held / 1000.0:N0} t held"
                 : $"{element.DisplayId}\n{element.Throughput.Kilograms / 1000.0:N0} t";
 
-            int row = i / perRow;
-            int column = i % perRow;
+            // MakeProp measures in TILES and the resource is authored in pixels,
+            // because a designer sizing a sprite thinks in the sprite's own units.
+            // The conversion belongs here rather than in the .tres.
+            Node2D node = MakeStructure(
+                plot.Kind, plot.Centre, element.Throughput.Kilograms > 0.0 && !element.Failed);
+            node.AddChild(Caption(caption));
 
-            Node2D node = MakeMarker(
-                ArtForElement(element.DisplayId),
-                new Vector2(left + (column * spacing), top + (row * rowHeight)),
-                ElementHeight(element.DisplayId),
-                caption);
+            if (element.Failed)
+                node.GetNode<Sprite2D>("Art").Modulate = new Color(1.0f, 0.55f, 0.5f);
 
             if (held > 0.0)
                 node.GetNode<Label>("Caption").AddThemeColorOverride("font_color", new Color(1.0f, 0.45f, 0.35f));
 
+            _standing.Add((plot.Centre, element));
             _plantLayer.AddChild(node);
         }
+    }
+
+    /// <summary>
+    /// Draw a bay under construction for each thing the crew is putting up.
+    /// </summary>
+    /// <remarks>
+    /// The bay is the next one the packer would use, which is the honest answer
+    /// to "where is it going" — the engine has no coordinate for a facility (gap
+    /// G-02), so the host picks and shows rather than letting a player choose a
+    /// spot that would mean nothing.
+    ///
+    /// <para>The scaffold comes down when the ELEMENT APPEARS in the chain, not
+    /// on a timer: that decision belongs to the dispatcher, which watches the
+    /// count, and this only draws what it is told is still rising.</para>
+    /// </remarks>
+    public void ShowRising(IReadOnlyList<string> rising)
+    {
+        foreach (Node child in _risingLayer.GetChildren())
+            child.QueueFree();
+
+        if (rising.Count == 0)
+            return;
+
+        var scaffold = GD.Load<Texture2D>("res://assets/props/mobile-crane-truck.png");
+
+        if (scaffold is null)
+            return;
+
+        // Along the bottom of the plant, where the next row would go.
+        float left = PlantSite.X - (rising.Count - 1) * TileSize * 3.0f * 0.5f;
+        float below = PlantSite.Y + (TileSize * 5.5f);
+
+        for (int i = 0; i < rising.Count; i++)
+        {
+            Node2D node = MakeProp(
+                scaffold,
+                new Vector2(left + (i * TileSize * 3.0f), below),
+                1.5f);
+
+            Label caption = Caption($"building\n{rising[i]}");
+            caption.AddThemeColorOverride("font_color", new Color(0.95f, 0.78f, 0.35f));
+            node.AddChild(caption);
+
+            _risingLayer.AddChild(node);
+        }
+    }
+
+    /// <summary>
+    /// The chain element nearest a point, within reach, or null.
+    /// </summary>
+    /// <remarks>
+    /// Reach is half a structure's own plot, so clicking a separator selects the
+    /// separator rather than whatever is beside it — the plots are packed with
+    /// clearance and a generous radius would hand every click to the largest
+    /// neighbour.
+    /// </remarks>
+    public ChainElementView? ElementNear(Vector2 point, float reach)
+    {
+        ChainElementView? nearest = null;
+        float best = reach;
+
+        for (int i = 0; i < _standing.Count; i++)
+        {
+            float distance = _standing[i].At.DistanceTo(point);
+
+            if (distance > best)
+                continue;
+
+            nearest = _standing[i].Element;
+            best = distance;
+        }
+
+        return nearest;
+    }
+
+    /// <summary>Where a chain element stands, for a crew to drive to.</summary>
+    public Vector2? WhereIs(ulong element)
+    {
+        for (int i = 0; i < _standing.Count; i++)
+        {
+            if (_standing[i].Element.Element.Value == element)
+                return _standing[i].At;
+        }
+
+        return null;
+    }
+
+    /// <summary>Whether the plant is standing where it was standing last tick.</summary>
+    private bool SamePlots(IReadOnlyList<PlantYard.Placed> plots)
+    {
+        if (plots.Count != _plots.Count)
+            return false;
+
+        for (int i = 0; i < plots.Count; i++)
+        {
+            if (plots[i].Plot != _plots[i].Plot)
+                return false;
+        }
+
+        return true;
     }
 
     private Vector2? NewestWellSite()
@@ -723,6 +957,44 @@ public sealed partial class BasinWorld : Node2D
 
         Node2D holder = MakeProp(texture, position, tilesTall);
         holder.AddChild(Caption(caption));
+
+        return holder;
+    }
+
+    /// <summary>
+    /// One plant structure, animated if its kind has a strip and it is running.
+    /// </summary>
+    /// <remarks>
+    /// <b>Running is the engine's word, not the host's.</b> A structure moves
+    /// while it is carrying mass and has not failed — both read straight off the
+    /// chain view. Nothing here decides that something is working.
+    /// </remarks>
+    private static Node2D MakeStructure(StructureKind kind, Vector2 position, bool running)
+    {
+        bool animate = running && kind.Working is not null && kind.WorkingFrames > 1;
+        Texture2D texture = animate ? kind.Working! : kind.Art!;
+
+        var sprite = new WorkingProp
+        {
+            Name = "Art",
+            Texture = texture,
+            Hframes = animate ? kind.WorkingFrames : 1,
+            Running = animate,
+            TextureFilter = CanvasItem.TextureFilterEnum.Nearest,
+        };
+
+        // Scaled off the FRAME rather than the sheet, or an eight-frame strip
+        // draws one eighth the size of the still beside it.
+        float frameTall = texture.GetHeight();
+        float scale = kind.DrawHeight / Mathf.Max(1.0f, frameTall);
+        sprite.Scale = new Vector2(scale, scale);
+
+        var holder = new Node2D { Position = position, ZIndex = 0 };
+        holder.AddChild(sprite);
+
+        // Feet on the ground: the sprite is drawn standing on its position
+        // rather than centred over it, which is what puts it on its own plot.
+        sprite.Position = new Vector2(0.0f, -kind.DrawHeight * 0.5f);
 
         return holder;
     }

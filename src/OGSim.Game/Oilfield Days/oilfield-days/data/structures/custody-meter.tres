@@ -1,0 +1,12 @@
+[gd_resource type="Resource" script_class="StructureKind" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://game/World/StructureKind.cs" id="1_script"]
+[ext_resource type="Texture2D" path="res://assets/props/metering-station.png" id="2_art"]
+
+[resource]
+script = ExtResource("1_script")
+Match = "custody-meter"
+Art = ExtResource("2_art")
+DrawHeight = 92.0
+Footprint = Vector2i(2, 2)
+Clearance = 1

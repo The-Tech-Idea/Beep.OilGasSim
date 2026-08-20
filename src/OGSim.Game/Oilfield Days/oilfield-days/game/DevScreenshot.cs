@@ -32,6 +32,13 @@ public static class DevScreenshot
         if (path is null)
             return;
 
+        // A caller that has already navigated away is no longer in the tree, and
+        // has no frames left to count. The router armed itself first and outlives
+        // every scene, so the shot is still taken — by the node that is still
+        // there to take it.
+        if (!host.IsInsideTree())
+            return;
+
         int frames = 0;
 
         // Several frames, not one: the first frame has no smoothing settled, no
@@ -45,6 +52,14 @@ public static class DevScreenshot
                 return;
 
             host.GetTree().ProcessFrame -= Capture;
+
+            // Measured on the same settled frame the picture is taken from, so
+            // what the audit reports is what the screenshot shows.
+            if (DevLayoutAudit.Requested())
+            {
+                DevLayoutAudit.Run(
+                    host.GetTree().Root, host.GetViewport().GetVisibleRect().Size);
+            }
 
             Image image = host.GetViewport().GetTexture().GetImage();
             Error error = image.SavePng(path);

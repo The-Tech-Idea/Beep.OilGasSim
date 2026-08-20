@@ -1,5 +1,6 @@
 #nullable enable
 
+using Beep.ECS.UI;
 using Godot;
 using OGSim.Composition;
 using OGSim.Contracts;
@@ -36,7 +37,7 @@ public sealed partial class ChallengeResult : Control
 
         if (snapshot is null)
         {
-            AddChild(ScreenChrome.Text("No run to report.", 30, ScreenChrome.Cream, HorizontalAlignment.Center));
+            AddChild(SlateChrome.Text("No run to report.", 30, KitTheme.Ink, HorizontalAlignment.Center));
             return;
         }
 
@@ -58,7 +59,7 @@ public sealed partial class ChallengeResult : Control
 
     private void BuildHeader(FieldReadModel snapshot, int rank)
     {
-        PanelContainer sign = ScreenChrome.Sign(
+        PanelContainer sign = SlateChrome.Sign(
             string.Empty, new Vector2(880, 0), LayoutPreset.CenterTop, new Vector2(-440, 20));
 
         AddChild(sign);
@@ -67,11 +68,11 @@ public sealed partial class ChallengeResult : Control
         row.AddThemeConstantOverride("separation", 20);
 
         var titles = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
-        titles.AddChild(ScreenChrome.Text("THE FIRST FIELD", 30, ScreenChrome.Gold, HorizontalAlignment.Center));
-        titles.AddChild(ScreenChrome.Text(
+        titles.AddChild(SlateChrome.Text("THE FIRST FIELD", 30, KitTheme.Amber, HorizontalAlignment.Center));
+        titles.AddChild(SlateChrome.Text(
             $"{Verdict(snapshot)}  -  {snapshot.Date.Year}-{snapshot.Date.Month:00}, month {snapshot.Tick.Value}",
             18,
-            ScreenChrome.Cream,
+            KitTheme.Ink,
             HorizontalAlignment.Center));
 
         row.AddChild(titles);
@@ -79,51 +80,51 @@ public sealed partial class ChallengeResult : Control
         if (rank > 0)
         {
             var rosette = new VBoxContainer();
-            rosette.AddChild(ScreenChrome.Text("RANK", 13, ScreenChrome.Faded, HorizontalAlignment.Center));
-            rosette.AddChild(ScreenChrome.Rosette(
-                rank.ToString(System.Globalization.CultureInfo.InvariantCulture), ScreenChrome.Gold, 62.0f));
+            rosette.AddChild(SlateChrome.Text("RANK", 13, KitTheme.Muted, HorizontalAlignment.Center));
+            rosette.AddChild(SlateChrome.Rosette(
+                rank.ToString(System.Globalization.CultureInfo.InvariantCulture), KitTheme.Amber, 62.0f));
 
             row.AddChild(rosette);
         }
 
-        ScreenChrome.ContentOf(sign).AddChild(row);
+        SlateChrome.ContentOf(sign).AddChild(row);
     }
 
     private void BuildScorecard(FieldReadModel snapshot)
     {
-        PanelContainer sign = ScreenChrome.Sign(
+        PanelContainer sign = SlateChrome.Sign(
             "SCORECARD", new Vector2(640, 520), LayoutPreset.CenterLeft, new Vector2(70, -200));
 
         AddChild(sign);
 
         var paper = new PanelContainer { CustomMinimumSize = new Vector2(606, 430) };
-        paper.AddThemeStyleboxOverride("panel", ScreenChrome.PaperBox());
+        paper.AddThemeStyleboxOverride("panel", SlateChrome.FieldPlate());
 
         var column = new VBoxContainer();
         column.AddThemeConstantOverride("separation", 12);
         paper.AddChild(column);
-        ScreenChrome.ContentOf(sign).AddChild(paper);
+        SlateChrome.ContentOf(sign).AddChild(paper);
 
         double dollars = snapshot.Cash.Cents / 100.0;
 
         column.AddChild(ScoreRow(
             "crude-oil-storage-tank", "Field value", dollars / 600_000_000.0,
             $"${dollars / 1_000_000.0:N1}M of $600M",
-            dollars >= 600_000_000.0 ? ScreenChrome.Good : ScreenChrome.Cash));
+            dollars >= 600_000_000.0 ? KitTheme.Green : KitTheme.Green));
 
         column.AddChild(ScoreRow(
             "pumpjack", "Production, final month", Mathf.Min(1.0, snapshot.ProducedThisTick.CubicMetres / 40_000.0),
-            $"{snapshot.ProducedThisTick.CubicMetres:N0} m3", ScreenChrome.Good));
+            $"{snapshot.ProducedThisTick.CubicMetres:N0} m3", KitTheme.Green));
 
         column.AddChild(ScoreRow(
             "drilling-rig-derrick", "Wells drilled", Mathf.Min(1.0, snapshot.Wells / 6.0),
-            $"{snapshot.Wells}", ScreenChrome.Gold));
+            $"{snapshot.Wells}", KitTheme.Amber));
 
         column.AddChild(ScoreRow(
             "metering-station", "Ten years used", snapshot.Tick.Value / 120.0,
-            $"month {snapshot.Tick.Value} of 120", ScreenChrome.Wood));
+            $"month {snapshot.Tick.Value} of 120", KitTheme.Muted));
 
-        column.AddChild(ScreenChrome.Text("Objectives", 15, new Color(0.45f, 0.40f, 0.34f)));
+        column.AddChild(SlateChrome.Text("Objectives", 15, new Color(0.45f, 0.40f, 0.34f)));
 
         ScenarioProgress progress = snapshot.Progress;
 
@@ -131,16 +132,16 @@ public sealed partial class ChallengeResult : Control
         {
             (ContentId objective, ObjectiveState state, double amount) = progress.Objectives[i];
 
-            column.AddChild(ScreenChrome.Text(
+            column.AddChild(SlateChrome.Text(
                 $"{objective}  -  {state}  ({amount * 100:F0}%)",
                 16,
-                state == ObjectiveState.Met ? ScreenChrome.Cash
-                    : state == ObjectiveState.Pending ? ScreenChrome.Ink : ScreenChrome.Bad));
+                state == ObjectiveState.Met ? KitTheme.Green
+                    : state == ObjectiveState.Pending ? KitTheme.Ink : KitTheme.Red));
         }
 
         if (progress.Scores.Count == 0)
         {
-            Label note = ScreenChrome.Body(
+            Label note = SlateChrome.Body(
                 "The shipped scenario scores nothing yet: the engine's score dimensions read ledger values " +
                 "this loop does not publish, and it would rather show none than invent five.", 14);
 
@@ -154,7 +155,7 @@ public sealed partial class ChallengeResult : Control
                 (ScoreDimension dimension, double score) = progress.Scores[i];
 
                 column.AddChild(ScoreRow(
-                    "metering-station", dimension.ToString(), score, $"{score * 100:F0}%", ScreenChrome.Cash));
+                    "metering-station", dimension.ToString(), score, $"{score * 100:F0}%", KitTheme.Green));
             }
         }
     }
@@ -163,16 +164,16 @@ public sealed partial class ChallengeResult : Control
     {
         var row = new HBoxContainer { CustomMinimumSize = new Vector2(580, 0) };
         row.AddThemeConstantOverride("separation", 12);
-        row.AddChild(ScreenChrome.Icon(icon, 44.0f));
+        row.AddChild(SlateChrome.Icon(icon, 44.0f));
 
         var column = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
         column.AddThemeConstantOverride("separation", 2);
 
         var head = new HBoxContainer();
-        Label name = ScreenChrome.Text(label, 17, ScreenChrome.Ink);
+        Label name = SlateChrome.Text(label, 17, KitTheme.Ink);
         name.SizeFlagsHorizontal = SizeFlags.ExpandFill;
         head.AddChild(name);
-        head.AddChild(ScreenChrome.Text(readout, 16, new Color(0.42f, 0.36f, 0.28f)));
+        head.AddChild(SlateChrome.Text(readout, 16, new Color(0.42f, 0.36f, 0.28f)));
         column.AddChild(head);
 
         var bar = new ProgressBar
@@ -184,8 +185,8 @@ public sealed partial class ChallengeResult : Control
             CustomMinimumSize = new Vector2(480, 18),
         };
 
-        bar.AddThemeStyleboxOverride("background", ScreenChrome.FlatBox(new Color(0.80f, 0.72f, 0.58f), radius: 9));
-        bar.AddThemeStyleboxOverride("fill", ScreenChrome.FlatBox(colour, radius: 9));
+        bar.AddThemeStyleboxOverride("background", SlateChrome.Track());
+        bar.AddThemeStyleboxOverride("fill", SlateChrome.Fill(colour));
         column.AddChild(bar);
 
         row.AddChild(column);
@@ -195,7 +196,7 @@ public sealed partial class ChallengeResult : Control
 
     private void BuildLeaderboard(Leaderboard.Entry[] board, Leaderboard.Entry run)
     {
-        PanelContainer sign = ScreenChrome.Sign(
+        PanelContainer sign = SlateChrome.Sign(
             "LOCAL LEADERBOARD", new Vector2(640, 520), LayoutPreset.CenterRight, new Vector2(-70, -200));
 
         sign.GrowHorizontal = GrowDirection.Begin;
@@ -205,32 +206,28 @@ public sealed partial class ChallengeResult : Control
         var column = new VBoxContainer { CustomMinimumSize = new Vector2(592, 0) };
         column.AddThemeConstantOverride("separation", 8);
         scroll.AddChild(column);
-        ScreenChrome.ContentOf(sign).AddChild(scroll);
+        SlateChrome.ContentOf(sign).AddChild(scroll);
 
         for (int i = 0; i < board.Length && i < 8; i++)
         {
             Leaderboard.Entry entry = board[i];
             bool mine = entry.Seed == run.Seed && entry.Months == run.Months && entry.Cash.Equals(run.Cash);
 
-            Button card = ScreenChrome.Card(string.Empty, mine, dimmed: !mine, new Vector2(592, 76));
+            Button card = SlateChrome.Slab(string.Empty, mine, !mine, new Vector2(592, 76));
 
             var row = new HBoxContainer { MouseFilter = MouseFilterEnum.Ignore };
-            row.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
-            row.OffsetLeft = 12;
-            row.OffsetRight = -12;
-            row.OffsetTop = 6;
-            row.OffsetBottom = -6;
+            SlateChrome.LayAcross(row, "field");
             row.AddThemeConstantOverride("separation", 12);
             card.AddChild(row);
 
-            row.AddChild(ScreenChrome.Medal(i + 1));
-            row.AddChild(ScreenChrome.Icon(entry.Wells > 2 ? "pumpjack" : "drilling-rig-derrick", 46.0f));
+            row.AddChild(SlateChrome.Medal(i + 1));
+            row.AddChild(SlateChrome.Icon(entry.Wells > 2 ? "pumpjack" : "drilling-rig-derrick", 46.0f));
 
             var lines = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
-            lines.AddChild(ScreenChrome.Text(
-                $"${entry.Cash / 1_000_000.0:N1}M  -  {entry.Wells} wells", 17, ScreenChrome.Ink));
+            lines.AddChild(SlateChrome.Text(
+                $"${entry.Cash / 1_000_000.0:N1}M  -  {entry.Wells} wells", 17, KitTheme.Ink));
 
-            lines.AddChild(ScreenChrome.Text(
+            lines.AddChild(SlateChrome.Text(
                 $"seed {entry.Seed}  -  {entry.Months} months  -  {entry.Outcome}",
                 14,
                 new Color(0.42f, 0.36f, 0.28f)));
@@ -239,14 +236,14 @@ public sealed partial class ChallengeResult : Control
             column.AddChild(card);
         }
 
-        Label note = ScreenChrome.Text(
+        Label note = SlateChrome.Text(
             "Runs compare only on the same seed: the basin and its odds are generated from it.",
             14,
-            ScreenChrome.Faded);
+            KitTheme.Muted);
 
         note.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         note.CustomMinimumSize = new Vector2(600, 0);
-        ScreenChrome.ContentOf(sign).AddChild(note);
+        SlateChrome.ContentOf(sign).AddChild(note);
     }
 
     private void BuildButtons()
@@ -257,15 +254,15 @@ public sealed partial class ChallengeResult : Control
         row.AddThemeConstantOverride("separation", 16);
         AddChild(row);
 
-        Button again = ScreenChrome.Action("NEXT BASIN", ScreenChrome.Good, new Vector2(320, 56));
+        Button again = SlateChrome.Chunk("NEXT BASIN", UiSurface.Role.Success, new Vector2(320, 56));
         again.Pressed += () => SceneRouter.Instance.Go(SceneRouter.NewGame);
         row.AddChild(again);
 
-        Button replay = ScreenChrome.Action("SAME SEED AGAIN", ScreenChrome.Wood, new Vector2(320, 56));
+        Button replay = SlateChrome.Chunk("SAME SEED AGAIN", UiSurface.Role.Neutral, new Vector2(320, 56));
         replay.Pressed += () => SceneRouter.Instance.Go(SceneRouter.NewGame);
         row.AddChild(replay);
 
-        Button menu = ScreenChrome.Action("MAIN MENU", ScreenChrome.Bad, new Vector2(320, 56));
+        Button menu = SlateChrome.Chunk("MAIN MENU", UiSurface.Role.Danger, new Vector2(320, 56));
         menu.Pressed += () => SceneRouter.Instance.Go(SceneRouter.MainMenu);
         row.AddChild(menu);
     }

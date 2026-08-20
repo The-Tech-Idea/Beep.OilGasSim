@@ -39,6 +39,21 @@ public sealed partial class SimulationController : Node
 
     public Speed Current { get; private set; } = Speed.Paused;
 
+    /// <summary>
+    /// How fast the world outside the tick should move: zero while paused, and
+    /// scaled so a unit crosses the lease in the same number of MONTHS at every
+    /// speed.
+    /// </summary>
+    /// <remarks>
+    /// Derived from the month length rather than declared, so a change to the
+    /// clock carries the yard with it. Without this a crew would take the same
+    /// number of seconds to arrive at 4x as at 1x, and fast-forwarding would
+    /// silently cost more months of travel than playing slowly.
+    /// </remarks>
+    public float Multiplier => Current == Speed.Paused
+        ? 0.0f
+        : (float)(SecondsPerMonth[(int)Speed.Normal] / SecondsPerMonth[(int)Current]);
+
     public override void _EnterTree() => Instance = this;
 
     public override void _Process(double delta)

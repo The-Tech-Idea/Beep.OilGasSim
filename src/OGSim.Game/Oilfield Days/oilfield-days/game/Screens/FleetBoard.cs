@@ -1,5 +1,6 @@
 #nullable enable
 
+using Beep.ECS.UI;
 using Godot;
 using OGSim.Composition;
 using OGSim.Contracts;
@@ -41,7 +42,7 @@ public sealed partial class FleetBoard : Control
     public override void _Ready()
     {
         SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
-        AddChild(ScreenChrome.Backdrop());
+        AddChild(SlateChrome.Backdrop());
 
         BuildList();
         BuildDetail();
@@ -60,12 +61,12 @@ public sealed partial class FleetBoard : Control
 
     private void BuildList()
     {
-        PanelContainer sign = ScreenChrome.Sign(
+        PanelContainer sign = SlateChrome.Sign(
             "OILFIELD FLEET", new Vector2(660, 560), LayoutPreset.CenterLeft, new Vector2(36, -310));
 
         AddChild(sign);
 
-        VBoxContainer column = ScreenChrome.ContentOf(sign);
+        VBoxContainer column = SlateChrome.ContentOf(sign);
 
         _tabs = new HBoxContainer();
         _tabs.AddThemeConstantOverride("separation", 8);
@@ -84,24 +85,24 @@ public sealed partial class FleetBoard : Control
 
     private void BuildDetail()
     {
-        PanelContainer sign = ScreenChrome.Sign(
+        PanelContainer sign = SlateChrome.Sign(
             "DETAIL", new Vector2(470, 560), LayoutPreset.CenterRight, new Vector2(-36, -310));
 
         sign.GrowHorizontal = GrowDirection.Begin;
         AddChild(sign);
 
         var paper = new PanelContainer { CustomMinimumSize = new Vector2(436, 470) };
-        paper.AddThemeStyleboxOverride("panel", ScreenChrome.PaperBox());
+        paper.AddThemeStyleboxOverride("panel", SlateChrome.FieldPlate());
 
         _detail = new VBoxContainer();
         _detail.AddThemeConstantOverride("separation", 10);
         paper.AddChild(_detail);
-        ScreenChrome.ContentOf(sign).AddChild(paper);
+        SlateChrome.ContentOf(sign).AddChild(paper);
     }
 
     private void BuildActions()
     {
-        PanelContainer bar = ScreenChrome.Sign(
+        PanelContainer bar = SlateChrome.Sign(
             string.Empty, new Vector2(700, 0), LayoutPreset.CenterBottom, new Vector2(-350, -18));
 
         bar.GrowVertical = GrowDirection.Begin;
@@ -110,26 +111,26 @@ public sealed partial class FleetBoard : Control
         var row = new HBoxContainer();
         row.AddThemeConstantOverride("separation", 12);
 
-        Button dispatch = ScreenChrome.Action("DISPATCH BOARD", ScreenChrome.Good, new Vector2(280, 50));
+        Button dispatch = SlateChrome.Chunk("DISPATCH BOARD", UiSurface.Role.Success, new Vector2(280, 50));
         dispatch.Pressed += () => SceneRouter.Instance.OpenOverlay(SceneRouter.DispatchBoard);
         row.AddChild(dispatch);
 
-        Button lease = ScreenChrome.Action("THE LEASE", ScreenChrome.Wood, new Vector2(200, 50));
+        Button lease = SlateChrome.Chunk("THE LEASE", UiSurface.Role.Neutral, new Vector2(200, 50));
         lease.Pressed += () => SceneRouter.Instance.OpenOverlay(SceneRouter.LeaseBoard);
         row.AddChild(lease);
 
-        Button back = ScreenChrome.Action("BACK", ScreenChrome.Bad, new Vector2(150, 50));
+        Button back = SlateChrome.Chunk("BACK", UiSurface.Role.Danger, new Vector2(150, 50));
         back.Pressed += () => SceneRouter.Instance.CloseOverlay();
         row.AddChild(back);
 
-        ScreenChrome.ContentOf(bar).AddChild(row);
+        SlateChrome.ContentOf(bar).AddChild(row);
     }
 
     private void AddTab(string text, Tab tab)
     {
-        Button button = ScreenChrome.Action(
+        Button button = SlateChrome.Action(
             text,
-            _tab == tab ? ScreenChrome.Cash : ScreenChrome.WoodDark,
+            _tab == tab ? KitTheme.Green : KitTheme.Void,
             new Vector2(200, 42),
             fontSize: 16);
 
@@ -153,7 +154,7 @@ public sealed partial class FleetBoard : Control
         if (_topBar is not null && IsInstanceValid(_topBar))
             _topBar.QueueFree();
 
-        _topBar = ScreenChrome.TopBar(DispatchBoard.Line(snapshot));
+        _topBar = DispatchBoard.Header(snapshot);
         AddChild(_topBar);
 
         foreach (Node child in _tabs.GetChildren())
@@ -186,7 +187,7 @@ public sealed partial class FleetBoard : Control
     {
         if (snapshot.Wellbores.Count == 0)
         {
-            _rows.AddChild(ScreenChrome.Text("Nothing drilled yet.", 18, ScreenChrome.Cream));
+            _rows.AddChild(SlateChrome.Text("Nothing drilled yet.", 18, KitTheme.Ink));
             ShowDetail("drilling-rig-derrick", "No wells", "The company owns a rig and a lease, and that is all.", []);
             return;
         }
@@ -206,8 +207,8 @@ public sealed partial class FleetBoard : Control
                 flowing ? "pumpjack" : "wellhead-tree",
                 well.DisplayId,
                 well.Status.ToString(),
-                ("output", well.ProducedThisTick.CubicMetres / most, flowing ? ScreenChrome.Good : ScreenChrome.Faded),
-                ("status", flowing ? 1.0 : 0.0, flowing ? ScreenChrome.Cash : ScreenChrome.Bad),
+                ("output", well.ProducedThisTick.CubicMetres / most, flowing ? KitTheme.Green : KitTheme.Muted),
+                ("status", flowing ? 1.0 : 0.0, flowing ? KitTheme.Green : KitTheme.Red),
                 i == _selected);
 
             row.Pressed += () =>
@@ -226,8 +227,8 @@ public sealed partial class FleetBoard : Control
             chosen.DisplayId,
             "Open, shut, test, log, core or abandon it from the truck, standing at the wellhead.",
             [
-                ("Output this month", chosen.ProducedThisTick.CubicMetres / most, $"{chosen.ProducedThisTick.CubicMetres:N0} m3", ScreenChrome.Good),
-                ("Flowing", chosen.Status == WellStatus.Producing ? 1.0 : 0.0, chosen.Status.ToString(), ScreenChrome.Cash),
+                ("Output this month", chosen.ProducedThisTick.CubicMetres / most, $"{chosen.ProducedThisTick.CubicMetres:N0} m3", KitTheme.Green),
+                ("Flowing", chosen.Status == WellStatus.Producing ? 1.0 : 0.0, chosen.Status.ToString(), KitTheme.Green),
             ]);
     }
 
@@ -245,9 +246,9 @@ public sealed partial class FleetBoard : Control
                 IconFor(element.DisplayId),
                 element.DisplayId,
                 held > 0.0 ? "throttling" : "clear",
-                ("passed", passed, held > 0.0 ? ScreenChrome.Bad : ScreenChrome.Good),
+                ("passed", passed, held > 0.0 ? KitTheme.Red : KitTheme.Green),
                 ("throughput", offered <= 0.0 ? 0.0 : element.Throughput.Kilograms / Mathf.Max(1.0, Busiest(snapshot)),
-                    ScreenChrome.Cash),
+                    KitTheme.Green),
                 i == _selected);
 
             row.Pressed += () =>
@@ -274,9 +275,9 @@ public sealed partial class FleetBoard : Control
                 : "Passing everything it is offered.",
             [
                 ("Passed of what it was offered", chosenOffered <= 0.0 ? 1.0 : chosen.Throughput.Kilograms / chosenOffered,
-                    $"{chosen.Throughput.Kilograms / 1000.0:N0} t", chosenHeld > 0.0 ? ScreenChrome.Bad : ScreenChrome.Good),
+                    $"{chosen.Throughput.Kilograms / 1000.0:N0} t", chosenHeld > 0.0 ? KitTheme.Red : KitTheme.Green),
                 ("Held back", chosenOffered <= 0.0 ? 0.0 : chosenHeld / chosenOffered,
-                    $"{chosenHeld / 1000.0:N0} t", ScreenChrome.Gold),
+                    $"{chosenHeld / 1000.0:N0} t", KitTheme.Amber),
             ]);
     }
 
@@ -288,8 +289,8 @@ public sealed partial class FleetBoard : Control
             "drilling-rig-derrick",
             "Drilling rig",
             busy ? "out on a job" : "in the yard",
-            ("busy", busy ? 1.0 : 0.0, busy ? ScreenChrome.Gold : ScreenChrome.Good),
-            ("activities", Mathf.Min(1.0, snapshot.ActivitiesRunning / 3.0), ScreenChrome.Cash),
+            ("busy", busy ? 1.0 : 0.0, busy ? KitTheme.Amber : KitTheme.Green),
+            ("activities", Mathf.Min(1.0, snapshot.ActivitiesRunning / 3.0), KitTheme.Green),
             selected: true));
 
         ShowDetail(
@@ -297,7 +298,7 @@ public sealed partial class FleetBoard : Control
             "One rig",
             "The company owns a single rig, and that is what makes drilling a decision rather than a list. " +
             "While it is out, another hole waits — the engine refuses the order rather than queueing it.",
-            [("Working", busy ? 1.0 : 0.0, busy ? "out" : "idle", ScreenChrome.Gold)]);
+            [("Working", busy ? 1.0 : 0.0, busy ? "out" : "idle", KitTheme.Amber)]);
     }
 
     /// <summary>The mockup's row: art, name, state, and two bars.</summary>
@@ -309,22 +310,20 @@ public sealed partial class FleetBoard : Control
         (string Label, double Value, Color Colour) second,
         bool selected)
     {
-        Button card = ScreenChrome.Card(string.Empty, selected, dimmed: false, new Vector2(612, 92));
+        Button card = SlateChrome.Slab(string.Empty, selected, false, new Vector2(632, 92));
 
         var row = new HBoxContainer { MouseFilter = MouseFilterEnum.Ignore };
-        row.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
-        row.OffsetLeft = 12;
-        row.OffsetRight = -12;
+        SlateChrome.LayAcross(row, "field");
         row.OffsetTop = 8;
         row.OffsetBottom = -8;
         row.AddThemeConstantOverride("separation", 12);
         card.AddChild(row);
 
-        row.AddChild(ScreenChrome.Icon(icon, 58.0f));
+        row.AddChild(SlateChrome.Icon(icon, 58.0f));
 
         var names = new VBoxContainer { CustomMinimumSize = new Vector2(180, 0) };
-        names.AddChild(ScreenChrome.Text(name, 17, ScreenChrome.Ink));
-        names.AddChild(ScreenChrome.Text(state, 14, new Color(0.42f, 0.36f, 0.28f)));
+        names.AddChild(SlateChrome.Text(name, 17, KitTheme.Ink));
+        names.AddChild(SlateChrome.Text(state, 14, new Color(0.42f, 0.36f, 0.28f)));
         row.AddChild(names);
 
         var bars = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
@@ -341,7 +340,7 @@ public sealed partial class FleetBoard : Control
         var row = new HBoxContainer();
         row.AddThemeConstantOverride("separation", 8);
 
-        Label name = ScreenChrome.Text(label, 13, new Color(0.45f, 0.40f, 0.34f));
+        Label name = SlateChrome.Text(label, 13, new Color(0.45f, 0.40f, 0.34f));
         name.CustomMinimumSize = new Vector2(86, 0);
         row.AddChild(name);
 
@@ -351,15 +350,15 @@ public sealed partial class FleetBoard : Control
             MaxValue = 1.0,
             Value = Mathf.Clamp(value, 0.0, 1.0),
             ShowPercentage = false,
-            CustomMinimumSize = new Vector2(190, 16),
+            CustomMinimumSize = new Vector2(176, 16),
             SizeFlagsHorizontal = SizeFlags.ExpandFill,
         };
 
-        bar.AddThemeStyleboxOverride("background", ScreenChrome.FlatBox(new Color(0.80f, 0.72f, 0.58f), radius: 8));
-        bar.AddThemeStyleboxOverride("fill", ScreenChrome.FlatBox(colour, radius: 8));
+        bar.AddThemeStyleboxOverride("background", SlateChrome.Track());
+        bar.AddThemeStyleboxOverride("fill", SlateChrome.Fill(colour));
         row.AddChild(bar);
 
-        row.AddChild(ScreenChrome.Text($"{value * 100:F0}%", 13, new Color(0.42f, 0.36f, 0.28f)));
+        row.AddChild(SlateChrome.Text($"{value * 100:F0}%", 13, new Color(0.42f, 0.36f, 0.28f)));
 
         return row;
     }
@@ -369,14 +368,14 @@ public sealed partial class FleetBoard : Control
         foreach (Node child in _detail.GetChildren())
             child.QueueFree();
 
-        _detail.AddChild(ScreenChrome.Icon(icon, 150.0f));
-        _detail.AddChild(ScreenChrome.Text(title, 24, ScreenChrome.Ink, HorizontalAlignment.Center));
+        _detail.AddChild(SlateChrome.Icon(icon, 150.0f));
+        _detail.AddChild(SlateChrome.Text(title, 24, KitTheme.Ink, HorizontalAlignment.Center));
 
         foreach ((string label, double value, string readout, Color colour) in meters)
         {
             var column = new VBoxContainer();
             column.AddThemeConstantOverride("separation", 2);
-            column.AddChild(ScreenChrome.Text($"{label}: {readout}", 15, ScreenChrome.Ink));
+            column.AddChild(SlateChrome.Text($"{label}: {readout}", 15, KitTheme.Ink));
 
             var bar = new ProgressBar
             {
@@ -387,13 +386,13 @@ public sealed partial class FleetBoard : Control
                 CustomMinimumSize = new Vector2(400, 18),
             };
 
-            bar.AddThemeStyleboxOverride("background", ScreenChrome.FlatBox(new Color(0.80f, 0.72f, 0.58f), radius: 9));
-            bar.AddThemeStyleboxOverride("fill", ScreenChrome.FlatBox(colour, radius: 9));
+            bar.AddThemeStyleboxOverride("background", SlateChrome.Track());
+            bar.AddThemeStyleboxOverride("fill", SlateChrome.Fill(colour));
             column.AddChild(bar);
             _detail.AddChild(column);
         }
 
-        Label text = ScreenChrome.Body(body, 16);
+        Label text = SlateChrome.Body(body, 16);
         text.CustomMinimumSize = new Vector2(404, 0);
         _detail.AddChild(text);
     }

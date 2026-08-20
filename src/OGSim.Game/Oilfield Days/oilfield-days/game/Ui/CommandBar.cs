@@ -2,6 +2,7 @@
 
 using System;
 using System.Collections.Generic;
+using Beep.ECS.UI;
 using Godot;
 using OGSim.Composition;
 using OGSim.Contracts;
@@ -48,13 +49,13 @@ public sealed partial class CommandBar : CanvasLayer
         root.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
         AddChild(root);
 
-        _panel = ScreenChrome.Sign(
-            "ACTIONS", new Vector2(400, 0), Control.LayoutPreset.BottomLeft, new Vector2(18, -122));
+        _panel = SlateChrome.Sign(
+            "ACTIONS", new Vector2(400, 0), Control.LayoutPreset.BottomLeft, new Vector2(122, -128));
 
         _panel.GrowVertical = Control.GrowDirection.Begin;
         root.AddChild(_panel);
 
-        VBoxContainer column = ScreenChrome.ContentOf(_panel);
+        VBoxContainer column = SlateChrome.ContentOf(_panel);
         column.CustomMinimumSize = new Vector2(364, 0);
         column.AddThemeConstantOverride("separation", 10);
 
@@ -65,7 +66,7 @@ public sealed partial class CommandBar : CanvasLayer
         };
 
         _target.AddThemeFontSizeOverride("font_size", 16);
-        _target.AddThemeColorOverride("font_color", ScreenChrome.Cream);
+        _target.AddThemeColorOverride("font_color", KitTheme.Ink);
         column.AddChild(_target);
 
         _list = new VBoxContainer { CustomMinimumSize = new Vector2(364, 0) };
@@ -89,6 +90,34 @@ public sealed partial class CommandBar : CanvasLayer
     }
 
     /// <summary>Offer what can be done to a prospect.</summary>
+    /// <summary>
+    /// Who carries a job out to the field, if anybody does.
+    /// </summary>
+    /// <remarks>
+    /// Set by the gameplay screen once the yard is raised. When it is present the
+    /// action sends a UNIT and the command is submitted on arrival (plans 17);
+    /// when it is null — a board opened with no world behind it — the command
+    /// goes straight to the engine, which is the behaviour every board already
+    /// had.
+    /// </remarks>
+    public World.Dispatcher? Yard { get; set; }
+
+    /// <summary>Where the selected thing stands, for a unit to drive to.</summary>
+    public Vector2 SiteAt { get; set; }
+
+    /// <summary>Send a unit if there is a yard, or the command if there is not.</summary>
+    private void Dispatch(World.JobKind job, ulong subject, Command command)
+    {
+        if (Yard is null)
+        {
+            Send(command);
+
+            return;
+        }
+
+        Yard.Send(job, SiteAt, subject);
+    }
+
     public void ShowProspect(ProspectView prospect, Action afterDrill)
     {
         Reset($"{prospect.Play} prospect\nPOS {prospect.ProbabilityOfSuccess * 100:F0}% · " +
@@ -98,9 +127,19 @@ public sealed partial class CommandBar : CanvasLayer
 
         var target = new EntityId<IProspect>(prospect.Prospect.Value);
 
-        Add("Shoot seismic", ScreenChrome.Wood, () => Send(new SeismicSurveyCommand(target)));
-        Add("Drill a well (2,000 m)", ScreenChrome.Gold, () =>
+        Add("Shoot seismic", KitTheme.Muted, () =>
+            Dispatch(World.JobKind.Survey, prospect.Prospect.Value, new SeismicSurveyCommand(target)));
+        Add("Drill a well (2,000 m)", KitTheme.Amber, () =>
         {
+            if (Yard is not null)
+            {
+                // The rig is going. Whether the engine takes the work is decided
+                // when it gets there, so the world records the hole then, not now.
+                Yard.Send(World.JobKind.Drill, SiteAt, prospect.Prospect.Value);
+
+                return;
+            }
+
             if (Send(new DrillWellCommand(target, WellDepth)))
                 afterDrill();
         });
@@ -114,22 +153,107 @@ public sealed partial class CommandBar : CanvasLayer
         var completion = new EntityId<ICompletion>(well.Well.Value);
         bool shut = well.Status == WellStatus.ShutIn;
 
-        Add(shut ? "Open the well" : "Shut the well in", ScreenChrome.Cash,
+        Add(shut ? "Open the well" : "Shut the well in", KitTheme.Green,
             () => Send(new SetWellChokeCommand(completion, !shut)));
 
         for (int i = 0; i < compartments.Count && i < 1; i++)
         {
             EntityId<IReservoirCompartmentEntity> compartment = compartments[i];
 
-            Add("Run a well test", ScreenChrome.Wood, () => Send(new WellTestCommand(compartment)));
-            Add("Run a wireline log", ScreenChrome.Wood, () => Send(new WirelineLogCommand(compartment)));
-            Add("Cut a core", ScreenChrome.Wood, () => Send(new CutCoreCommand(compartment)));
+            Add("Run a well test", KitTheme.Muted, () =>
+                Dispatch(World.JobKind.WellTest, well.Well.Value, new WellTestCommand(compartment)));
+
+            Add("Run a wireline log", KitTheme.Muted, () =>
+                Dispatch(World.JobKind.WirelineLog, well.Well.Value, new WirelineLogCommand(compartment)));
+
+            Add("Cut a core", KitTheme.Muted, () =>
+                Dispatch(World.JobKind.CutCore, well.Well.Value, new CutCoreCommand(compartment)));
         }
 
-        Add("Abandon the well", ScreenChrome.Bad, () => Send(new AbandonWellCommand(completion)));
+        Add("Abandon the well", KitTheme.Red, () => Send(new AbandonWellCommand(completion)));
     }
 
     /// <summary>Offer what can be done to the surface plant.</summary>
+    /// <summary>
+    /// One piece of the chain: what it is doing, and what a crew can do to it.
+    /// </summary>
+    /// <remarks>
+    /// Condition is shown only where the engine publishes it. A null condition
+    /// is UNMEASURED — the company has not fitted a monitoring kit — and printing
+    /// "as new" for it would report truth nobody bought, which is the door the
+    /// whole belief system exists to keep shut.
+    /// </remarks>
+    public void ShowElement(ChainElementView element)
+    {
+        string wear = element.Condition is double condition
+            ? $"condition {condition * 100.0:F0}%"
+            : "condition unknown — no monitoring fitted";
+
+        Reset(
+            $"{element.DisplayId}\n{element.Throughput.Kilograms / 1000.0:N0} t this month · {wear}"
+            + (element.Failed
+                ? "\nOUT OF SERVICE — the chain behind it is shut in"
+                : string.Empty));
+
+        ulong id = element.Element.Value;
+
+        if (element.Failed)
+        {
+            Add("Repair it", KitTheme.Red, () =>
+                Dispatch(World.JobKind.Repair, id, new RepairEquipmentCommand(element.Element)));
+
+            return;
+        }
+
+        // Planned work only while it still runs, and monitoring only while there
+        // is nothing to read: both are the engine's own rules, and offering the
+        // other one would be offering a refusal.
+        if (element.Condition is not null)
+        {
+            Add("Overhaul it", KitTheme.Green, () =>
+                Dispatch(World.JobKind.Service, id, new ServiceEquipmentCommand(element.Element)));
+        }
+        else
+        {
+            Add("Fit condition monitoring", KitTheme.Sky, () =>
+                Dispatch(World.JobKind.FitMonitoring, id, new InstallMonitoringCommand(element.Element)));
+        }
+    }
+
+    /// <summary>A unit, and the one thing a player can still change about it.</summary>
+    public void ShowUnit(World.Unit unit, System.Action afterRecall)
+    {
+        string doing = unit.State switch
+        {
+            World.UnitState.Idle => "in the yard",
+            World.UnitState.Travelling => "on its way out",
+            World.UnitState.Working => $"working since month {unit.StartedOn}",
+            _ => "on its way home",
+        };
+
+        Reset($"{unit.Kind.DisplayName}\n{doing}");
+
+        // Only while travelling: nothing has been submitted yet, so there is
+        // something to call back. After arrival the work is the engine's.
+        if (unit.State != World.UnitState.Travelling)
+            return;
+
+        Add("Call it back", KitTheme.Red, () =>
+        {
+            if (unit.Recall())
+                afterRecall();
+        });
+    }
+
+    /// <summary>
+    /// The plant: what the chain is, and what a construction crew can add to it.
+    /// </summary>
+    /// <remarks>
+    /// <b>No placement is offered.</b> OGSim has no coordinate for a facility
+    /// (gap G-02), so every separator is the same separator wherever it is drawn
+    /// — the host chooses a bay and says so. A tile grid and a placement ghost
+    /// would imply a choice the engine cannot honour.
+    /// </remarks>
     public void ShowPlant(FieldReadModel snapshot)
     {
         var text = new System.Text.StringBuilder("Surface facilities\n");
@@ -137,15 +261,40 @@ public sealed partial class CommandBar : CanvasLayer
         for (int i = 0; i < snapshot.Chain.Count; i++)
             text.Append(snapshot.Chain[i].DisplayId).Append(i == snapshot.Chain.Count - 1 ? "" : " → ");
 
+        if (Yard is not null && Yard.Rising.Count > 0)
+        {
+            text.Append("\nUnder construction: ");
+
+            for (int i = 0; i < Yard.Rising.Count; i++)
+                text.Append(i == 0 ? "" : ", ").Append(Yard.Rising[i]);
+        }
+
         Reset(text.ToString());
 
-        Add("Install another separator", ScreenChrome.Cash, () => Send(new InstallSeparatorCommand()));
-        Add("Expand export capacity", ScreenChrome.Cash, () => Send(new ExpandExportCommand()));
+        if (Yard is null)
+        {
+            Add("Install another separator", KitTheme.Green, () => Send(new InstallSeparatorCommand()));
+            Add("Expand export capacity", KitTheme.Green, () => Send(new ExpandExportCommand()));
+
+            return;
+        }
+
+        for (int i = 0; i < Yard.Catalogue.Count; i++)
+        {
+            World.BuildKind kind = Yard.Catalogue[i];
+            ulong at = (ulong)i;
+
+            Add($"Build: {kind.DisplayName}", KitTheme.Green, () =>
+                Yard.Send(World.JobKind.Build, SiteAt, at));
+        }
     }
 
     /// <summary>Nothing is in reach.</summary>
     public void ShowNothing() =>
-        Reset("Drive to a prospect, a well, or the plant.\n\nW A S D to drive · Space advances a month · P pauses");
+        Reset(
+            "Click a structure, a well, or the plant to see what can be done to it.\n\n"
+            + "W A S D or the screen edge moves the view · wheel zooms · "
+            + "Space advances a month · P pauses");
 
     private void Reset(string target)
     {
@@ -160,7 +309,7 @@ public sealed partial class CommandBar : CanvasLayer
 
     private void Add(string label, Color colour, Action action)
     {
-        Button button = ScreenChrome.Action($"{_actions.Count + 1}.  {label}", colour, new Vector2(364, 42), fontSize: 16);
+        Button button = SlateChrome.Action($"{_actions.Count + 1}.  {label}", colour, new Vector2(364, 42), fontSize: 16);
         button.Pressed += () => action();
         _labels.Add(label);
         _list.AddChild(button);
@@ -175,20 +324,20 @@ public sealed partial class CommandBar : CanvasLayer
 
         if (result is Accepted)
         {
-            Reported?.Invoke($"{Name(command)} ordered.", false);
+            Reported?.Invoke($"{Describe(command)} ordered.", false);
             return true;
         }
 
         if (result is Rejected rejected)
         {
             for (int i = 0; i < rejected.Reasons.Count; i++)
-                Reported?.Invoke($"{Name(command)} refused — {rejected.Reasons[i].Detail}", true);
+                Reported?.Invoke($"{Describe(command)} refused — {rejected.Reasons[i].Detail}", true);
         }
 
         return false;
     }
 
-    private static string Name(Command command) => command switch
+    private static string Describe(Command command) => command switch
     {
         DrillWellCommand => "A well",
         SeismicSurveyCommand => "A seismic survey",

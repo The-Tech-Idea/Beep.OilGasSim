@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="UnitKind" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://game/World/UnitKind.cs" id="1_script"]
+[ext_resource type="Texture2D" path="res://assets/props/mobile-crane-truck.png" id="2_art"]
+
+[resource]
+script = ExtResource("1_script")
+DisplayName = "Maintenance crew"
+Carries = 6
+Art = ExtResource("2_art")
+DrawHeight = 88.0
+Speed = 880.0
+YardStand = Vector2(6.5, 7.6)
+WorkingFrames = 1

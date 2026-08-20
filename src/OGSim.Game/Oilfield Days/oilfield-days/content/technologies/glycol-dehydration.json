@@ -1,0 +1,9 @@
+{
+  "kind": "tech",
+  "id": "glycol-dehydration",
+  "name": "$loc:tech.glycol-dehydration",
+  "availableFrom": "E1",
+  "diffusionLagTicks": 0,
+  "prerequisites": [],
+  "routes": ["Diffusion"]
+}

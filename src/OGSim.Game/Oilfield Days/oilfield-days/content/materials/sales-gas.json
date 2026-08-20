@@ -1,0 +1,11 @@
+{
+  "kind": "material",
+  "id": "sales-gas",
+  "phase": "Gas",
+  "sold": true,
+  "properties": {
+    "density": "0.72 kg/m3",
+    "viscosity": "0.011 cP",
+    "heating-value": "52.2 MJ/kg"
+  }
+}

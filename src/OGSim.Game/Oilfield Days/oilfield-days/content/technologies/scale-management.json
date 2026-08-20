@@ -1,0 +1,9 @@
+{
+  "kind": "tech",
+  "id": "scale-management",
+  "name": "$loc:tech.scale-management",
+  "availableFrom": "E2",
+  "diffusionLagTicks": 0,
+  "prerequisites": [],
+  "routes": ["Research", "Licence", "ServiceRental"]
+}

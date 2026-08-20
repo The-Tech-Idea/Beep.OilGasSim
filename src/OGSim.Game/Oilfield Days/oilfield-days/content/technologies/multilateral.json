@@ -1,0 +1,9 @@
+{
+  "kind": "tech",
+  "id": "multilateral",
+  "name": "$loc:tech.multilateral",
+  "availableFrom": "E4",
+  "diffusionLagTicks": 0,
+  "prerequisites": ["horizontal"],
+  "routes": ["Research", "Licence"]
+}

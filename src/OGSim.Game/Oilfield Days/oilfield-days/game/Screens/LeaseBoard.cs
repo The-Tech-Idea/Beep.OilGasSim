@@ -1,5 +1,6 @@
 #nullable enable
 
+using Beep.ECS.UI;
 using Godot;
 using OGSim.Composition;
 using OGSim.Contracts;
@@ -39,7 +40,7 @@ public sealed partial class LeaseBoard : Control
     public override void _Ready()
     {
         SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
-        AddChild(ScreenChrome.Backdrop());
+        AddChild(SlateChrome.Backdrop());
 
         BuildList();
         BuildMap();
@@ -59,49 +60,60 @@ public sealed partial class LeaseBoard : Control
 
     private void BuildList()
     {
-        PanelContainer sign = ScreenChrome.Sign(
+        PanelContainer sign = SlateChrome.Sign(
             "STRUCTURES", new Vector2(430, 520), LayoutPreset.CenterLeft, new Vector2(30, -300));
 
         AddChild(sign);
 
-        var scroll = new ScrollContainer { CustomMinimumSize = new Vector2(396, 430) };
+        // Five rows and their gaps exactly. A scroll cut to an arbitrary height
+        // slices the last row in half, which reads as a panel that does not fit
+        // its contents rather than as a list with more below.
+        var scroll = new ScrollContainer
+        {
+            CustomMinimumSize = new Vector2(396, (5 * RowHeight) + (4 * RowGap)),
+            HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled,
+        };
         _list = new VBoxContainer { CustomMinimumSize = new Vector2(382, 0) };
         _list.AddThemeConstantOverride("separation", 8);
         scroll.AddChild(_list);
-        ScreenChrome.ContentOf(sign).AddChild(scroll);
+        SlateChrome.ContentOf(sign).AddChild(scroll);
     }
 
     private void BuildMap()
     {
-        PanelContainer sign = ScreenChrome.Sign(
+        PanelContainer sign = SlateChrome.Sign(
             "THE LEASE", new Vector2(500, 520), LayoutPreset.Center, new Vector2(-250, -300));
 
         AddChild(sign);
 
-        _map = new LeaseMap { CustomMinimumSize = new Vector2(466, 430) };
-        ScreenChrome.ContentOf(sign).AddChild(_map);
+        _map = new LeaseMap { CustomMinimumSize = new Vector2(466, (5 * RowHeight) + (4 * RowGap)) };
+        SlateChrome.ContentOf(sign).AddChild(_map);
     }
+
+    /// <summary>How tall one structure row is, and the gap between two.</summary>
+    private const int RowHeight = 84;
+    private const int RowGap = 8;
 
     private void BuildDetail()
     {
-        PanelContainer sign = ScreenChrome.Sign(
+        PanelContainer sign = SlateChrome.Sign(
             "WHAT WE BELIEVE", new Vector2(430, 520), LayoutPreset.CenterRight, new Vector2(-30, -300));
 
         sign.GrowHorizontal = GrowDirection.Begin;
         AddChild(sign);
 
-        var paper = new PanelContainer { CustomMinimumSize = new Vector2(396, 430) };
-        paper.AddThemeStyleboxOverride("panel", ScreenChrome.PaperBox());
+        var paper = new PanelContainer { CustomMinimumSize = new Vector2(396, 0) };
+        paper.AddThemeStyleboxOverride("panel", SlateChrome.FieldPlate());
 
         _detail = new VBoxContainer();
         _detail.AddThemeConstantOverride("separation", 8);
         paper.AddChild(_detail);
-        ScreenChrome.ContentOf(sign).AddChild(paper);
+        SlateChrome.ContentOf(sign).AddChild(paper);
     }
 
     private void BuildFooter()
     {
-        PanelContainer bar = ScreenChrome.Sign(
+        PanelContainer bar = SlateChrome.Sign(
             string.Empty, new Vector2(1000, 0), LayoutPreset.CenterBottom, new Vector2(-500, -18));
 
         bar.GrowVertical = GrowDirection.Begin;
@@ -110,28 +122,28 @@ public sealed partial class LeaseBoard : Control
         var row = new HBoxContainer();
         row.AddThemeConstantOverride("separation", 14);
 
-        _mode = ScreenChrome.Text("Placement mode: a well", 19, ScreenChrome.Cream);
+        _mode = SlateChrome.Text("Placement mode: a well", 19, KitTheme.Ink);
         _mode.CustomMinimumSize = new Vector2(330, 0);
         row.AddChild(_mode);
 
-        Button survey = ScreenChrome.Action("SHOOT SEISMIC", ScreenChrome.Wood, new Vector2(230, 50));
+        Button survey = SlateChrome.Chunk("SHOOT SEISMIC", UiSurface.Role.Neutral, new Vector2(230, 50));
         survey.Pressed += () => Order(false);
         row.AddChild(survey);
 
-        Button drill = ScreenChrome.Action("CONFIRM - DRILL", ScreenChrome.Good, new Vector2(250, 50));
+        Button drill = SlateChrome.Chunk("CONFIRM - DRILL", UiSurface.Role.Success, new Vector2(250, 50));
         drill.Pressed += () => Order(true);
         row.AddChild(drill);
 
-        Button cancel = ScreenChrome.Action("CANCEL", ScreenChrome.Bad, new Vector2(150, 50));
+        Button cancel = SlateChrome.Chunk("CANCEL", UiSurface.Role.Danger, new Vector2(150, 50));
         cancel.Pressed += () => SceneRouter.Instance.CloseOverlay();
         row.AddChild(cancel);
 
-        ScreenChrome.ContentOf(bar).AddChild(row);
+        SlateChrome.ContentOf(bar).AddChild(row);
 
-        _status = ScreenChrome.Text(string.Empty, 15, ScreenChrome.Gold);
+        _status = SlateChrome.Text(string.Empty, 15, KitTheme.Amber);
         _status.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         _status.CustomMinimumSize = new Vector2(960, 0);
-        ScreenChrome.ContentOf(bar).AddChild(_status);
+        SlateChrome.ContentOf(bar).AddChild(_status);
     }
 
     private void Refresh()
@@ -144,7 +156,7 @@ public sealed partial class LeaseBoard : Control
         if (_topBar is not null && IsInstanceValid(_topBar))
             _topBar.QueueFree();
 
-        _topBar = ScreenChrome.TopBar(DispatchBoard.Line(snapshot));
+        _topBar = DispatchBoard.Header(snapshot);
         AddChild(_topBar);
 
         foreach (Node child in _list.GetChildren())
@@ -162,7 +174,7 @@ public sealed partial class LeaseBoard : Control
             // already answered — the mockup's padlock, earned rather than set.
             bool spent = prospect.Source < 0.10;
 
-            Button card = ScreenChrome.IconCard(
+            Button card = SlateChrome.IconCard(
                 spent ? "blowout-preventer" : "wellhead-tree",
                 $"{prospect.Play}",
                 [
@@ -170,9 +182,9 @@ public sealed partial class LeaseBoard : Control
                     $"{prospect.ToMarket.Metres / 1000.0:F0} km to market",
                 ],
                 spent ? "DRILLED" : $"POS {prospect.ProbabilityOfSuccess * 100:F0}%",
-                spent ? ScreenChrome.Faded : Odds(prospect.ProbabilityOfSuccess),
+                spent ? KitTheme.Muted : Odds(prospect.ProbabilityOfSuccess),
                 null,
-                ScreenChrome.Faded,
+                KitTheme.Muted,
                 id == _selected,
                 spent,
                 new Vector2(382, 84));
@@ -197,7 +209,7 @@ public sealed partial class LeaseBoard : Control
 
         if (prospect is null)
         {
-            _detail.AddChild(ScreenChrome.Body("Nothing left in this basin to put a hole in."));
+            _detail.AddChild(SlateChrome.Body("Nothing left in this basin to put a hole in."));
             _mode.Text = "Placement mode: nothing selected";
             return;
         }
@@ -206,11 +218,11 @@ public sealed partial class LeaseBoard : Control
 
         var head = new HBoxContainer();
         head.AddThemeConstantOverride("separation", 10);
-        head.AddChild(ScreenChrome.Icon("wellhead-tree", 52.0f));
+        head.AddChild(SlateChrome.Icon("wellhead-tree", 52.0f));
 
         var title = new VBoxContainer();
-        title.AddChild(ScreenChrome.Text(prospect.Play.ToString(), 22, ScreenChrome.Ink));
-        title.AddChild(ScreenChrome.Text(
+        title.AddChild(SlateChrome.Text(prospect.Play.ToString(), 22, KitTheme.Ink));
+        title.AddChild(SlateChrome.Text(
             $"Probability of success {prospect.ProbabilityOfSuccess * 100:F0}%",
             16,
             Odds(prospect.ProbabilityOfSuccess).Darkened(0.2f)));
@@ -222,7 +234,7 @@ public sealed partial class LeaseBoard : Control
         _detail.AddChild(Line("Required area", "A cleared pad, five tiles square. The ground is levelled when the rig arrives."));
         _detail.AddChild(Line("Placement", "The structure is where world generation put it — confirm sends the rig there."));
 
-        _detail.AddChild(ScreenChrome.Text("The five factors", 14, new Color(0.45f, 0.40f, 0.34f)));
+        _detail.AddChild(SlateChrome.Text("The five factors", 14, new Color(0.45f, 0.40f, 0.34f)));
         _detail.AddChild(Factor("Source", prospect.Source));
         _detail.AddChild(Factor("Reservoir", prospect.Reservoir));
         _detail.AddChild(Factor("Seal", prospect.Seal));
@@ -232,10 +244,16 @@ public sealed partial class LeaseBoard : Control
 
     private static Control Factor(string name, double value)
     {
+        // Weakest reads red: the point of showing the five apart is that the low
+        // one is where a measurement is worth spending.
+        Color colour = value < 0.4 ? KitTheme.Red.Lightened(0.25f)
+            : value < 0.7 ? KitTheme.Amber
+            : KitTheme.Green.Lightened(0.25f);
+
         var row = new HBoxContainer { CustomMinimumSize = new Vector2(370, 0) };
         row.AddThemeConstantOverride("separation", 8);
 
-        Label label = ScreenChrome.Text(name, 15, ScreenChrome.Ink);
+        Label label = SlateChrome.Text(name, 15, KitTheme.Ink);
         label.CustomMinimumSize = new Vector2(100, 0);
         row.AddChild(label);
 
@@ -248,11 +266,11 @@ public sealed partial class LeaseBoard : Control
             CustomMinimumSize = new Vector2(200, 16),
         };
 
-        bar.AddThemeStyleboxOverride("background", ScreenChrome.FlatBox(new Color(0.80f, 0.72f, 0.58f), radius: 8));
-        bar.AddThemeStyleboxOverride("fill", ScreenChrome.FlatBox(ScreenChrome.Cash, radius: 8));
+        bar.AddThemeStyleboxOverride("background", SlateChrome.Track());
+        bar.AddThemeStyleboxOverride("fill", SlateChrome.Fill(colour));
         row.AddChild(bar);
 
-        row.AddChild(ScreenChrome.Text($"{value * 100:F0}%", 14, new Color(0.42f, 0.36f, 0.28f)));
+        row.AddChild(SlateChrome.Text($"{value * 100:F0}%", 14, new Color(0.42f, 0.36f, 0.28f)));
 
         return row;
     }
@@ -261,9 +279,9 @@ public sealed partial class LeaseBoard : Control
     {
         var column = new VBoxContainer();
         column.AddThemeConstantOverride("separation", 1);
-        column.AddChild(ScreenChrome.Text(heading, 14, new Color(0.45f, 0.40f, 0.34f)));
+        column.AddChild(SlateChrome.Text(heading, 14, new Color(0.45f, 0.40f, 0.34f)));
 
-        Label text = ScreenChrome.Body(body, 15);
+        Label text = SlateChrome.Body(body, 15);
         text.CustomMinimumSize = new Vector2(366, 0);
         column.AddChild(text);
 
@@ -272,9 +290,9 @@ public sealed partial class LeaseBoard : Control
 
     private static Color Odds(double probability) => probability switch
     {
-        < 0.20 => ScreenChrome.Bad,
-        < 0.35 => ScreenChrome.Gold,
-        _ => ScreenChrome.Good,
+        < 0.20 => KitTheme.Red,
+        < 0.35 => KitTheme.Amber,
+        _ => KitTheme.Green,
     };
 
     private ProspectView? Selected(FieldReadModel snapshot)
@@ -337,7 +355,7 @@ public sealed partial class LeaseMap : Control
         Vector2 size = Size;
         BasinWorld? world = Gameplay.Current?.World;
 
-        DrawRect(new Rect2(Vector2.Zero, size), ScreenChrome.WoodDark);
+        DrawRect(new Rect2(Vector2.Zero, size), KitTheme.Void);
 
         if (world is null || _snapshot is null)
             return;
@@ -383,9 +401,9 @@ public sealed partial class LeaseMap : Control
 
             Color colour = prospect.ProbabilityOfSuccess switch
             {
-                < 0.20 => ScreenChrome.Bad,
-                < 0.35 => ScreenChrome.Gold,
-                _ => ScreenChrome.Good,
+                < 0.20 => KitTheme.Red,
+                < 0.35 => KitTheme.Amber,
+                _ => KitTheme.Green,
             };
 
             if (chosen)

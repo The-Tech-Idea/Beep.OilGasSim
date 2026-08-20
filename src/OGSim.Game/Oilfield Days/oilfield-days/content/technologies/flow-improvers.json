@@ -1,0 +1,9 @@
+{
+  "kind": "tech",
+  "id": "flow-improvers",
+  "name": "$loc:tech.flow-improvers",
+  "availableFrom": "E3",
+  "diffusionLagTicks": 0,
+  "prerequisites": [],
+  "routes": ["Licence", "ServiceRental"]
+}

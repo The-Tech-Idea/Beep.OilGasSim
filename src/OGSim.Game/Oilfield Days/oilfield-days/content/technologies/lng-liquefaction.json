@@ -1,0 +1,9 @@
+{
+  "kind": "tech",
+  "id": "lng-liquefaction",
+  "name": "$loc:tech.lng-liquefaction",
+  "availableFrom": "E3",
+  "diffusionLagTicks": 0,
+  "prerequisites": ["molecular-sieve", "cryogenic-recovery"],
+  "routes": ["Research", "Licence"]
+}

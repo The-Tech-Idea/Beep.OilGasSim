@@ -1,0 +1,9 @@
+{
+  "kind": "tech",
+  "id": "synthetic-drilling-fluids",
+  "name": "$loc:tech.synthetic-drilling-fluids",
+  "availableFrom": "E3",
+  "diffusionLagTicks": 0,
+  "prerequisites": ["directional"],
+  "routes": ["Research", "Licence", "ServiceRental"]
+}
