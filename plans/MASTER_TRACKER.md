@@ -424,7 +424,7 @@ parameter.
 | R7.3 | ESP — piecewise-linear catalogue curve scaled by ρ_mix/ρ_ref, power draw = hydraulic/η | ✅ |
 | R7.4 | Rod pump — displacement cap | ✅ |
 | R7.5 | PCP — the same relation, distinguished by its envelope, per §6.2 | ✅ |
-| R7.6 | Lift selection advisory | ⬜ — deferred to R15's advisor, which owns recommendation surfaces; `Assess` gives it everything it needs |
+| R7.6 | Lift selection advisory | ⬜ — deferred to R25's advisor (this row said R15, which is World generation — R25 is Advisor and Reality Profiles, and the number drifted at some renumbering this file never caught), which owns recommendation surfaces; `Assess` gives it everything it needs |
 
 **R7's verification.** R7-V1 ✅ · R7-V2 ✅ · R7-V3 ✅ · R7-V4 ✅ · R7-V5 ✅ ·
 R7-V6 ✅ · R7-V7 🟨 (the ESP's power draw is computed and asserted; the facility
