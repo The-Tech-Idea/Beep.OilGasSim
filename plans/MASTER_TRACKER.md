@@ -152,7 +152,7 @@ the standing moves — but it lives in `OGSim.Integrity` and composition's
 | **R14** Information and uncertainty | 7 | 2 | 2 |
 | **R19** Persistence and determinism | 3 | 2 | 2 |
 | **R5** Subsurface | 7 | 1 | 2 |
-| **R17** Technology | 5 | 1 | 2 |
+| **R17** Technology | 6 | 1 | 1 |
 | **R18** Degradation, hazards, maintenance | 4 | 1 | 2 |
 | **R21** Host contract | 1 | 5 | 0 |
 | **R23** Health, Safety and Environment | 5 | 4 | 0 |
@@ -907,7 +907,7 @@ cheap way to keep most of the money.
 | R17.2 | Model-swap, envelope-extension and option-unlock effects | ✅ |
 | R17.3 | Acquisition routes | 🟨 — the grant and its refusals are built; the *cost* of each route is R13's |
 | R17.4 | Ongoing technology costs | ⬜ — R13's ledger |
-| R17.5 | The shipped technology graph | ⬜ — content, not code |
+| R17.5 | The shipped technology graph | ✅ — stale ⬜ (found going through the plan). Sixty-five nodes ship in `content/technologies/`, read through `TechnologyContentKind` (registered in `EngineBuilder.FacilityContent`'s loader list) and composed into `CapabilitiesModule` as the technology graph (`EngineBuilder.Registry`) — not files sitting unread |
 | R17.6 | Era gating and diffusion | ✅ |
 | R17.7 | Catalogue gating; install validation; rentals | ✅ |
 
