@@ -419,6 +419,51 @@ ambient temperature — the air-cooled driver and the aftercoolers both lose dut
 `ConstraintKind.TotalCapacity` at the derated value and its `PowerDraw` is
 `W_shaft`, which stage 4's balance consumes exactly as it consumes an ESP's.
 
+## 3d. Liquid pump station — R11.2 amendment (finding 246)
+
+> **R11.2 named no model at all.** [01](../design/01_CONCEPT_MATRIX.md) D2
+> declares `IPumpStation : IFacilityUnit` at status `solved` and
+> [C11](../catalog/C11_PIPELINES_AND_STATIONS.md) prices a power-tier ladder
+> against "liquid head restored mid-line", and neither states a formula. Under
+> F-1 a liquid pump was unimplementable until one was pinned. `IFacilityUnit`
+> itself is the concept matrix's aspirational name for the slot; the settled
+> contract every boosting element implements is `IFlowElement`, exactly as
+> [C16](../catalog/C16_TERRAIN_CLASSES.md)'s flare and §3c's compressor do, so
+> the corrected name is a `LiquidPumpStation : IFlowElement` rather than a new
+> interface (the same correction finding 117 already made for compression).
+
+```text
+LIQUID PUMPING — SI throughout, and simpler than §3c's gas form because a
+liquid is treated incompressible (SDD-003 §3.1 already does this for Bw
+everywhere in the balance; a pump modelled compressibly would disagree with
+the reservoir side about the same barrels).
+
+No staging and no interstage cooling: a liquid pump does not heat the fluid
+the way a polytropic gas stage does, and 05 §3's incompressible treatment
+means one stage always suffices.
+
+  w = (P2 − P1) / ρ̄                                        [J/kg]
+  W_shaft = ṁ · w / η_pump                                  [W]
+
+ρ̄ is the average density of the fluid AT THE PUMP, supplied at construction
+exactly as §3c's compressor takes ρ̄ as an average compressibility Z̄ — both
+are a property of the stream the unit was built for, not a tier constant.
+
+No heat derating (contrast §3c): §2.6/13 §3.3's derate curve exists because a
+gas compressor's air-cooled driver and aftercoolers lose duty in the heat.
+Nothing here does the same job for a liquid pump's motor, and inventing a
+curve nothing calibrates would be a fabricated number rather than a modelled
+one. Capacity is the tier's rated flow, undegraded.
+```
+
+**The pump station is an ordinary `IFlowElement`**, discharge and suction
+pressures fixed at construction like the compressor's — a boosting element
+raises the stream from where it sits to a set discharge, and does not solve
+for that set point itself; sizing it correctly is the player's decision, made
+when the station is bought. Its constraint is `ConstraintKind.TotalCapacity`
+at the tier's rated flow and its `PowerDraw` is `W_shaft`, consumed by stage
+4's balance exactly as the compressor's is.
+
 ## 4. Gas treating (dehydration · sweetening · NGL)
 
 ```text
@@ -726,9 +771,18 @@ into as well.
 
 **Order of work**, each landing green before the next:
 
-1. The berth carries the rate (§7a's L5 decision), with no schedule yet —
-   behaviour identical, tests unmoved, and the duplicate-rate hazard closed
-   before anything can depend on it.
+1. **Done (finding 251).** The berth carries the rate (§7a's L5 decision),
+   with no schedule yet — behaviour identical, tests unmoved, and the
+   duplicate-rate hazard closed before anything can depend on it.
+   `ExportTerminal.Berth` is a DERIVED value (`new Berth(Tier.Id,
+   Tier.Offtake)`), never a second stored fact — `Tier` stays the one thing
+   `Fit`/save-restore touch, so there is still exactly one owner of the rate
+   (law L5) even though there are now two names for reading it. The tank's
+   draw (`ProductionLoop`, formerly `_terminal.Tier.Offtake` directly) now
+   reads `_terminal.Berth.LoadingRate` — the one consumer §7a.1 named, moved
+   to the seam a schedule will eventually attach to. Steps 2–4 remain open
+   and each still needs the company-value prerequisite §7a.2 records before
+   it is safe to attempt.
 2. Cargoes and occupancy: the tank fills between liftings. **This is where the
    slow suite moves**, and where the predictions above are checked.
 3. Laytime and demurrage — a cost, so it touches the ledger and the ESG/covenant
@@ -822,12 +876,67 @@ into as well.
 > where that field is. Until the rest lands, one chain serves one field. Stated
 > here so the limit reads as a known gap rather than as a decision.
 
+## 7d. The Reject leg has no declared destination — R20d.29 amendment (finding 252)
+
+§7's own text says a failing stream "routes to the declared Reject port in
+full" and stops there. It was reviewed twice since (§7a, R20d.5.0) and both
+reviews checked the berth/cargo half and never asked where Reject goes,
+because the port satisfying network-build's "a spec gate must declare a
+Reject outlet" check reads as the requirement met — the check is that the
+port EXISTS, not that anything is connected to it. **In the shipped
+composition, nothing is**: `Modules.cs` wires `Custody.OnSpecOutlet` to the
+tank and leaves `RejectOutlet` unconnected, so a rejected stream, once
+produced, is read by nothing downstream — not delivered, not `Disposed`, not
+audited.
+
+**This is reachable, not theoretical.** `SeparationEfficiency.WaterIntoLiquid`
+ships at 7% (§1) — the separator's own datasheet — so BS&W crosses
+`Defaults.SalesSpec`'s 0.5% limit at a modest water cut, well before the
+late-life numbers §7a.2 and R20d.4 describe, and every rejection is
+all-or-nothing (§7's text, FV6): the whole liquid stream is refused, not the
+fraction that failed.
+
+**The decision.** Rejected crude is a real, permanent loss — not recycled,
+not held for reprocessing. Two reasons. First, reprocessing needs a path back
+INTO the network, and this composition's flow graph is a DAG (`FlowNetwork`'s
+topological order); a return edge is a cycle the solver does not express and
+inventing one is a bigger mechanism than this gap calls for. Second, and the
+reason a cycle is not merely inconvenient but wrong: `SpecificationGate.cs`'s
+own header says the point of a rejection is "not a hint: a rejection with a
+reason" — a real consequence that makes buying a treater a decision rather
+than a formality. A stream that quietly re-tries until it passes would remove
+exactly the pressure the mechanic exists to create.
+
+**The mechanism.** A terminal sink, the same SHAPE as `Flare` (§3b) — one
+inlet, no outlets, everything that arrives leaves the network as `Disposed`
+— reporting through `DisposedMass.Discharged`, the category `Treater`
+already uses for water it takes out (§2): "left the network, was never sold,
+is accounted for." `ProductionLoop`'s existing `Discharged` reader is gated
+on `solution.Element == _disposal.Id` (the water-to-ground case), so a second
+element reporting through the same field does not get mis-read as disposal
+water — it is read generically by the per-element throughput sum the way
+every other terminal already is. **Nothing about revenue changes**: rejected
+mass was never part of `Delivered` before this element existed (it had no
+reader at all) and is not part of it after (this sink is downstream of the
+`OnSpecOutlet`/tank leg, not upstream of it) — the fix makes the loss VISIBLE
+and audited, it does not create or remove one.
+
+**The other half of the same gap**: `CustodyTransferPoint.LastBreaches` —
+which property failed and by how much margin — is read by nothing in
+`OGSim.Composition` today, so even the audited mass carries no reason with
+it. `ProductionLoop.RecordCustody` (stage `Custody`, order 0) is where the
+successful transfer is already recorded each tick with `_audit` in scope;
+a rejection this tick is recorded beside it, naming every breach exactly as
+`SpecificationCheck.Evaluate` reports it (design 09 §4.2's "a rejection with
+a reason", not "a rejection happened").
+
 ## 8. Datasheet field registry (content ⇄ code)
 
 Per-unit-kind closed datasheet blocks (SDD-004 §6): separator {gasRating,
 liquidRating, **operatingPressure**, effGL, effLG, effLW}; **manifold {slots}**;
 treater {eff, spec_capable, heatDuty};
-compressor {maxPower, η_poly, maxStageRatio, driver, derateCurve}; tank
+compressor {maxPower, η_poly, maxStageRatio, driver, derateCurve}; **pump
+{ratedFlow, η_pump}** (§3d — no derate curve: nothing calibrates one); tank
 {capacity, lossRate}; pipe-spec {D, rating, roughness, U-value};
 meter {σ}; berth {loadingRate}; power source {maxPower, η_driver, fuelType|grid,
 meritRank}; flare {capacity, combustionEfficiency}; VRU {capacity,

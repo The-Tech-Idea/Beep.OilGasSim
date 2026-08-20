@@ -543,6 +543,14 @@ public static class SaveGame
         // the refusal that has to survive: it means this build's generator no
         // longer draws the basin the save was played on.
         world.SealGeneration(from);
+
+        // AND WEATHER, THE SAME WAY (SDD-016's R20d.8.10 amendment) — missing
+        // this would leave a reloaded game's weather at the unscaled default
+        // while the original run's was scaled by ClimateSeverity, which is
+        // exactly the "right dice from the wrong place" shape finding 192
+        // already found once for the reservoir.
+        engine.Provided.Resolve<Environment.WeatherState>()
+            .SealGeneration([Defaults.ScaledClimate(from.ClimateSeverity)]);
     }
 
     /// <summary>

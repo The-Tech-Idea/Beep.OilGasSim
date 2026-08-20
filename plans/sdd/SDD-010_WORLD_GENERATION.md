@@ -36,6 +36,16 @@ principle applied INSIDE world-gen. PV7 (regeneration identity) follows.
 | Sub-step | Algorithm |
 |---|---|
 | Terrain | Heightfield = archetype base profile + value noise; terrain class by (height, slope, climate) table |
+
+> **Amendment (finding 242, building `TerrainClassContentKind`).** The
+> shipped generator classifies by **height and slope only** — climate is not
+> yet a per-cell generated fact anywhere in this composition (`AddClimateRegion`
+> is never called), so classification cannot honestly read it. [C16](../catalog/C16_TERRAIN_CLASSES.md)'s
+> amendment carries the exhaustive (height × slope) cut table and names the two
+> classes (desert, swamp) this leaves unreachable until climate generation
+> exists — both still ship as validated content. `ClassByCell` carries `-1` for
+> a sea cell (elevation below zero) rather than a class index; C16's own rule,
+> "sea is not a class," was previously violated by the one caller that existed.
 | Hydrology | Rivers: steepest-descent walks from sampled high points, carving; lakes at sinks; coast at sea level; **bathymetry = continued heightfield below sea level** (port depth falls out) |
 | Settlements | Score every candidate cell: `w_coast·coast + w_river·river + w_flat·flat + w_arable·arable` (weights content); take top-N with minimum spacing; population ~ LogNormal by rank |
 | Transport | Roads: **A\* on an 8-neighbour cost grid** (cost = terrain-class table), ties broken by coordinate order; network = MST over settlements (edge-weight ties broken by ordinal (idA, idB) pair) + spurs to ports; rail on the highest-traffic corridors (archetype era) |
@@ -399,3 +409,4 @@ reach sinks, A\* connectivity, port depth) · V9b (derived profiles) · V9c
 |---|---|---|
 | S010-1 | Grid resolution for heightfield/cost grids (memory vs corridor fidelity) — start 250 m cells, benchmark | R15.1 |
 | S010-2 | Settlement growth (H9 slow response) lives in Environment at runtime, seeded from these populations — confirm the handoff shape | R22/R16 integration |
+| S010-3 | `desert` and `swamp` terrain classes are shipped content, unreachable by the shipped generator until a per-cell climate/aridity signal exists (finding 242) | Climate-region generation (design 06 §5.1a step 9.3) |

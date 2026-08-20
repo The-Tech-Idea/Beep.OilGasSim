@@ -380,6 +380,21 @@ internal sealed class ObjectiveStage(
     public ScenarioProgress Progress { get; private set; } =
         new([], [], ObjectiveState.Pending);
 
+    // SDD-014 §3's "kind" — this IS a state transition and shares
+    // AuditCategory.StateTransition with every other one this engine records
+    // (a well, a lease, a compartment); a per-objective event is told apart
+    // by a "kind" key rather than a dedicated enum member per fact.
+    private const string MetKind = "objective.met";
+    private const string FailedKind = "objective.failed";
+    private const string ExpiredKind = "objective.expired";
+
+    // The runner is not the owner of this cache — SDD-014 §5a's R24-V15
+    // keeps it unable to reach IAuditTrail at all, so ownership of "what did
+    // we already report" sits with the one consumer that already holds the
+    // trail. Point lookups only (TryGetValue / indexer), never enumerated,
+    // so this stays a store rather than an iteration order (SDD-000 §3).
+    private readonly Dictionary<ContentId, ObjectiveState> _reportedByObjective = [];
+
     public void Execute(TickContext context)
     {
         ArgumentNullException.ThrowIfNull(context);
@@ -388,6 +403,22 @@ internal sealed class ObjectiveStage(
 
         Position = projection.Take(context.Tick, context.Date, Insolvent);
         Progress = runner.Evaluate(paths.SnapshotOf(Position), context.Tick);
+
+        // SDD-014 §3: "emit objective.* events on state change" — PER
+        // objective, ahead of the combined verdict below: a scenario with
+        // several objectives can settle one of them long before Overall
+        // moves, and that is exactly the fact a mission author wants on the
+        // trail (finding 247).
+        for (int i = 0; i < Progress.Objectives.Count; i++)
+        {
+            (ContentId id, ObjectiveState state, double _) = Progress.Objectives[i];
+
+            _reportedByObjective.TryGetValue(id, out ObjectiveState before);
+            if (state == before) continue;
+
+            _reportedByObjective[id] = state;
+            RecordObjectiveTransition(id, state, context.Tick);
+        }
 
         if (Progress.Overall == _reported) return;
 
@@ -401,6 +432,31 @@ internal sealed class ObjectiveStage(
                 ["overall"] = new(Progress.Overall.ToString()),
                 ["tick"] = new(context.Tick.Value.ToString(
                     System.Globalization.CultureInfo.InvariantCulture)),
+            });
+    }
+
+    private void RecordObjectiveTransition(ContentId objective, ObjectiveState state, Tick tick)
+    {
+        string kind = state switch
+        {
+            ObjectiveState.Met => MetKind,
+            ObjectiveState.Failed => FailedKind,
+            ObjectiveState.Expired => ExpiredKind,
+
+            // Pending is the cache's default and never a transition TARGET —
+            // a terminal state latches (SDD-014 §5a) and nothing moves back.
+            _ => throw new ModelFault("SDD-014 §3", null,
+                $"objective '{objective.Value}' transitioned to {state}, which is not a " +
+                "terminal state an objective.* event can name"),
+        };
+
+        audit.Record(
+            AuditCategory.StateTransition, subject: null, cause: null,
+            new Dictionary<string, AuditValue>(StringComparer.Ordinal)
+            {
+                ["kind"] = new(kind),
+                ["objective"] = new(objective.Value),
+                ["tick"] = new(tick.Value.ToString(System.Globalization.CultureInfo.InvariantCulture)),
             });
     }
 }

@@ -272,6 +272,15 @@ internal sealed class FacilitiesModule(FacilityLadders ladders) : EngineModule(D
         var gasPlant = new OGSim.Facilities.GasCapture(
             Defaults.TheGasPlant, ladders.GasPlant[0], Defaults.MaterialCount);
 
+        // WHERE A REJECTED STREAM GOES (SDD-006 §7d, finding 252). Custody's
+        // Reject port satisfies network-build's "a spec gate must declare a
+        // Reject outlet" check on its own; without a sink connected to it, a
+        // rejected stream would be read by nothing and vanish from the tick's
+        // conservation terms the way the flare exists precisely to stop gas
+        // from doing.
+        var offSpecSink = new OGSim.Facilities.OffSpecSink(
+            Defaults.TheOffSpecSink, Defaults.MaterialCount);
+
         var flare = new OGSim.Facilities.Flare(
             Defaults.TheFlare, Defaults.FlareCapacity, Defaults.FlareCombustionEfficiency,
             Defaults.MaterialCount);
@@ -320,6 +329,7 @@ internal sealed class FacilitiesModule(FacilityLadders ladders) : EngineModule(D
         network.Add(treater);
         network.Add(gasPlant);
         network.Add(flare);
+        network.Add(offSpecSink);
         // Set once, not refreshed: a DISPOSAL well injects into a disposal
         // formation, not into the producing compartment. Its acceptance
         // therefore depends on that formation's pressure and the pump's, neither
@@ -399,9 +409,14 @@ internal sealed class FacilitiesModule(FacilityLadders ladders) : EngineModule(D
             custody.Id, OGSim.Facilities.CustodyTransferPoint.OnSpecOutlet,
             tank.Id, OGSim.Facilities.Tank.Inlet));
 
+        // AND WHAT FAILS THE SPEC GOES TO THE SINK, not nowhere (finding 252).
+        network.Connect(new FlowConnection(
+            custody.Id, OGSim.Facilities.CustodyTransferPoint.RejectOutlet,
+            offSpecSink.Id, OGSim.Facilities.OffSpecSink.Inlet));
+
         var chain = new SurfaceChain(
             manifold, flowline, separator, custody, treater, gasPlant, flare,
-            disposal, intake, tank);
+            disposal, intake, tank, offSpecSink);
 
         // OWNED AS WELL AS PROVIDED (SDD-006 §8b). Six sockets carry a fitted
         // tier and facilities registered no owner, so a reload returned the
@@ -433,7 +448,8 @@ internal sealed record SurfaceChain(
     OGSim.Facilities.Flare Flare,
     OGSim.Wells.Injector Disposal,
     OGSim.Facilities.WaterIntake Intake,
-    OGSim.Facilities.Tank Tank)
+    OGSim.Facilities.Tank Tank,
+    OGSim.Facilities.OffSpecSink OffSpecSink)
 {
     /// <summary>Where a well ties in, and how many can. One list rather than a
     /// count, so a caller cannot forget which port a slot index means.</summary>
@@ -463,6 +479,7 @@ internal sealed record SurfaceChain(
         if (element == Disposal.Id) return "water-disposal";
         if (element == Intake.Id) return "water-intake";
         if (element == Tank.Id) return "tank";
+        if (element == OffSpecSink.Id) return "off-spec-sink";
 
         // A gathering line, numbered by the well it serves (SDD-006 §1c). Named
         // rather than left to the well-N fallback because a player watching the
@@ -641,20 +658,81 @@ internal sealed class LicenceStage(
 
         OGSim.Company.CommitmentAssessment assessment = licence.AssessAt(context.Tick);
 
-        if (!assessment.LicenceLost) return;
+        if (assessment.LicenceLost)
+        {
+            AuditId cause = audit.Record(
+                AuditCategory.Financial, subject: null, cause: null,
+                new Dictionary<string, AuditValue>(StringComparer.Ordinal)
+                {
+                    ["spend"] = new("licence-bond-forfeit"),
+                    ["unmet-count"] = new(assessment.Unmet.Count.ToString(
+                        System.Globalization.CultureInfo.InvariantCulture)),
+                });
+
+            company.Ledger.Post(new OGSim.Company.Movement(
+                context.Tick, OGSim.Company.Account.Penalty, OGSim.Company.Account.Cash,
+                assessment.BondForfeit, OGSim.Company.MovementCategory.Contractual,
+                Asset: null, Cause: cause));
+
+            return;
+        }
+
+        // THE OTHER WAY A LICENCE ENDS (SDD-011 §1's R16 amendment, finding
+        // 254). Checked only once the commitment is confirmed met this tick —
+        // a company that broke its promise the same month the term ran out is
+        // told the truer of the two reasons. `StateTransition`, not
+        // `Financial`: no `Movement` posts, because nothing was broken and
+        // there is nothing to forfeit — the same category and the same
+        // `kind`-keyed shape `ObjectiveStage` already uses for a verdict that
+        // is a fact about state rather than about money (SDD-014 §3).
+        if (licence.ExpireIfDue(context.Tick))
+            audit.Record(
+                AuditCategory.StateTransition, subject: null, cause: null,
+                new Dictionary<string, AuditValue>(StringComparer.Ordinal)
+                {
+                    ["kind"] = new("licence.expired"),
+                });
+    }
+}
+
+/// <summary>
+/// Stage 11, beside <see cref="LicenceStage"/> — SDD-009 §7's R13.3 amendment
+/// (finding 250). Records the tick's delivered volume every tick, and posts
+/// the SAME shape of movement the licence bond does — <c>Account.Penalty</c>
+/// against <c>Account.Cash</c>, <c>MovementCategory.Contractual</c> — the
+/// tick a window closes short.
+/// </summary>
+internal sealed class TakeOrPayStage(
+    OGSim.Company.TakeOrPayContract contract,
+    ProductionLoop loop,
+    OGSim.Company.CompanyState company,
+    IAuditTrail audit) : ITickStage
+{
+    public StageId Id => StageId.Company;
+
+    public void Execute(TickContext context)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+
+        contract.RecordDelivery(loop.ProducedThisTick);
+
+        OGSim.Company.TakeOrPayAssessment? assessment = contract.AssessAt(context.Tick);
+        if (assessment is null || assessment.Penalty.Cents <= 0) return;
 
         AuditId cause = audit.Record(
             AuditCategory.Financial, subject: null, cause: null,
             new Dictionary<string, AuditValue>(StringComparer.Ordinal)
             {
-                ["spend"] = new("licence-bond-forfeit"),
-                ["unmet-count"] = new(assessment.Unmet.Count.ToString(
-                    System.Globalization.CultureInfo.InvariantCulture)),
+                ["spend"] = new("take-or-pay-shortfall"),
+                ["delivered-m3"] = new(assessment.Delivered.CubicMetres.ToString(
+                    "R", System.Globalization.CultureInfo.InvariantCulture)),
+                ["shortfall-m3"] = new(assessment.Shortfall.CubicMetres.ToString(
+                    "R", System.Globalization.CultureInfo.InvariantCulture)),
             });
 
         company.Ledger.Post(new OGSim.Company.Movement(
             context.Tick, OGSim.Company.Account.Penalty, OGSim.Company.Account.Cash,
-            assessment.BondForfeit, OGSim.Company.MovementCategory.Contractual,
+            assessment.Penalty, OGSim.Company.MovementCategory.Contractual,
             Asset: null, Cause: cause));
     }
 }
@@ -675,12 +753,18 @@ internal sealed class LicenceStage(
 /// pay are three stages in design 03 §6's order rather than one function,
 /// because a failed solve must commit nothing.</para>
 /// </summary>
-internal sealed class FieldModule(FacilityLadders ladders) : EngineModule(Declare(
+internal sealed class FieldModule(
+    FacilityLadders ladders, OGSim.Company.TakeOrPayTerms takeOrPay) : EngineModule(Declare(
     "field",
     provides:
     [
         typeof(FieldControl), typeof(CloseStage), typeof(IObligationRegistry),
         typeof(Bank), typeof(ReserveHistory),
+
+        // SDD-009 §7's R13.3 amendment (finding 250) — the one take-or-pay
+        // contract, provided so a test can resolve and assess it directly,
+        // the same reason Licence is.
+        typeof(OGSim.Company.TakeOrPayContract),
     ],
     requires:
     [
@@ -739,7 +823,8 @@ internal sealed class FieldModule(FacilityLadders ladders) : EngineModule(Declar
 
     ownsState: [
         "field.activities", "company.obligations", "field.flood", "field.export",
-        "company.facility", "company.reserve-history", "field.abandoned"],
+        "company.facility", "company.reserve-history", "field.abandoned",
+        "company.take-or-pay"],
     stages:
     [
         new StageParticipation(StageId.Operations, Order: 0),
@@ -747,6 +832,16 @@ internal sealed class FieldModule(FacilityLadders ladders) : EngineModule(Declar
         new StageParticipation(StageId.SolveFlow, Order: 0),
         new StageParticipation(StageId.Custody, Order: 0),
         new StageParticipation(StageId.Economics, Order: 0),
+
+        // SDD-009 §7's R13.3 amendment (finding 250) — TakeOrPayStage, the
+        // same stage LicenceStage posts a contractual penalty from, for the
+        // same reason: after stage 8 has settled the month's custody and
+        // before stage 12 reports it. Order 2: CompanyModule's LicenceStage
+        // claims order 0 and CapabilitiesModule's diffusion claims order 1 on
+        // this stage, and within-stage order must be unambiguous across
+        // modules — the three are independent, so which runs first does not
+        // matter beyond that.
+        new StageParticipation(StageId.Company, Order: 2),
 
         // STALENESS (SDD-008 §2d.3). Declared by THIS module rather than by the
         // information one, and the choice is worth stating: what fixes the
@@ -779,6 +874,7 @@ internal sealed class FieldModule(FacilityLadders ladders) : EngineModule(Declar
         typeof(ExpandExportCommand),
         typeof(InstallGasPlantCommand),
         typeof(RemediateInjectorCommand),
+        typeof(StimulateWellCommand),
         typeof(ServiceEquipmentCommand),
         typeof(InstallMonitoringCommand),
         typeof(RepairEquipmentCommand),
@@ -856,6 +952,7 @@ internal sealed class FieldModule(FacilityLadders ladders) : EngineModule(Declar
             composition.Require<OGSim.Integrity.AssetIntegrity>(),
             chain.Tank,
             terminal,
+            chain.Custody,
             composition.Require<IFiscalRegime>(),
 
             // The market, and the ONE stream it may draw from (SDD-009 §6). The
@@ -1055,6 +1152,13 @@ internal sealed class FieldModule(FacilityLadders ladders) : EngineModule(Declar
             new RemediateInjectorActivity(
                 Defaults.RemediateInjectorTerms, chain.Disposal),
 
+            // A WELL DRILLED CLEAN CAN STILL BE MADE BETTER (R12b.7, finding
+            // 253). Every completion opens at zero skin, so this is a genuine
+            // improvement rather than a restoration — the acid job, not yet
+            // the frac or multi-stage that name is short for.
+            new StimulateWellActivity(
+                Defaults.StimulateWellTerms, field),
+
             // THE ANSWER THE DRILLING REFUSAL ALREADY NAMED. "A bigger header
             // has to be installed first" has been the reason a well is turned
             // away since R12b, and nothing could install one.
@@ -1110,6 +1214,16 @@ internal sealed class FieldModule(FacilityLadders ladders) : EngineModule(Declar
         var close = new CloseStage(projection, objectives);
         composition.Contribute(order: 0, close);
         composition.Provide(close);
+
+        // THE ONE TAKE-OR-PAY CONTRACT (SDD-009 §7's R13.3 amendment, finding
+        // 250), granted at tick 0 like the one licence: this composition's
+        // company holds one offtake commitment against the one field it
+        // generates.
+        var takeOrPayContract = new OGSim.Company.TakeOrPayContract(takeOrPay, start: new Tick(0));
+
+        composition.Own(takeOrPayContract);
+        composition.Provide(takeOrPayContract);
+        composition.Contribute(order: 2, new TakeOrPayStage(takeOrPayContract, loop, company, audit));
 
         // Stage 3: rigs that finished this month hand over a well or a dry hole,
         // BEFORE stage 5 solves — so a well completed in January produces in
@@ -1176,7 +1290,7 @@ internal sealed class InformationModule() : EngineModule(Declare(
         typeof(OGSim.Information.ObservationSampler),
         typeof(OGSim.Information.ProspectRisks),
     ],
-    requires: [typeof(IAuditTrail), typeof(IRandomSource), typeof(SimulationClock)],
+    requires: [typeof(IAuditTrail), typeof(IRandomSource), typeof(SimulationClock), typeof(WorldState)],
     ownsState: ["information.beliefs", "information.prospect-risk"],
     stages: NoStagesYet))
 {
@@ -1213,7 +1327,7 @@ internal sealed class InformationModule() : EngineModule(Declare(
         composition.Own(beliefs);
         composition.Provide<IBeliefStore>(beliefs);
 
-        var model = new RegionalObservationModel();
+        var model = new RegionalObservationModel(composition.Require<WorldState>());
         composition.Provide<IObservationModel>(model);
 
         // R20d.7's POS, composed at last. `ProspectRisk` was built, tested and
@@ -1246,7 +1360,9 @@ internal sealed class InformationModule() : EngineModule(Declare(
 
 // ---------------------------------------------------------------- world
 
-internal sealed class WorldModule() : EngineModule(Declare(
+internal sealed class WorldModule(
+    IReadOnlyList<OGSim.World.TerrainClassDefinition> terrainClasses,
+    ContentId climateId) : EngineModule(Declare(
     "world",
     provides: [typeof(IWorldGenerator), typeof(WorldState)],
     requires: [],
@@ -1257,7 +1373,8 @@ internal sealed class WorldModule() : EngineModule(Declare(
     {
         ArgumentNullException.ThrowIfNull(composition);
 
-        composition.Provide<IWorldGenerator>(new OGSim.World.BasinWorldGenerator());
+        composition.Provide<IWorldGenerator>(
+            new OGSim.World.BasinWorldGenerator(terrainClasses, climateId));
 
         // EMPTY, and filled once by generation before the first tick. Composed
         // rather than created by `CreateNew` because the FIELD reads it — a well
@@ -1297,6 +1414,13 @@ internal sealed class CapabilitiesModule(
         // What the company has actually acquired, so the scheduler can be told
         // rather than handed an empty list (SDD-005 §2's R20d.10 amendment).
         typeof(OGSim.Capabilities.CapabilityState),
+
+        // THE CONCRETE TYPE TOO (SDD-005 §4.2's R22.2 amendment) — environment
+        // and technology apply through the SAME `EffectState.Apply`, which is
+        // deliberately not on `IEffectState`, so the module that calls it for
+        // weather has to resolve the concrete object this one built rather
+        // than a second instance of its own.
+        typeof(OGSim.Capabilities.EffectState),
     ],
     requires: [],
 
@@ -1340,6 +1464,7 @@ internal sealed class CapabilitiesModule(
         var effects = new OGSim.Capabilities.EffectState(new Dictionary<EnvelopeKind, double>());
 
         composition.Provide<IEffectState>(effects);
+        composition.Provide(effects);
 
         composition.Contribute(order: 1, new DiffusionStage(state, effects));
     }
@@ -1401,7 +1526,13 @@ internal sealed class DiffusionStage(
 internal sealed class WeatherStage(
     OGSim.Environment.WeatherState weather,
     IWeatherModel model,
-    IRandomStream stream) : ITickStage
+    IRandomStream stream,
+
+    /// <summary>SDD-005 §4.2's R22.2 amendment: the same path technology's
+    /// `DiffusionStage` applies through, at the stage design 07 §1 = 13 §2.1
+    /// already puts weather at.</summary>
+    OGSim.Capabilities.EffectState effects,
+    OGSim.Environment.ClimateProfile climate) : ITickStage
 {
     public StageId Id => StageId.Environment;
 
@@ -1410,6 +1541,7 @@ internal sealed class WeatherStage(
         ArgumentNullException.ThrowIfNull(context);
 
         weather.Advance(context.Date, model, stream);
+        effects.Apply(climate.Effects);
     }
 }
 
@@ -1417,7 +1549,7 @@ internal sealed class EnvironmentModule(OGSim.Environment.ClimateProfile climate
     : EngineModule(Declare(
     "environment",
     provides: [typeof(IWeatherModel), typeof(OGSim.Environment.WeatherState)],
-    requires: [typeof(IRandomSource)],
+    requires: [typeof(IRandomSource), typeof(OGSim.Capabilities.EffectState)],
 
     // THE CARRY, which is the one value that crosses a tick. `StreamId.Weather`
     // has existed since R1 and was drawn by nothing until now — the ninth
@@ -1444,7 +1576,8 @@ internal sealed class EnvironmentModule(OGSim.Environment.ClimateProfile climate
         composition.Provide(weather);
 
         composition.Contribute(order: 0, new WeatherStage(
-            weather, model, composition.Require<IRandomSource>().Stream(StreamId.Weather)));
+            weather, model, composition.Require<IRandomSource>().Stream(StreamId.Weather),
+            composition.Require<OGSim.Capabilities.EffectState>(), climate));
     }
 }
 

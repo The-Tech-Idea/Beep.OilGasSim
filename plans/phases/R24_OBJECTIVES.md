@@ -109,6 +109,7 @@ The GM1–GM13 suite from [18_GAME_MODES](../design/18_GAME_MODES.md) §7, plus:
 | R24-V16 | Deterministic scoring | Identical play produces an identical score across platforms |
 | R24-V17 | Chapter isolation | Each campaign chapter is playable standalone from its declared starting state |
 | R24-V18 | Stage placement (I-V4, I-V5) | Objectives are evaluated only at stage 12, and read no state produced after it |
+| R24-V19 | Per-objective audit trail (SDD-014 §3's R24.5 amendment) | An `objective.*` event is recorded the tick an individual objective settles, distinct from and ahead of the scenario's combined-verdict entry; a tick that only re-confirms an already-latched objective records nothing new |
 
 **GM5 is the phase's gate.** If a run with objectives diverges from one without,
 the objective system has reached into the simulation and the layering is broken.

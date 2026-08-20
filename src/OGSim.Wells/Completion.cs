@@ -155,7 +155,36 @@ public sealed class Completion : ICompletion
 
     public EntityId<IWellbore> Wellbore { get; }
 
-    public IReadOnlyList<Perforation> Perforations { get; }
+    public IReadOnlyList<Perforation> Perforations { get; private set; }
+
+    /// <summary>
+    /// SDD-003 §6's R12b.7 amendment (finding 253): a stimulation job's whole
+    /// effect. Every perforation's skin moves by the same amount and the list
+    /// is REBUILT rather than mutated in place — <see cref="Perforation"/> is
+    /// immutable for the same reason <see cref="Money"/> is, so "the same
+    /// perforation, changed" is a new value carrying the old one's identity.
+    ///
+    /// <para>No floor is checked here. A skin driven far enough negative makes
+    /// the inflow model's own Darcy denominator non-positive, which already
+    /// throws — that invariant is the floor, and a second one guessed at this
+    /// call site would be a constant standing in for a case nothing yet
+    /// produces (law L3).</para>
+    /// </summary>
+    public void Stimulate(double skinReduction)
+    {
+        if (skinReduction <= 0.0)
+            throw new ModelFault("SDD-003 §6", null,
+                "a stimulation job reduces skin by " +
+                skinReduction.ToString("R", System.Globalization.CultureInfo.InvariantCulture) +
+                ", which is not a job that improves anything");
+
+        var stimulated = new Perforation[Perforations.Count];
+
+        for (int i = 0; i < Perforations.Count; i++)
+            stimulated[i] = Perforations[i] with { Skin = Perforations[i].Skin - skinReduction };
+
+        Perforations = stimulated;
+    }
 
     public ILiftMethod? Lift { get; }
 

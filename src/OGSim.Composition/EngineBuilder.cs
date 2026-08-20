@@ -750,6 +750,10 @@ internal static class Defaults
 
     public static EntityId<IFlowElement> TheWaterIntake { get; } = new(1_000_010);
 
+    /// <summary>Where the custody spec gate's Reject leg goes (SDD-006 §7d,
+    /// finding 252) — a permanent loss, accounted rather than silent.</summary>
+    public static EntityId<IFlowElement> TheOffSpecSink { get; } = new(1_000_011);
+
     /// <summary>
     /// Where per-well gathering lines start numbering (SDD-006 §1c). Above the
     /// fixed chain elements by a clear margin, so a line laid for the
@@ -979,6 +983,31 @@ internal static class Defaults
         RequiresAccess: false,
 
         Outcomes: SurveyOutcomes);
+
+    /// <summary>
+    /// What an acid job on a PRODUCER costs (R12b.7, finding 253). Same
+    /// wellsite-intervention shape as remediating an injector — no rig, a
+    /// wireline and pump crew — priced a little dearer because this one
+    /// leaves an asset behind rather than restoring one.
+    /// </summary>
+    public static ActivityTerms StimulateWellTerms { get; } = new(
+        Template: new ContentId("stimulate-well"),
+        Cost: Money.FromMillions(1.8),
+        DurationTicks: 1,
+        Rig: null,
+        WeatherLimit: 6.5,
+        RequiresAccess: false,
+
+        Outcomes: SurveyOutcomes);
+
+    /// <summary>
+    /// What an acid job removes from a producer's skin (SDD-003 §6's R12b.7
+    /// amendment, finding 253) — a first-pass engineering estimate, typical
+    /// of matrix acidising near-wellbore damage, and not iterated against a
+    /// fixture: nothing in this composition currently produces a skin value
+    /// close enough to a physical floor to need calibrating one.
+    /// </summary>
+    public static double StimulationSkinReduction { get; } = 3.0;
 
     /// <summary>
     /// A PLANNED OVERHAUL (SDD-012 §3). A month and rather less than a new
@@ -1405,7 +1434,35 @@ internal static class Defaults
             // refusal is proved against an arctic profile in the tests until R20
             // authors a scenario that has one (SDD-016 §5b's R22.6 amendment).
             AccessOpen: [true, true, true, true, true, true,
-                         true, true, true, true, true, true]);
+                         true, true, true, true, true, true],
+
+            // EMPTY, and correct rather than missing (SDD-005 §4.2's R22.2
+            // amendment): a temperate-offshore climate restricts nothing a
+            // technology would extend — that is the arctic-window story, and
+            // this composition ships no arctic climate.
+            Effects: []);
+
+    /// <summary>
+    /// SDD-016's R20d.8.10 amendment (finding 244):
+    /// <c>WorldParameters.ClimateSeverity</c> — "weather amplitude/extreme-rate
+    /// multiplier" — validated and saved since R15 and read by nothing
+    /// (CLAUDE.md rule 7). Scales how variable this basin's weather is, not its
+    /// average: the seasonal baselines are what a climate typically looks like,
+    /// and severity is how far a given day can depart from that, so only the
+    /// two amplitude curves move.
+    /// </summary>
+    public static Environment.ClimateProfile ScaledClimate(double climateSeverity)
+    {
+        var amplitude = new double[Climate.Amplitude.Count];
+        for (int i = 0; i < amplitude.Length; i++)
+            amplitude[i] = Climate.Amplitude[i] * climateSeverity;
+
+        return Climate with
+        {
+            Amplitude = amplitude,
+            TemperatureAmplitude = Climate.TemperatureAmplitude * climateSeverity,
+        };
+    }
 
     /// <summary>
     /// The severity an operation can work through (SDD-016 §3). ONE limit for
@@ -1434,12 +1491,42 @@ internal static class Defaults
 /// units, pressure in pascals, permeability and oil-in-place in natural-log units
 /// where an absolute σ is a relative one.</para>
 /// </summary>
-internal sealed class RegionalObservationModel : IObservationModel
+internal sealed class RegionalObservationModel(WorldState world) : IObservationModel
 {
     public ContentId Id { get; } = new("regional-observation");
 
-    public double? SigmaFor(ContentId source, ContentId propertyKind, EntityRef subject) =>
-        (source.Value, propertyKind.Value) switch
+    /// <summary>
+    /// Design 06 §2.3's table — the only source of a detect ceiling anywhere
+    /// (SDD-005 §5's R12b.19 amendment). Hand-authored beside this model
+    /// rather than content-driven, the same relationship `Defaults.Climate`
+    /// has to a `ClimateContentKind` that does not exist either: three shipped
+    /// sources reach two of the table's four rows, and no `information-source`
+    /// kind exists to load a fifth. Null for a source the table has no ceiling
+    /// for — every non-survey source (a log, a core, a well test, a discovery
+    /// well) never queries a prospect's subtlety at all, so this is never
+    /// consulted for them regardless.
+    /// </summary>
+    private static DetectClass? CeilingOf(ContentId source) => source.Value switch
+    {
+        "regional" => DetectClass.D0,
+        "seismic-2d" => DetectClass.D0,
+        "seismic-3d" => DetectClass.D1,
+        _ => null,
+    };
+
+    public double? SigmaFor(ContentId source, ContentId propertyKind, EntityRef subject)
+    {
+        // BELOW THE TIER, A SURVEY SEES NOTHING (design 06 §2.3) — checked
+        // only when the subject IS the structure: `Subtlety` describes the
+        // trap's own geometry, not what turns out to be in it, so a discovery
+        // well, log, core or well test (always a compartment, always
+        // post-discovery) never reaches this branch.
+        if (subject.Kind == EntityKind.Prospect
+            && CeilingOf(source) is DetectClass ceiling
+            && world.SubtletyOf(new EntityId<IProspect>(subject.Value)) > ceiling)
+            return null;
+
+        return (source.Value, propertyKind.Value) switch
         {
             // Regional data is deliberately coarse: a player who could book
             // reserves off a gravity and magnetics pass would never buy seismic
@@ -1497,6 +1584,7 @@ internal sealed class RegionalObservationModel : IObservationModel
             // rather than merely uncertain (SDD-008 §3).
             _ => null,
         };
+    }
 }
 
 /// <summary>
@@ -1674,19 +1762,38 @@ public static class EngineBuilder
     /// before the engine exists" — and this is that sentence's other half.</para>
     /// </summary>
     private static (FacilityLadders Ladders,
-                    IReadOnlyList<OGSim.Capabilities.TechnologyNode> Registry)? Ladders(
+                    IReadOnlyList<OGSim.Capabilities.TechnologyNode> Registry,
+                    IReadOnlyList<OGSim.World.TerrainClassDefinition> TerrainClasses,
+                    OGSim.Company.TakeOrPayTerms TakeOrPay)? Ladders(
         EngineSettings settings)
     {
         ContentLoadResult result = FacilityContent(settings);
 
         return result is ContentLoaded loaded
-            ? (FacilityLadders.From(loaded.Catalogues), Registry(loaded.Catalogues))
+            ? (FacilityLadders.From(loaded.Catalogues), Registry(loaded.Catalogues),
+               loaded.Catalogues.Of<OGSim.World.TerrainClassDefinition>().All,
+               TakeOrPayFrom(loaded.Catalogues))
             : null;
     }
 
     /// <summary>Why it would not load, for the refusal to carry.</summary>
     private static IReadOnlyList<LoadFailure> Failures(EngineSettings settings) =>
         FacilityContent(settings) is ContentFailures failed ? failed.Failures : [];
+
+    /// <summary>
+    /// SDD-009 §7's R13.3 amendment (finding 250, revised). ONE contract, the
+    /// same relationship <see cref="Defaults.LicenceTerms"/> has to the one
+    /// licence — no ladder, because a sales contract is not a purchasable
+    /// progression.
+    /// </summary>
+    private static OGSim.Company.TakeOrPayTerms TakeOrPayFrom(ICatalogSet catalogues)
+    {
+        TakeOrPayDefinition definition =
+            catalogues.Of<TakeOrPayDefinition>()[new ContentId("oil-take-or-pay")];
+
+        return new OGSim.Company.TakeOrPayTerms(
+            definition.CommittedVolume, definition.WindowMonths, definition.PenaltyRate);
+    }
 
     /// <summary>
     /// The technology registry, as a graph (SDD-005 §2's R20d.10 amendment).
@@ -1742,6 +1849,8 @@ public static class EngineBuilder
                 new SeparatorContentKind(), new TankContentKind(), new TreaterContentKind(),
                 new GasPlantContentKind(), new ExportLineContentKind(), new ManifoldContentKind(),
                 new OGSim.Capabilities.TechnologyContentKind(),
+                new OGSim.World.TerrainClassContentKind(),
+                new TakeOrPayContentKind(),
             ],
             new PluginRegistry())
             .LoadAll(settings.Content);
@@ -1749,7 +1858,9 @@ public static class EngineBuilder
     internal static IReadOnlyList<IModule> ShippedModules(
         AuditTrail audit, SimulationClock clock, IRandomSource random,
         RealityProfile profile, FacilityLadders ladders,
-        IReadOnlyList<OGSim.Capabilities.TechnologyNode> registry) =>
+        IReadOnlyList<OGSim.Capabilities.TechnologyNode> registry,
+        IReadOnlyList<OGSim.World.TerrainClassDefinition> terrainClasses,
+        OGSim.Company.TakeOrPayTerms takeOrPay) =>
     [
         new SubsurfaceModule(),
         new WellsModule(),
@@ -1758,14 +1869,14 @@ public static class EngineBuilder
         new OperationsModule(),
         new CompanyModule(),
         new InformationModule(),
-        new WorldModule(),
+        new WorldModule(terrainClasses, Defaults.Climate.Id),
         new CapabilitiesModule(registry, Defaults.Eras, clock),
         new IntegrityModule(),
         new EnvironmentModule(Defaults.Climate),
         new HseModule(),
         new ObjectivesModule(),
         new MaterialsModule(profile),
-        new FieldModule(ladders),
+        new FieldModule(ladders, takeOrPay),
         new DiagnosticsModule(audit, clock, random),
     ];
 
@@ -1825,6 +1936,14 @@ public static class EngineBuilder
         // boundary is: this is the one instant the caller is holding both.
         ready.Engine.Provided.Resolve<WorldState>().SealGeneration(world);
 
+        // AND WEATHER'S ONE REGION IS SEALED THE SAME INSTANT (SDD-016's
+        // R20d.8.10 amendment) — composed from Defaults.Climate unscaled so a
+        // hand-built engine that never reaches this line still has weather,
+        // replaced here with what this basin's ClimateSeverity actually asks
+        // for, which is the value world generation just declared a region FOR.
+        ready.Engine.Provided.Resolve<Environment.WeatherState>()
+            .SealGeneration([Defaults.ScaledClimate(world.ClimateSeverity)]);
+
         return built;
     }
 
@@ -1833,7 +1952,7 @@ public static class EngineBuilder
     {
         ArgumentNullException.ThrowIfNull(settings);
 
-        if (Ladders(settings) is not var (ladders, registry))
+        if (Ladders(settings) is not var (ladders, registry, terrainClasses, takeOrPay))
             return new BuildRefusedByContent(Failures(settings));
 
         var clock = new SimulationClock(settings.Epoch);
@@ -1842,7 +1961,8 @@ public static class EngineBuilder
         return Build(
             settings,
             ShippedModules(audit, clock, new RandomSource(settings.WorldSeed),
-                           Defaults.ProfileNamed(settings.RealityProfile), ladders, registry),
+                           Defaults.ProfileNamed(settings.RealityProfile), ladders, registry,
+                           terrainClasses, takeOrPay),
             clock, audit);
     }
 
@@ -1864,7 +1984,7 @@ public static class EngineBuilder
     {
         ArgumentNullException.ThrowIfNull(settings);
 
-        if (Ladders(settings) is not var (ladders, registry))
+        if (Ladders(settings) is not var (ladders, registry, terrainClasses, takeOrPay))
             return new BuildRefusedByContent(Failures(settings));
 
         var clock = new SimulationClock(settings.Epoch);
@@ -1875,7 +1995,8 @@ public static class EngineBuilder
         return Build(
             settings,
             ShippedModules(audit, clock, new RandomSource(settings.WorldSeed),
-                           Defaults.ProfileNamed(settings.RealityProfile), ladders, registry),
+                           Defaults.ProfileNamed(settings.RealityProfile), ladders, registry,
+                           terrainClasses, takeOrPay),
             clock, audit);
     }
 

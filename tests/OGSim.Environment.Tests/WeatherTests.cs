@@ -15,14 +15,16 @@ namespace OGSim.Environment.Tests;
 public class WeatherTests
 {
     private static ClimateProfile Climate(
-        double persistence, double amplitude = 1.0, IReadOnlyList<bool>? access = null) =>
+        double persistence, double amplitude = 1.0, IReadOnlyList<bool>? access = null,
+        IReadOnlyList<Effect>? effects = null) =>
         new(new ContentId("north-sea"),
             persistence,
             Baseline: Flat(3.0),
             Amplitude: Flat(amplitude),
             TemperatureBaseline: Flat(8.0),
             TemperatureAmplitude: -2.0,
-            AccessOpen: access ?? Open());
+            AccessOpen: access ?? Open(),
+            Effects: effects ?? []);
 
     /// <summary>A year a boat can reach in every month.</summary>
     private static IReadOnlyList<bool> Open() =>
@@ -261,7 +263,7 @@ public class WeatherTests
         var eleven = new double[11];
 
         var profile = new ClimateProfile(
-            new ContentId("short-year"), 0.5, eleven, Flat(1.0), Flat(8.0), -2.0, Open());
+            new ContentId("short-year"), 0.5, eleven, Flat(1.0), Flat(8.0), -2.0, Open(), []);
 
         Assert.Throws<ContentFault>(profile.Validate);
     }

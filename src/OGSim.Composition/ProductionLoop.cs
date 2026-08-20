@@ -232,6 +232,7 @@ internal sealed class ProductionLoop : IStateOwner
 
     private readonly OGSim.Facilities.Tank _tank;
     private readonly OGSim.Facilities.ExportTerminal _terminal;
+    private readonly OGSim.Facilities.CustodyTransferPoint _custody;
 
     private OGSim.Kernel.Composition _stored;
     private Allocation _tankProvenance;
@@ -291,6 +292,7 @@ internal sealed class ProductionLoop : IStateOwner
         OGSim.Integrity.AssetIntegrity integrity,
         OGSim.Facilities.Tank tank,
         OGSim.Facilities.ExportTerminal terminal,
+        OGSim.Facilities.CustodyTransferPoint custody,
         IFiscalRegime regime,
         IPriceModel prices,
         IRandomStream priceStream,
@@ -321,6 +323,7 @@ internal sealed class ProductionLoop : IStateOwner
         ArgumentNullException.ThrowIfNull(names);
         ArgumentNullException.ThrowIfNull(tank);
         ArgumentNullException.ThrowIfNull(terminal);
+        ArgumentNullException.ThrowIfNull(custody);
         ArgumentNullException.ThrowIfNull(intake);
         ArgumentNullException.ThrowIfNull(regime);
         ArgumentNullException.ThrowIfNull(liquidOrdinals);
@@ -339,6 +342,7 @@ internal sealed class ProductionLoop : IStateOwner
         _integrity = integrity;
         _tank = tank;
         _terminal = terminal;
+        _custody = custody;
         _regime = regime;
         _prices = prices;
         _priceStream = priceStream;
@@ -1271,9 +1275,11 @@ internal sealed class ProductionLoop : IStateOwner
 
         // Asked of the TERMINAL each tick rather than held: a line laid this
         // month must lift against its new capacity from this month
-        // (SDD-006 §7b).
+        // (SDD-006 §7b). Through the berth (SDD-006 §7a's L5 decision, step
+        // 1, finding 251) — the same rate, read through the seam a schedule
+        // will eventually attach to.
         MaterialInventory lifted = _tank.Draw(
-            new Mass(_terminal.Tier.Offtake.KgPerSecond * tick.Seconds));
+            new Mass(_terminal.Berth.LoadingRate.KgPerSecond * tick.Seconds));
 
         Exported = lifted.Total;
     }
@@ -1327,17 +1333,54 @@ internal sealed class ProductionLoop : IStateOwner
     public void RecordCustody()
     {
         _sale = null;
-        if (Delivered.Total.KgPerSecond <= 0.0) return;
+        if (Delivered.Total.KgPerSecond > 0.0)
+            _sale = _audit.Record(
+                AuditCategory.CustodyTransfer,
+                subject: null,
+                cause: null,
+                new Dictionary<string, AuditValue>(StringComparer.Ordinal)
+                {
+                    ["mass-kg"] = new(Format(Delivered.Total.KgPerSecond)),
+                    ["volume-m3"] = new(Format(ProducedThisTick.CubicMetres)),
+                });
 
-        _sale = _audit.Record(
-            AuditCategory.CustodyTransfer,
-            subject: null,
+        RecordRejection();
+    }
+
+    /// <summary>
+    /// The other half of "a rejection with a reason" (SDD-006 §7d, finding
+    /// 252). What fails and why: <see cref="OGSim.Facilities.OffSpecSink"/>
+    /// accounts the MASS a rejection loses, and this accounts the CAUSE — the
+    /// same split the chain view and the audit trail already draw everywhere
+    /// else (how much vs why).
+    /// </summary>
+    private void RecordRejection()
+    {
+        IReadOnlyList<OGSim.Facilities.SpecBreach> breaches = _custody.LastBreaches;
+        if (breaches.Count == 0) return;
+
+        var data = new Dictionary<string, AuditValue>(StringComparer.Ordinal)
+        {
+            ["breach-count"] = new(breaches.Count.ToString(
+                System.Globalization.CultureInfo.InvariantCulture)),
+        };
+
+        for (int i = 0; i < breaches.Count; i++)
+        {
+            string at = "breach-" + i.ToString(
+                System.Globalization.CultureInfo.InvariantCulture) + "-";
+
+            data[at + "property"] = new(breaches[i].Property.ToString());
+            data[at + "limit"] = new(Format(breaches[i].Limit));
+            data[at + "measured"] = new(Format(breaches[i].Measured));
+            data[at + "margin"] = new(Format(breaches[i].Margin));
+        }
+
+        _audit.Record(
+            AuditCategory.Rejection,
+            subject: new EntityRef(EntityKind.FlowElement, _custody.Id.Value),
             cause: null,
-            new Dictionary<string, AuditValue>(StringComparer.Ordinal)
-            {
-                ["mass-kg"] = new(Format(Delivered.Total.KgPerSecond)),
-                ["volume-m3"] = new(Format(ProducedThisTick.CubicMetres)),
-            });
+            data);
     }
 
     private AuditId? _sale;
@@ -1974,6 +2017,12 @@ public sealed class FieldControl : IStateOwner
     /// and no longer part of the field a player is running.</summary>
     public int LiveWellCount => _wells.Count - _abandoned.Count;
 
+    /// <summary>Whether THIS well specifically is plugged (SDD-003 §6's
+    /// R12b.7 amendment, finding 253) — a job ordered against a well that is
+    /// out of the network for good is a bill for nothing, and a player who
+    /// ordered one deserves to be told rather than invoiced.</summary>
+    public bool IsWellAbandoned(EntityId<ICompletion> well) => _abandoned.Contains(well);
+
     /// <summary>
     /// Whether the field is closed: it was developed, and every well it had is
     /// plugged.
@@ -2198,6 +2247,44 @@ public sealed class FieldControl : IStateOwner
 
         found.SetChoke(choke);
     }
+
+    /// <summary>
+    /// Which wells drain a compartment, plugged ones excluded — what a
+    /// build-up test on that compartment has to shut in and reopen (SDD-007
+    /// §5's R12b.18 amendment). A plugged well's valve reads the same
+    /// <c>ChokeSetting.Closed</c> a shut-in test would set and is never coming
+    /// back open, so it is not "on" the compartment for this question even
+    /// though its perforations still are.
+    /// </summary>
+    internal IReadOnlyList<EntityId<ICompletion>> WellsOn(
+        EntityId<IReservoirCompartmentEntity> compartment)
+    {
+        var found = new List<EntityId<ICompletion>>();
+        IReadOnlyList<Completion> completions = _wells.Completions;
+
+        for (int i = 0; i < completions.Count; i++)
+        {
+            Completion completion = completions[i];
+            if (_abandoned.Contains(completion.CompletionId)) continue;
+
+            for (int p = 0; p < completion.Perforations.Count; p++)
+                if (completion.Perforations[p].Drains == compartment)
+                {
+                    found.Add(completion.CompletionId);
+                    break;
+                }
+        }
+
+        return found;
+    }
+
+    /// <summary>Whether a well's valve is shut, plugged or not (SDD-007 §5's
+    /// R12b.18 amendment) — what a build-up test's own refusal reads, since
+    /// testing an already-shut-in well would either reopen it against the
+    /// player's own choice or leave the test's "reopen when done" with
+    /// nothing honest to restore.</summary>
+    internal bool IsShutIn(EntityId<ICompletion> well) =>
+        _wells.Find(well) is Completion found && found.IsShutIn;
 
     public int CompartmentCount => _subsurface.Count;
 

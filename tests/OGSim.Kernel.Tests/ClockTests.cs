@@ -136,6 +136,26 @@ public class ClockTests
         Assert.Throws<InvariantFault>(() => uninitialised.AddMonths(1));
     }
 
+    // ------------------------------------------------------------- printing
+
+    /// <summary>
+    /// Finding 248: this build's compiler mis-synthesises <c>Tick</c>'s
+    /// record <c>PrintMembers</c> because <c>Next</c> is an instance property
+    /// of the struct's OWN type — <c>ToString</c> called <c>PrintMembers</c>
+    /// called <c>ToString</c> on <c>Next</c>, which has its own <c>Next</c>,
+    /// forever, a genuine stack overflow rather than a slow test. Nothing in
+    /// the engine ever called it (every site formats <c>Value</c> directly),
+    /// which is exactly how it went unnoticed — until a FAILING assertion
+    /// involving a <c>Tick</c> tried to render one for its own message and
+    /// took the whole test host down instead of reporting the failure. The
+    /// fix is <c>Tick</c>'s own hand-written override; this proves it holds.
+    /// </summary>
+    [Fact]
+    public void Finding248_ToString_terminates_and_does_not_take_the_host_down_with_it()
+    {
+        Assert.Equal("Tick { Value = 5 }", new Tick(5).ToString());
+    }
+
     // ------------------------------------------------------------- restore
 
     [Fact] // A load resumes mid-run; it does not replay from tick 0

@@ -8,7 +8,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 exploration → appraisal → development → production → processing → transport →
 export. It is a turn-based engine (one tick = one month) with real-time-with-pause gameplay; the engine is headless and a host renders it.
 
-The repository is design-first. `plans/` contains the authoritative design set and is read before code is changed. The current repo state is the result of the design work plus implementation progress; the single reliable source of truth for what is built, next, and bypassed is `plans/MASTER_TRACKER.md`.
+The repository is **design-first**: `plans/` holds ~90 documents settled before
+code and is still authoritative. **The engine now runs.** Seventeen projects under
+`src/` compose into a playable field — a world is generated, prospects are
+drilled, a chain of surface equipment moves the fluid, a market moves under it, a
+bank lends against reserves, equipment wears out and breaks, and two headless
+clients play the whole arc through `ReadModel` + `Commands` alone. 1125 tests
+across seventeen suites, 0 warnings.
 
 Treat counts in prose as stale until they are re-checked. The project is expected to evolve and some historical notes in this file are intentionally superseded by the live plan and the codebase itself.
 

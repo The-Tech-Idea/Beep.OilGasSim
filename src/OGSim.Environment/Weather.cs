@@ -39,7 +39,19 @@ public sealed record ClimateProfile(
     /// would make it a consequence of the dice, and a lucky calm February would
     /// then open an ice road in a thaw.</para>
     /// </summary>
-    IReadOnlyList<bool> AccessOpen)
+    IReadOnlyList<bool> AccessOpen,
+
+    /// <summary>
+    /// SDD-005 §4.2's R22.2 amendment: what this climate moves, through the
+    /// SAME path technology does — a cold climate restricting a rig's depth
+    /// rating and a technology extending it are the same kind of statement
+    /// (design 07 §1 = 13 §2.1). Empty for every shipped climate and that is
+    /// correct rather than missing, the identical relationship R20d.10e's
+    /// amendment states for `TechnologyDefinition.Effects`: a node or a
+    /// climate carries an effect only where it changes a number nobody
+    /// bought, and no shipped climate does yet.
+    /// </summary>
+    IReadOnlyList<Effect> Effects)
 {
     /// <summary>Twelve of everything, checked here rather than at the first
     /// December of a forty-year game.</summary>
@@ -107,20 +119,43 @@ public readonly record struct Forecast(double Expected, double Sigma);
 /// </summary>
 public sealed class WeatherState : IStateOwner
 {
-    private readonly ClimateProfile[] _climates;
+    private ClimateProfile[] _climates;
 
     // x(d) for each region's last thirty days: severity and temperature are both
     // curves over these, so one array serves both and they cannot disagree.
-    private readonly double[] _daily;
+    private double[] _daily;
 
     // What the next tick's first day builds on. Held separately from the daily
     // array because it is the only value that CROSSES a tick — and therefore the
     // only one a save has to carry (SDD-013 §4).
-    private readonly double[] _carry;
+    private double[] _carry;
 
     private int _month = 1;
 
     public WeatherState(IReadOnlyList<ClimateProfile> climates)
+    {
+        (_climates, _daily, _carry) = Validated(climates);
+    }
+
+    /// <summary>
+    /// SDD-016's R20d.8.10 amendment: composed from a default so a hand-built
+    /// scenario that never generates still has weather, then REPLACED with what
+    /// generation actually decided — the same "empty then filled" shape
+    /// <c>WorldState.SealGeneration</c> already uses, at the identical instant
+    /// (SDD-010 §4c: after generation, before the first tick).
+    ///
+    /// <para>Safe to reassign the arrays wholesale: nothing has advanced,
+    /// captured or restored this owner between composition and this call — the
+    /// tick loop has not started and a save cannot exist yet.</para>
+    /// </summary>
+    public void SealGeneration(IReadOnlyList<ClimateProfile> climates)
+    {
+        (_climates, _daily, _carry) = Validated(climates);
+        _month = 1;
+    }
+
+    private static (ClimateProfile[] Climates, double[] Daily, double[] Carry) Validated(
+        IReadOnlyList<ClimateProfile> climates)
     {
         ArgumentNullException.ThrowIfNull(climates);
 
@@ -129,16 +164,16 @@ public sealed class WeatherState : IStateOwner
                 "a world has at least one climate region; with none, every location " +
                 "would map to no weather and §3's day-lost rule would silently never fire");
 
-        _climates = new ClimateProfile[climates.Count];
+        var validated = new ClimateProfile[climates.Count];
 
         for (int i = 0; i < climates.Count; i++)
         {
             climates[i].Validate();
-            _climates[i] = climates[i];
+            validated[i] = climates[i];
         }
 
-        _daily = new double[climates.Count * (int)Duration.DaysPerTick];
-        _carry = new double[climates.Count];
+        return (validated, new double[climates.Count * (int)Duration.DaysPerTick],
+                new double[climates.Count]);
     }
 
     public int Regions => _climates.Length;

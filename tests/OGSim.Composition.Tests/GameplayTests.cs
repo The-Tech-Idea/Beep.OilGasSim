@@ -489,13 +489,16 @@ public sealed class GameplayTests
         Engine engine = built.Engine;
 
         // $50M at $300k a month, minus the $12M bond forfeited at month 24
-        // when the licence's one commitment goes unmet (R20d.9): insolvency
-        // now arrives around month 127, not month 166 — a real, one-time shift
-        // in the shipped economics rather than a defect in the mechanic.
-        for (var month = 0; month < 120; month++) engine.Pipeline.AdvanceTick();
+        // when the licence's one commitment goes unmet (R20d.9), minus the
+        // annual take-or-pay shortfall on the whole committed volume this
+        // idle field never delivers a barrel against (SDD-009 §7's R13.3
+        // amendment, finding 250): insolvency now arrives at month 82,
+        // measured directly rather than hand-derived from three compounding
+        // costs.
+        for (var month = 0; month < 79; month++) engine.Pipeline.AdvanceTick();
         Assert.False(engine.ReadModel!.Insolvent, "the company is not out of money yet");
 
-        for (var month = 0; month < 20; month++) engine.Pipeline.AdvanceTick();
+        for (var month = 0; month < 3; month++) engine.Pipeline.AdvanceTick();
         Assert.True(engine.ReadModel!.Insolvent, "the company has spent everything");
     }
 
@@ -601,19 +604,24 @@ public sealed class GameplayTests
     }
 
     /// <summary>
-    /// A player who does nothing runs out of TIME, not money — and the two are
-    /// now different verdicts (SDD-014 §5a).
+    /// A player who does nothing runs out of MONEY, not time — SDD-014 §5a's
+    /// two verdicts are distinguishable, and this is now which one an idle
+    /// company actually reaches first.
     ///
-    /// <para>At $300k a month the opening $50M lasts about fourteen years and
-    /// the deadline is ten, so an idle company is <c>Expired</c> and not
-    /// <c>Failed</c>. That is a real statement about the shipped numbers, and
-    /// the old enum could not make it: `Lost` covered both, so a scenario that
-    /// ended one way looked identical to one that ended the other, and a
-    /// campaign branching on it (SDD-014 §5) would have had nothing to
-    /// branch on.</para>
+    /// <para>Before SDD-009 §7's R13.3 amendment (finding 250) this fixture
+    /// ran out of time: $300k a month left the opening $50M standing for
+    /// about fourteen years against a ten-year deadline. The one shipped
+    /// take-or-pay contract changed that arithmetic — an idle company owes
+    /// the FULL committed volume as shortfall every window, on top of the
+    /// standing charge — and now reaches <c>Insolvent</c> at month 82,
+    /// measured directly, well inside the month-120 deadline. `Expired` is
+    /// still a reachable, distinct verdict (R24-V19 proves it on this same
+    /// scenario, from the deadline side); this fixture now demonstrates
+    /// `Failed` instead of retiring the distinction the enum exists for.
+    /// </para>
     /// </summary>
     [Fact]
-    public void A_player_who_does_nothing_runs_out_of_time()
+    public void A_player_who_does_nothing_runs_out_of_money()
     {
         Built built = Assert.IsType<Built>(EngineBuilder.Build(Fixture.Settings()));
         Engine engine = built.Engine;
@@ -624,8 +632,8 @@ public sealed class GameplayTests
             if (engine.ReadModel!.Outcome != ObjectiveState.Pending) break;
         }
 
-        Assert.Equal(ObjectiveState.Expired, engine.ReadModel!.Outcome);
-        Assert.False(engine.ReadModel.Insolvent, "the money had not run out yet");
+        Assert.Equal(ObjectiveState.Failed, engine.ReadModel!.Outcome);
+        Assert.True(engine.ReadModel.Insolvent, "the money ran out before the deadline did");
     }
 
     /// <summary>

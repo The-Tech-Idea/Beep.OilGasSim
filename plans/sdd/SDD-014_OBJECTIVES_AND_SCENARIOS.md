@@ -77,6 +77,20 @@ evaluate every active objective's AST; emit `objective.*` events on state
 change. Deterministic iteration: objectives by content id. No command bus
 reference exists in the assembly (R24-V15).
 
+> **R24.5 amendment (finding 247): emitted by `ObjectiveStage`, not by
+> `ScenarioRunner`.** R24-V15's own test forbids the runner an `IAuditTrail`
+> field at all — "observes, never influences" reaches auditing too, since a
+> runner that could write the trail is a runner touching something outside
+> its own return value. `ObjectiveStage` already holds the trail for the
+> scenario's combined verdict, so it is also the one owner of "did this
+> particular objective just settle": a `Dictionary<ContentId, ObjectiveState>`
+> cache, looked up per objective and never enumerated, tells a transition
+> from a tick that merely re-confirms an already-latched state. Recorded as
+> `AuditCategory.StateTransition` with `kind ∈ {objective.met, objective.failed,
+> objective.expired}` — the same category every other transition in this
+> engine shares, told apart by the `kind` key rather than a dedicated enum
+> member per fact.
+
 ## 4. The eight score dimensions — formulas pinned
 
 | Dimension | Formula (period = scenario span) |

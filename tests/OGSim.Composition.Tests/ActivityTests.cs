@@ -216,6 +216,16 @@ public sealed class ActivityTests
         Belief porosity = Learn(
             engine, target, "porosity", () => new WirelineLogCommand(target));
 
+        // BACK ON PRODUCTION — a build-up test shuts every well on the
+        // compartment in and leaves them shut (SDD-007 §5's R12b.18
+        // amendment), which the player reverses through the same door any
+        // other shut-in does.
+        IReadOnlyList<WellStatusView> tested = engine.ReadModel!.Wellbores;
+
+        for (var i = 0; i < tested.Count; i++)
+            Assert.IsType<Accepted>(engine.Commands.Submit(
+                new SetWellChokeCommand(new EntityId<ICompletion>(tested[i].Well.Value), Open: true)));
+
         // A YEAR OF PRODUCTION. The field is drilled and flowing, so every tick
         // withdraws from this compartment and every tick ages what is believed
         // about its pressure.
@@ -245,6 +255,11 @@ public sealed class ActivityTests
     ///
     /// <para>The same twelve months as V15, with the wells shut. This is the
     /// decision stated as a test rather than as a preference.</para>
+    ///
+    /// <para>Nothing shuts the wells in explicitly any more (SDD-007 §5's
+    /// R12b.18 amendment): a build-up test already leaves every well on the
+    /// compartment shut when it completes, which is exactly the state this
+    /// test wants to hold for a year — asserted rather than re-created.</para>
     /// </summary>
     [Fact]
     public void R14V16_a_shut_in_fields_pressure_belief_does_not_go_stale()
@@ -254,19 +269,121 @@ public sealed class ActivityTests
         Belief measured = Learn(
             engine, target, "reservoir-pressure", () => new WellTestCommand(target));
 
-        // SHUT EVERYTHING. A compartment nothing is drawing from gives up no
-        // volume, so it never reaches the withdrawals stage 11 reads.
+        // SHUT EVERYTHING — already true. A compartment nothing is drawing
+        // from gives up no volume, so it never reaches the withdrawals
+        // stage 11 reads.
         IReadOnlyList<WellStatusView> wells = engine.ReadModel!.Wellbores;
 
+        Assert.True(wells.Count > 0, "the fixture drilled no well to hold shut");
+
         for (var i = 0; i < wells.Count; i++)
-            Assert.IsType<Accepted>(engine.Commands.Submit(
-                new SetWellChokeCommand(new EntityId<ICompletion>(wells[i].Well.Value), Open: false)));
+            Assert.Equal(WellStatus.ShutIn, wells[i].Status);
 
         Fixture.Run(engine, months: 12);
 
         Assert.Equal(
             measured.Sigma,
             Assert.NotNull(BeliefAbout(engine, target, "reservoir-pressure")).Sigma);
+    }
+
+    // ---------------------------------------------- a build-up really shuts in
+
+    /// <summary>
+    /// SDD-007 §5's R12b.18 amendment. This file's own header claimed "the
+    /// well is shut in for the build-up, so the test costs the month's oil"
+    /// while nothing in the class touched a choke (finding 245) — proved here
+    /// against the read model a player actually sees, not a reconstructed
+    /// double.
+    /// </summary>
+    [Fact]
+    public void R12bV18_ordering_a_well_test_shuts_in_every_well_on_the_compartment()
+    {
+        (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Drilled();
+
+        IReadOnlyList<WellStatusView> before = engine.ReadModel!.Wellbores;
+        Assert.True(before.Count > 0, "the fixture drilled no well");
+
+        foreach (WellStatusView well in before)
+            Assert.Equal(WellStatus.Producing, well.Status);
+
+        Assert.IsType<Accepted>(engine.Commands.Submit(new WellTestCommand(target)));
+
+        // SHUT THE INSTANT IT IS BOOKED — before any tick has run, which is
+        // the only way the shut-in can reach the SAME tick's flow solve
+        // (SolveFlow is stage 5; a test with a one-tick duration completes
+        // inside stage 3, Operations, and a shut-in applied only there would
+        // never be visible to a solve that already ran this tick). Read off
+        // FieldControl directly rather than the read model, which is a
+        // snapshot rebuilt on tick advance and would not have moved yet.
+        FieldControl field = engine.Provided.Resolve<FieldControl>();
+
+        foreach (WellStatusView well in before)
+            Assert.True(field.IsShutIn(new EntityId<ICompletion>(well.Well.Value)),
+                $"well {well.DisplayId} is still open the instant after a test was booked");
+    }
+
+    /// <summary>
+    /// AND IT COSTS THE MONTH'S OIL FOR REAL — the economic claim the header
+    /// makes, checked against actual production rather than against the
+    /// choke setting alone. A shut-in that never reached the solve would
+    /// leave this test green while the company's revenue never moved.
+    ///
+    /// <para>Read off the FIELD'S total, not <see cref="WellStatusView.ProducedThisTick"/>
+    /// — that member is documented as always zero: a per-well split of the
+    /// solve does not exist, so the honest answer lives on the field beside
+    /// it. This fixture has exactly one well, so the field's total IS this
+    /// well's production.</para>
+    /// </summary>
+    [Fact]
+    public void R12bV18b_a_shut_in_well_produces_nothing_the_tick_it_is_tested()
+    {
+        (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Drilled();
+
+        // A YEAR OF NORMAL MONTHS FIRST, so there is a non-zero baseline to
+        // lose — the well the drilling loop stops on has not necessarily
+        // reached the network yet on the very tick it completes.
+        Fixture.Run(engine, months: 12);
+
+        Assert.True(engine.ReadModel!.ProducedThisTick.CubicMetres > 0.0,
+            "the fixture field produced nothing even before the test — no baseline to lose");
+
+        Assert.IsType<Accepted>(engine.Commands.Submit(new WellTestCommand(target)));
+        engine.Pipeline.AdvanceTick();
+
+        WellStatusView tested = Assert.Single(engine.ReadModel!.Wellbores);
+        Assert.Equal(WellStatus.ShutIn, tested.Status);
+        Assert.Equal(0.0, engine.ReadModel!.ProducedThisTick.CubicMetres);
+    }
+
+    /// <summary>A compartment with nothing to test is refused naming why,
+    /// scoped to the TARGET compartment rather than "the company has a well
+    /// somewhere" — the looser check this replaced would have let a test be
+    /// ordered against a compartment nothing has ever penetrated.</summary>
+    [Fact]
+    public void R12bV18c_a_well_test_refuses_a_compartment_with_no_well_on_it()
+    {
+        (Engine engine, EntityId<IReservoirCompartmentEntity> undrilled) = Undrilled();
+
+        Assert.IsType<Rejected>(engine.Commands.Submit(new WellTestCommand(undrilled)));
+    }
+
+    /// <summary>
+    /// AND IT REFUSES AGAINST AN ALREADY SHUT-IN WELL — reopening it when the
+    /// test ended would override whatever reason the player had for closing
+    /// it, and leaving it closed would give "shut in for the test" nothing it
+    /// actually changed.
+    /// </summary>
+    [Fact]
+    public void R12bV18d_a_well_test_refuses_when_a_well_on_the_compartment_is_already_shut_in()
+    {
+        (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Drilled();
+
+        WellStatusView well = Assert.Single(engine.ReadModel!.Wellbores);
+
+        Assert.IsType<Accepted>(engine.Commands.Submit(
+            new SetWellChokeCommand(new EntityId<ICompletion>(well.Well.Value), Open: false)));
+
+        Assert.IsType<Rejected>(engine.Commands.Submit(new WellTestCommand(target)));
     }
 
     /// <summary>

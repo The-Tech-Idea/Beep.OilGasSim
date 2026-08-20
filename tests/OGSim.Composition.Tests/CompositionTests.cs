@@ -120,6 +120,23 @@ internal static class Fixture
             files.Add(new ContentFile("technologies/" + Path.GetFileName(path),
                                       File.ReadAllText(path)));
 
+        // AND THE TERRAIN CLASSES (R20d.8.9) — the same door.
+        string terrain = Path.Combine(here.Parent!.Parent!.FullName, "content", "terrain-classes");
+
+        foreach (string path in Directory.EnumerateFiles(terrain, "*.json")
+                                         .OrderBy(p => p, StringComparer.Ordinal))
+            files.Add(new ContentFile("terrain-classes/" + Path.GetFileName(path),
+                                      File.ReadAllText(path)));
+
+        // AND THE ONE SALES CONTRACT (SDD-009 §7's R13.3 amendment, finding
+        // 250) — the same door.
+        string contracts = Path.Combine(here.Parent!.Parent!.FullName, "content", "contracts");
+
+        foreach (string path in Directory.EnumerateFiles(contracts, "*.json")
+                                         .OrderBy(p => p, StringComparer.Ordinal))
+            files.Add(new ContentFile("contracts/" + Path.GetFileName(path),
+                                      File.ReadAllText(path)));
+
         return new DirectorySource(files);
     }
 
@@ -135,6 +152,8 @@ internal static class Fixture
                 new SeparatorContentKind(), new TankContentKind(), new TreaterContentKind(),
                 new GasPlantContentKind(), new ExportLineContentKind(), new ManifoldContentKind(),
                 new OGSim.Capabilities.TechnologyContentKind(),
+                new OGSim.World.TerrainClassContentKind(),
+                new TakeOrPayContentKind(),
             ],
             new PluginRegistry());
 
@@ -168,6 +187,22 @@ internal static class Fixture
         }
 
         return graph;
+    }
+
+    /// <summary>The shipped terrain classes, for the tests that build the
+    /// module list themselves.</summary>
+    public static IReadOnlyList<OGSim.World.TerrainClassDefinition> TerrainClasses() =>
+        Loaded().Of<OGSim.World.TerrainClassDefinition>().All;
+
+    /// <summary>The shipped take-or-pay contract (SDD-009 §7's R13.3
+    /// amendment), for the tests that build the module list themselves.</summary>
+    public static OGSim.Company.TakeOrPayTerms TakeOrPay()
+    {
+        TakeOrPayDefinition definition =
+            Loaded().Of<TakeOrPayDefinition>()[new ContentId("oil-take-or-pay")];
+
+        return new OGSim.Company.TakeOrPayTerms(
+            definition.CommittedVolume, definition.WindowMonths, definition.PenaltyRate);
     }
 
     private sealed class DirectorySource(IReadOnlyList<ContentFile> files) : IContentSource
@@ -228,7 +263,8 @@ public sealed class ShippedSetTests
 
         IReadOnlyList<IModule> modules = EngineBuilder.ShippedModules(
             audit, new SimulationClock(new GameDate(1965, 1)), new RandomSource(1UL),
-            Defaults.Simulation, Fixture.Ladders(), Fixture.Registry());
+            Defaults.Simulation, Fixture.Ladders(), Fixture.Registry(), Fixture.TerrainClasses(),
+            Fixture.TakeOrPay());
 
         var provided = new HashSet<Type>();
         foreach (IModule module in modules)
@@ -255,7 +291,8 @@ public sealed class ShippedSetTests
 
         var reversed = new List<IModule>(EngineBuilder.ShippedModules(
             audit, new SimulationClock(new GameDate(1965, 1)), new RandomSource(1UL),
-            Defaults.Simulation, Fixture.Ladders(), Fixture.Registry()));
+            Defaults.Simulation, Fixture.Ladders(), Fixture.Registry(), Fixture.TerrainClasses(),
+            Fixture.TakeOrPay()));
         reversed.Reverse();
 
         Built forward = Assert.IsType<Built>(EngineBuilder.Build(Fixture.Settings()));
@@ -331,7 +368,13 @@ public sealed class ShippedSetTests
              StageId.Availability, StageId.Availability,
              StageId.SolveFlow, StageId.MaterialBalance, StageId.Custody,
              StageId.Economics, StageId.HseRegulation, StageId.Information,
-             StageId.Company, StageId.Company, StageId.Objectives, StageId.Close],
+
+             // Three StageId.Company participants: CompanyModule's
+             // LicenceStage (order 0), CapabilitiesModule's diffusion
+             // (order 1), and FieldModule's TakeOrPayStage (order 2,
+             // SDD-009 §7's R13.3 amendment, finding 250).
+             StageId.Company, StageId.Company, StageId.Company,
+             StageId.Objectives, StageId.Close],
             built.Engine.Pipeline.DeclaredOrder());
     }
 
@@ -768,7 +811,8 @@ public sealed class AccessWindowTests
             Amplitude: [.. Enumerable.Repeat(1.0, 12)],
             TemperatureBaseline: [.. Enumerable.Repeat(-15.0, 12)],
             TemperatureAmplitude: -4.0,
-            AccessOpen: [.. Enumerable.Range(1, 12).Select(m => m <= 3 || m == 12)]);
+            AccessOpen: [.. Enumerable.Range(1, 12).Select(m => m <= 3 || m == 12)],
+            Effects: []);
 
     /// <summary>The shipped set with the climate swapped, which is what makes
     /// this a test of the ENGINE rather than of the profile record.</summary>
@@ -779,7 +823,7 @@ public sealed class AccessWindowTests
 
         var modules = new List<IModule>(EngineBuilder.ShippedModules(
             audit, clock, new RandomSource(20260806UL), Defaults.Simulation,
-            Fixture.Ladders(), Fixture.Registry()));
+            Fixture.Ladders(), Fixture.Registry(), Fixture.TerrainClasses(), Fixture.TakeOrPay()));
 
         for (int i = 0; i < modules.Count; i++)
             if (modules[i] is EnvironmentModule)
@@ -886,6 +930,38 @@ public sealed class AccessWindowTests
             Assert.True(Defaults.Climate.AccessOpen[month],
                 $"month {month + 1} of the shipped climate is closed; if that is " +
                 "intended, the slow suite's timelines change and this test should say so");
+    }
+
+    /// <summary>
+    /// R21.6's coverage record named "access windows with time remaining" as
+    /// ABSENT while `WeatherState.MonthsUntilAccessCloses` already answered
+    /// it, joined to nothing (finding 253's shape again). Proved on the road
+    /// that actually shuts, not the shipped climate that never does — see
+    /// <see cref="No_shipped_climate_closes_and_that_is_deliberate"/> for why
+    /// that fixture would read 12 every month and prove nothing.
+    /// </summary>
+    [Fact]
+    public void The_read_model_carries_months_until_the_window_shuts()
+    {
+        // Read as of the date a tick LEAVES the clock at, not the one it
+        // simulated — a forward answer to a forward question ("how long have
+        // I got"), the same direction `AccessOpenIn`'s own refusal check asks
+        // in when validating a NEW command against `clock.Date`.
+        Engine engine = OnAnIceRoad(new GameDate(1965, 1));   // January
+
+        engine.Pipeline.AdvanceTick();   // clock is now at February
+
+        Assert.Equal(2, engine.ReadModel!.Weather.MonthsUntilAccessCloses);
+    }
+
+    [Fact]
+    public void The_read_model_reports_zero_once_the_window_has_shut()
+    {
+        Engine engine = OnAnIceRoad(new GameDate(1965, 7));   // July: shut until December
+
+        engine.Pipeline.AdvanceTick();
+
+        Assert.Equal(0, engine.ReadModel!.Weather.MonthsUntilAccessCloses);
     }
 }
 
@@ -1486,5 +1562,177 @@ public sealed class DiffusionStageTests
             stage.Execute(new TickContext { Tick = new Tick(tick), Date = Epoch });
 
         Assert.Equal(8.0, effects.EffectiveEnvelope(EnvelopeKind.ArcticOperability));
+    }
+}
+
+/// <summary>
+/// SDD-005 §5's R12b.19 amendment: below its tier, a survey source sees
+/// nothing — checked against the actual composition-internal classes
+/// (<c>WorldState</c>, <c>RegionalObservationModel</c>), not a reimplemented
+/// double, exactly as <c>DiffusionStageTests</c> already does for R20d-V11.
+/// </summary>
+public sealed class DetectClassGatingTests
+{
+    private static (WorldState World, RegionalObservationModel Model) Build() =>
+        Build(out _);
+
+    private static (WorldState World, RegionalObservationModel Model) Build(
+        out EntityId<IProspect> prospect, DetectClass subtlety = DetectClass.D1)
+    {
+        var world = new WorldState();
+        prospect = world.Place(default, new ReservoirVolume(1.0e6), subtlety);
+
+        return (world, new RegionalObservationModel(world));
+    }
+
+    /// <summary>2-D seismic's ceiling is D0 (design 06 §2.3); a D1 trap is
+    /// below it, and the rule is "nothing", not a wide sigma.</summary>
+    [Fact]
+    public void R12bV19_a_below_tier_survey_sees_nothing()
+    {
+        (_, RegionalObservationModel model) = Build(out EntityId<IProspect> prospect, DetectClass.D1);
+
+        double? sigma = model.SigmaFor(
+            new ContentId("seismic-2d"), new ContentId("structure-capacity"),
+            new EntityRef(EntityKind.Prospect, prospect.Value));
+
+        Assert.Null(sigma);
+    }
+
+    /// <summary>3-D seismic's ceiling is D1 (design 06 §2.3); at the tier
+    /// exactly, the survey sees the structure — this is the case that
+    /// distinguishes "gated" from "always null".</summary>
+    [Fact]
+    public void R12bV19b_a_survey_at_its_own_tier_sees_the_structure()
+    {
+        (_, RegionalObservationModel model) = Build(out EntityId<IProspect> prospect, DetectClass.D1);
+
+        double? sigma = model.SigmaFor(
+            new ContentId("seismic-3d"), new ContentId("structure-capacity"),
+            new EntityRef(EntityKind.Prospect, prospect.Value));
+
+        Assert.NotNull(sigma);
+    }
+
+    /// <summary>D0's own tier is the obvious-closure case (design 06 §2.3) —
+    /// regional data, the free read every game gets, sees it.</summary>
+    [Fact]
+    public void R12bV19c_an_obvious_trap_is_seen_even_by_regional_data()
+    {
+        (_, RegionalObservationModel model) = Build(out EntityId<IProspect> prospect, DetectClass.D0);
+
+        double? sigma = model.SigmaFor(
+            new ContentId("regional"), new ContentId("oil-in-place"),
+            new EntityRef(EntityKind.Prospect, prospect.Value));
+
+        Assert.NotNull(sigma);
+    }
+
+    /// <summary>
+    /// AND SUBTLETY NEVER GATES A DISCOVERED COMPARTMENT — a well test, a log,
+    /// a core and a discovery well always ask about a COMPARTMENT, and
+    /// `Subtlety` is a property of the trap's own geometry, not of what turns
+    /// out to be inside it (SDD-005 §5's R12b.19 amendment). A subject that is
+    /// not a prospect must reach the ordinary (source, kind) table untouched.
+    /// </summary>
+    [Fact]
+    public void R12bV19d_a_compartment_subject_is_never_gated_by_subtlety()
+    {
+        (WorldState world, RegionalObservationModel model) = Build(out _, DetectClass.D3);
+
+        double? sigma = model.SigmaFor(
+            new ContentId("well-test"), new ContentId("reservoir-pressure"),
+            new EntityRef(EntityKind.Compartment, 1UL));
+
+        Assert.NotNull(sigma);
+    }
+}
+
+/// <summary>
+/// SDD-005 §4.2's R22.2 amendment: the environment applies through the SAME
+/// path technology does, proved against the actual composed classes
+/// (<c>WeatherStage</c>, <c>EnvironmentModule</c>) exactly as
+/// <c>DiffusionStageTests</c> already does for R20d-V11 on the technology
+/// side. Built from a synthetic climate rather than the shipped one:
+/// `Defaults.Climate.Effects` is empty, and correctly so — no shipped climate
+/// changes a number nobody bought, the identical relationship
+/// <c>TechnologyContentKind</c>'s hardcoded `[]` has to the sixty-five
+/// shipped technology nodes.
+/// </summary>
+public sealed class WeatherEffectTests
+{
+    private static (OGSim.Capabilities.EffectState Effects, WeatherStage Stage)
+        Build(OGSim.Environment.ClimateProfile climate, ulong seed)
+    {
+        var weather = new OGSim.Environment.WeatherState([climate]);
+        var model = new OGSim.Environment.Ar1Weather(climate.Persistence);
+        IRandomStream stream = new RandomSource(seed).Stream(StreamId.Weather);
+        var effects = new OGSim.Capabilities.EffectState(new Dictionary<EnvelopeKind, double>());
+
+        return (effects, new WeatherStage(weather, model, stream, effects, climate));
+    }
+
+    private static OGSim.Environment.ClimateProfile ClimateWith(Effect effect) => new(
+        new ContentId("test-climate"),
+        Persistence: 0.75,
+        Baseline: [.. Enumerable.Repeat(3.0, 12)],
+        Amplitude: [.. Enumerable.Repeat(1.0, 12)],
+        TemperatureBaseline: [.. Enumerable.Repeat(-15.0, 12)],
+        TemperatureAmplitude: -4.0,
+        AccessOpen: [.. Enumerable.Repeat(true, 12)],
+        Effects: [effect]);
+
+    /// <summary>
+    /// The stage moves the envelope. Every composed `EffectState` starts with
+    /// an empty base (0.0 for every kind — `CapabilitiesModule.Compose`'s own
+    /// choice, matched here), so an EXTENSION is the effect kind whose result
+    /// is directly observable against it: `Max(0, extension)` is the
+    /// extension itself. A RESTRICTION against a zero base would leave
+    /// `EffectiveEnvelope` at zero whether or not it were ever applied —
+    /// which is why the restriction case is proved separately, in
+    /// combination, in the next test.
+    /// </summary>
+    [Fact]
+    public void R22V18_the_environment_applies_through_the_same_effect_state_as_technology()
+    {
+        (OGSim.Capabilities.EffectState effects, WeatherStage stage) = Build(
+            ClimateWith(new MoveEnvelope(
+                EnvelopeKind.ArcticOperability, EnvelopeContributionKind.Extension, 12.0)),
+            seed: 11UL);
+
+        Assert.Equal(0.0, effects.EffectiveEnvelope(EnvelopeKind.ArcticOperability));
+
+        stage.Execute(new TickContext { Tick = new Tick(0), Date = new GameDate(1965, 1) });
+
+        Assert.Equal(12.0, effects.EffectiveEnvelope(EnvelopeKind.ArcticOperability));
+    }
+
+    /// <summary>
+    /// AND A RESTRICTION COMBINES WITH AN EXTENSION THE NORMAL WAY — the
+    /// whole point of one shared path: an extension a HELD TECHNOLOGY would
+    /// contribute, and this climate's OWN restriction capping it, resolve to
+    /// `Min(Max(base, extension), restriction)`, exactly SDD-005 §4.1's form
+    /// and its rule that restrictions always win. This is what proves the
+    /// restriction reaches `EffectState` at all — the case a lone restriction
+    /// against a zero base cannot show, since `Min(0, restriction)` is zero
+    /// whether or not the restriction was ever applied.
+    /// </summary>
+    [Fact]
+    public void R22V18b_the_climates_restriction_combines_with_an_extension_the_normal_way()
+    {
+        (OGSim.Capabilities.EffectState effects, WeatherStage stage) = Build(
+            ClimateWith(new MoveEnvelope(
+                EnvelopeKind.ArcticOperability, EnvelopeContributionKind.Restriction, 4.0)),
+            seed: 12UL);
+
+        stage.Execute(new TickContext { Tick = new Tick(0), Date = new GameDate(1965, 1) });
+
+        // Simulating what a held technology would have contributed, through
+        // the SAME method — SDD-005 §4.2's whole claim.
+        effects.Apply([new MoveEnvelope(
+            EnvelopeKind.ArcticOperability, EnvelopeContributionKind.Extension, 12.0)]);
+
+        // Min(Max(0, 12), 4) = 4 — the climate's restriction wins.
+        Assert.Equal(4.0, effects.EffectiveEnvelope(EnvelopeKind.ArcticOperability));
     }
 }

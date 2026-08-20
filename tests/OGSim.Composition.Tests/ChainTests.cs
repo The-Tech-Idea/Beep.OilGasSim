@@ -237,8 +237,12 @@ public sealed class ChainTests
              // what it is: an element that makes mass out of nothing, feeding
              // the injector's second inlet (R20d.24). A flood's water crosses
              // the network exactly as produced oil does.
+             // The off-spec sink is where a rejected stream goes (SDD-006 §7d,
+             // finding 252) — off custody's Reject leg rather than its OnSpec
+             // one, so it sorts last.
              ["well-1", "water-intake", "gathering-1", "manifold", "flowline", "separator",
-             "water-disposal", "gas-plant", "flare", "treater", "custody-meter", "tank"],
+             "water-disposal", "gas-plant", "flare", "treater", "custody-meter", "tank",
+             "off-spec-sink"],
             engine.ReadModel!.Chain.Select(element => element.DisplayId));
     }
 
@@ -253,6 +257,11 @@ public sealed class ChainTests
     /// for a different reason and the same kind of reason: nobody has ordered a
     /// flood, so no water is bought (R20d.24). An idle leg on a young field is a
     /// true statement about it.</para>
+    ///
+    /// <para>The off-spec sink is excluded for the same reason (SDD-006 §7d,
+    /// finding 252): a young field with no water in its stream fails no spec,
+    /// so nothing is ever rejected onto its leg. See
+    /// <see cref="R20d29V5_the_off_spec_sink_is_present_and_dry_when_nothing_is_rejected"/>.</para>
     /// </summary>
     [Fact]
     public void R20dV1_every_element_on_a_flowing_leg_reports_what_crossed_it()
@@ -264,11 +273,34 @@ public sealed class ChainTests
 
         foreach (ChainElementView element in engine.ReadModel!.Chain)
         {
-            if (element.DisplayId is "water-disposal" or "water-intake") continue;
+            if (element.DisplayId is "water-disposal" or "water-intake" or "off-spec-sink")
+                continue;
 
             Assert.True(element.Throughput.Kilograms > 0.0,
                 $"{element.DisplayId} shows no throughput, so a host cannot draw the flow");
         }
+    }
+
+    /// <summary>
+    /// The off-spec leg is PRESENT and DRY when nothing is rejected — the same
+    /// shape as <see cref="R20dV4_the_water_leg_is_present_and_dry_before_breakthrough"/>
+    /// for the water leg. A young field with no water in its stream fails no
+    /// spec, so nothing crosses the sink yet; it is still on the chain, wired
+    /// and ready for the tick water does.
+    /// </summary>
+    [Fact]
+    public void R20d29V5_the_off_spec_sink_is_present_and_dry_when_nothing_is_rejected()
+    {
+        (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled();
+        Produce(engine, target);
+
+        engine.Pipeline.AdvanceTick();
+
+        ChainElementView sink = Assert.Single(
+            engine.ReadModel!.Chain, element => element.DisplayId == "off-spec-sink");
+
+        Assert.Equal(0.0, sink.Throughput.Kilograms, precision: 9);
+        Assert.False(sink.IsBottleneck);
     }
 
     /// <summary>
@@ -1176,6 +1208,79 @@ public sealed class ChainTests
         Assert.True(disposal.CurrentSkin < plugged,
             $"the well was acidised and its skin is still {disposal.CurrentSkin} against " +
             $"{plugged} before");
+    }
+
+    /// <summary>
+    /// THE OTHER STIMULATION (R12b.7, finding 253) — and unlike the injector's,
+    /// this one needs no decades of plugging first: every completion opens at
+    /// zero skin, so a producer is acidisable from month one. Two engines, same
+    /// seed, one ordered a job and one did not — the R20d17V1 comparison shape,
+    /// which isolates the treatment from decline the way a single field's
+    /// before/after cannot.
+    /// </summary>
+    [Fact]
+    public void R12b7V6_a_stimulated_well_outproduces_an_unstimulated_one()
+    {
+        (Engine stimulated, EntityId<IReservoirCompartmentEntity> stimTarget) = Undrilled();
+        FieldControl stimField = stimulated.Provided.Resolve<FieldControl>();
+        EntityId<ICompletion> stimWell = stimField.Drill(stimTarget, new Length(2000.0));
+
+        (Engine plain, EntityId<IReservoirCompartmentEntity> plainTarget) = Undrilled();
+        FieldControl plainField = plain.Provided.Resolve<FieldControl>();
+        plainField.Drill(plainTarget, new Length(2000.0));
+
+        Assert.IsType<Accepted>(
+            stimulated.Commands.Submit(new StimulateWellCommand(stimWell)));
+
+        for (var month = 0; month < 3; month++)
+        {
+            stimulated.Pipeline.AdvanceTick();
+            plain.Pipeline.AdvanceTick();
+        }
+
+        double withJob = stimulated.ReadModel!.ProducedThisTick.CubicMetres;
+        double without = plain.ReadModel!.ProducedThisTick.CubicMetres;
+
+        Assert.True(withJob > without,
+            $"a stimulated well produced {withJob} m3 against {without} for the same field " +
+            "left alone");
+    }
+
+    [Fact]
+    public void R12b7V7_stimulating_a_well_that_does_not_exist_is_refused()
+    {
+        (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled();
+        Produce(engine, target);
+
+        Assert.IsType<Rejected>(engine.Commands.Submit(
+            new StimulateWellCommand(new EntityId<ICompletion>(999_999))));
+    }
+
+    /// <summary>
+    /// A COMPANY THAT KEPT ITS PROMISE STILL LOSES THE LICENCE WHEN THE TERM
+    /// RUNS OUT (SDD-011 §1's R16 amendment, finding 254). `Licence.Expiry`
+    /// was real and unread since R20d.9; `Defaults.LicenceTerms.TermMonths`
+    /// is 480, exactly this composition's own forty-year horizon — the clock
+    /// was sized to matter and never started.
+    ///
+    /// <para>The well drilled here satisfies the ONE work commitment (drill
+    /// one well by tick 60) long before the term ends, so the refusal at the
+    /// end has to be the EXPIRY one and not the commitment one — the wrong
+    /// message would tell a compliant company it broke a promise it kept.</para>
+    /// </summary>
+    [Fact]
+    public void R254_a_licence_that_met_its_commitment_still_refuses_drilling_past_its_term()
+    {
+        (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled();
+        Produce(engine, target);   // satisfies the one work commitment (drill one well)
+
+        for (var month = 0; month < 480; month++) engine.Pipeline.AdvanceTick();
+
+        Rejected refused = Assert.IsType<Rejected>(engine.Commands.Submit(
+            new DrillWellCommand(Structure(engine, target), new Length(2000.0))));
+
+        Assert.Contains(refused.Reasons, reason => reason.LocId == "$loc:reject.licence-expired");
+        Assert.DoesNotContain(refused.Reasons, reason => reason.LocId == "$loc:reject.licence-lost");
     }
 
     /// <summary>

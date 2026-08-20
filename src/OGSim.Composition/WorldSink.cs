@@ -82,18 +82,25 @@ public sealed class WorldState : IStateOwner
 
     /// <summary>Places a closed structure and hands back its identity. Every
     /// one the generator finds, charged or dry (SDD-010 §4b).</summary>
-    internal EntityId<IProspect> Place(Coordinate at, ReservoirVolume capacity)
+    /// <param name="subtlety">How hard the trap is to see (SDD-005 §5's
+    /// R12b.19 amendment). D0 for <see cref="DeclareKnownField"/> — a
+    /// scenario-declared field carries no exploration risk to be wrong
+    /// about.</param>
+    internal EntityId<IProspect> Place(
+        Coordinate at, ReservoirVolume capacity, DetectClass subtlety)
     {
         var prospect = new EntityId<IProspect>((ulong)(_prospects.Count + 1));
 
         _prospects.Add(prospect);
         _at.Add(at);
         _capacity.Add(capacity);
+        _subtlety.Add(subtlety);
 
         return prospect;
     }
 
     private readonly List<ReservoirVolume> _capacity = [];
+    private readonly List<DetectClass> _subtlety = [];
 
     /// <summary>
     /// What a structure could hold — TRUTH, and what a survey measures. Every
@@ -113,6 +120,25 @@ public sealed class WorldState : IStateOwner
     }
 
     /// <summary>
+    /// How hard this trap is to see — TRUTH, read by the observation model
+    /// alone (SDD-005 §5's R12b.19 amendment). A closed structure's own
+    /// geometry, not what turns out to be in it, which is why a discovery
+    /// well, log, core or well test never consults this: those subjects are
+    /// always a compartment, always post-discovery, and subtlety has nothing
+    /// left to say by then.
+    /// </summary>
+    internal DetectClass SubtletyOf(EntityId<IProspect> prospect)
+    {
+        int index = _prospects.IndexOf(prospect);
+
+        return index < 0
+            ? throw new InvariantFault("SDD-010 §4b", null,
+                $"prospect {prospect.Value} was never placed, so it has no structure and " +
+                "nothing to survey")
+            : _subtlety[index];
+    }
+
+    /// <summary>
     /// A field a SCENARIO declares outright rather than one a world buried
     /// (SDD-010 §4b). It is already known to be there, so it is placed and found
     /// in one step and carries no exploration risk — there is nothing left to be
@@ -122,7 +148,7 @@ public sealed class WorldState : IStateOwner
     public EntityId<IProspect> DeclareKnownField(
         EntityId<IReservoirCompartmentEntity> compartment, ReservoirVolume capacity)
     {
-        EntityId<IProspect> prospect = Place(default, capacity);
+        EntityId<IProspect> prospect = Place(default, capacity, DetectClass.D0);
 
         Found(prospect, compartment);
 
@@ -172,7 +198,7 @@ public sealed class WorldState : IStateOwner
 
     public StateKey Key { get; } = new("world.decisions");
 
-    public int SchemaVersion => 1;
+    public int SchemaVersion => 2;
 
     /// <summary>Nothing has to be back before this is — the world is one of
     /// the two the FIELD is measured against (SDD-013 §2b).</summary>
@@ -234,6 +260,7 @@ public sealed class WorldState : IStateOwner
             writer.WriteDouble(at + "x", _at[i].X);
             writer.WriteDouble(at + "y", _at[i].Y);
             writer.WriteDouble(at + "capacity", _capacity[i].CubicMetres);
+            writer.WriteString(at + "subtlety", SubtletyName(_subtlety[i]));
 
             // The field it was found in, if it has been. A prospect placed and
             // not yet drilled is a legitimate state and says so with a flag.
@@ -334,6 +361,28 @@ public sealed class WorldState : IStateOwner
             "regenerating it in another age would place a world the game never played"),
     };
 
+    /// <summary>By name rather than ordinal, for the same reason
+    /// <see cref="EraName"/> is (SDD-005 §5's R12b.19 amendment).</summary>
+    private static string SubtletyName(DetectClass subtlety) => subtlety switch
+    {
+        DetectClass.D0 => "D0",
+        DetectClass.D1 => "D1",
+        DetectClass.D2 => "D2",
+        DetectClass.D3 => "D3",
+        _ => throw new InvariantFault("SDD-005 §5", null,
+            $"detect class {subtlety} has no name in the save format"),
+    };
+
+    private static DetectClass SubtletyNamed(string name) => name switch
+    {
+        "D0" => DetectClass.D0,
+        "D1" => DetectClass.D1,
+        "D2" => DetectClass.D2,
+        "D3" => DetectClass.D3,
+        _ => throw new SaveDataFault("SDD-005 §5", null,
+            $"the save carries detect class '{name}', which this build does not declare"),
+    };
+
     public void Restore(IStateReader reader)
     {
         ArgumentNullException.ThrowIfNull(reader);
@@ -370,7 +419,8 @@ public sealed class WorldState : IStateOwner
             // rebuild relies on `NextWellId` doing.
             EntityId<IProspect> prospect = Place(
                 new Coordinate(reader.ReadDouble(at + "x"), reader.ReadDouble(at + "y")),
-                new ReservoirVolume(reader.ReadDouble(at + "capacity")));
+                new ReservoirVolume(reader.ReadDouble(at + "capacity")),
+                SubtletyNamed(reader.ReadString(at + "subtlety")));
 
             if (reader.ReadInt64(at + "found") != 0L)
                 Found(prospect, new EntityId<IReservoirCompartmentEntity>(
@@ -515,7 +565,7 @@ public sealed class WorldSink : IWorldSink
         // The id is assigned here and in generation order, which is what lets
         // the generator name its regional observations positionally.
         EntityId<IProspect> prospect =
-            _world.Place(accumulation.Closure.Centroid, accumulation.Capacity);
+            _world.Place(accumulation.Closure.Centroid, accumulation.Capacity, accumulation.Subtlety);
 
         _prospectsPlaced++;
 

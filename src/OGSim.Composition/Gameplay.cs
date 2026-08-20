@@ -153,7 +153,18 @@ public sealed record FieldPosition(
 public sealed record WeatherView(
     double Severity,
     Temperature Ambient,
-    OGSim.Environment.Forecast Forecast);
+    OGSim.Environment.Forecast Forecast,
+
+    /// <summary>
+    /// Months left before the access window shuts, 0 when it is already shut
+    /// (R21.6's coverage record, "access windows with time remaining").
+    ///
+    /// <para>`WeatherState.MonthsUntilAccessCloses` was built and documented
+    /// at R22.6 and had no reader anywhere in `OGSim.Composition` — the same
+    /// shape this project keeps finding (findings 149, 200, 207, 252): a real
+    /// mechanism with a real unit test, joined to nothing.</para>
+    /// </summary>
+    int MonthsUntilAccessCloses);
 
 public sealed record WaterFloodView(
     double Target,
@@ -470,7 +481,8 @@ internal sealed class FieldProjection(
             new WeatherView(
                 loop.SeverityThisTick,
                 loop.AmbientThisTick,
-                weather.Look(FieldRegion, ForecastHorizonDays)),
+                weather.Look(FieldRegion, ForecastHorizonDays),
+                weather.MonthsUntilAccessCloses(FieldRegion, position.Date)),
             reserves.Remaining(loop.CumulativeProduced),
             history.Ratio(
                 reserves.Remaining(loop.CumulativeProduced).Proved,

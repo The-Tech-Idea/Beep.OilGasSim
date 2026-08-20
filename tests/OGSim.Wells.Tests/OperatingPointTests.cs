@@ -205,4 +205,62 @@ public class OperatingPointTests
 
     private static double Rate(OperatingPoint point) =>
         point is Flowing flowing ? flowing.Rate.CubicMetresPerSecond : 0.0;
+
+    // ---------------------------------------------------------- R12b.7 / 253
+
+    [Fact] // A stimulated well produces MORE, at the same conditions — the physical proof
+    public void R12b7V1_a_stimulated_well_flows_more_at_the_same_conditions()
+    {
+        Completion well = Well(skin: 3.0);
+        var wellhead = new Pressure(20.0e5);
+
+        double before = Rate(well.SolveOperatingPoint(wellhead));
+
+        well.Stimulate(3.0);
+
+        double after = Rate(well.SolveOperatingPoint(wellhead));
+
+        Assert.True(after > before,
+            $"a well acidised from skin 3.0 to 0.0 flowed {after} against {before} before it");
+    }
+
+    [Fact] // The mechanism itself: skin moves by exactly the amount ordered
+    public void R12b7V2_stimulate_reduces_every_perforations_skin_by_the_same_amount()
+    {
+        Completion well = Well(skin: 5.0);
+
+        well.Stimulate(2.0);
+
+        Assert.Equal(3.0, well.Perforations[0].Skin, precision: 9);
+    }
+
+    [Fact] // A well drilled clean, stimulated, goes NEGATIVE — a real physical outcome
+    public void R12b7V3_stimulating_a_clean_well_drives_skin_negative()
+    {
+        Completion well = Well(skin: 0.0);
+
+        well.Stimulate(3.0);
+
+        Assert.Equal(-3.0, well.Perforations[0].Skin, precision: 9);
+    }
+
+    [Fact] // A job that reduces nothing is not a job
+    public void R12b7V4_a_non_positive_reduction_is_refused()
+    {
+        Completion well = Well(skin: 2.0);
+
+        Assert.Throws<ModelFault>(() => well.Stimulate(0.0));
+        Assert.Throws<ModelFault>(() => well.Stimulate(-1.0));
+    }
+
+    [Fact] // Repeated jobs compound — nothing here caps how many times a well can be acidised
+    public void R12b7V5_repeated_jobs_compound()
+    {
+        Completion well = Well(skin: 6.0);
+
+        well.Stimulate(2.0);
+        well.Stimulate(2.0);
+
+        Assert.Equal(2.0, well.Perforations[0].Skin, precision: 9);
+    }
 }

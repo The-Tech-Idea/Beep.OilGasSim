@@ -259,12 +259,39 @@ lands in.
 
 ## 5b. Operations that move mass
 
-A well test produces and flares real barrels outside the routed network. Any
-operation may report per-tick `Sourced` / `Disposed` masses (well tests,
-frac-fluid recovery); these post **directly into the tick's 04 §7 terms** with
-the operation as the audited element — small volumes, same conservation, no
-special ledger. If the site has a routed test separator, the network path wins
-and the operation reports nothing (no double count, checked).
+> **R12b.18 amendment (finding 245) — "a well test" named two different
+> activities and only one of them is built.** This section's opening line
+> described a FLOWING test — barrels produced and flared outside the routed
+> network — and `WellTestActivity`'s own file header described a SHUT-IN
+> pressure build-up: the well closed, no flow at all, the reservoir watched
+> answer for itself as pressure recovers. These are mutually exclusive, and
+> only the shut-in one is shipped: `Complete` delivers pressure and
+> permeability observations and nothing else, `OperationMass.None(width)` is
+> the correct answer for it, and no activity in this composition flows and
+> flares outside the network. The line below is corrected to describe what is
+> actually built; a flowing test (a DST, or frac-fluid recovery) remains a
+> real, DIFFERENT, unbuilt activity that would genuinely need `OperationMass`
+> the day it exists.
+>
+> **The shut-in itself was also pure prose until this amendment.** The file's
+> own claim — "the well is shut in for the build-up, so the test costs the
+> month's oil" — was true of nothing: no code touched a well's choke. It is
+> shut in now, for real, the instant the test is booked, and stays shut after
+> it completes rather than reopening automatically — `ActivityStage.Execute`
+> calls `Complete` from inside stage 3 (Operations), and SolveFlow is stage 5
+> of the SAME tick, so a one-tick test that reopened its well in `Complete`
+> would never have been absent from a single segment the solve actually ran.
+> The player reopens it through `SetWellChokeCommand`, the same door every
+> other shut-in reason already uses.
+
+A build-up test shuts in every well on the compartment it targets and
+delivers pressure and permeability observations; it moves no mass and reports
+`OperationMass.None(width)`. Any operation may report per-tick `Sourced` /
+`Disposed` masses (a flowing test, frac-fluid recovery — neither shipped);
+these post **directly into the tick's 04 §7 terms** with the operation as the
+audited element — small volumes, same conservation, no special ledger. If the
+site has a routed test separator, the network path wins and the operation
+reports nothing (no double count, checked).
 
 > **R20d review amendment (finding 147) — the shape, declared.** This section
 > pinned the rule and declared no type, so the tick's conservation check had no

@@ -253,4 +253,75 @@ public sealed class ScenarioTests
 
         Assert.Equal(new ContentId("first-field"), runner.Id);
     }
+
+    // ------------------------------------------------- R24-V19: the audit trail
+
+    /// <summary>
+    /// SDD-014 §3's R24.5 amendment: an <c>objective.*</c> event is recorded
+    /// the tick an individual objective settles — here, the shipped scenario's
+    /// "stay-solvent" failure the moment the company actually runs out of
+    /// money. Reuses the exact fixture <c>GameplayTests</c>' own insolvency
+    /// test establishes (no compartment, so every well is refused): SDD-009
+    /// §7's R13.3 amendment (finding 250) means an idle company also owes the
+    /// shipped take-or-pay contract's full committed volume as shortfall
+    /// every window, which brings insolvency in well before the scenario's
+    /// own month-120 deadline — measured at month 82.
+    /// </summary>
+    [Fact]
+    public void R24V19_a_failed_objective_is_recorded_once_when_it_actually_fails()
+    {
+        Built built = Assert.IsType<Built>(EngineBuilder.Build(Fixture.Settings()));
+        Engine engine = built.Engine;
+
+        for (var month = 0; month < 90; month++) engine.Pipeline.AdvanceTick();
+
+        Assert.True(engine.ReadModel!.Insolvent,
+            "the fixture must actually go insolvent for this test to prove anything");
+
+        AuditEntry entry = Assert.Single(ObjectiveKindEntries(engine, "objective.failed"));
+        Assert.Equal("stay-solvent", entry.Data["objective"].Value);
+
+        // Once latched the run keeps ticking — insolvency does not reverse —
+        // but the fact was reported once, not on every subsequent tick that
+        // merely re-confirms it.
+        for (var month = 0; month < 20; month++) engine.Pipeline.AdvanceTick();
+
+        Assert.Single(ObjectiveKindEntries(engine, "objective.failed"));
+    }
+
+    /// <summary>
+    /// The per-objective event is not a duplicate of the scenario's combined
+    /// verdict, even on a fixture where both fire at the SAME tick (SDD-009
+    /// §7's R13.3 amendment moved this fixture's insolvency to month 82,
+    /// before the scenario's own month-120 deadline could ever latch
+    /// <c>Overall</c> to <c>Expired</c> first — so the two events are no
+    /// longer temporally separated the way an earlier measurement found).
+    /// What still makes the per-objective event worth having is CONTENT: it
+    /// names WHICH objective broke, and the combined verdict — by design,
+    /// SDD-014 §5a's report over a whole scenario rather than one term of
+    /// it — does not and cannot.
+    /// </summary>
+    [Fact]
+    public void R24V19_the_per_objective_event_names_what_the_overall_verdict_cannot()
+    {
+        Built built = Assert.IsType<Built>(EngineBuilder.Build(Fixture.Settings()));
+        Engine engine = built.Engine;
+
+        for (var month = 0; month < 90; month++) engine.Pipeline.AdvanceTick();
+
+        IReadOnlyList<AuditEntry> transitions = engine.Audit.Query(
+            new AuditQuery(null, AuditCategory.StateTransition, null, null));
+
+        AuditEntry overall = Assert.Single(transitions,
+            e => e.Data.ContainsKey("overall") && e.Data["overall"].Value == "Failed");
+        Assert.False(overall.Data.ContainsKey("objective"));
+
+        AuditEntry perObjective = Assert.Single(ObjectiveKindEntries(engine, "objective.failed"));
+        Assert.False(perObjective.Data.ContainsKey("overall"));
+        Assert.Equal("stay-solvent", perObjective.Data["objective"].Value);
+    }
+
+    private static IEnumerable<AuditEntry> ObjectiveKindEntries(Engine engine, string kind) =>
+        engine.Audit.Query(new AuditQuery(null, AuditCategory.StateTransition, null, null))
+            .Where(e => e.Data.TryGetValue("kind", out AuditValue k) && k.Value == kind);
 }

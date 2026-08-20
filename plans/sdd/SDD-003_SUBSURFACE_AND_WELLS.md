@@ -1281,6 +1281,55 @@ public interface ICompletion : IFlowElement
 > declaring it outside the component tree would have made it the one piece of
 > equipment R18 could not wear out.
 
+> **R12b.7 amendment (finding 253): stimulation, and why it is not the
+> injector's remediation moved to the other kind of well.**
+>
+> `Injector.Remediate()` (§3.1d) resets a plugging COUNTER, because injector
+> skin is DERIVED — `s(V) = s0 + α·V/V_ref` — and remediation is "the counter
+> that damage accrues into, zeroed." A producer's `Perforation.Skin` is not
+> derived from anything: it is set once, at drilling (`Skin: 0.0` — a
+> perfectly clean completion, SDD-003 §6's `CompletionFor`), and nothing
+> anywhere grows it afterward. There is no damage counter to zero, so
+> stimulation cannot be that mechanism wearing a different name — it is a
+> genuine, one-time IMPROVEMENT below the drilled baseline, not a restoration.
+> That is also the honest economics: SDD-009 §1 books a restoration as opex
+> (it buys back a capability the well already had) and an improvement as
+> capex, and a real acid job or frac is capitalised for exactly this reason —
+> it leaves the well BETTER than it was drilled, which is an asset.
+>
+> `Completion` gains one mutating member:
+>
+> ```csharp
+> // Every perforation's skin moves by the same amount — a treatment job
+> // reaches the whole perforated interval, not one foot of it, and with one
+> // perforation reachable per completion today (R6.2: no command produces a
+> // second) the distinction is latent rather than tested. REBUILDS the list
+> // rather than mutating a Perforation in place: Perforation is immutable
+> // (SDD-003 §5) for the same reason Money and Composition are — a stream's
+> // properties are what they are, and "the same perforation, changed" is a
+> // new value with the old one's identity, never a field written through.
+> void Stimulate(double skinReduction);
+> ```
+>
+> **No floor is checked here, deliberately.** A skin driven far enough
+> negative makes §6.1's Darcy denominator non-positive, and that throws
+> `ModelFault` already — the solver's own invariant is the floor, not a
+> second one invented at the call site to anticipate it. A game-design floor
+> (stimulation stops helping past some point) is a real question and not
+> this task's: nothing in this composition currently produces a value close
+> enough to the physical one to need it, and inventing a number to guard
+> against a case that cannot yet arise would be exactly the "constant
+> standing in for work" rule L3 forbids.
+>
+> **What this task ships and what it does not.** One technique — an acid
+> job, un-gated, matching real petroleum history's oldest and simplest
+> stimulation and the injector's own remediation having no tech gate either.
+> "Frac" and "multi-stage" (this row's other two names) are E3-gated per
+> R12b.7's own text and need a technology this composition's shipped tree
+> does not yet map to a facility or an activity (R20d.10's own open item),
+> so building them now would mean inventing the mapping rather than reading
+> it — named and left, not silently dropped.
+
 ### 6.1 Inflow (SI Darcy form, per perforation)
 
 ```text

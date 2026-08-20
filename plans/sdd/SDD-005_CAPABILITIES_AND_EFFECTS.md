@@ -397,6 +397,35 @@ if (accumulation.TrapSubtlety > survey.Tier.MaxDetectClass)
 (gated equipment), not from `ICapabilitySet` directly — you re-screen with a
 *kit*, which you could only buy because of the node. Consistent with §3 rule 2.
 
+> **R12b.19 amendment.** This section specified the rule and named its data
+> source; nothing implemented either half. `ObservationSampler.Sample` already
+> does exactly the described thing when `SigmaFor` returns null — it was
+> written for this — but `RegionalObservationModel.SigmaFor` never used its own
+> `subject` parameter, so no source ever actually returned null for being
+> below a trap's tier. `WorldGenerator.DeliverRegionalData` proves the check
+> belongs here: it already applies the identical rule at WORLD-GEN time, for
+> the free regional read every new game gets, by comparing
+> `accumulation.Subtlety` against a fixed ceiling.
+>
+> **No `information-source` content kind exists** — design 06 §2.3's four rows
+> (regional/2-D → D0, 3-D → D1, 3-D+attributes → D2, pre-stack depth migration
+> → D3) are the only source of a ceiling anywhere, and only three sources ship
+> (`regional`, `seismic-2d`, `seismic-3d`, reaching D0/D0/D1). The ceiling is
+> therefore a small hand-authored table beside `RegionalObservationModel`,
+> content-shaped and not yet content-driven — the same relationship
+> `Defaults.Climate` has to a `ClimateContentKind` that does not exist either
+> (R20d.8.10's amendment). Building the full gated-equipment kind for three
+> rows would be content for its own sake; it is named here as the eventual
+> home rather than built now.
+>
+> **The gate applies only when the subject is a PROSPECT** — `Subtlety`
+> describes the trap's geometry, not what turns out to be in it, so a
+> discovery well, a log, a core or a well test (subjects that are always a
+> compartment, always post-discovery) are untouched. Subtlety is stored on
+> `WorldState` the same way `CapacityOf` already is: a truth attribute, kept
+> `internal`, read by composition's observation model and never by anything a
+> player-facing surface could resolve.
+
 ## 6. Persistence
 
 `TechnologyState` persists: acquired node ids (strings), in-progress R&D, and
