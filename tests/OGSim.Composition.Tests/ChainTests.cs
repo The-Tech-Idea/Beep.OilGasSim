@@ -1263,24 +1263,37 @@ public sealed class ChainTests
     /// is 480, exactly this composition's own forty-year horizon — the clock
     /// was sized to matter and never started.
     ///
-    /// <para>The well drilled here satisfies the ONE work commitment (drill
-    /// one well by tick 60) long before the term ends, so the refusal at the
-    /// end has to be the EXPIRY one and not the commitment one — the wrong
-    /// message would tell a compliant company it broke a promise it kept.</para>
+    /// <para>Drilled through the REAL command, not <see cref="Produce"/>'s
+    /// bypass: only `DrillWellActivity.Complete` calls
+    /// `Licence.RecordDelivery`, which is what satisfies the one work
+    /// commitment (drill one well by tick 60) long before the term ends — so
+    /// the state 480 months on has to be the EXPIRY reason, not the
+    /// commitment one, and saying otherwise would tell a compliant company it
+    /// broke a promise it kept.</para>
     /// </summary>
     [Fact]
-    public void R254_a_licence_that_met_its_commitment_still_refuses_drilling_past_its_term()
+    public void R254_a_licence_that_met_its_commitment_still_expires_at_its_term()
     {
         (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled();
-        Produce(engine, target);   // satisfies the one work commitment (drill one well)
 
-        for (var month = 0; month < 480; month++) engine.Pipeline.AdvanceTick();
-
-        Rejected refused = Assert.IsType<Rejected>(engine.Commands.Submit(
+        Assert.IsType<Accepted>(engine.Commands.Submit(
             new DrillWellCommand(Structure(engine, target), new Length(2000.0))));
 
-        Assert.Contains(refused.Reasons, reason => reason.LocId == "$loc:reject.licence-expired");
-        Assert.DoesNotContain(refused.Reasons, reason => reason.LocId == "$loc:reject.licence-lost");
+        for (var month = 0; month < 12; month++) engine.Pipeline.AdvanceTick();
+
+        Licence licence = engine.Provided.Resolve<Licence>();
+
+        // THE COMMITMENT WAS MET, well inside its tick-60 deadline — confirmed
+        // rather than assumed, because a fixture that silently failed to
+        // credit it would make the rest of this test pass for the wrong
+        // reason (the same discipline R20dV4 applies to the water leg).
+        Assert.True(licence.IsLive);
+        Assert.All(licence.Progress, p => Assert.True(p.Met));
+
+        for (var month = 12; month < 480; month++) engine.Pipeline.AdvanceTick();
+
+        Assert.False(licence.IsLive);
+        Assert.Equal(LicenceLossReason.Expired, licence.LossReason);
     }
 
     /// <summary>
