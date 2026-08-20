@@ -362,3 +362,9 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
+
+# Godot's import cache. Regenerated from the source assets on every import, so
+# tracking it means thousands of churning binaries in every commit. The .uid
+# files that sit BESIDE scripts and resources are a different thing and stay:
+# they carry stable identity and Godot needs them in version control.
+.godot/
