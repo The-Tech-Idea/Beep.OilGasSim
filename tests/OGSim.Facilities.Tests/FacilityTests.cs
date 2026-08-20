@@ -494,6 +494,71 @@ public class SpecificationTests
     }
 }
 
+/// <summary>SDD-006 §7d — R20d.29, finding 252: where the Reject leg goes.</summary>
+public class OffSpecSinkTests
+{
+    [Fact] // A terminal sink: inlet only, nothing downstream to connect
+    public void R20d29V1_the_sink_is_a_terminal_with_one_inlet_and_no_outlets()
+    {
+        var sink = new OffSpecSink(new EntityId<IFlowElement>(10), Fx.MaterialCount);
+
+        PortSpec port = Assert.Single(sink.Ports);
+        Assert.Equal(PortDirection.Inlet, port.Direction);
+
+        TransformResult result = sink.Transform(Fx.In(Fx.Stream(50.0, 0.0, 0.0)));
+        Assert.Empty(result.Outlets);
+    }
+
+    [Fact] // Everything that arrives is accounted, not dropped
+    public void R20d29V2_what_arrives_leaves_as_discharged_exactly()
+    {
+        var sink = new OffSpecSink(new EntityId<IFlowElement>(10), Fx.MaterialCount);
+
+        TransformResult result = sink.Transform(Fx.In(Fx.Stream(30.0, 5.0, 2.0)));
+
+        Assert.Equal(37.0, result.Disposed.Discharged.Total.KgPerSecond, 9);
+        Assert.Equal(0.0, result.Disposed.Flared.Total.KgPerSecond, 12);
+        Assert.Equal(0.0, result.Disposed.Vented.Total.KgPerSecond, 12);
+    }
+
+    [Fact] // No capacity of its own — the gate already decided how much arrives
+    public void R20d29V3_the_sink_declares_no_constraint()
+    {
+        var sink = new OffSpecSink(new EntityId<IFlowElement>(10), Fx.MaterialCount);
+
+        Assert.Empty(sink.EvaluateConstraints(Fx.In(Fx.Stream(1000.0, 0.0, 0.0))));
+    }
+
+    /// <summary>
+    /// THE SEAM ITSELF: what a spec gate's Reject port produces is exactly what
+    /// the sink accounts — the same ports `Modules.cs` wires together
+    /// (`CustodyTransferPoint.RejectOutlet` → `OffSpecSink.Inlet`), chained by
+    /// hand the way the flow solver would chain them. Before finding 252 was
+    /// fixed, this mass had no reader anywhere; this is the proof it now does.
+    /// </summary>
+    [Fact]
+    public void R20d29V4_a_rejected_stream_reaches_the_sink_and_is_accounted()
+    {
+        var spec = new Specification([new SpecLimit(SpecProperty.BasicSedimentAndWater, 0.005)]);
+        var custody = new CustodyTransferPoint(
+            new EntityId<IFlowElement>(9), spec, Fx.MaterialCount,
+            _ => new StreamProperties(
+                BasicSedimentAndWater: 0.03, H2SFraction: 0.0, Co2Fraction: 0.0,
+                WaterInGasFraction: 0.0, LightEndsFraction: 0.0, Heating: new HeatingValue(0.0)));
+
+        var sink = new OffSpecSink(new EntityId<IFlowElement>(10), Fx.MaterialCount);
+
+        TransformResult custodyResult = custody.Transform(Fx.In(Fx.Stream(50.0, 0.0, 0.0)));
+        MaterialStream rejected = custodyResult.Outlets[1];
+
+        Assert.Equal(50.0, rejected.MassRates.Total.KgPerSecond, 9);
+
+        TransformResult sinkResult = sink.Transform(Fx.In(rejected));
+
+        Assert.Equal(50.0, sinkResult.Disposed.Discharged.Total.KgPerSecond, 9);
+    }
+}
+
 public class PowerBalanceTests
 {
     private sealed record Source(Power MaxSupply, int MeritRank) : IPowerSource;

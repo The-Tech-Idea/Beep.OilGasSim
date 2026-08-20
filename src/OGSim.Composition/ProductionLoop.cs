@@ -232,6 +232,7 @@ internal sealed class ProductionLoop : IStateOwner
 
     private readonly OGSim.Facilities.Tank _tank;
     private readonly OGSim.Facilities.ExportTerminal _terminal;
+    private readonly OGSim.Facilities.CustodyTransferPoint _custody;
 
     private OGSim.Kernel.Composition _stored;
     private Allocation _tankProvenance;
@@ -291,6 +292,7 @@ internal sealed class ProductionLoop : IStateOwner
         OGSim.Integrity.AssetIntegrity integrity,
         OGSim.Facilities.Tank tank,
         OGSim.Facilities.ExportTerminal terminal,
+        OGSim.Facilities.CustodyTransferPoint custody,
         IFiscalRegime regime,
         IPriceModel prices,
         IRandomStream priceStream,
@@ -321,6 +323,7 @@ internal sealed class ProductionLoop : IStateOwner
         ArgumentNullException.ThrowIfNull(names);
         ArgumentNullException.ThrowIfNull(tank);
         ArgumentNullException.ThrowIfNull(terminal);
+        ArgumentNullException.ThrowIfNull(custody);
         ArgumentNullException.ThrowIfNull(intake);
         ArgumentNullException.ThrowIfNull(regime);
         ArgumentNullException.ThrowIfNull(liquidOrdinals);
@@ -339,6 +342,7 @@ internal sealed class ProductionLoop : IStateOwner
         _integrity = integrity;
         _tank = tank;
         _terminal = terminal;
+        _custody = custody;
         _regime = regime;
         _prices = prices;
         _priceStream = priceStream;
@@ -1329,17 +1333,54 @@ internal sealed class ProductionLoop : IStateOwner
     public void RecordCustody()
     {
         _sale = null;
-        if (Delivered.Total.KgPerSecond <= 0.0) return;
+        if (Delivered.Total.KgPerSecond > 0.0)
+            _sale = _audit.Record(
+                AuditCategory.CustodyTransfer,
+                subject: null,
+                cause: null,
+                new Dictionary<string, AuditValue>(StringComparer.Ordinal)
+                {
+                    ["mass-kg"] = new(Format(Delivered.Total.KgPerSecond)),
+                    ["volume-m3"] = new(Format(ProducedThisTick.CubicMetres)),
+                });
 
-        _sale = _audit.Record(
-            AuditCategory.CustodyTransfer,
-            subject: null,
+        RecordRejection();
+    }
+
+    /// <summary>
+    /// The other half of "a rejection with a reason" (SDD-006 §7d, finding
+    /// 252). What fails and why: <see cref="OGSim.Facilities.OffSpecSink"/>
+    /// accounts the MASS a rejection loses, and this accounts the CAUSE — the
+    /// same split the chain view and the audit trail already draw everywhere
+    /// else (how much vs why).
+    /// </summary>
+    private void RecordRejection()
+    {
+        IReadOnlyList<OGSim.Facilities.SpecBreach> breaches = _custody.LastBreaches;
+        if (breaches.Count == 0) return;
+
+        var data = new Dictionary<string, AuditValue>(StringComparer.Ordinal)
+        {
+            ["breach-count"] = new(breaches.Count.ToString(
+                System.Globalization.CultureInfo.InvariantCulture)),
+        };
+
+        for (int i = 0; i < breaches.Count; i++)
+        {
+            string at = "breach-" + i.ToString(
+                System.Globalization.CultureInfo.InvariantCulture) + "-";
+
+            data[at + "property"] = new(breaches[i].Property.ToString());
+            data[at + "limit"] = new(Format(breaches[i].Limit));
+            data[at + "measured"] = new(Format(breaches[i].Measured));
+            data[at + "margin"] = new(Format(breaches[i].Margin));
+        }
+
+        _audit.Record(
+            AuditCategory.Rejection,
+            subject: new EntityRef(EntityKind.FlowElement, _custody.Id.Value),
             cause: null,
-            new Dictionary<string, AuditValue>(StringComparer.Ordinal)
-            {
-                ["mass-kg"] = new(Format(Delivered.Total.KgPerSecond)),
-                ["volume-m3"] = new(Format(ProducedThisTick.CubicMetres)),
-            });
+            data);
     }
 
     private AuditId? _sale;

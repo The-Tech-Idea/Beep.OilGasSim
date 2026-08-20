@@ -237,8 +237,12 @@ public sealed class ChainTests
              // what it is: an element that makes mass out of nothing, feeding
              // the injector's second inlet (R20d.24). A flood's water crosses
              // the network exactly as produced oil does.
+             // The off-spec sink is where a rejected stream goes (SDD-006 §7d,
+             // finding 252) — off custody's Reject leg rather than its OnSpec
+             // one, so it sorts last.
              ["well-1", "water-intake", "gathering-1", "manifold", "flowline", "separator",
-             "water-disposal", "gas-plant", "flare", "treater", "custody-meter", "tank"],
+             "water-disposal", "gas-plant", "flare", "treater", "custody-meter", "tank",
+             "off-spec-sink"],
             engine.ReadModel!.Chain.Select(element => element.DisplayId));
     }
 
@@ -253,6 +257,11 @@ public sealed class ChainTests
     /// for a different reason and the same kind of reason: nobody has ordered a
     /// flood, so no water is bought (R20d.24). An idle leg on a young field is a
     /// true statement about it.</para>
+    ///
+    /// <para>The off-spec sink is excluded for the same reason (SDD-006 §7d,
+    /// finding 252): a young field with no water in its stream fails no spec,
+    /// so nothing is ever rejected onto its leg. See
+    /// <see cref="R20d29V5_the_off_spec_sink_is_present_and_dry_when_nothing_is_rejected"/>.</para>
     /// </summary>
     [Fact]
     public void R20dV1_every_element_on_a_flowing_leg_reports_what_crossed_it()
@@ -264,11 +273,34 @@ public sealed class ChainTests
 
         foreach (ChainElementView element in engine.ReadModel!.Chain)
         {
-            if (element.DisplayId is "water-disposal" or "water-intake") continue;
+            if (element.DisplayId is "water-disposal" or "water-intake" or "off-spec-sink")
+                continue;
 
             Assert.True(element.Throughput.Kilograms > 0.0,
                 $"{element.DisplayId} shows no throughput, so a host cannot draw the flow");
         }
+    }
+
+    /// <summary>
+    /// The off-spec leg is PRESENT and DRY when nothing is rejected — the same
+    /// shape as <see cref="R20dV4_the_water_leg_is_present_and_dry_before_breakthrough"/>
+    /// for the water leg. A young field with no water in its stream fails no
+    /// spec, so nothing crosses the sink yet; it is still on the chain, wired
+    /// and ready for the tick water does.
+    /// </summary>
+    [Fact]
+    public void R20d29V5_the_off_spec_sink_is_present_and_dry_when_nothing_is_rejected()
+    {
+        (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled();
+        Produce(engine, target);
+
+        engine.Pipeline.AdvanceTick();
+
+        ChainElementView sink = Assert.Single(
+            engine.ReadModel!.Chain, element => element.DisplayId == "off-spec-sink");
+
+        Assert.Equal(0.0, sink.Throughput.Kilograms, precision: 9);
+        Assert.False(sink.IsBottleneck);
     }
 
     /// <summary>

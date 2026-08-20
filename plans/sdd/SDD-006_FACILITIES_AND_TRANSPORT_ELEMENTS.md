@@ -876,6 +876,60 @@ into as well.
 > where that field is. Until the rest lands, one chain serves one field. Stated
 > here so the limit reads as a known gap rather than as a decision.
 
+## 7d. The Reject leg has no declared destination — R20d.29 amendment (finding 252)
+
+§7's own text says a failing stream "routes to the declared Reject port in
+full" and stops there. It was reviewed twice since (§7a, R20d.5.0) and both
+reviews checked the berth/cargo half and never asked where Reject goes,
+because the port satisfying network-build's "a spec gate must declare a
+Reject outlet" check reads as the requirement met — the check is that the
+port EXISTS, not that anything is connected to it. **In the shipped
+composition, nothing is**: `Modules.cs` wires `Custody.OnSpecOutlet` to the
+tank and leaves `RejectOutlet` unconnected, so a rejected stream, once
+produced, is read by nothing downstream — not delivered, not `Disposed`, not
+audited.
+
+**This is reachable, not theoretical.** `SeparationEfficiency.WaterIntoLiquid`
+ships at 7% (§1) — the separator's own datasheet — so BS&W crosses
+`Defaults.SalesSpec`'s 0.5% limit at a modest water cut, well before the
+late-life numbers §7a.2 and R20d.4 describe, and every rejection is
+all-or-nothing (§7's text, FV6): the whole liquid stream is refused, not the
+fraction that failed.
+
+**The decision.** Rejected crude is a real, permanent loss — not recycled,
+not held for reprocessing. Two reasons. First, reprocessing needs a path back
+INTO the network, and this composition's flow graph is a DAG (`FlowNetwork`'s
+topological order); a return edge is a cycle the solver does not express and
+inventing one is a bigger mechanism than this gap calls for. Second, and the
+reason a cycle is not merely inconvenient but wrong: `SpecificationGate.cs`'s
+own header says the point of a rejection is "not a hint: a rejection with a
+reason" — a real consequence that makes buying a treater a decision rather
+than a formality. A stream that quietly re-tries until it passes would remove
+exactly the pressure the mechanic exists to create.
+
+**The mechanism.** A terminal sink, the same SHAPE as `Flare` (§3b) — one
+inlet, no outlets, everything that arrives leaves the network as `Disposed`
+— reporting through `DisposedMass.Discharged`, the category `Treater`
+already uses for water it takes out (§2): "left the network, was never sold,
+is accounted for." `ProductionLoop`'s existing `Discharged` reader is gated
+on `solution.Element == _disposal.Id` (the water-to-ground case), so a second
+element reporting through the same field does not get mis-read as disposal
+water — it is read generically by the per-element throughput sum the way
+every other terminal already is. **Nothing about revenue changes**: rejected
+mass was never part of `Delivered` before this element existed (it had no
+reader at all) and is not part of it after (this sink is downstream of the
+`OnSpecOutlet`/tank leg, not upstream of it) — the fix makes the loss VISIBLE
+and audited, it does not create or remove one.
+
+**The other half of the same gap**: `CustodyTransferPoint.LastBreaches` —
+which property failed and by how much margin — is read by nothing in
+`OGSim.Composition` today, so even the audited mass carries no reason with
+it. `ProductionLoop.RecordCustody` (stage `Custody`, order 0) is where the
+successful transfer is already recorded each tick with `_audit` in scope;
+a rejection this tick is recorded beside it, naming every breach exactly as
+`SpecificationCheck.Evaluate` reports it (design 09 §4.2's "a rejection with
+a reason", not "a rejection happened").
+
 ## 8. Datasheet field registry (content ⇄ code)
 
 Per-unit-kind closed datasheet blocks (SDD-004 §6): separator {gasRating,

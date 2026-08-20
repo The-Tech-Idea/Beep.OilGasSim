@@ -750,6 +750,10 @@ internal static class Defaults
 
     public static EntityId<IFlowElement> TheWaterIntake { get; } = new(1_000_010);
 
+    /// <summary>Where the custody spec gate's Reject leg goes (SDD-006 §7d,
+    /// finding 252) — a permanent loss, accounted rather than silent.</summary>
+    public static EntityId<IFlowElement> TheOffSpecSink { get; } = new(1_000_011);
+
     /// <summary>
     /// Where per-well gathering lines start numbering (SDD-006 §1c). Above the
     /// fixed chain elements by a clear margin, so a line laid for the
