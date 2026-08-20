@@ -2017,6 +2017,12 @@ public sealed class FieldControl : IStateOwner
     /// and no longer part of the field a player is running.</summary>
     public int LiveWellCount => _wells.Count - _abandoned.Count;
 
+    /// <summary>Whether THIS well specifically is plugged (SDD-003 §6's
+    /// R12b.7 amendment, finding 253) — a job ordered against a well that is
+    /// out of the network for good is a bill for nothing, and a player who
+    /// ordered one deserves to be told rather than invoiced.</summary>
+    public bool IsWellAbandoned(EntityId<ICompletion> well) => _abandoned.Contains(well);
+
     /// <summary>
     /// Whether the field is closed: it was developed, and every well it had is
     /// plugged.

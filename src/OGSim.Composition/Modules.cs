@@ -855,6 +855,7 @@ internal sealed class FieldModule(
         typeof(ExpandExportCommand),
         typeof(InstallGasPlantCommand),
         typeof(RemediateInjectorCommand),
+        typeof(StimulateWellCommand),
         typeof(ServiceEquipmentCommand),
         typeof(InstallMonitoringCommand),
         typeof(RepairEquipmentCommand),
@@ -1131,6 +1132,13 @@ internal sealed class FieldModule(
             // player watches rather than a decision they take.
             new RemediateInjectorActivity(
                 Defaults.RemediateInjectorTerms, chain.Disposal),
+
+            // A WELL DRILLED CLEAN CAN STILL BE MADE BETTER (R12b.7, finding
+            // 253). Every completion opens at zero skin, so this is a genuine
+            // improvement rather than a restoration — the acid job, not yet
+            // the frac or multi-stage that name is short for.
+            new StimulateWellActivity(
+                Defaults.StimulateWellTerms, field),
 
             // THE ANSWER THE DRILLING REFUSAL ALREADY NAMED. "A bigger header
             // has to be installed first" has been the reason a well is turned

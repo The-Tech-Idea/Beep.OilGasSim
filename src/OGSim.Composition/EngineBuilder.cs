@@ -985,6 +985,31 @@ internal static class Defaults
         Outcomes: SurveyOutcomes);
 
     /// <summary>
+    /// What an acid job on a PRODUCER costs (R12b.7, finding 253). Same
+    /// wellsite-intervention shape as remediating an injector — no rig, a
+    /// wireline and pump crew — priced a little dearer because this one
+    /// leaves an asset behind rather than restoring one.
+    /// </summary>
+    public static ActivityTerms StimulateWellTerms { get; } = new(
+        Template: new ContentId("stimulate-well"),
+        Cost: Money.FromMillions(1.8),
+        DurationTicks: 1,
+        Rig: null,
+        WeatherLimit: 6.5,
+        RequiresAccess: false,
+
+        Outcomes: SurveyOutcomes);
+
+    /// <summary>
+    /// What an acid job removes from a producer's skin (SDD-003 §6's R12b.7
+    /// amendment, finding 253) — a first-pass engineering estimate, typical
+    /// of matrix acidising near-wellbore damage, and not iterated against a
+    /// fixture: nothing in this composition currently produces a skin value
+    /// close enough to a physical floor to need calibrating one.
+    /// </summary>
+    public static double StimulationSkinReduction { get; } = 3.0;
+
+    /// <summary>
     /// A PLANNED OVERHAUL (SDD-012 §3). A month and rather less than a new
     /// vessel, because it is the same vessel: what is bought is the years of
     /// hazard the decay curve was about to charge, not a capability the field

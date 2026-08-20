@@ -1211,6 +1211,52 @@ public sealed class ChainTests
     }
 
     /// <summary>
+    /// THE OTHER STIMULATION (R12b.7, finding 253) — and unlike the injector's,
+    /// this one needs no decades of plugging first: every completion opens at
+    /// zero skin, so a producer is acidisable from month one. Two engines, same
+    /// seed, one ordered a job and one did not — the R20d17V1 comparison shape,
+    /// which isolates the treatment from decline the way a single field's
+    /// before/after cannot.
+    /// </summary>
+    [Fact]
+    public void R12b7V6_a_stimulated_well_outproduces_an_unstimulated_one()
+    {
+        (Engine stimulated, EntityId<IReservoirCompartmentEntity> stimTarget) = Undrilled();
+        FieldControl stimField = stimulated.Provided.Resolve<FieldControl>();
+        EntityId<ICompletion> stimWell = stimField.Drill(stimTarget, new Length(2000.0));
+
+        (Engine plain, EntityId<IReservoirCompartmentEntity> plainTarget) = Undrilled();
+        FieldControl plainField = plain.Provided.Resolve<FieldControl>();
+        plainField.Drill(plainTarget, new Length(2000.0));
+
+        Assert.IsType<Accepted>(
+            stimulated.Commands.Submit(new StimulateWellCommand(stimWell)));
+
+        for (var month = 0; month < 3; month++)
+        {
+            stimulated.Pipeline.AdvanceTick();
+            plain.Pipeline.AdvanceTick();
+        }
+
+        double withJob = stimulated.ReadModel!.ProducedThisTick.CubicMetres;
+        double without = plain.ReadModel!.ProducedThisTick.CubicMetres;
+
+        Assert.True(withJob > without,
+            $"a stimulated well produced {withJob} m3 against {without} for the same field " +
+            "left alone");
+    }
+
+    [Fact]
+    public void R12b7V7_stimulating_a_well_that_does_not_exist_is_refused()
+    {
+        (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled();
+        Produce(engine, target);
+
+        Assert.IsType<Rejected>(engine.Commands.Submit(
+            new StimulateWellCommand(new EntityId<ICompletion>(999_999))));
+    }
+
+    /// <summary>
     /// THE HEADER CAN BE MADE BIGGER, which the drilling refusal has promised
     /// since R12b. "A well with nowhere to tie in cannot flow, and a bigger
     /// header has to be installed first" was the reason a well was turned away,
