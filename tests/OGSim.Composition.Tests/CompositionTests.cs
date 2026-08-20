@@ -931,6 +931,38 @@ public sealed class AccessWindowTests
                 $"month {month + 1} of the shipped climate is closed; if that is " +
                 "intended, the slow suite's timelines change and this test should say so");
     }
+
+    /// <summary>
+    /// R21.6's coverage record named "access windows with time remaining" as
+    /// ABSENT while `WeatherState.MonthsUntilAccessCloses` already answered
+    /// it, joined to nothing (finding 253's shape again). Proved on the road
+    /// that actually shuts, not the shipped climate that never does — see
+    /// <see cref="No_shipped_climate_closes_and_that_is_deliberate"/> for why
+    /// that fixture would read 12 every month and prove nothing.
+    /// </summary>
+    [Fact]
+    public void The_read_model_carries_months_until_the_window_shuts()
+    {
+        // Read as of the date a tick LEAVES the clock at, not the one it
+        // simulated — a forward answer to a forward question ("how long have
+        // I got"), the same direction `AccessOpenIn`'s own refusal check asks
+        // in when validating a NEW command against `clock.Date`.
+        Engine engine = OnAnIceRoad(new GameDate(1965, 1));   // January
+
+        engine.Pipeline.AdvanceTick();   // clock is now at February
+
+        Assert.Equal(2, engine.ReadModel!.Weather.MonthsUntilAccessCloses);
+    }
+
+    [Fact]
+    public void The_read_model_reports_zero_once_the_window_has_shut()
+    {
+        Engine engine = OnAnIceRoad(new GameDate(1965, 7));   // July: shut until December
+
+        engine.Pipeline.AdvanceTick();
+
+        Assert.Equal(0, engine.ReadModel!.Weather.MonthsUntilAccessCloses);
+    }
 }
 
 /// <summary>
