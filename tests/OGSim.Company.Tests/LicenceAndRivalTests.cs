@@ -104,6 +104,7 @@ public class LicenceTests
         Assert.Equal(Money.FromMillions(25.0), assessment.BondForfeit);
         Assert.True(assessment.LicenceLost);
         Assert.False(licence.IsLive);
+        Assert.Equal(LicenceLossReason.CommitmentUnmet, licence.LossReason);
     }
 
     [Fact] // Meeting the programme keeps everything
@@ -119,6 +120,68 @@ public class LicenceTests
         Assert.Empty(assessment.Unmet);
         Assert.Equal(Money.Zero, assessment.BondForfeit);
         Assert.True(licence.IsLive);
+        Assert.Null(licence.LossReason);
+    }
+
+    // -------------------------------------------------------------- R16 / 254
+
+    [Fact] // A promise kept and a clock that still ran out is not a broken promise
+    public void R254_a_licence_that_met_every_commitment_still_expires()
+    {
+        Licence licence = New(Terms(months: 72));
+
+        licence.RecordDelivery(Seismic, 500.0);
+        licence.RecordDelivery(Well, 2.0);
+        licence.AssessAt(new Tick(48));            // every commitment met, nothing forfeited
+
+        Assert.True(licence.IsLive);
+
+        bool transitioned = licence.ExpireIfDue(new Tick(72));
+
+        Assert.True(transitioned);
+        Assert.False(licence.IsLive);
+        Assert.Equal(LicenceLossReason.Expired, licence.LossReason);
+    }
+
+    [Fact] // Not due yet is not due yet
+    public void R254_expiry_does_not_fire_before_the_term_ends()
+    {
+        Licence licence = New(Terms(months: 72));
+
+        Assert.False(licence.ExpireIfDue(new Tick(71)));
+        Assert.True(licence.IsLive);
+        Assert.Null(licence.LossReason);
+    }
+
+    [Fact] // A one-time transition, safe to call every tick, exactly like AssessAt
+    public void R254_expiry_fires_once()
+    {
+        Licence licence = New(Terms(months: 72));
+
+        Assert.True(licence.ExpireIfDue(new Tick(72)));
+        Assert.False(licence.ExpireIfDue(new Tick(73)));   // already lost — no second transition
+    }
+
+    [Fact] // A promise broken beats a clock that happens to run out the same month
+    public void R254_a_commitment_forfeit_the_same_tick_as_expiry_wins()
+    {
+        // The term and the last commitment's deadline land on the same tick.
+        var terms = new LicenceTerms(
+            TermMonths: 48,
+            [new CommitmentItem(Well, 1.0, new Tick(48))],
+            Money.FromMillions(10.0), [], new ContentId("psc-generic"), new ContentId("hse-strict"));
+
+        Licence licence = New(terms);
+        // The well was never drilled.
+
+        licence.AssessAt(new Tick(48));
+
+        Assert.Equal(LicenceLossReason.CommitmentUnmet, licence.LossReason);
+
+        // ExpireIfDue is a no-op once the licence is already lost, whichever
+        // way — it must not overwrite the truer reason with the later check.
+        Assert.False(licence.ExpireIfDue(new Tick(48)));
+        Assert.Equal(LicenceLossReason.CommitmentUnmet, licence.LossReason);
     }
 
     [Fact] // Relinquishment is CUMULATIVE

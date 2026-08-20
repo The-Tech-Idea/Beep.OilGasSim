@@ -658,21 +658,40 @@ internal sealed class LicenceStage(
 
         OGSim.Company.CommitmentAssessment assessment = licence.AssessAt(context.Tick);
 
-        if (!assessment.LicenceLost) return;
+        if (assessment.LicenceLost)
+        {
+            AuditId cause = audit.Record(
+                AuditCategory.Financial, subject: null, cause: null,
+                new Dictionary<string, AuditValue>(StringComparer.Ordinal)
+                {
+                    ["spend"] = new("licence-bond-forfeit"),
+                    ["unmet-count"] = new(assessment.Unmet.Count.ToString(
+                        System.Globalization.CultureInfo.InvariantCulture)),
+                });
 
-        AuditId cause = audit.Record(
-            AuditCategory.Financial, subject: null, cause: null,
-            new Dictionary<string, AuditValue>(StringComparer.Ordinal)
-            {
-                ["spend"] = new("licence-bond-forfeit"),
-                ["unmet-count"] = new(assessment.Unmet.Count.ToString(
-                    System.Globalization.CultureInfo.InvariantCulture)),
-            });
+            company.Ledger.Post(new OGSim.Company.Movement(
+                context.Tick, OGSim.Company.Account.Penalty, OGSim.Company.Account.Cash,
+                assessment.BondForfeit, OGSim.Company.MovementCategory.Contractual,
+                Asset: null, Cause: cause));
 
-        company.Ledger.Post(new OGSim.Company.Movement(
-            context.Tick, OGSim.Company.Account.Penalty, OGSim.Company.Account.Cash,
-            assessment.BondForfeit, OGSim.Company.MovementCategory.Contractual,
-            Asset: null, Cause: cause));
+            return;
+        }
+
+        // THE OTHER WAY A LICENCE ENDS (SDD-011 §1's R16 amendment, finding
+        // 254). Checked only once the commitment is confirmed met this tick —
+        // a company that broke its promise the same month the term ran out is
+        // told the truer of the two reasons. `StateTransition`, not
+        // `Financial`: no `Movement` posts, because nothing was broken and
+        // there is nothing to forfeit — the same category and the same
+        // `kind`-keyed shape `ObjectiveStage` already uses for a verdict that
+        // is a fact about state rather than about money (SDD-014 §3).
+        if (licence.ExpireIfDue(context.Tick))
+            audit.Record(
+                AuditCategory.StateTransition, subject: null, cause: null,
+                new Dictionary<string, AuditValue>(StringComparer.Ordinal)
+                {
+                    ["kind"] = new("licence.expired"),
+                });
     }
 }
 

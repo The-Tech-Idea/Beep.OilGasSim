@@ -24,6 +24,11 @@ public sealed record CommitmentProgress(CommitmentItem Item, double Delivered)
     public bool Met => Outstanding <= 0.0;
 }
 
+/// <summary>Why a licence stopped authorising new development (SDD-011 §1's
+/// R16 amendment, finding 254) — the two are not one fact wearing two names:
+/// one forfeits a bond and one does not.</summary>
+public enum LicenceLossReason { CommitmentUnmet, Expired }
+
 /// <summary>What happened when a deadline arrived.</summary>
 public sealed record CommitmentAssessment(
     IReadOnlyList<CommitmentProgress> Unmet,
@@ -81,6 +86,12 @@ public sealed class Licence : ILicence, IStateOwner
     /// <summary>Whether the licence has been forfeited or has run out.</summary>
     public bool IsLive { get; private set; } = true;
 
+    /// <summary>Which of the two happened — null while still live. Set exactly
+    /// once, by whichever of <see cref="AssessAt"/> or <see cref="ExpireIfDue"/>
+    /// transitions the licence first (SDD-011 §1's R16 amendment, finding
+    /// 254).</summary>
+    public LicenceLossReason? LossReason { get; private set; }
+
     /// <summary>
     /// A qualifying operation completed. Mechanical: it decrements the matching
     /// item and nothing else.
@@ -131,6 +142,7 @@ public sealed class Licence : ILicence, IStateOwner
             return new CommitmentAssessment([], Money.Zero, LicenceLost: false);
 
         IsLive = false;
+        LossReason = LicenceLossReason.CommitmentUnmet;
         return new CommitmentAssessment(unmet, Terms.Bond, LicenceLost: true);
     }
 
@@ -156,11 +168,37 @@ public sealed class Licence : ILicence, IStateOwner
     /// work was done.</summary>
     public bool HasExpiredBy(Tick now) => now.Value >= Expiry.Value;
 
+    /// <summary>
+    /// The other transition into "not live" (SDD-011 §1's R16 amendment,
+    /// finding 254) — a company that kept every promise still loses the right
+    /// to develop further when the term itself runs out. No bond forfeits:
+    /// nothing was broken, so there is nothing to forfeit.
+    ///
+    /// <para>Mirrors <see cref="AssessAt"/>'s own shape — a one-time
+    /// transition, safe to call every tick, a no-op once the licence is
+    /// already lost either way. Returns whether THIS call is the one that
+    /// transitioned it, which is what a caller needs to know before auditing
+    /// an event that must fire once.</para>
+    /// </summary>
+    public bool ExpireIfDue(Tick now)
+    {
+        if (!IsLive) return false;
+        if (!HasExpiredBy(now)) return false;
+
+        IsLive = false;
+        LossReason = LicenceLossReason.Expired;
+        return true;
+    }
+
     // ------------------------------------------------------- SDD-013 §4
 
     public StateKey Key { get; } = new("company.licence");
 
-    public int SchemaVersion => 1;
+    // 2: LossReason joined IsLive (SDD-011 §1's R16 amendment, finding 254) —
+    // a save from before it exists cannot say WHY a lost licence is lost, and
+    // guessing would misreport a company that met every commitment as one
+    // that broke a promise.
+    public int SchemaVersion => 2;
 
     /// <summary>Nothing has to be back before this is (SDD-013 §2b).</summary>
     public IReadOnlyList<StateKey> RestoreAfter => [];
@@ -170,6 +208,12 @@ public sealed class Licence : ILicence, IStateOwner
         ArgumentNullException.ThrowIfNull(writer);
 
         writer.WriteInt64("is-live", IsLive ? 1L : 0L);
+
+        // -1: still live, so there is no reason yet. A reload of a live
+        // licence must not fabricate one just because the writer needs SOME
+        // value on the wire.
+        writer.WriteInt64("loss-reason", LossReason is { } reason ? (long)reason : -1L);
+
         writer.WriteInt64("delivered-count", _progress.Count);
 
         // DECLARED ORDER, matching Terms.WorkCommitment — a List and not a
@@ -185,6 +229,9 @@ public sealed class Licence : ILicence, IStateOwner
         ArgumentNullException.ThrowIfNull(reader);
 
         IsLive = reader.ReadInt64("is-live") != 0L;
+
+        long reason = reader.ReadInt64("loss-reason");
+        LossReason = reason < 0L ? null : (LicenceLossReason)reason;
 
         long count = reader.ReadInt64("delivered-count");
 

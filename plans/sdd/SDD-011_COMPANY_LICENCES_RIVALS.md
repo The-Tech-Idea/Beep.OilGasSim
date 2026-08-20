@@ -139,6 +139,60 @@ of open acreage.
 > forced-abandonment consequence here would be a second, uninvited
 > mechanic.
 
+> **R16 amendment (finding 254): `Expiry` was in the contract from the first
+> draft and had no reader.** §1 declares `ILicence.Expiry` and `Licence`
+> computes it (`Granted + TermMonths`) and answers `HasExpiredBy(Tick)`
+> correctly — proved by its own unit test — but nothing in `OGSim.Composition`
+> ever calls it. `Defaults.LicenceTerms.TermMonths` is 480, chosen because "the
+> term spans the composition's own forty-year test horizon" (the R20d.9
+> amendment above), which makes the coincidence pointed: the clock was sized
+> to matter and then never started.
+>
+> **Expiry is not a second name for commitment loss, and the two must not
+> share one meaning.** §1's prose — "at deadline, unmet ⇒ bond forfeit +
+> licence loss" — describes ONE commitment item reaching its OWN due date,
+> which for the shipped licence is tick 60, far inside the 480-month term.
+> Reaching `Expiry` with every commitment met is the opposite case: the
+> promise was kept and the clock still ran out, which is not a broken promise
+> and forfeits no bond — a company that drilled its one well by tick 60 and is
+> still producing at tick 480 did nothing wrong. Reusing
+> `DrillWellActivity`'s existing refusal text ("the work commitment went
+> unmet and the bond was forfeited") for this case would tell a compliant
+> company it broke a promise it kept.
+>
+> **The consequence is the same as commitment loss, and that reuse IS
+> correct**: `IsLive` already means "can this licence still authorise new
+> development", not "did the company keep its promise" — nothing reads it as
+> the second question, and refusing further drilling is the one edge
+> [design 02](../design/02_DOMAIN_MODEL.md) §3.4 gives a licence loss into
+> `Abandoned`, exactly as the R20d.9 amendment above already argued for
+> commitment loss. Wells already producing keep producing.
+>
+> `Licence` gains a reason and a second, independent transition:
+>
+> ```csharp
+> public enum LicenceLossReason { CommitmentUnmet, Expired }
+>
+> // Null while IsLive; set exactly once, by whichever transition fires first.
+> public LicenceLossReason? LossReason { get; }
+>
+> // Mirrors AssessAt's own shape: a one-time transition, called every tick,
+> // safe to call after the licence is already lost (a no-op then). Checked
+> // AFTER AssessAt, never before — the same "failure before expiry"
+> // precedence Scenario.Overall already uses for objectives (SDD-014 §5a),
+> // because a company that broke its promise the same month the clock ran
+> // out is told the truer of the two reasons.
+> public bool ExpireIfDue(Tick now);
+> ```
+>
+> `LicenceStage.Execute` calls `AssessAt` first as it does today, then
+> `ExpireIfDue` only if the licence is still live — and records an
+> `AuditCategory.Financial` entry on a fresh expiry the same way commitment
+> loss does, minus the `Movement`: nothing is owed, so there is nothing to
+> post, but "never silent" (EM7) applies to the fact of losing the licence,
+> not only to the cost of losing it. `DrillWellActivity`'s refusal reads
+> `licence.LossReason` and states the one that actually happened.
+
 ## 2. Rivals — the architectural rule
 
 > **A rival is a policy over beliefs, never a reader of truth.** Rivals hold

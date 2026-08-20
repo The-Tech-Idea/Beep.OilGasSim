@@ -106,11 +106,20 @@ internal sealed class DrillWellActivity(
         // ORDER time, not at the wells themselves, because design 02 §3.4's
         // diagram routes every terminal state through `Abandoned` and a
         // licence loss is not one of its edges into it.
+        //
+        // TWO REASONS, NOT ONE (SDD-011 §1's R16 amendment, finding 254). A
+        // company that met every commitment and simply ran out of term broke
+        // no promise, and telling it otherwise would be a fabrication this
+        // project's own standards forbid.
         if (!licence.IsLive)
-            reasons.Add(new RejectionReason(
-                "$loc:reject.licence-lost",
-                "the licence's work commitment went unmet and the bond was " +
-                "forfeited; no further development is possible here"));
+            reasons.Add(licence.LossReason == OGSim.Company.LicenceLossReason.Expired
+                ? new RejectionReason(
+                    "$loc:reject.licence-expired",
+                    "the licence's term has ended; no further development is possible here")
+                : new RejectionReason(
+                    "$loc:reject.licence-lost",
+                    "the licence's work commitment went unmet and the bond was " +
+                    "forfeited; no further development is possible here"));
 
         return reasons;
     }

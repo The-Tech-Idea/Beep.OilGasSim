@@ -1257,6 +1257,33 @@ public sealed class ChainTests
     }
 
     /// <summary>
+    /// A COMPANY THAT KEPT ITS PROMISE STILL LOSES THE LICENCE WHEN THE TERM
+    /// RUNS OUT (SDD-011 §1's R16 amendment, finding 254). `Licence.Expiry`
+    /// was real and unread since R20d.9; `Defaults.LicenceTerms.TermMonths`
+    /// is 480, exactly this composition's own forty-year horizon — the clock
+    /// was sized to matter and never started.
+    ///
+    /// <para>The well drilled here satisfies the ONE work commitment (drill
+    /// one well by tick 60) long before the term ends, so the refusal at the
+    /// end has to be the EXPIRY one and not the commitment one — the wrong
+    /// message would tell a compliant company it broke a promise it kept.</para>
+    /// </summary>
+    [Fact]
+    public void R254_a_licence_that_met_its_commitment_still_refuses_drilling_past_its_term()
+    {
+        (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled();
+        Produce(engine, target);   // satisfies the one work commitment (drill one well)
+
+        for (var month = 0; month < 480; month++) engine.Pipeline.AdvanceTick();
+
+        Rejected refused = Assert.IsType<Rejected>(engine.Commands.Submit(
+            new DrillWellCommand(Structure(engine, target), new Length(2000.0))));
+
+        Assert.Contains(refused.Reasons, reason => reason.LocId == "$loc:reject.licence-expired");
+        Assert.DoesNotContain(refused.Reasons, reason => reason.LocId == "$loc:reject.licence-lost");
+    }
+
+    /// <summary>
     /// THE HEADER CAN BE MADE BIGGER, which the drilling refusal has promised
     /// since R12b. "A well with nowhere to tie in cannot flow, and a bigger
     /// header has to be installed first" was the reason a well was turned away,
