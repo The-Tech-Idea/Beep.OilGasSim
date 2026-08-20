@@ -1,0 +1,7 @@
+{
+  "kind": "manifold",
+  "id": "manifold-16slot",
+  "availableFromEra": "E1",
+  "rung": 1,
+  "slots": 16
+}

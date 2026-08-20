@@ -1,0 +1,8 @@
+{
+  "kind": "property-kind",
+  "id": "porosity",
+  "dimension": "Dimensionless",
+  "space": "Linear",
+  "minimumValid": 0.0,
+  "maximumValid": 0.5
+}

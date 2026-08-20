@@ -1,0 +1,9 @@
+{
+  "kind": "tech",
+  "id": "precision-metering",
+  "name": "$loc:tech.precision-metering",
+  "availableFrom": "E3",
+  "diffusionLagTicks": 0,
+  "prerequisites": ["telemetry-scada"],
+  "routes": ["Research", "Licence"]
+}

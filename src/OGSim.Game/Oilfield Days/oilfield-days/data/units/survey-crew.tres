@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="UnitKind" load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://game/World/UnitKind.cs" id="1_script"]
+[ext_resource type="Texture2D" path="res://assets/props/well-testing-skid.png" id="2_art"]
+[ext_resource type="Texture2D" path="res://assets/props/working/well-testing-skid_working.png" id="3_work"]
+
+[resource]
+script = ExtResource("1_script")
+DisplayName = "Survey crew"
+Carries = 1
+Art = ExtResource("2_art")
+Working = ExtResource("3_work")
+DrawHeight = 86.0
+Speed = 980.0
+YardStand = Vector2(-3.9, 7.8)
+WorkingFrames = 8

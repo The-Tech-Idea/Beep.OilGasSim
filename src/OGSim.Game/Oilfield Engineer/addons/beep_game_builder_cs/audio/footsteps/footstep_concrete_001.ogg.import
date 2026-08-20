@@ -1,0 +1,19 @@
+[remap]
+
+importer="oggvorbisstr"
+type="AudioStreamOggVorbis"
+uid="uid://kohshtnycg0u"
+path="res://.godot/imported/footstep_concrete_001.ogg-0b03143b2f3e79887c0c054b85574fbe.oggvorbisstr"
+
+[deps]
+
+source_file="res://Oilfield Engineer/addons/beep_game_builder_cs/audio/footsteps/footstep_concrete_001.ogg"
+dest_files=["res://.godot/imported/footstep_concrete_001.ogg-0b03143b2f3e79887c0c054b85574fbe.oggvorbisstr"]
+
+[params]
+
+loop=false
+loop_offset=0
+bpm=0
+beat_count=0
+bar_beats=4

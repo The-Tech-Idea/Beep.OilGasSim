@@ -1,0 +1,9 @@
+{
+  "kind": "tech",
+  "id": "offshore-operations",
+  "name": "$loc:tech.offshore-operations",
+  "availableFrom": "E2",
+  "diffusionLagTicks": 120,
+  "prerequisites": ["rotary-drilling"],
+  "routes": ["Research", "Licence", "Diffusion"]
+}

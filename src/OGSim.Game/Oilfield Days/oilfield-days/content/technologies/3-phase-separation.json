@@ -1,0 +1,9 @@
+{
+  "kind": "tech",
+  "id": "3-phase-separation",
+  "name": "$loc:tech.3-phase-separation",
+  "availableFrom": "E1",
+  "diffusionLagTicks": 0,
+  "prerequisites": ["2-phase-separation"],
+  "routes": ["Diffusion"]
+}

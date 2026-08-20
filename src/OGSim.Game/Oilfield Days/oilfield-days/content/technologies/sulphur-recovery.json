@@ -1,0 +1,9 @@
+{
+  "kind": "tech",
+  "id": "sulphur-recovery",
+  "name": "$loc:tech.sulphur-recovery",
+  "availableFrom": "E2",
+  "diffusionLagTicks": 0,
+  "prerequisites": ["amine-sweetening"],
+  "routes": ["Research", "Licence"]
+}

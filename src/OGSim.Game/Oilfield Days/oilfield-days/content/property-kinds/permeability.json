@@ -1,0 +1,8 @@
+{
+  "kind": "property-kind",
+  "id": "permeability",
+  "dimension": "Permeability",
+  "space": "Log",
+  "minimumValid": 9.869233e-19,
+  "maximumValid": 9.869233e-11
+}

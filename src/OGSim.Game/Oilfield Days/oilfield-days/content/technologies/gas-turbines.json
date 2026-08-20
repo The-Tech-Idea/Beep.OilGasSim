@@ -1,0 +1,9 @@
+{
+  "kind": "tech",
+  "id": "gas-turbines",
+  "name": "$loc:tech.gas-turbines",
+  "availableFrom": "E2",
+  "diffusionLagTicks": 0,
+  "prerequisites": [],
+  "routes": ["Research", "Licence"]
+}

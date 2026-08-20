@@ -1,0 +1,9 @@
+{
+  "kind": "tech",
+  "id": "basin-modelling",
+  "name": "$loc:tech.basin-modelling",
+  "availableFrom": "E2",
+  "diffusionLagTicks": 120,
+  "prerequisites": ["2-d-seismic"],
+  "routes": ["Research", "Licence", "Diffusion"]
+}

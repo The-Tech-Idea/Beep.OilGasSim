@@ -1,0 +1,10 @@
+{
+  "kind": "material",
+  "id": "hydrogen-sulphide",
+  "phase": "Gas",
+  "sold": false,
+  "properties": {
+    "density": "1.44 kg/m3",
+    "viscosity": "0.012 cP"
+  }
+}

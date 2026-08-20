@@ -1,0 +1,9 @@
+{
+  "kind": "tech",
+  "id": "esp",
+  "name": "$loc:tech.esp",
+  "availableFrom": "E2",
+  "diffusionLagTicks": 0,
+  "prerequisites": ["gas-lift"],
+  "routes": ["Research", "Licence", "ServiceRental"]
+}

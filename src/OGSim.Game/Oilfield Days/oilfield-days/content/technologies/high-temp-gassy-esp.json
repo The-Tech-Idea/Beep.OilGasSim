@@ -1,0 +1,9 @@
+{
+  "kind": "tech",
+  "id": "high-temp-gassy-esp",
+  "name": "$loc:tech.high-temp-gassy-esp",
+  "availableFrom": "E3",
+  "diffusionLagTicks": 0,
+  "prerequisites": ["esp"],
+  "routes": ["Research", "Licence"]
+}

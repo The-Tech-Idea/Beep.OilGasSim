@@ -1,0 +1,15 @@
+{
+  "kind": "separator",
+  "id": "separator-3phase-e1",
+  "availableFromEra": "E1",
+  "rung": 0,
+  "gasCapacity": "50 kg/s",
+  "liquidCapacity": "12 kg/s",
+  "volume": "30 rm3",
+  "liquidFromGas": "0 pct",
+  "gasFromLiquid": "0 pct",
+  "waterFromLiquid": "0 pct",
+  "waterIntoLiquid": "7 pct",
+  "designRate": "4320 rm3/d",
+  "operatingPressure": "15 bar"
+}

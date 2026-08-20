@@ -1,0 +1,96 @@
+using Godot;
+using Beep.ECS.UI;
+using Beep.ECS.UI.Kit;
+
+namespace Beep.ECS
+{
+    /// <summary>
+    /// Health bar component. Blind — auto-locates a sibling HealthComponent and renders a bar.
+    /// Works for any entity with health — players, enemies, bosses.
+    /// </summary>
+    [Tool]
+    [GlobalClass]
+    public partial class HealthBarComponent : GameplayComponent
+    {
+        [Export] public Vector2 Size { get; set; } = new(40, 6);
+        [Export] public Vector2 BarOffset { get; set; } = new(0, -20);
+        [Export] public Color HealthyColor { get; set; } = Colors.Green;
+        [Export] public Color WarningColor { get; set; } = Colors.Yellow;
+        [Export] public Color DangerColor { get; set; } = Colors.Red;
+        [Export] public Color BgColor { get; set; } = new(0, 0, 0, 0.5f);
+        [Export] public bool ShowOnlyWhenDamaged { get; set; } = true;
+        [Export] public float HideDelay { get; set; } = 3f;
+
+        private HealthComponent? _health;
+        private KitMeter? _bar;
+        private float _hideTimer;
+
+        public override void _Ready()
+        {
+            base._Ready();
+            // SetupBar spawns a ProgressBar into the parent. This class is [Tool], so
+            // without the guard, opening a scene that uses it would litter the scene with
+            // runtime-only nodes in the editor.
+            if (Engine.IsEditorHint()) return;
+            Callable.From(SetupBar).CallDeferred();
+        }
+
+        private void SetupBar()
+        {
+            _health = GetSiblingComponent<HealthComponent>();
+            if (_health == null)
+            {
+                GD.PushWarning($"[{Name}] HealthBarComponent found no sibling HealthComponent — the bar will not appear. Add it beside a HealthComponent on the same entity.");
+                return;
+            }
+
+            _bar = new KitMeter();
+            _bar.CustomMinimumSize = Size;
+            _bar.MaxValue = _health.MaxHealth;
+            _bar.Value = _health.CurrentHealth;
+            _bar.ShowPercentage = false;
+            _bar.Position = BarOffset - Size / 2f;
+            _bar.Segments = 6;
+            _bar.Fill = UiSurface.Role.Success;
+
+            var parent = GetParent();
+            if (parent != null)
+            {
+                parent.AddChild(_bar);
+                if (parent.IsInsideTree())
+                    _bar.Owner = parent.Owner;
+            }
+
+            _health.HealthChanged += OnHealthChanged;
+
+            _bar.Visible = !ShowOnlyWhenDamaged;
+        }
+
+        private void OnHealthChanged(float cur, float max)
+        {
+            if (_bar == null) return;
+            _bar.MaxValue = max;
+            _bar.Value = cur;
+            float pct = cur / (float)max;
+            _bar.Fill = pct > 0.5f ? UiSurface.Role.Success : pct > 0.25f ? UiSurface.Role.Warning : UiSurface.Role.Danger;
+            _bar.Visible = true;
+            _hideTimer = HideDelay;
+        }
+
+        public override void _Process(double delta)
+        {
+            if (_bar == null || !ShowOnlyWhenDamaged || !_bar.Visible) return;
+            _hideTimer -= (float)delta;
+            if (_hideTimer <= 0) _bar.Visible = false;
+        }
+
+        public override void _ExitTree()
+        {
+            base._ExitTree();
+            if (_health != null && GodotObject.IsInstanceValid(_health))
+                _health.HealthChanged -= OnHealthChanged;
+            if (_bar != null && GodotObject.IsInstanceValid(_bar))
+                _bar.QueueFree();
+        }
+    }
+}

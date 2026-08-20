@@ -1,0 +1,9 @@
+{
+  "kind": "tech",
+  "id": "molecular-sieve",
+  "name": "$loc:tech.molecular-sieve",
+  "availableFrom": "E3",
+  "diffusionLagTicks": 0,
+  "prerequisites": ["glycol-dehydration"],
+  "routes": ["Research", "Licence"]
+}

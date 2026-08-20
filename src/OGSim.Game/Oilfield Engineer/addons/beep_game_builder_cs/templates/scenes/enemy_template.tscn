@@ -1,0 +1,61 @@
+[gd_scene load_steps=10 format=3]
+
+[ext_resource type="Script" path="res://addons/beep_game_builder_cs/ecs/HealthComponent.cs" id="1_health"]
+[ext_resource type="Script" path="res://addons/beep_game_builder_cs/ecs/AggroComponent.cs" id="2_aggro"]
+[ext_resource type="Script" path="res://addons/beep_game_builder_cs/ecs/AttackComponent.cs" id="3_attack"]
+[ext_resource type="Script" path="res://addons/beep_game_builder_cs/ecs/HealthBarComponent.cs" id="4_healthbar"]
+[ext_resource type="Script" path="res://addons/beep_game_builder_cs/ecs/AIController.cs" id="5_ai"]
+[ext_resource type="Script" path="res://addons/beep_game_builder_cs/ecs/DespawnOnDeathComponent.cs" id="6_despawn"]
+[ext_resource type="Script" path="res://addons/beep_game_builder_cs/ecs/HitSoundComponent.cs" id="7_hitsound"]
+[ext_resource type="Script" path="res://addons/beep_game_builder_cs/ecs/SpriteEffectComponent.cs" id="8_deatheffect"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_body"]
+size = Vector2(28, 44)
+
+[node name="Enemy" type="CharacterBody2D"]
+
+[node name="Sprite2D" type="Sprite2D" parent="."]
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("RectangleShape2D_body")
+
+[node name="Health" type="Node" parent="."]
+script = ExtResource("1_health")
+MaxHealth = 30.0
+CurrentHealth = 30.0
+EntityGroup = "enemies"
+XpReward = 25.0
+
+[node name="Aggro" type="Node" parent="."]
+script = ExtResource("2_aggro")
+DeaggroRange = 500.0
+ThreatDecayRate = 10.0
+
+[node name="Attack" type="Node" parent="."]
+script = ExtResource("3_attack")
+Damage = 8.0
+Range = 40.0
+Cooldown = 1.0
+IsRanged = false
+
+[node name="AI" type="Node" parent="."]
+script = ExtResource("5_ai")
+Speed = 80.0
+DetectionRange = 200.0
+AttackRange = 40.0
+TargetGroup = "players"
+
+[node name="DespawnOnDeath" type="Node" parent="."]
+script = ExtResource("6_despawn")
+DespawnDelay = 0.0
+
+[node name="HitSound" type="Node" parent="."]
+script = ExtResource("7_hitsound")
+
+[node name="DeathEffect" type="Node" parent="."]
+script = ExtResource("8_deatheffect")
+PlayOnDeath = true
+EffectScale = 0.75
+
+[node name="HealthBar" type="Node" parent="."]
+script = ExtResource("4_healthbar")
+ShowOnlyWhenDamaged = true

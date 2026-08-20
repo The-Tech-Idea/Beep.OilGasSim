@@ -1,0 +1,109 @@
+{
+  "note": "SpriteCook assets for Oilfield Days. Props follow the HD recipe in assets/_sample-hd-topdown/README.md: pixel=false, 1K, bg_mode=white then remove_background, smart_crop power_of_2, the three referenceart sheets as style_asset_ids, and flat front/side elevation wording. Files here are the 1024 masters with transparent padding trimmed; nothing is downscaled.",
+  "styleGuide": {
+    "propStyleAssetIds": [
+      "fbfa6153-724b-4754-917b-36958388306d",
+      "3ac656ca-2a2a-48fc-9009-03b6a62e82fc",
+      "7821bdc3-ae5f-4640-9375-7ae896c60add"
+    ],
+    "propStyleSource": "the three referenceart/TopDown-StartDewValley sheets, already uploaded (assets/spritecook-assets.json)",
+    "tilesetStyleAssetId": "70d7c09f-d95a-4914-927f-09a336e2c9c0",
+    "tilesetStyleSource": "referenceart/Mockup/Oilfield Days/CasualTopDownMainScenemockup.jpg"
+  },
+  "tilesetSettings": {
+    "style_mode": "detailed",
+    "perspective": "topdown",
+    "piece_set": "15-piece",
+    "tile_size": 64,
+    "elevation": "no-elevation",
+    "edges": "transparent"
+  },
+  "assets": [
+    {
+      "asset_id": "517f272f-56d3-4c2e-999c-f16ec1e2f935",
+      "sha12": "a94c6437a634",
+      "label": "Oilfield Days grass (15-piece dual grid, 64px)",
+      "file": "assets/tilesets/oilfield-days/grass_15p_64.png"
+    },
+    {
+      "asset_id": "313d66e4-2375-4c77-91f0-b7357a5fd32b",
+      "sha12": "fb6e1a2bda87",
+      "label": "Oilfield Days dirt road (15-piece dual grid, 64px)",
+      "file": "assets/tilesets/oilfield-days/dirt-road_15p_64.png"
+    },
+    {
+      "asset_id": "a5ab8468-d96e-409b-b97e-33f764ea8257",
+      "sha12": "02cb00b1e588",
+      "label": "Oilfield Days gravel lease pad (15-piece dual grid, 64px)",
+      "file": "assets/tilesets/oilfield-days/gravel-pad_15p_64.png"
+    },
+    {
+      "asset_id": "9a03e3e3-96d3-53da-92c5-cfb40069531e",
+      "sha12": "0ab4a5e7ee60",
+      "label": "Wellhead christmas tree, front elevation",
+      "file": "assets/props/wellhead-tree.png"
+    },
+    {
+      "asset_id": "7023c83f-4c8b-5c2d-8a0b-67ad10914a33",
+      "sha12": "583be71ca542",
+      "label": "Three-phase separator vessel, side elevation",
+      "file": "assets/props/separator-vessel.png"
+    },
+    {
+      "asset_id": "74f0f251-f7fe-5c98-a754-04b16bf85f75",
+      "sha12": "e5d597ca00ef",
+      "label": "Flare stack, front elevation",
+      "file": "assets/props/flare-stack.png"
+    },
+    {
+      "asset_id": "e21facfd-b25e-51a2-82e8-9f31e9d1b990",
+      "sha12": "af9379230e62",
+      "label": "Containerised generator unit, front elevation",
+      "file": "assets/props/generator-unit.png"
+    },
+    {
+      "asset_id": "04c13878-eb43-5f94-ae21-0327f3d7b9cd",
+      "sha12": "8beae07231d6",
+      "label": "Water injection pump skid, side elevation",
+      "file": "assets/props/water-injection-pump.png"
+    },
+    {
+      "asset_id": "423b0317-6bb3-5de3-b471-5eeb3dadec42",
+      "sha12": "022a96711e39",
+      "label": "Pipeline manifold skid, side elevation",
+      "file": "assets/props/pipeline-manifold.png"
+    }
+  ],
+  "reusedFromRepo": [
+    {
+      "file": "assets/props/pumpjack.png",
+      "source": "assets/_sample-hd-topdown/pumpjack.png",
+      "sha12": "5d3f7b0a78f3"
+    },
+    {
+      "file": "assets/props/oil-storage-tank.png",
+      "source": "assets/_sample-hd-topdown/crude-oil-storage-tank.png",
+      "sha12": "dfcb3d32966e"
+    },
+    {
+      "file": "assets/props/control-room-cabin.png",
+      "source": "assets/_sample-hd-topdown/control-room-cabin.png",
+      "sha12": "6c703271ee87"
+    },
+    {
+      "file": "assets/vehicles/tanker-truck/east.png",
+      "source": "assets/_sample-hd-topdown/tanker-truck_E.png",
+      "sha12": "56921ab77f62"
+    },
+    {
+      "file": "assets/vehicles/tanker-truck/north.png",
+      "source": "assets/_sample-hd-topdown/tanker-truck_N.png",
+      "sha12": "ff353f595dc1"
+    },
+    {
+      "file": "assets/vehicles/tanker-truck/south.png",
+      "source": "assets/_sample-hd-topdown/tanker-truck_S.png",
+      "sha12": "5ab7b97a263f"
+    }
+  ]
+}

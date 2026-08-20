@@ -1,0 +1,9 @@
+{
+  "kind": "tech",
+  "id": "deep-drilling",
+  "name": "$loc:tech.deep-drilling",
+  "availableFrom": "E2",
+  "diffusionLagTicks": 120,
+  "prerequisites": ["rotary-drilling"],
+  "routes": ["Research", "Licence", "Diffusion"]
+}

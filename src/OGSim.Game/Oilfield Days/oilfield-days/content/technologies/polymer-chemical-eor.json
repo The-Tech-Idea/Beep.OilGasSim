@@ -1,0 +1,9 @@
+{
+  "kind": "tech",
+  "id": "polymer-chemical-eor",
+  "name": "$loc:tech.polymer-chemical-eor",
+  "availableFrom": "E3",
+  "diffusionLagTicks": 0,
+  "prerequisites": ["waterflood"],
+  "routes": ["Research", "Licence"]
+}

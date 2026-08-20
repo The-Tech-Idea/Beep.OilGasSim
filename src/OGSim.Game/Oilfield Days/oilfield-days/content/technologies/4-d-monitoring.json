@@ -1,0 +1,9 @@
+{
+  "kind": "tech",
+  "id": "4-d-monitoring",
+  "name": "$loc:tech.4-d-monitoring",
+  "availableFrom": "E4",
+  "diffusionLagTicks": 0,
+  "prerequisites": ["seismic-attributes"],
+  "routes": ["Research", "Licence", "ServiceRental"]
+}

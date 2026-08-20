@@ -1,0 +1,9 @@
+{
+  "kind": "tech",
+  "id": "directional",
+  "name": "$loc:tech.directional",
+  "availableFrom": "E2",
+  "diffusionLagTicks": 120,
+  "prerequisites": ["rotary-drilling"],
+  "routes": ["Research", "Licence", "ServiceRental", "Diffusion"]
+}

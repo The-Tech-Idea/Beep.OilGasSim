@@ -1,0 +1,47 @@
+{
+  "id": "citybuilder",
+  "display_name": "City Builder",
+  "icon": "\ud83c\udfd9\ufe0f",
+  "description": "Construction, economy, citizen statistics and districts",
+  "default_theme": "urban",
+  "default_geometry": "citybuilder",
+  "themes": [
+    "urban",
+    "eco",
+    "industrial",
+    "future",
+    "blueprint"
+  ],
+  "main_scene": "citybuilder_main.tscn",
+  "scenes": [
+    "build_menu.tscn",
+    "economy.tscn",
+    "districts.tscn"
+  ],
+  "nav_wiring": {
+    "build": "build_menu.tscn",
+    "economy": "economy.tscn",
+    "districts": "districts.tscn"
+  },
+  "tuning": {
+    "build_grid_size": 32,
+    "resource_slots": 6,
+    "notification_stack": 5,
+    "enable_weather": true,
+    "default_weather": "Cloudy",
+    "enable_day_night": false,
+    "enable_seasons": false,
+    "default_season": "Spring",
+    "days_per_season": 7,
+    "enable_temperature": false,
+    "ambient_temperature": 20,
+    "enable_forecast": false,
+    "forecast_days": 7,
+    "enable_save_load": true,
+    "max_save_slots": 5,
+    "autosave_enabled": true,
+    "autosave_interval_seconds": 300,
+    "top_down_view": true,
+    "weather_view": "CityBuilder"
+  }
+}

@@ -1,0 +1,450 @@
+[gd_scene load_steps=8 format=3]
+
+[ext_resource type="Script" path="res://addons/beep_game_builder_cs/ecs/ui/kit/KitPushButton.cs" id="k_pbtn"]
+[ext_resource type="Script" path="res://addons/beep_game_builder_cs/ecs/ui/kit/KitPanelContainer.cs" id="k_panelc"]
+[ext_resource type="Script" path="res://addons/beep_game_builder_cs/ecs/ui/LoadGameMenuComponent.cs" id="1_menu"]
+[ext_resource type="Script" path="res://addons/beep_game_builder_cs/ecs/ui/ThemePresetComponent.cs" id="2_theme"]
+[ext_resource type="Script" path="res://addons/beep_game_builder_cs/ecs/ui/GameInfoBinder.cs" id="3_binder"]
+[ext_resource type="Script" path="res://addons/beep_game_builder_cs/ecs/ui/kit/KitColorRect.cs" id="k_color"]
+[ext_resource type="Script" path="res://addons/beep_game_builder_cs/ecs/ui/kit/KitLabel.cs" id="k_label"]
+
+[node name="LoadGameMenu" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_menu")
+
+[node name="Background" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+color = Color(0, 0, 0, 0.7)
+
+script = ExtResource("k_color")
+[node name="PanelContainer" type="PanelContainer" parent="."]
+custom_minimum_size = Vector2(720, 620)
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -360.0
+offset_top = -310.0
+offset_right = 360.0
+offset_bottom = 310.0
+script = ExtResource("k_panelc")
+
+[node name="Theme" type="Node" parent="PanelContainer"]
+script = ExtResource("2_theme")
+
+[node name="GameInfoBinder" type="Node" parent="."]
+script = ExtResource("3_binder")
+ThemeComponentPath = NodePath("PanelContainer/Theme")
+
+[node name="Margin" type="MarginContainer" parent="PanelContainer"]
+layout_mode = 2
+theme_override_constants/margin_left = 24
+theme_override_constants/margin_right = 24
+theme_override_constants/margin_top = 24
+theme_override_constants/margin_bottom = 24
+
+[node name="VBox" type="VBoxContainer" parent="PanelContainer/Margin"]
+layout_mode = 2
+theme_override_constants/separation = 20
+
+[node name="Title" type="Label" parent="PanelContainer/Margin/VBox"]
+theme_type_variation = &"BeepTitle"
+layout_mode = 2
+text = "Load Game"
+horizontal_alignment = 1
+
+script = ExtResource("k_label")
+[node name="SlotsScroll" type="ScrollContainer" parent="PanelContainer/Margin/VBox"]
+layout_mode = 2
+size_flags_vertical = 3
+horizontal_scroll_mode = 0
+
+[node name="SlotsMargin" type="MarginContainer" parent="PanelContainer/Margin/VBox/SlotsScroll"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/margin_right = 14
+
+[node name="SlotsVBox" type="VBoxContainer" parent="PanelContainer/Margin/VBox/SlotsScroll/SlotsMargin"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 10
+
+[node name="AutosaveContainer" type="PanelContainer" parent="PanelContainer/Margin/VBox/SlotsScroll/SlotsMargin/SlotsVBox"]
+custom_minimum_size = Vector2(0, 60)
+layout_mode = 2
+script = ExtResource("k_panelc")
+
+[node name="SlotHBox" type="HBoxContainer" parent="PanelContainer/Margin/VBox/SlotsScroll/SlotsMargin/SlotsVBox/AutosaveContainer"]
+layout_mode = 2
+theme_override_constants/separation = 16
+
+[node name="SlotButton" type="Button" parent="PanelContainer/Margin/VBox/SlotsScroll/SlotsMargin/SlotsVBox/AutosaveContainer/SlotHBox"]
+custom_minimum_size = Vector2(128, 44)
+layout_mode = 2
+size_flags_vertical = 4
+text = "Autosave"
+script = ExtResource("k_pbtn")
+
+[node name="SlotInfo" type="VBoxContainer" parent="PanelContainer/Margin/VBox/SlotsScroll/SlotsMargin/SlotsVBox/AutosaveContainer/SlotHBox"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 4
+theme_override_constants/separation = 4
+
+[node name="SlotNameLabel" type="Label" parent="PanelContainer/Margin/VBox/SlotsScroll/SlotsMargin/SlotsVBox/AutosaveContainer/SlotHBox/SlotInfo"]
+theme_type_variation = &"BeepSubtitle"
+layout_mode = 2
+text = "No autosave"
+text_overrun_behavior = 1
+
+script = ExtResource("k_label")
+[node name="SlotMeta" type="HBoxContainer" parent="PanelContainer/Margin/VBox/SlotsScroll/SlotsMargin/SlotsVBox/AutosaveContainer/SlotHBox/SlotInfo"]
+layout_mode = 2
+theme_override_constants/separation = 16
+
+[node name="SlotLevelLabel" type="Label" parent="PanelContainer/Margin/VBox/SlotsScroll/SlotsMargin/SlotsVBox/AutosaveContainer/SlotHBox/SlotInfo/SlotMeta"]
+theme_type_variation = &"BeepCaption"
+custom_minimum_size = Vector2(90, 0)
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Level: --"
+text_overrun_behavior = 3
+
+script = ExtResource("k_label")
+[node name="SlotPlaytimeLabel" type="Label" parent="PanelContainer/Margin/VBox/SlotsScroll/SlotsMargin/SlotsVBox/AutosaveContainer/SlotHBox/SlotInfo/SlotMeta"]
+theme_type_variation = &"BeepCaption"
+custom_minimum_size = Vector2(90, 0)
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Time: --"
+text_overrun_behavior = 3
+
+script = ExtResource("k_label")
+[node name="DeleteButton" type="Button" parent="PanelContainer/Margin/VBox/SlotsScroll/SlotsMargin/SlotsVBox/AutosaveContainer/SlotHBox"]
+custom_minimum_size = Vector2(88, 36)
+layout_mode = 2
+size_flags_vertical = 4
+text = "Delete"
+script = ExtResource("k_pbtn")
+
+[node name="Slot0Container" type="PanelContainer" parent="PanelContainer/Margin/VBox/SlotsScroll/SlotsMargin/SlotsVBox"]
+custom_minimum_size = Vector2(0, 60)
+layout_mode = 2
+script = ExtResource("k_panelc")
+
+[node name="SlotHBox" type="HBoxContainer" parent="PanelContainer/Margin/VBox/SlotsScroll/SlotsMargin/SlotsVBox/Slot0Container"]
+layout_mode = 2
+theme_override_constants/separation = 16
+
+[node name="SlotButton" type="Button" parent="PanelContainer/Margin/VBox/SlotsScroll/SlotsMargin/SlotsVBox/Slot0Container/SlotHBox"]
+custom_minimum_size = Vector2(128, 44)
+layout_mode = 2
+size_flags_vertical = 4
+text = "Slot 1"
+script = ExtResource("k_pbtn")
+
+[node name="SlotInfo" type="VBoxContainer" parent="PanelContainer/Margin/VBox/SlotsScroll/SlotsMargin/SlotsVBox/Slot0Container/SlotHBox"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 4
+theme_override_constants/separation = 4
+
+[node name="SlotNameLabel" type="Label" parent="PanelContainer/Margin/VBox/SlotsScroll/SlotsMargin/SlotsVBox/Slot0Container/SlotHBox/SlotInfo"]
+theme_type_variation = &"BeepSubtitle"
+layout_mode = 2
+text = "Empty Slot"
+text_overrun_behavior = 1
+
+script = ExtResource("k_label")
+[node name="SlotMeta" type="HBoxContainer" parent="PanelContainer/Margin/VBox/SlotsScroll/SlotsMargin/SlotsVBox/Slot0Container/SlotHBox/SlotInfo"]
+layout_mode = 2
+theme_override_constants/separation = 16
+
+[node name="SlotLevelLabel" type="Label" parent="PanelContainer/Margin/VBox/SlotsScroll/SlotsMargin/SlotsVBox/Slot0Container/SlotHBox/SlotInfo/SlotMeta"]
+theme_type_variation = &"BeepCaption"
+custom_minimum_size = Vector2(90, 0)
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Level: --"
+text_overrun_behavior = 3
+
+script = ExtResource("k_label")
+[node name="SlotPlaytimeLabel" type="Label" parent="PanelContainer/Margin/VBox/SlotsScroll/SlotsMargin/SlotsVBox/Slot0Container/SlotHBox/SlotInfo/SlotMeta"]
+theme_type_variation = &"BeepCaption"
+custom_minimum_size = Vector2(90, 0)
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Time: --"
+text_overrun_behavior = 3
+
+script = ExtResource("k_label")
+[node name="DeleteButton" type="Button" parent="PanelContainer/Margin/VBox/SlotsScroll/SlotsMargin/SlotsVBox/Slot0Container/SlotHBox"]
+custom_minimum_size = Vector2(88, 36)
+layout_mode = 2
+size_flags_vertical = 4
+text = "Delete"
+script = ExtResource("k_pbtn")
+
+[node name="Slot1Container" type="PanelContainer" parent="PanelContainer/Margin/VBox/SlotsScroll/SlotsMargin/SlotsVBox"]
+custom_minimum_size = Vector2(0, 60)
+layout_mode = 2
+script = ExtResource("k_panelc")
+
+[node name="SlotHBox" type="HBoxContainer" parent="PanelContainer/Margin/VBox/SlotsScroll/SlotsMargin/SlotsVBox/Slot1Container"]
+layout_mode = 2
+theme_override_constants/separation = 16
+
+[node name="SlotButton" type="Button" parent="PanelContainer/Margin/VBox/SlotsScroll/SlotsMargin/SlotsVBox/Slot1Container/SlotHBox"]
+custom_minimum_size = Vector2(128, 44)
+layout_mode = 2
+size_flags_vertical = 4
+text = "Slot 2"
+script = ExtResource("k_pbtn")
+
+[node name="SlotInfo" type="VBoxContainer" parent="PanelContainer/Margin/VBox/SlotsScroll/SlotsMargin/SlotsVBox/Slot1Container/SlotHBox"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 4
+theme_override_constants/separation = 4
+
+[node name="SlotNameLabel" type="Label" parent="PanelContainer/Margin/VBox/SlotsScroll/SlotsMargin/SlotsVBox/Slot1Container/SlotHBox/SlotInfo"]
+theme_type_variation = &"BeepSubtitle"
+layout_mode = 2
+text = "Empty Slot"
+text_overrun_behavior = 1
+
+script = ExtResource("k_label")
+[node name="SlotMeta" type="HBoxContainer" parent="PanelContainer/Margin/VBox/SlotsScroll/SlotsMargin/SlotsVBox/Slot1Container/SlotHBox/SlotInfo"]
+layout_mode = 2
+theme_override_constants/separation = 16
+
+[node name="SlotLevelLabel" type="Label" parent="PanelContainer/Margin/VBox/SlotsScroll/SlotsMargin/SlotsVBox/Slot1Container/SlotHBox/SlotInfo/SlotMeta"]
+theme_type_variation = &"BeepCaption"
+custom_minimum_size = Vector2(90, 0)
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Level: --"
+text_overrun_behavior = 3
+
+script = ExtResource("k_label")
+[node name="SlotPlaytimeLabel" type="Label" parent="PanelContainer/Margin/VBox/SlotsScroll/SlotsMargin/SlotsVBox/Slot1Container/SlotHBox/SlotInfo/SlotMeta"]
+theme_type_variation = &"BeepCaption"
+custom_minimum_size = Vector2(90, 0)
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Time: --"
+text_overrun_behavior = 3
+
+script = ExtResource("k_label")
+[node name="DeleteButton" type="Button" parent="PanelContainer/Margin/VBox/SlotsScroll/SlotsMargin/SlotsVBox/Slot1Container/SlotHBox"]
+custom_minimum_size = Vector2(88, 36)
+layout_mode = 2
+size_flags_vertical = 4
+text = "Delete"
+script = ExtResource("k_pbtn")
+
+[node name="Slot2Container" type="PanelContainer" parent="PanelContainer/Margin/VBox/SlotsScroll/SlotsMargin/SlotsVBox"]
+custom_minimum_size = Vector2(0, 60)
+layout_mode = 2
+script = ExtResource("k_panelc")
+
+[node name="SlotHBox" type="HBoxContainer" parent="PanelContainer/Margin/VBox/SlotsScroll/SlotsMargin/SlotsVBox/Slot2Container"]
+layout_mode = 2
+theme_override_constants/separation = 16
+
+[node name="SlotButton" type="Button" parent="PanelContainer/Margin/VBox/SlotsScroll/SlotsMargin/SlotsVBox/Slot2Container/SlotHBox"]
+custom_minimum_size = Vector2(128, 44)
+layout_mode = 2
+size_flags_vertical = 4
+text = "Slot 3"
+script = ExtResource("k_pbtn")
+
+[node name="SlotInfo" type="VBoxContainer" parent="PanelContainer/Margin/VBox/SlotsScroll/SlotsMargin/SlotsVBox/Slot2Container/SlotHBox"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 4
+theme_override_constants/separation = 4
+
+[node name="SlotNameLabel" type="Label" parent="PanelContainer/Margin/VBox/SlotsScroll/SlotsMargin/SlotsVBox/Slot2Container/SlotHBox/SlotInfo"]
+theme_type_variation = &"BeepSubtitle"
+layout_mode = 2
+text = "Empty Slot"
+text_overrun_behavior = 1
+
+script = ExtResource("k_label")
+[node name="SlotMeta" type="HBoxContainer" parent="PanelContainer/Margin/VBox/SlotsScroll/SlotsMargin/SlotsVBox/Slot2Container/SlotHBox/SlotInfo"]
+layout_mode = 2
+theme_override_constants/separation = 16
+
+[node name="SlotLevelLabel" type="Label" parent="PanelContainer/Margin/VBox/SlotsScroll/SlotsMargin/SlotsVBox/Slot2Container/SlotHBox/SlotInfo/SlotMeta"]
+theme_type_variation = &"BeepCaption"
+custom_minimum_size = Vector2(90, 0)
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Level: --"
+text_overrun_behavior = 3
+
+script = ExtResource("k_label")
+[node name="SlotPlaytimeLabel" type="Label" parent="PanelContainer/Margin/VBox/SlotsScroll/SlotsMargin/SlotsVBox/Slot2Container/SlotHBox/SlotInfo/SlotMeta"]
+theme_type_variation = &"BeepCaption"
+custom_minimum_size = Vector2(90, 0)
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Time: --"
+text_overrun_behavior = 3
+
+script = ExtResource("k_label")
+[node name="DeleteButton" type="Button" parent="PanelContainer/Margin/VBox/SlotsScroll/SlotsMargin/SlotsVBox/Slot2Container/SlotHBox"]
+custom_minimum_size = Vector2(88, 36)
+layout_mode = 2
+size_flags_vertical = 4
+text = "Delete"
+script = ExtResource("k_pbtn")
+
+[node name="Slot3Container" type="PanelContainer" parent="PanelContainer/Margin/VBox/SlotsScroll/SlotsMargin/SlotsVBox"]
+custom_minimum_size = Vector2(0, 60)
+layout_mode = 2
+script = ExtResource("k_panelc")
+
+[node name="SlotHBox" type="HBoxContainer" parent="PanelContainer/Margin/VBox/SlotsScroll/SlotsMargin/SlotsVBox/Slot3Container"]
+layout_mode = 2
+theme_override_constants/separation = 16
+
+[node name="SlotButton" type="Button" parent="PanelContainer/Margin/VBox/SlotsScroll/SlotsMargin/SlotsVBox/Slot3Container/SlotHBox"]
+custom_minimum_size = Vector2(128, 44)
+layout_mode = 2
+size_flags_vertical = 4
+text = "Slot 4"
+script = ExtResource("k_pbtn")
+
+[node name="SlotInfo" type="VBoxContainer" parent="PanelContainer/Margin/VBox/SlotsScroll/SlotsMargin/SlotsVBox/Slot3Container/SlotHBox"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 4
+theme_override_constants/separation = 4
+
+[node name="SlotNameLabel" type="Label" parent="PanelContainer/Margin/VBox/SlotsScroll/SlotsMargin/SlotsVBox/Slot3Container/SlotHBox/SlotInfo"]
+theme_type_variation = &"BeepSubtitle"
+layout_mode = 2
+text = "Empty Slot"
+text_overrun_behavior = 1
+
+script = ExtResource("k_label")
+[node name="SlotMeta" type="HBoxContainer" parent="PanelContainer/Margin/VBox/SlotsScroll/SlotsMargin/SlotsVBox/Slot3Container/SlotHBox/SlotInfo"]
+layout_mode = 2
+theme_override_constants/separation = 16
+
+[node name="SlotLevelLabel" type="Label" parent="PanelContainer/Margin/VBox/SlotsScroll/SlotsMargin/SlotsVBox/Slot3Container/SlotHBox/SlotInfo/SlotMeta"]
+theme_type_variation = &"BeepCaption"
+custom_minimum_size = Vector2(90, 0)
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Level: --"
+text_overrun_behavior = 3
+
+script = ExtResource("k_label")
+[node name="SlotPlaytimeLabel" type="Label" parent="PanelContainer/Margin/VBox/SlotsScroll/SlotsMargin/SlotsVBox/Slot3Container/SlotHBox/SlotInfo/SlotMeta"]
+theme_type_variation = &"BeepCaption"
+custom_minimum_size = Vector2(90, 0)
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Time: --"
+text_overrun_behavior = 3
+
+script = ExtResource("k_label")
+[node name="DeleteButton" type="Button" parent="PanelContainer/Margin/VBox/SlotsScroll/SlotsMargin/SlotsVBox/Slot3Container/SlotHBox"]
+custom_minimum_size = Vector2(88, 36)
+layout_mode = 2
+size_flags_vertical = 4
+text = "Delete"
+script = ExtResource("k_pbtn")
+
+[node name="Slot4Container" type="PanelContainer" parent="PanelContainer/Margin/VBox/SlotsScroll/SlotsMargin/SlotsVBox"]
+custom_minimum_size = Vector2(0, 60)
+layout_mode = 2
+script = ExtResource("k_panelc")
+
+[node name="SlotHBox" type="HBoxContainer" parent="PanelContainer/Margin/VBox/SlotsScroll/SlotsMargin/SlotsVBox/Slot4Container"]
+layout_mode = 2
+theme_override_constants/separation = 16
+
+[node name="SlotButton" type="Button" parent="PanelContainer/Margin/VBox/SlotsScroll/SlotsMargin/SlotsVBox/Slot4Container/SlotHBox"]
+custom_minimum_size = Vector2(128, 44)
+layout_mode = 2
+size_flags_vertical = 4
+text = "Slot 5"
+script = ExtResource("k_pbtn")
+
+[node name="SlotInfo" type="VBoxContainer" parent="PanelContainer/Margin/VBox/SlotsScroll/SlotsMargin/SlotsVBox/Slot4Container/SlotHBox"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 4
+theme_override_constants/separation = 4
+
+[node name="SlotNameLabel" type="Label" parent="PanelContainer/Margin/VBox/SlotsScroll/SlotsMargin/SlotsVBox/Slot4Container/SlotHBox/SlotInfo"]
+theme_type_variation = &"BeepSubtitle"
+layout_mode = 2
+text = "Empty Slot"
+text_overrun_behavior = 1
+
+script = ExtResource("k_label")
+[node name="SlotMeta" type="HBoxContainer" parent="PanelContainer/Margin/VBox/SlotsScroll/SlotsMargin/SlotsVBox/Slot4Container/SlotHBox/SlotInfo"]
+layout_mode = 2
+theme_override_constants/separation = 16
+
+[node name="SlotLevelLabel" type="Label" parent="PanelContainer/Margin/VBox/SlotsScroll/SlotsMargin/SlotsVBox/Slot4Container/SlotHBox/SlotInfo/SlotMeta"]
+theme_type_variation = &"BeepCaption"
+custom_minimum_size = Vector2(90, 0)
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Level: --"
+text_overrun_behavior = 3
+
+script = ExtResource("k_label")
+[node name="SlotPlaytimeLabel" type="Label" parent="PanelContainer/Margin/VBox/SlotsScroll/SlotsMargin/SlotsVBox/Slot4Container/SlotHBox/SlotInfo/SlotMeta"]
+theme_type_variation = &"BeepCaption"
+custom_minimum_size = Vector2(90, 0)
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Time: --"
+text_overrun_behavior = 3
+
+script = ExtResource("k_label")
+[node name="DeleteButton" type="Button" parent="PanelContainer/Margin/VBox/SlotsScroll/SlotsMargin/SlotsVBox/Slot4Container/SlotHBox"]
+custom_minimum_size = Vector2(88, 36)
+layout_mode = 2
+size_flags_vertical = 4
+text = "Delete"
+script = ExtResource("k_pbtn")
+
+[node name="SeparatorH" type="HSeparator" parent="PanelContainer/Margin/VBox"]
+layout_mode = 2
+
+[node name="ButtonHBox" type="HBoxContainer" parent="PanelContainer/Margin/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="LoadButton" type="Button" parent="PanelContainer/Margin/VBox/ButtonHBox"]
+custom_minimum_size = Vector2(0, 44)
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Load"
+disabled = true
+script = ExtResource("k_pbtn")
+
+[node name="CancelButton" type="Button" parent="PanelContainer/Margin/VBox/ButtonHBox"]
+custom_minimum_size = Vector2(0, 44)
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Cancel"
+script = ExtResource("k_pbtn")

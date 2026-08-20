@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="UnitKind" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://game/World/UnitKind.cs" id="1_script"]
+[ext_resource type="Texture2D" path="res://assets/props/pipeline-construction-excavator.png" id="2_art"]
+
+[resource]
+script = ExtResource("1_script")
+DisplayName = "Construction crew"
+Carries = 9
+Art = ExtResource("2_art")
+DrawHeight = 86.0
+Speed = 820.0
+YardStand = Vector2(-8.9, 7.4)
+WorkingFrames = 1

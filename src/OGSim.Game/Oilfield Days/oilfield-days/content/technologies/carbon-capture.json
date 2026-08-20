@@ -1,0 +1,9 @@
+{
+  "kind": "tech",
+  "id": "carbon-capture",
+  "name": "$loc:tech.carbon-capture",
+  "availableFrom": "E4",
+  "diffusionLagTicks": 0,
+  "prerequisites": ["amine-sweetening"],
+  "routes": ["Research", "Licence"]
+}

@@ -1,0 +1,12 @@
+<Project>
+  <!-- Deliberately empty, and deliberately here.
+
+       MSBuild walks upward for the NEAREST Directory.Build.props and stops. Without
+       this file the game inherits the engine's (repo root): net10.0, nullable enable
+       and TreatWarningsAsErrors. Those are the engine's laws (SDD-000 §1) and they
+       are right for the engine — but this is a Godot 4.7 project on net8.0 whose
+       addon sources and Godot source-generator output do not compile under them.
+
+       The game is a host, not an engine assembly. Its settings live in
+       OilfieldDays.csproj. -->
+</Project>

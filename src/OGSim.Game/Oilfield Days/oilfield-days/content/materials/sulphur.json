@@ -1,0 +1,9 @@
+{
+  "kind": "material",
+  "id": "sulphur",
+  "phase": "Solid",
+  "sold": true,
+  "properties": {
+    "density": "2070 kg/m3"
+  }
+}

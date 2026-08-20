@@ -1,0 +1,9 @@
+{
+  "kind": "tech",
+  "id": "multi-stage-separation",
+  "name": "$loc:tech.multi-stage-separation",
+  "availableFrom": "E2",
+  "diffusionLagTicks": 0,
+  "prerequisites": ["3-phase-separation"],
+  "routes": ["Research", "Licence"]
+}

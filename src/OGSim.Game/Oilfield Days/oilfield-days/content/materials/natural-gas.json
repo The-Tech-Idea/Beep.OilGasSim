@@ -1,0 +1,11 @@
+{
+  "kind": "material",
+  "id": "natural-gas",
+  "phase": "Gas",
+  "sold": false,
+  "properties": {
+    "density": "0.78 kg/m3",
+    "viscosity": "0.012 cP",
+    "heating-value": "48.5 MJ/kg"
+  }
+}

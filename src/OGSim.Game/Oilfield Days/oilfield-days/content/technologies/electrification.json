@@ -1,0 +1,9 @@
+{
+  "kind": "tech",
+  "id": "electrification",
+  "name": "$loc:tech.electrification",
+  "availableFrom": "E4",
+  "diffusionLagTicks": 0,
+  "prerequisites": ["centrifugal-compression"],
+  "routes": ["Research", "Licence"]
+}

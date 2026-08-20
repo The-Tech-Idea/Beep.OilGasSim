@@ -1,0 +1,923 @@
+﻿{
+    "generator":  "SpriteCook (gemini-3.1-flash-image, pixel mode)",
+    "art_direction":  "isometric pixel art, 2:1 projection, transparent background, off-white / steel-blue / safety-orange industrial palette derived from referenceart/",
+    "style_reference_asset_ids":  {
+                                      "additional-oil-and-gas-objects":  "fbfa6153-724b-4754-917b-36958388306d",
+                                      "drilling-and-well-services":  "3ac656ca-2a2a-48fc-9009-03b6a62e82fc",
+                                      "more-isolated-objects":  "7821bdc3-ae5f-4640-9375-7ae896c60add"
+                                  },
+    "counts":  {
+                   "sprites":  76,
+                   "animations":  33
+               },
+    "sprites":  {
+                    "air-cooler-bank":  {
+                                            "asset_id":  "4de25570-88f7-4d03-968d-5aa799b81bb2",
+                                            "category":  "processing",
+                                            "sha12":  "e099786ac793",
+                                            "sprite_256":  "sprites/256/air-cooler-bank.png",
+                                            "states":  [
+                                                           "working"
+                                                       ]
+                                        },
+                    "amine-treatment-skid":  {
+                                                 "asset_id":  "7f234cf1-c5e6-44a9-a9e2-e16328920885",
+                                                 "category":  "processing",
+                                                 "sha12":  "968f29077034",
+                                                 "sprite_256":  "sprites/256/amine-treatment-skid.png"
+                                             },
+                    "backup-battery-bank":  {
+                                                "asset_id":  "1add73a7-2f9f-4065-8ca5-ac929fb960a7",
+                                                "category":  "power",
+                                                "sha12":  "c53decffd329",
+                                                "sprite_256":  "sprites/256/backup-battery-bank.png"
+                                            },
+                    "blowout-preventer":  {
+                                              "asset_id":  "f7f4143c-463e-494a-bc32-5aca37eab9bb",
+                                              "category":  "drilling",
+                                              "sha12":  "ab4fbb011dea",
+                                              "sprite_256":  "sprites/256/blowout-preventer.png"
+                                          },
+                    "cementing-unit":  {
+                                           "asset_id":  "dea99d0b-78d6-496d-8ace-a94107616231",
+                                           "category":  "drilling",
+                                           "sha12":  "65e1e9b6ec4d",
+                                           "sprite_256":  "sprites/256/cementing-unit.png",
+                                           "states":  [
+                                                          "moving",
+                                                          "working"
+                                                      ]
+                                       },
+                    "chemical-injection-skid":  {
+                                                    "asset_id":  "865d22d7-e296-419f-968c-6d320edc4b1e",
+                                                    "category":  "processing",
+                                                    "sha12":  "4fee89cbb7f5",
+                                                    "sprite_256":  "sprites/256/chemical-injection-skid.png"
+                                                },
+                    "chemical-storage-tank":  {
+                                                  "asset_id":  "785d3579-1e1e-4215-a557-2d66f9b07438",
+                                                  "category":  "storage",
+                                                  "sha12":  "7a548ab44685",
+                                                  "sprite_256":  "sprites/256/chemical-storage-tank.png"
+                                              },
+                    "choke-manifold":  {
+                                           "asset_id":  "26057b1a-1729-4d2f-a85a-98d7f389e615",
+                                           "category":  "drilling",
+                                           "sha12":  "93fd3a4703b8",
+                                           "sprite_256":  "sprites/256/choke-manifold.png"
+                                       },
+                    "coiled-tubing-truck":  {
+                                                "asset_id":  "42b7f144-1e7a-453d-864a-132299ea2b01",
+                                                "category":  "drilling",
+                                                "sha12":  "0e18e187c5fe",
+                                                "sprite_256":  "sprites/256/coiled-tubing-truck.png",
+                                                "states":  [
+                                                               "moving",
+                                                               "working"
+                                                           ]
+                                            },
+                    "communications-tower":  {
+                                                 "asset_id":  "da1a2a7f-124b-48f8-8e4b-71c6d90f88df",
+                                                 "category":  "buildings",
+                                                 "sha12":  "2f065f189bfd",
+                                                 "sprite_256":  "sprites/256/communications-tower.png",
+                                                 "states":  [
+                                                                "beacon"
+                                                            ]
+                                             },
+                    "control-room-cabin":  {
+                                               "asset_id":  "19a2c745-4919-4ae6-b90a-cfb941070249",
+                                               "category":  "buildings",
+                                               "sha12":  "bf9f7bc52b3c",
+                                               "sprite_256":  "sprites/256/control-room-cabin.png"
+                                           },
+                    "cooling-tower":  {
+                                          "asset_id":  "c874d33b-961a-43a4-8665-b3b5f690ff6a",
+                                          "category":  "processing",
+                                          "sha12":  "0031cf78b4a9",
+                                          "sprite_256":  "sprites/256/cooling-tower.png",
+                                          "states":  [
+                                                         "working"
+                                                     ]
+                                      },
+                    "covered-warehouse":  {
+                                              "asset_id":  "52cc93b4-8edf-46c4-bbe6-a68cacc99c7c",
+                                              "category":  "buildings",
+                                              "sha12":  "6d7e19dcec42",
+                                              "sprite_256":  "sprites/256/covered-warehouse.png"
+                                          },
+                    "crude-oil-storage-tank":  {
+                                                   "asset_id":  "13ab00ca-60c2-432b-aef9-5d48654ce25e",
+                                                   "category":  "storage",
+                                                   "sha12":  "193cd0f86452",
+                                                   "sprite_256":  "sprites/256/crude-oil-storage-tank.png"
+                                               },
+                    "dehydration-unit":  {
+                                             "asset_id":  "80f688a5-fa7d-4d10-9906-1da069836c3b",
+                                             "category":  "processing",
+                                             "sha12":  "89340cfd284f",
+                                             "sprite_256":  "sprites/256/dehydration-unit.png"
+                                         },
+                    "desalter-vessel":  {
+                                            "asset_id":  "8096deb1-6564-4a9c-a348-cef55a327b75",
+                                            "category":  "processing",
+                                            "sha12":  "fe7e4ab12e11",
+                                            "sprite_256":  "sprites/256/desalter-vessel.png"
+                                        },
+                    "diesel-generator-shelter":  {
+                                                     "asset_id":  "1c30f2d6-b1ab-4c53-bf1b-a095667abc19",
+                                                     "category":  "power",
+                                                     "sha12":  "a4b1bd15a48c",
+                                                     "sprite_256":  "sprites/256/diesel-generator-shelter.png"
+                                                 },
+                    "distillation-column":  {
+                                                "asset_id":  "db0c3fd1-3536-413f-a67a-8a1ce710d626",
+                                                "category":  "processing",
+                                                "sha12":  "a3bff76d98fe",
+                                                "sprite_256":  "sprites/256/distillation-column.png"
+                                            },
+                    "drilling-rig-derrick":  {
+                                                 "asset_id":  "60b72190-08d9-4be6-9012-27ad68062cbf",
+                                                 "category":  "drilling",
+                                                 "sha12":  "6f62593c649a",
+                                                 "sprite_256":  "sprites/256/drilling-rig-derrick.png",
+                                                 "states":  [
+                                                                "working"
+                                                            ]
+                                             },
+                    "drill-pipe-rack":  {
+                                            "asset_id":  "43395352-3ad7-44f5-aad1-eaf1af560ea0",
+                                            "category":  "drilling",
+                                            "sha12":  "4ec19b4193a8",
+                                            "sprite_256":  "sprites/256/drill-pipe-rack.png"
+                                        },
+                    "electrical-substation":  {
+                                                  "asset_id":  "ff90b887-e90e-4f94-9e0a-57026d5578b4",
+                                                  "category":  "power",
+                                                  "sha12":  "bea57dcbc7ea",
+                                                  "sprite_256":  "sprites/256/electrical-substation.png"
+                                              },
+                    "emergency-shower":  {
+                                             "asset_id":  "3f7311f8-88b9-4463-be4a-bb3c6fb7b41a",
+                                             "category":  "hse",
+                                             "sha12":  "5630c41a8423",
+                                             "sprite_256":  "sprites/256/emergency-shower.png"
+                                         },
+                    "emergency-shutdown-station":  {
+                                                       "asset_id":  "d2566f6d-1aa1-4ab7-850c-ce3a2b145a18",
+                                                       "category":  "hse",
+                                                       "sha12":  "dfc33a638b78",
+                                                       "sprite_256":  "sprites/256/emergency-shutdown-station.png"
+                                                   },
+                    "equipment-warehouse":  {
+                                                "asset_id":  "8a03961c-5dd2-4da9-809a-de101302117b",
+                                                "category":  "buildings",
+                                                "sha12":  "cb9c67f373a2",
+                                                "sprite_256":  "sprites/256/equipment-warehouse.png"
+                                            },
+                    "firefighting-foam-unit":  {
+                                                   "asset_id":  "e24dc984-44af-4c94-b93b-8f60d9a45118",
+                                                   "category":  "hse",
+                                                   "sha12":  "1a875839769c",
+                                                   "sprite_256":  "sprites/256/firefighting-foam-unit.png"
+                                               },
+                    "fire-water-tank":  {
+                                            "asset_id":  "b8f9c231-9209-4184-b74a-64754dc76990",
+                                            "category":  "storage",
+                                            "sha12":  "bd5041a2b3a2",
+                                            "sprite_256":  "sprites/256/fire-water-tank.png"
+                                        },
+                    "flare-stack":  {
+                                        "asset_id":  "5eda6c49-bd42-4f76-a300-100c996ff42a",
+                                        "category":  "processing",
+                                        "sha12":  "87b6e29ec0d4",
+                                        "sprite_256":  "sprites/256/flare-stack.png",
+                                        "states":  [
+                                                       "burning"
+                                                   ]
+                                    },
+                    "flatbed-pipe-truck":  {
+                                               "asset_id":  "98246474-6c52-4385-8a97-d6fd46e04992",
+                                               "category":  "transport",
+                                               "sha12":  "fee78af9414c",
+                                               "sprite_256":  "sprites/256/flatbed-pipe-truck.png",
+                                               "states":  [
+                                                              "moving"
+                                                          ]
+                                           },
+                    "forklift":  {
+                                     "asset_id":  "ec80d852-9f83-4d2a-8544-a9cea09aa810",
+                                     "category":  "transport",
+                                     "sha12":  "a88fbb8645c5",
+                                     "sprite_256":  "sprites/256/forklift.png",
+                                     "states":  [
+                                                    "moving",
+                                                    "working"
+                                                ]
+                                 },
+                    "frac-tank":  {
+                                      "asset_id":  "7ae0c5c5-12ac-484d-84a6-bf6b1dc04479",
+                                      "category":  "drilling",
+                                      "sha12":  "50d0cf61f432",
+                                      "sprite_256":  "sprites/256/frac-tank.png"
+                                  },
+                    "gas-compressor-unit":  {
+                                                "asset_id":  "46787755-ed90-47ac-a6aa-73c67755460e",
+                                                "category":  "processing",
+                                                "sha12":  "40c02c99c376",
+                                                "sprite_256":  "sprites/256/gas-compressor-unit.png",
+                                                "states":  [
+                                                               "working"
+                                                           ]
+                                            },
+                    "gas-detector-station":  {
+                                                 "asset_id":  "40536ff0-6512-4a96-bb14-98be26f9435f",
+                                                 "category":  "hse",
+                                                 "sha12":  "717ae75256a4",
+                                                 "sprite_256":  "sprites/256/gas-detector-station.png",
+                                                 "states":  [
+                                                                "alarm"
+                                                            ]
+                                             },
+                    "gas-scrubber":  {
+                                         "asset_id":  "fd0cb27f-4ac4-4fb9-afde-39dad85341ed",
+                                         "category":  "processing",
+                                         "sha12":  "4964a9c411be",
+                                         "sprite_256":  "sprites/256/gas-scrubber.png"
+                                     },
+                    "generator-unit":  {
+                                           "asset_id":  "1fc137ef-d861-4d30-8fc9-323ba30b984b",
+                                           "category":  "power",
+                                           "sha12":  "73e769191e0d",
+                                           "sprite_256":  "sprites/256/generator-unit.png",
+                                           "states":  [
+                                                          "working"
+                                                      ]
+                                       },
+                    "hazardous-material-cabinet":  {
+                                                       "asset_id":  "0a82cc0e-30bb-4958-8c60-38b35b3f5949",
+                                                       "category":  "hse",
+                                                       "sha12":  "59caba5298ca",
+                                                       "sprite_256":  "sprites/256/hazardous-material-cabinet.png"
+                                                   },
+                    "heat-exchanger-skid":  {
+                                                "asset_id":  "4f015ff0-0593-408b-b104-8e1adf8bccb7",
+                                                "category":  "processing",
+                                                "sha12":  "249df8168628",
+                                                "sprite_256":  "sprites/256/heat-exchanger-skid.png"
+                                            },
+                    "heavy-equipment-trailer":  {
+                                                    "asset_id":  "7a73c189-2db8-4b33-aede-9c0b5caa750a",
+                                                    "category":  "transport",
+                                                    "sha12":  "eaa83e06d606",
+                                                    "sprite_256":  "sprites/256/heavy-equipment-trailer.png"
+                                                },
+                    "helipad-platform":  {
+                                             "asset_id":  "a4c4146e-73b6-4e52-9c6f-af03d1d844e0",
+                                             "category":  "buildings",
+                                             "sha12":  "2a1423f80cf3",
+                                             "sprite_256":  "sprites/256/helipad-platform.png"
+                                         },
+                    "lng-storage-sphere":  {
+                                               "asset_id":  "a8100982-59da-4ed8-b904-1080368bc566",
+                                               "category":  "storage",
+                                               "sha12":  "81d5985ed15a",
+                                               "sprite_256":  "sprites/256/lng-storage-sphere.png"
+                                           },
+                    "main-operations-building":  {
+                                                     "asset_id":  "c522919b-0355-4622-a38f-e7242dec3705",
+                                                     "category":  "buildings",
+                                                     "sha12":  "9a9cd14a2903",
+                                                     "sprite_256":  "sprites/256/main-operations-building.png"
+                                                 },
+                    "maintenance-workshop":  {
+                                                 "asset_id":  "0d275269-bb9f-4f1a-885f-18ef068a57e2",
+                                                 "category":  "buildings",
+                                                 "sha12":  "58895b184c4e",
+                                                 "sprite_256":  "sprites/256/maintenance-workshop.png"
+                                             },
+                    "metering-station":  {
+                                             "asset_id":  "d996e8f9-fa05-495d-a6a9-91f54d5a86ae",
+                                             "category":  "processing",
+                                             "sha12":  "563c66d6aab9",
+                                             "sprite_256":  "sprites/256/metering-station.png"
+                                         },
+                    "mobile-crane-truck":  {
+                                               "asset_id":  "74210a97-6b7f-4c95-ab8c-22288e634d0d",
+                                               "category":  "transport",
+                                               "sha12":  "39293d1867f9",
+                                               "sprite_256":  "sprites/256/mobile-crane-truck.png",
+                                               "states":  [
+                                                              "moving",
+                                                              "working"
+                                                          ]
+                                           },
+                    "mud-mixing-hopper":  {
+                                              "asset_id":  "d27cbb0e-c12e-448d-9a61-ba66025efd7e",
+                                              "category":  "drilling",
+                                              "sha12":  "0ab64bd0d97a",
+                                              "sprite_256":  "sprites/256/mud-mixing-hopper.png",
+                                              "states":  [
+                                                             "working"
+                                                         ]
+                                          },
+                    "mud-pump":  {
+                                     "asset_id":  "0692679b-081d-427b-bc09-4a06384c5157",
+                                     "category":  "drilling",
+                                     "sha12":  "d7ac0643dfb5",
+                                     "sprite_256":  "sprites/256/mud-pump.png",
+                                     "states":  [
+                                                    "working"
+                                                ]
+                                 },
+                    "mud-tank":  {
+                                     "asset_id":  "57d122fa-9a7b-44e8-ac03-bd46292a2988",
+                                     "category":  "drilling",
+                                     "sha12":  "d840db4d098c",
+                                     "sprite_256":  "sprites/256/mud-tank.png"
+                                 },
+                    "oil-containment-boom":  {
+                                                 "asset_id":  "d0ffbc59-9256-470f-9e66-a9e84a2bf369",
+                                                 "category":  "hse",
+                                                 "sha12":  "067e71a15f34",
+                                                 "sprite_256":  "sprites/256/oil-containment-boom.png"
+                                             },
+                    "pipe-handling-trailer":  {
+                                                  "asset_id":  "2adae914-1e3a-4690-9c6e-ea2c446deace",
+                                                  "category":  "drilling",
+                                                  "sha12":  "d221de4713c8",
+                                                  "sprite_256":  "sprites/256/pipe-handling-trailer.png"
+                                              },
+                    "pipeline-construction-excavator":  {
+                                                            "asset_id":  "029a1f89-1ca8-4423-b85a-82e3d2e36643",
+                                                            "category":  "transport",
+                                                            "sha12":  "2c490a23e30c",
+                                                            "sprite_256":  "sprites/256/pipeline-construction-excavator.png",
+                                                            "states":  [
+                                                                           "moving",
+                                                                           "working"
+                                                                       ]
+                                                        },
+                    "pipeline-manifold":  {
+                                              "asset_id":  "2b6fd0be-b49b-48c3-8061-336f7c3b329c",
+                                              "category":  "processing",
+                                              "sha12":  "b998aefe769d",
+                                              "sprite_256":  "sprites/256/pipeline-manifold.png"
+                                          },
+                    "pipeline-pig-launcher":  {
+                                                  "asset_id":  "539c7982-66b0-4ce9-b6b1-fc8ae13c41fe",
+                                                  "category":  "transport",
+                                                  "sha12":  "4b744a9a97e5",
+                                                  "sprite_256":  "sprites/256/pipeline-pig-launcher.png"
+                                              },
+                    "pipeline-pig-receiver":  {
+                                                  "asset_id":  "faaab695-a5f3-413d-88d4-362b4e60003b",
+                                                  "category":  "transport",
+                                                  "sha12":  "9e7493e7bc28",
+                                                  "sprite_256":  "sprites/256/pipeline-pig-receiver.png"
+                                              },
+                    "pipe-rack-section":  {
+                                              "asset_id":  "48f3d442-30f1-4d0e-aed2-67ac8c765697",
+                                              "category":  "transport",
+                                              "sha12":  "5bab1d8a3423",
+                                              "sprite_256":  "sprites/256/pipe-rack-section.png"
+                                          },
+                    "power-swivel-unit":  {
+                                              "asset_id":  "5d535bfd-bcd4-436a-8dce-bcd0bdb6ed7b",
+                                              "category":  "drilling",
+                                              "sha12":  "16544eb81b09",
+                                              "sprite_256":  "sprites/256/power-swivel-unit.png",
+                                              "states":  [
+                                                             "working"
+                                                         ]
+                                          },
+                    "produced-water-pond":  {
+                                                "asset_id":  "afca556d-4477-4162-b97b-6f378f136544",
+                                                "category":  "processing",
+                                                "sha12":  "170b5ef33ffd",
+                                                "sprite_256":  "sprites/256/produced-water-pond.png"
+                                            },
+                    "pumpjack":  {
+                                     "asset_id":  "e719585b-6a80-42cd-8ad0-b03365307b24",
+                                     "category":  "drilling",
+                                     "sha12":  "5c1afe97e810",
+                                     "sprite_256":  "sprites/256/pumpjack.png",
+                                     "states":  [
+                                                    "working"
+                                                ]
+                                 },
+                    "pump-manifold-trailer":  {
+                                                  "asset_id":  "9939ccea-a2d4-437e-8830-481b641838eb",
+                                                  "category":  "drilling",
+                                                  "sha12":  "0c00b418d18b",
+                                                  "sprite_256":  "sprites/256/pump-manifold-trailer.png"
+                                              },
+                    "road-barrier-gate":  {
+                                              "asset_id":  "ece6d220-a04f-427a-8c76-823ed91d9ca3",
+                                              "category":  "buildings",
+                                              "sha12":  "0b0416f7fd56",
+                                              "sprite_256":  "sprites/256/road-barrier-gate.png",
+                                              "states":  [
+                                                             "barrier"
+                                                         ]
+                                          },
+                    "security-checkpoint":  {
+                                                "asset_id":  "3f3f3cbd-4498-4f4d-96ad-ce53fbfdba9c",
+                                                "category":  "buildings",
+                                                "sha12":  "555dec8a3f1a",
+                                                "sprite_256":  "sprites/256/security-checkpoint.png",
+                                                "states":  [
+                                                               "barrier"
+                                                           ]
+                                            },
+                    "separator-vessel":  {
+                                             "asset_id":  "27e90c74-3975-4732-9a3b-5e101cb9a6b7",
+                                             "category":  "processing",
+                                             "sha12":  "72a365feb2b4",
+                                             "sprite_256":  "sprites/256/separator-vessel.png"
+                                         },
+                    "shale-shaker":  {
+                                         "asset_id":  "87a9a9be-ff7b-423e-9c87-5f018dc523e2",
+                                         "category":  "drilling",
+                                         "sha12":  "d524bae729ca",
+                                         "sprite_256":  "sprites/256/shale-shaker.png",
+                                         "states":  [
+                                                        "working"
+                                                    ]
+                                     },
+                    "site-lighting-tower":  {
+                                                "asset_id":  "e97d9244-0b7e-4b5a-88b3-913bc98fdf03",
+                                                "category":  "power",
+                                                "sha12":  "1fb35c6ddd17",
+                                                "sprite_256":  "sprites/256/site-lighting-tower.png"
+                                            },
+                    "solar-power-array":  {
+                                              "asset_id":  "f7e9b2cc-827b-49dd-9b0c-5647c2ea6f10",
+                                              "category":  "power",
+                                              "sha12":  "527f6b83ca94",
+                                              "sprite_256":  "sprites/256/solar-power-array.png"
+                                          },
+                    "spill-response-trailer":  {
+                                                   "asset_id":  "61971b44-4a10-4721-bbe6-ee590f3248de",
+                                                   "category":  "hse",
+                                                   "sha12":  "c2c079e84abf",
+                                                   "sprite_256":  "sprites/256/spill-response-trailer.png"
+                                               },
+                    "tanker-rail-loading-station":  {
+                                                        "asset_id":  "cb93db0d-6998-4862-9478-2fe75420a3fd",
+                                                        "category":  "transport",
+                                                        "sha12":  "46f332dfe56c",
+                                                        "sprite_256":  "sprites/256/tanker-rail-loading-station.png"
+                                                    },
+                    "tanker-truck":  {
+                                         "asset_id":  "bd94b8ea-239e-45b1-a9e5-ccf393dd0184",
+                                         "category":  "transport",
+                                         "sha12":  "df9235784ae9",
+                                         "sprite_256":  "sprites/256/tanker-truck.png",
+                                         "states":  [
+                                                        "moving"
+                                                    ]
+                                     },
+                    "three-phase-separator":  {
+                                                  "asset_id":  "811c1a65-22fd-414b-8201-01d06820d684",
+                                                  "category":  "processing",
+                                                  "sha12":  "fe4bb190d44c",
+                                                  "sprite_256":  "sprites/256/three-phase-separator.png"
+                                              },
+                    "truck-loading-gantry":  {
+                                                 "asset_id":  "38649d74-19f3-4c2a-99fd-18c8e4646907",
+                                                 "category":  "transport",
+                                                 "sha12":  "68544287ae0f",
+                                                 "sprite_256":  "sprites/256/truck-loading-gantry.png"
+                                             },
+                    "wastewater-treatment-tank":  {
+                                                      "asset_id":  "fab09681-a934-4a76-8c77-008ba7418ef0",
+                                                      "category":  "processing",
+                                                      "sha12":  "1e2eb5a89dad",
+                                                      "sprite_256":  "sprites/256/wastewater-treatment-tank.png",
+                                                      "states":  [
+                                                                     "working"
+                                                                 ]
+                                                  },
+                    "water-injection-pump":  {
+                                                 "asset_id":  "4bd40814-1b74-4409-9f9b-7f6512321a65",
+                                                 "category":  "processing",
+                                                 "sha12":  "62e71fbd9aa6",
+                                                 "sprite_256":  "sprites/256/water-injection-pump.png",
+                                                 "states":  [
+                                                                "working"
+                                                            ]
+                                             },
+                    "wellhead-tree":  {
+                                          "asset_id":  "9dd0603c-2134-41cc-afd2-a9c6d5a2aefe",
+                                          "category":  "drilling",
+                                          "sha12":  "669501386367",
+                                          "sprite_256":  "sprites/256/wellhead-tree.png"
+                                      },
+                    "well-testing-skid":  {
+                                              "asset_id":  "f1a2595d-80cd-444d-b113-f2aabc970c7a",
+                                              "category":  "drilling",
+                                              "sha12":  "39384da1e84c",
+                                              "sprite_256":  "sprites/256/well-testing-skid.png",
+                                              "states":  [
+                                                             "working"
+                                                         ]
+                                          },
+                    "wireline-service-truck":  {
+                                                   "asset_id":  "3cc299c3-21c8-4c02-9eee-cbc27560146f",
+                                                   "category":  "drilling",
+                                                   "sha12":  "cd7931abe396",
+                                                   "sprite_256":  "sprites/256/wireline-service-truck.png",
+                                                   "states":  [
+                                                                  "moving",
+                                                                  "working"
+                                                              ]
+                                               },
+                    "worker-accommodation-cabin":  {
+                                                       "asset_id":  "c15cc5b2-01d9-4b44-9e03-86853e4241e5",
+                                                       "category":  "buildings",
+                                                       "sha12":  "75dd2c34ff4b",
+                                                       "sprite_256":  "sprites/256/worker-accommodation-cabin.png"
+                                                   },
+                    "worker-safety-cabin":  {
+                                                "asset_id":  "4e739f95-a282-4b0e-bf3f-3d77fee214b2",
+                                                "category":  "buildings",
+                                                "sha12":  "58867ad37275",
+                                                "sprite_256":  "sprites/256/worker-safety-cabin.png"
+                                            },
+                    "workover-rig":  {
+                                         "asset_id":  "3eb7be07-a772-4eec-bddc-0b184e8823dd",
+                                         "category":  "drilling",
+                                         "sha12":  "cf5dcc7aa00f",
+                                         "sprite_256":  "sprites/256/workover-rig.png",
+                                         "states":  [
+                                                        "working"
+                                                    ]
+                                     }
+                },
+    "animations":  {
+                       "air-cooler-bank_working":  {
+                                                       "asset_id":  "211c7235-b651-47fe-94b3-c5288c7f7cea",
+                                                       "sprite":  "air-cooler-bank",
+                                                       "state":  "working",
+                                                       "frames":  8,
+                                                       "fps":  8,
+                                                       "frame_size":  202,
+                                                       "layout":  "horizontal strip, 1 row",
+                                                       "sha12":  "b064a69c29fe",
+                                                       "spritesheet":  "animations/air-cooler-bank_working.png"
+                                                   },
+                       "cementing-unit_moving":  {
+                                                     "asset_id":  "4b3ed34e-9d16-4d46-b2ba-e8eda62e7efc",
+                                                     "sprite":  "cementing-unit",
+                                                     "state":  "moving",
+                                                     "frames":  8,
+                                                     "fps":  8,
+                                                     "frame_size":  184,
+                                                     "layout":  "horizontal strip, 1 row",
+                                                     "sha12":  "75067d37f68a",
+                                                     "spritesheet":  "animations/cementing-unit_moving.png"
+                                                 },
+                       "cementing-unit_working":  {
+                                                      "asset_id":  "d694131e-f074-4d9a-ab22-48209acfd395",
+                                                      "sprite":  "cementing-unit",
+                                                      "state":  "working",
+                                                      "frames":  8,
+                                                      "fps":  8,
+                                                      "frame_size":  184,
+                                                      "layout":  "horizontal strip, 1 row",
+                                                      "sha12":  "1195e8d7827d",
+                                                      "spritesheet":  "animations/cementing-unit_working.png"
+                                                  },
+                       "coiled-tubing-truck_moving":  {
+                                                          "asset_id":  "92707ada-57c1-4486-a3d9-480c6d9eced2",
+                                                          "sprite":  "coiled-tubing-truck",
+                                                          "state":  "moving",
+                                                          "frames":  8,
+                                                          "fps":  8,
+                                                          "frame_size":  184,
+                                                          "layout":  "horizontal strip, 1 row",
+                                                          "sha12":  "ed5eb54d2b01",
+                                                          "spritesheet":  "animations/coiled-tubing-truck_moving.png"
+                                                      },
+                       "coiled-tubing-truck_working":  {
+                                                           "asset_id":  "b08a76e8-bc39-408d-9bcd-1108880172f6",
+                                                           "sprite":  "coiled-tubing-truck",
+                                                           "state":  "working",
+                                                           "frames":  8,
+                                                           "fps":  8,
+                                                           "frame_size":  184,
+                                                           "layout":  "horizontal strip, 1 row",
+                                                           "sha12":  "205e4748e97b",
+                                                           "spritesheet":  "animations/coiled-tubing-truck_working.png"
+                                                       },
+                       "communications-tower_beacon":  {
+                                                           "asset_id":  "d3b9f9d4-02ed-4362-95c8-8f33e7dc8404",
+                                                           "sprite":  "communications-tower",
+                                                           "state":  "beacon",
+                                                           "frames":  8,
+                                                           "fps":  8,
+                                                           "frame_size":  184,
+                                                           "layout":  "horizontal strip, 1 row",
+                                                           "sha12":  "1f5c03bea08d",
+                                                           "spritesheet":  "animations/communications-tower_beacon.png"
+                                                       },
+                       "cooling-tower_working":  {
+                                                     "asset_id":  "4b9f7dfb-9c99-4da5-89df-6914f6566fa5",
+                                                     "sprite":  "cooling-tower",
+                                                     "state":  "working",
+                                                     "frames":  8,
+                                                     "fps":  8,
+                                                     "frame_size":  220,
+                                                     "layout":  "horizontal strip, 1 row",
+                                                     "sha12":  "9fa387963eee",
+                                                     "spritesheet":  "animations/cooling-tower_working.png"
+                                                 },
+                       "drilling-rig-derrick_working":  {
+                                                            "asset_id":  "23eb15d7-155e-4b2e-a92a-dc9d64f3f3d2",
+                                                            "sprite":  "drilling-rig-derrick",
+                                                            "state":  "working",
+                                                            "frames":  8,
+                                                            "fps":  8,
+                                                            "frame_size":  182,
+                                                            "layout":  "horizontal strip, 1 row",
+                                                            "sha12":  "3066e57f97fd",
+                                                            "spritesheet":  "animations/drilling-rig-derrick_working.png"
+                                                        },
+                       "flare-stack_burning":  {
+                                                   "asset_id":  "e87234a8-03c4-44aa-bbf8-afbc2ad7c62e",
+                                                   "sprite":  "flare-stack",
+                                                   "state":  "burning",
+                                                   "frames":  8,
+                                                   "fps":  8,
+                                                   "frame_size":  210,
+                                                   "layout":  "horizontal strip, 1 row",
+                                                   "sha12":  "cbbdfa4c5877",
+                                                   "spritesheet":  "animations/flare-stack_burning.png"
+                                               },
+                       "flatbed-pipe-truck_moving":  {
+                                                         "asset_id":  "caf8e5cc-ddaa-4b19-a575-0613f7485f06",
+                                                         "sprite":  "flatbed-pipe-truck",
+                                                         "state":  "moving",
+                                                         "frames":  8,
+                                                         "fps":  8,
+                                                         "frame_size":  200,
+                                                         "layout":  "horizontal strip, 1 row",
+                                                         "sha12":  "f74de322d358",
+                                                         "spritesheet":  "animations/flatbed-pipe-truck_moving.png"
+                                                     },
+                       "forklift_moving":  {
+                                               "asset_id":  "f5fd6d2d-1ef9-47dc-b0a0-8828422dc525",
+                                               "sprite":  "forklift",
+                                               "state":  "moving",
+                                               "frames":  8,
+                                               "fps":  8,
+                                               "frame_size":  158,
+                                               "layout":  "horizontal strip, 1 row",
+                                               "sha12":  "70bfdfe1c6cc",
+                                               "spritesheet":  "animations/forklift_moving.png"
+                                           },
+                       "forklift_working":  {
+                                                "asset_id":  "fc023884-a268-4381-9b84-7122769d3754",
+                                                "sprite":  "forklift",
+                                                "state":  "working",
+                                                "frames":  8,
+                                                "fps":  8,
+                                                "frame_size":  158,
+                                                "layout":  "horizontal strip, 1 row",
+                                                "sha12":  "491abbcf0779",
+                                                "spritesheet":  "animations/forklift_working.png"
+                                            },
+                       "gas-compressor-unit_working":  {
+                                                           "asset_id":  "7dc691b6-0ef8-4d7c-8dd6-3a25a6eb8b41",
+                                                           "sprite":  "gas-compressor-unit",
+                                                           "state":  "working",
+                                                           "frames":  8,
+                                                           "fps":  8,
+                                                           "frame_size":  184,
+                                                           "layout":  "horizontal strip, 1 row",
+                                                           "sha12":  "9541851448db",
+                                                           "spritesheet":  "animations/gas-compressor-unit_working.png"
+                                                       },
+                       "gas-detector-station_alarm":  {
+                                                          "asset_id":  "f5392161-c6a9-4504-8bfb-8ad97bd3f90f",
+                                                          "sprite":  "gas-detector-station",
+                                                          "state":  "alarm",
+                                                          "frames":  8,
+                                                          "fps":  8,
+                                                          "frame_size":  256,
+                                                          "layout":  "horizontal strip, 1 row",
+                                                          "sha12":  "9bb918534d67",
+                                                          "spritesheet":  "animations/gas-detector-station_alarm.png"
+                                                      },
+                       "generator-unit_working":  {
+                                                      "asset_id":  "1785527b-60bd-425d-bd0e-0f1cde328600",
+                                                      "sprite":  "generator-unit",
+                                                      "state":  "working",
+                                                      "frames":  8,
+                                                      "fps":  8,
+                                                      "frame_size":  170,
+                                                      "layout":  "horizontal strip, 1 row",
+                                                      "sha12":  "d90eb14168f9",
+                                                      "spritesheet":  "animations/generator-unit_working.png"
+                                                  },
+                       "mobile-crane-truck_moving":  {
+                                                         "asset_id":  "01c5179b-c419-4c0a-a6a4-2fde62d635dc",
+                                                         "sprite":  "mobile-crane-truck",
+                                                         "state":  "moving",
+                                                         "frames":  8,
+                                                         "fps":  8,
+                                                         "frame_size":  164,
+                                                         "layout":  "horizontal strip, 1 row",
+                                                         "sha12":  "bca864a622f5",
+                                                         "spritesheet":  "animations/mobile-crane-truck_moving.png"
+                                                     },
+                       "mobile-crane-truck_working":  {
+                                                          "asset_id":  "6166ca2f-f9e3-431d-9bd3-9689d71494fd",
+                                                          "sprite":  "mobile-crane-truck",
+                                                          "state":  "working",
+                                                          "frames":  8,
+                                                          "fps":  8,
+                                                          "frame_size":  164,
+                                                          "layout":  "horizontal strip, 1 row",
+                                                          "sha12":  "43809a65f070",
+                                                          "spritesheet":  "animations/mobile-crane-truck_working.png"
+                                                      },
+                       "mud-mixing-hopper_working":  {
+                                                         "asset_id":  "94bb39a4-affa-4e92-b08e-959db3d25635",
+                                                         "sprite":  "mud-mixing-hopper",
+                                                         "state":  "working",
+                                                         "frames":  8,
+                                                         "fps":  8,
+                                                         "frame_size":  176,
+                                                         "layout":  "horizontal strip, 1 row",
+                                                         "sha12":  "69e03af1e9b2",
+                                                         "spritesheet":  "animations/mud-mixing-hopper_working.png"
+                                                     },
+                       "mud-pump_working":  {
+                                                "asset_id":  "be8d4634-fc17-4fdd-8b0c-408c9e1cac5f",
+                                                "sprite":  "mud-pump",
+                                                "state":  "working",
+                                                "frames":  8,
+                                                "fps":  8,
+                                                "frame_size":  178,
+                                                "layout":  "horizontal strip, 1 row",
+                                                "sha12":  "db64040df13a",
+                                                "spritesheet":  "animations/mud-pump_working.png"
+                                            },
+                       "pipeline-construction-excavator_moving":  {
+                                                                      "asset_id":  "979884b7-5c52-40be-ada8-ee1a4f9e8bda",
+                                                                      "sprite":  "pipeline-construction-excavator",
+                                                                      "state":  "moving",
+                                                                      "frames":  8,
+                                                                      "fps":  8,
+                                                                      "frame_size":  208,
+                                                                      "layout":  "horizontal strip, 1 row",
+                                                                      "sha12":  "61875ff921e2",
+                                                                      "spritesheet":  "animations/pipeline-construction-excavator_moving.png"
+                                                                  },
+                       "pipeline-construction-excavator_working":  {
+                                                                       "asset_id":  "e3ccb7d0-7c67-4a83-ac83-cc01d3009553",
+                                                                       "sprite":  "pipeline-construction-excavator",
+                                                                       "state":  "working",
+                                                                       "frames":  10,
+                                                                       "fps":  8,
+                                                                       "frame_size":  208,
+                                                                       "layout":  "horizontal strip, 1 row",
+                                                                       "sha12":  "d93c082b3b70",
+                                                                       "spritesheet":  "animations/pipeline-construction-excavator_working.png"
+                                                                   },
+                       "power-swivel-unit_working":  {
+                                                         "asset_id":  "b3464b75-ebe9-4cea-a330-8720fe052e08",
+                                                         "sprite":  "power-swivel-unit",
+                                                         "state":  "working",
+                                                         "frames":  8,
+                                                         "fps":  8,
+                                                         "frame_size":  256,
+                                                         "layout":  "horizontal strip, 1 row",
+                                                         "sha12":  "987d0fa3b80c",
+                                                         "spritesheet":  "animations/power-swivel-unit_working.png"
+                                                     },
+                       "pumpjack_working":  {
+                                                "asset_id":  "c022f2d7-924f-4859-9efd-e3516e48b487",
+                                                "sprite":  "pumpjack",
+                                                "state":  "working",
+                                                "frames":  10,
+                                                "fps":  8,
+                                                "frame_size":  172,
+                                                "layout":  "horizontal strip, 1 row",
+                                                "sha12":  "ec16e7e7e4f1",
+                                                "spritesheet":  "animations/pumpjack_working.png"
+                                            },
+                       "road-barrier-gate_barrier":  {
+                                                         "asset_id":  "00fa9833-35ab-475a-82b7-011b30335c1f",
+                                                         "sprite":  "road-barrier-gate",
+                                                         "state":  "barrier",
+                                                         "frames":  8,
+                                                         "fps":  8,
+                                                         "frame_size":  202,
+                                                         "layout":  "horizontal strip, 1 row",
+                                                         "sha12":  "133653eff66f",
+                                                         "spritesheet":  "animations/road-barrier-gate_barrier.png"
+                                                     },
+                       "security-checkpoint_barrier":  {
+                                                           "asset_id":  "8ccf27a4-2b0a-4ce5-affc-74c902941e2e",
+                                                           "sprite":  "security-checkpoint",
+                                                           "state":  "barrier",
+                                                           "frames":  8,
+                                                           "fps":  8,
+                                                           "frame_size":  256,
+                                                           "layout":  "horizontal strip, 1 row",
+                                                           "sha12":  "746742c6d066",
+                                                           "spritesheet":  "animations/security-checkpoint_barrier.png"
+                                                       },
+                       "shale-shaker_working":  {
+                                                    "asset_id":  "0a0eb590-57a1-4666-a655-b163612f454f",
+                                                    "sprite":  "shale-shaker",
+                                                    "state":  "working",
+                                                    "frames":  8,
+                                                    "fps":  8,
+                                                    "frame_size":  180,
+                                                    "layout":  "horizontal strip, 1 row",
+                                                    "sha12":  "9713498fcd56",
+                                                    "spritesheet":  "animations/shale-shaker_working.png"
+                                                },
+                       "tanker-truck_moving":  {
+                                                   "asset_id":  "ca219a8e-715f-4635-a28f-30ae331565cb",
+                                                   "sprite":  "tanker-truck",
+                                                   "state":  "moving",
+                                                   "frames":  8,
+                                                   "fps":  8,
+                                                   "frame_size":  198,
+                                                   "layout":  "horizontal strip, 1 row",
+                                                   "sha12":  "2fcc61c46a99",
+                                                   "spritesheet":  "animations/tanker-truck_moving.png"
+                                               },
+                       "wastewater-treatment-tank_working":  {
+                                                                 "asset_id":  "9198db21-d22f-4d9b-9acb-5d4a6aa36375",
+                                                                 "sprite":  "wastewater-treatment-tank",
+                                                                 "state":  "working",
+                                                                 "frames":  8,
+                                                                 "fps":  8,
+                                                                 "frame_size":  180,
+                                                                 "layout":  "horizontal strip, 1 row",
+                                                                 "sha12":  "dd7655cc9447",
+                                                                 "spritesheet":  "animations/wastewater-treatment-tank_working.png"
+                                                             },
+                       "water-injection-pump_working":  {
+                                                            "asset_id":  "248eba28-a81c-4be3-906f-d1371ce897cf",
+                                                            "sprite":  "water-injection-pump",
+                                                            "state":  "working",
+                                                            "frames":  8,
+                                                            "fps":  8,
+                                                            "frame_size":  168,
+                                                            "layout":  "horizontal strip, 1 row",
+                                                            "sha12":  "0c31b45b69f2",
+                                                            "spritesheet":  "animations/water-injection-pump_working.png"
+                                                        },
+                       "well-testing-skid_working":  {
+                                                         "asset_id":  "e3964a2c-4282-403f-8003-4f91b6a718ad",
+                                                         "sprite":  "well-testing-skid",
+                                                         "state":  "working",
+                                                         "frames":  8,
+                                                         "fps":  8,
+                                                         "frame_size":  170,
+                                                         "layout":  "horizontal strip, 1 row",
+                                                         "sha12":  "e95790673110",
+                                                         "spritesheet":  "animations/well-testing-skid_working.png"
+                                                     },
+                       "wireline-service-truck_moving":  {
+                                                             "asset_id":  "eaefdce0-7a7a-4e06-be46-c334fc70018e",
+                                                             "sprite":  "wireline-service-truck",
+                                                             "state":  "moving",
+                                                             "frames":  8,
+                                                             "fps":  8,
+                                                             "frame_size":  178,
+                                                             "layout":  "horizontal strip, 1 row",
+                                                             "sha12":  "be37e8557337",
+                                                             "spritesheet":  "animations/wireline-service-truck_moving.png"
+                                                         },
+                       "wireline-service-truck_working":  {
+                                                              "asset_id":  "689983fa-f54b-4a39-bc00-05cf50a945dd",
+                                                              "sprite":  "wireline-service-truck",
+                                                              "state":  "working",
+                                                              "frames":  8,
+                                                              "fps":  8,
+                                                              "frame_size":  178,
+                                                              "layout":  "horizontal strip, 1 row",
+                                                              "sha12":  "04c30d8ced1f",
+                                                              "spritesheet":  "animations/wireline-service-truck_working.png"
+                                                          },
+                       "workover-rig_working":  {
+                                                    "asset_id":  "3297eb07-19ca-4940-a52e-0332dee0357a",
+                                                    "sprite":  "workover-rig",
+                                                    "state":  "working",
+                                                    "frames":  8,
+                                                    "fps":  8,
+                                                    "frame_size":  250,
+                                                    "layout":  "horizontal strip, 1 row",
+                                                    "sha12":  "3523f79a03d8",
+                                                    "spritesheet":  "animations/workover-rig_working.png"
+                                                }
+                   }
+}

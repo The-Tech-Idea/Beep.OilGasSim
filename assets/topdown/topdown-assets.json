@@ -1,0 +1,899 @@
+﻿{
+    "source":  "referenceart/TopDown-StartDewValley (user-authored), chroma-normalised then sliced",
+    "perspective":  "top-down, axis-aligned",
+    "scaling":  "masters only - Godot handles display scaling",
+    "counts":  {
+                   "sprites":  75,
+                   "animated":  20,
+                   "static":  55,
+                   "animation_files":  20
+               },
+    "sprites":  {
+                    "air-cooler-bank":  {
+                                            "width":  126,
+                                            "height":  121,
+                                            "sha12":  "9739cac86b68",
+                                            "sprite":  "sprites/air-cooler-bank.png",
+                                            "states":  [
+                                                           "working"
+                                                       ]
+                                        },
+                    "amine-treatment-skid":  {
+                                                 "width":  155,
+                                                 "height":  116,
+                                                 "sha12":  "664861078b5e",
+                                                 "sprite":  "sprites/amine-treatment-skid.png",
+                                                 "states":  [
+
+                                                            ]
+                                             },
+                    "backup-battery-bank":  {
+                                                "width":  149,
+                                                "height":  107,
+                                                "sha12":  "7ba468df6778",
+                                                "sprite":  "sprites/backup-battery-bank.png",
+                                                "states":  [
+
+                                                           ]
+                                            },
+                    "blowout-preventer":  {
+                                              "width":  144,
+                                              "height":  171,
+                                              "sha12":  "e67d26e353fc",
+                                              "sprite":  "sprites/blowout-preventer.png",
+                                              "states":  [
+
+                                                         ]
+                                          },
+                    "chemical-injection-skid":  {
+                                                    "width":  149,
+                                                    "height":  115,
+                                                    "sha12":  "c85fdeb4e9da",
+                                                    "sprite":  "sprites/chemical-injection-skid.png",
+                                                    "states":  [
+
+                                                               ]
+                                                },
+                    "chemical-storage-tank":  {
+                                                  "width":  154,
+                                                  "height":  165,
+                                                  "sha12":  "a64d9b427a1e",
+                                                  "sprite":  "sprites/chemical-storage-tank.png",
+                                                  "states":  [
+
+                                                             ]
+                                              },
+                    "choke-manifold":  {
+                                           "width":  182,
+                                           "height":  163,
+                                           "sha12":  "06a943da215a",
+                                           "sprite":  "sprites/choke-manifold.png",
+                                           "states":  [
+
+                                                      ]
+                                       },
+                    "communications-tower":  {
+                                                 "width":  79,
+                                                 "height":  113,
+                                                 "sha12":  "ec11fd3915f2",
+                                                 "sprite":  "sprites/communications-tower.png",
+                                                 "states":  [
+                                                                "beacon"
+                                                            ]
+                                             },
+                    "control-room-cabin":  {
+                                               "width":  195,
+                                               "height":  170,
+                                               "sha12":  "2e1408bae15a",
+                                               "sprite":  "sprites/control-room-cabin.png",
+                                               "states":  [
+
+                                                          ]
+                                           },
+                    "cooling-tower":  {
+                                          "width":  117,
+                                          "height":  127,
+                                          "sha12":  "a9b6cf09757f",
+                                          "sprite":  "sprites/cooling-tower.png",
+                                          "states":  [
+                                                         "working"
+                                                     ]
+                                      },
+                    "covered-warehouse":  {
+                                              "width":  144,
+                                              "height":  101,
+                                              "sha12":  "a5205e5e7d24",
+                                              "sprite":  "sprites/covered-warehouse.png",
+                                              "states":  [
+
+                                                         ]
+                                          },
+                    "dehydration-unit":  {
+                                             "width":  143,
+                                             "height":  105,
+                                             "sha12":  "d02881cb6406",
+                                             "sprite":  "sprites/dehydration-unit.png",
+                                             "states":  [
+
+                                                        ]
+                                         },
+                    "desalter-vessel":  {
+                                            "width":  158,
+                                            "height":  94,
+                                            "sha12":  "f7986bce4348",
+                                            "sprite":  "sprites/desalter-vessel.png",
+                                            "states":  [
+
+                                                       ]
+                                        },
+                    "diesel-generator-shelter":  {
+                                                     "width":  157,
+                                                     "height":  95,
+                                                     "sha12":  "e8fea7d4db4d",
+                                                     "sprite":  "sprites/diesel-generator-shelter.png",
+                                                     "states":  [
+
+                                                                ]
+                                                 },
+                    "distillation-column":  {
+                                                "width":  95,
+                                                "height":  127,
+                                                "sha12":  "a564ab21840f",
+                                                "sprite":  "sprites/distillation-column.png",
+                                                "states":  [
+
+                                                           ]
+                                            },
+                    "drill-pipe-rack":  {
+                                            "width":  182,
+                                            "height":  123,
+                                            "sha12":  "bfaefa34be83",
+                                            "sprite":  "sprites/drill-pipe-rack.png",
+                                            "states":  [
+
+                                                       ]
+                                        },
+                    "electrical-substation":  {
+                                                  "width":  228,
+                                                  "height":  165,
+                                                  "sha12":  "97ae2003049a",
+                                                  "sprite":  "sprites/electrical-substation.png",
+                                                  "states":  [
+
+                                                             ]
+                                              },
+                    "emergency-shower":  {
+                                             "width":  70,
+                                             "height":  99,
+                                             "sha12":  "cf5e0c7b412e",
+                                             "sprite":  "sprites/emergency-shower.png",
+                                             "states":  [
+
+                                                        ]
+                                         },
+                    "emergency-shutdown-station":  {
+                                                       "width":  61,
+                                                       "height":  89,
+                                                       "sha12":  "a958872ef434",
+                                                       "sprite":  "sprites/emergency-shutdown-station.png",
+                                                       "states":  [
+                                                                      "alarm"
+                                                                  ]
+                                                   },
+                    "equipment-warehouse":  {
+                                                "width":  144,
+                                                "height":  107,
+                                                "sha12":  "78670a09be2c",
+                                                "sprite":  "sprites/equipment-warehouse.png",
+                                                "states":  [
+
+                                                           ]
+                                            },
+                    "firefighting-foam-unit":  {
+                                                   "width":  118,
+                                                   "height":  90,
+                                                   "sha12":  "d5dbb32e91ab",
+                                                   "sprite":  "sprites/firefighting-foam-unit.png",
+                                                   "states":  [
+
+                                                              ],
+                                                   "note":  "vehicle - 8 directions deferred to the trucks.png pass"
+                                               },
+                    "fire-water-tank":  {
+                                            "width":  173,
+                                            "height":  172,
+                                            "sha12":  "7f03401c3355",
+                                            "sprite":  "sprites/fire-water-tank.png",
+                                            "states":  [
+
+                                                       ]
+                                        },
+                    "flare-stack":  {
+                                        "width":  107,
+                                        "height":  231,
+                                        "sha12":  "e71f97ab08f4",
+                                        "sprite":  "sprites/flare-stack.png",
+                                        "states":  [
+                                                       "burning"
+                                                   ]
+                                    },
+                    "forklift":  {
+                                     "width":  143,
+                                     "height":  93,
+                                     "sha12":  "406b4230d7b9",
+                                     "sprite":  "sprites/forklift.png",
+                                     "states":  [
+
+                                                ],
+                                     "note":  "vehicle - 8 directions deferred to the trucks.png pass"
+                                 },
+                    "frac-tank":  {
+                                      "width":  221,
+                                      "height":  149,
+                                      "sha12":  "2fe5ba14711b",
+                                      "sprite":  "sprites/frac-tank.png",
+                                      "states":  [
+
+                                                 ]
+                                  },
+                    "fuel-tank":  {
+                                      "width":  200,
+                                      "height":  130,
+                                      "sha12":  "c3b98bd2ac64",
+                                      "sprite":  "sprites/fuel-tank.png",
+                                      "states":  [
+
+                                                 ]
+                                  },
+                    "gas-compressor-unit":  {
+                                                "width":  204,
+                                                "height":  170,
+                                                "sha12":  "c739b5eab6b2",
+                                                "sprite":  "sprites/gas-compressor-unit.png",
+                                                "states":  [
+                                                               "working"
+                                                           ]
+                                            },
+                    "gas-detector-station":  {
+                                                 "width":  50,
+                                                 "height":  100,
+                                                 "sha12":  "8f1726cccd8a",
+                                                 "sprite":  "sprites/gas-detector-station.png",
+                                                 "states":  [
+                                                                "alarm"
+                                                            ]
+                                             },
+                    "gas-scrubber":  {
+                                         "width":  101,
+                                         "height":  129,
+                                         "sha12":  "1e9e78bb5317",
+                                         "sprite":  "sprites/gas-scrubber.png",
+                                         "states":  [
+
+                                                    ]
+                                     },
+                    "generator-unit":  {
+                                           "width":  212,
+                                           "height":  137,
+                                           "sha12":  "d4212c0d7b8b",
+                                           "sprite":  "sprites/generator-unit.png",
+                                           "states":  [
+                                                          "working"
+                                                      ]
+                                       },
+                    "hazardous-material-cabinet":  {
+                                                       "width":  73,
+                                                       "height":  90,
+                                                       "sha12":  "f3f4553a841b",
+                                                       "sprite":  "sprites/hazardous-material-cabinet.png",
+                                                       "states":  [
+
+                                                                  ]
+                                                   },
+                    "heat-exchanger-skid":  {
+                                                "width":  198,
+                                                "height":  158,
+                                                "sha12":  "accdcf98ad5f",
+                                                "sprite":  "sprites/heat-exchanger-skid.png",
+                                                "states":  [
+
+                                                           ]
+                                            },
+                    "heavy-equipment-trailer":  {
+                                                    "width":  176,
+                                                    "height":  67,
+                                                    "sha12":  "88afbc90551d",
+                                                    "sprite":  "sprites/heavy-equipment-trailer.png",
+                                                    "states":  [
+
+                                                               ],
+                                                    "note":  "vehicle - 8 directions deferred to the trucks.png pass"
+                                                },
+                    "helipad-platform":  {
+                                             "width":  191,
+                                             "height":  175,
+                                             "sha12":  "50ab1ceb6fe6",
+                                             "sprite":  "sprites/helipad-platform.png",
+                                             "states":  [
+
+                                                        ]
+                                         },
+                    "lng-storage-sphere":  {
+                                               "width":  191,
+                                               "height":  184,
+                                               "sha12":  "b4fe58f37291",
+                                               "sprite":  "sprites/lng-storage-sphere.png",
+                                               "states":  [
+
+                                                          ]
+                                           },
+                    "main-operations-building":  {
+                                                     "width":  164,
+                                                     "height":  112,
+                                                     "sha12":  "05a1e489e134",
+                                                     "sprite":  "sprites/main-operations-building.png",
+                                                     "states":  [
+
+                                                                ]
+                                                 },
+                    "maintenance-cabin":  {
+                                              "width":  204,
+                                              "height":  151,
+                                              "sha12":  "76bedbb9c07c",
+                                              "sprite":  "sprites/maintenance-cabin.png",
+                                              "states":  [
+
+                                                         ]
+                                          },
+                    "maintenance-workshop":  {
+                                                 "width":  154,
+                                                 "height":  107,
+                                                 "sha12":  "15073648a4b4",
+                                                 "sprite":  "sprites/maintenance-workshop.png",
+                                                 "states":  [
+
+                                                            ]
+                                             },
+                    "metering-station":  {
+                                             "width":  129,
+                                             "height":  89,
+                                             "sha12":  "7d00cbe6f565",
+                                             "sprite":  "sprites/metering-station.png",
+                                             "states":  [
+
+                                                        ]
+                                         },
+                    "mobile-crane-truck":  {
+                                               "width":  220,
+                                               "height":  128,
+                                               "sha12":  "2e5719291e42",
+                                               "sprite":  "sprites/mobile-crane-truck.png",
+                                               "states":  [
+
+                                                          ],
+                                               "note":  "vehicle - 8 directions deferred to the trucks.png pass"
+                                           },
+                    "mud-mixing-hopper":  {
+                                              "width":  152,
+                                              "height":  146,
+                                              "sha12":  "1b2d639bd781",
+                                              "sprite":  "sprites/mud-mixing-hopper.png",
+                                              "states":  [
+                                                             "working"
+                                                         ]
+                                          },
+                    "mud-pump":  {
+                                     "width":  180,
+                                     "height":  149,
+                                     "sha12":  "f72937a5f7ae",
+                                     "sprite":  "sprites/mud-pump.png",
+                                     "states":  [
+                                                    "working"
+                                                ]
+                                 },
+                    "mud-tank":  {
+                                     "width":  180,
+                                     "height":  159,
+                                     "sha12":  "4a31affbf90e",
+                                     "sprite":  "sprites/mud-tank.png",
+                                     "states":  [
+
+                                                ]
+                                 },
+                    "office-cabin":  {
+                                         "width":  194,
+                                         "height":  151,
+                                         "sha12":  "ea340674c3fc",
+                                         "sprite":  "sprites/office-cabin.png",
+                                         "states":  [
+
+                                                    ]
+                                     },
+                    "oil-containment-boom":  {
+                                                 "width":  153,
+                                                 "height":  93,
+                                                 "sha12":  "0be6b9706e5d",
+                                                 "sprite":  "sprites/oil-containment-boom.png",
+                                                 "states":  [
+
+                                                            ]
+                                             },
+                    "oil-storage-tank":  {
+                                             "width":  156,
+                                             "height":  170,
+                                             "sha12":  "677d5237d1f5",
+                                             "sprite":  "sprites/oil-storage-tank.png",
+                                             "states":  [
+
+                                                        ]
+                                         },
+                    "pipe-handling-trailer":  {
+                                                  "width":  194,
+                                                  "height":  117,
+                                                  "sha12":  "f55f966f2351",
+                                                  "sprite":  "sprites/pipe-handling-trailer.png",
+                                                  "states":  [
+
+                                                             ],
+                                                  "note":  "vehicle - 8 directions deferred to the trucks.png pass"
+                                              },
+                    "pipeline-construction-excavator":  {
+                                                            "width":  172,
+                                                            "height":  81,
+                                                            "sha12":  "d954f042f148",
+                                                            "sprite":  "sprites/pipeline-construction-excavator.png",
+                                                            "states":  [
+
+                                                                       ],
+                                                            "note":  "vehicle - 8 directions deferred to the trucks.png pass"
+                                                        },
+                    "pipeline-manifold":  {
+                                              "width":  183,
+                                              "height":  182,
+                                              "sha12":  "6955acf9adb1",
+                                              "sprite":  "sprites/pipeline-manifold.png",
+                                              "states":  [
+
+                                                         ]
+                                          },
+                    "pipeline-pig-launcher":  {
+                                                  "width":  153,
+                                                  "height":  82,
+                                                  "sha12":  "e0fcc247d52b",
+                                                  "sprite":  "sprites/pipeline-pig-launcher.png",
+                                                  "states":  [
+
+                                                             ]
+                                              },
+                    "pipeline-pig-receiver":  {
+                                                  "width":  148,
+                                                  "height":  83,
+                                                  "sha12":  "6a2e5cb2d914",
+                                                  "sprite":  "sprites/pipeline-pig-receiver.png",
+                                                  "states":  [
+
+                                                             ]
+                                              },
+                    "pipe-rack-section":  {
+                                              "width":  145,
+                                              "height":  151,
+                                              "sha12":  "743e03e3a9ee",
+                                              "sprite":  "sprites/pipe-rack-section.png",
+                                              "states":  [
+
+                                                         ]
+                                          },
+                    "power-swivel-unit":  {
+                                              "width":  130,
+                                              "height":  133,
+                                              "sha12":  "bb3f3522489c",
+                                              "sprite":  "sprites/power-swivel-unit.png",
+                                              "states":  [
+                                                             "working"
+                                                         ]
+                                          },
+                    "produced-water-pond":  {
+                                                "width":  158,
+                                                "height":  99,
+                                                "sha12":  "fc636ac4a5be",
+                                                "sprite":  "sprites/produced-water-pond.png",
+                                                "states":  [
+
+                                                           ]
+                                            },
+                    "pump-manifold-trailer":  {
+                                                  "width":  216,
+                                                  "height":  116,
+                                                  "sha12":  "a376f174824b",
+                                                  "sprite":  "sprites/pump-manifold-trailer.png",
+                                                  "states":  [
+
+                                                             ],
+                                                  "note":  "vehicle - 8 directions deferred to the trucks.png pass"
+                                              },
+                    "road-barrier-gate":  {
+                                              "width":  180,
+                                              "height":  68,
+                                              "sha12":  "887011059f43",
+                                              "sprite":  "sprites/road-barrier-gate.png",
+                                              "states":  [
+                                                             "barrier"
+                                                         ]
+                                          },
+                    "security-camera-pole":  {
+                                                 "width":  67,
+                                                 "height":  146,
+                                                 "sha12":  "1e0ca985bf70",
+                                                 "sprite":  "sprites/security-camera-pole.png",
+                                                 "states":  [
+
+                                                            ]
+                                             },
+                    "security-checkpoint":  {
+                                                "width":  98,
+                                                "height":  91,
+                                                "sha12":  "63e52e8fde21",
+                                                "sprite":  "sprites/security-checkpoint.png",
+                                                "states":  [
+                                                               "barrier"
+                                                           ]
+                                            },
+                    "separator-vessel":  {
+                                             "width":  211,
+                                             "height":  149,
+                                             "sha12":  "04b43e3e9ac7",
+                                             "sprite":  "sprites/separator-vessel.png",
+                                             "states":  [
+
+                                                        ]
+                                         },
+                    "shale-shaker":  {
+                                         "width":  148,
+                                         "height":  156,
+                                         "sha12":  "cf0ae18540ad",
+                                         "sprite":  "sprites/shale-shaker.png",
+                                         "states":  [
+                                                        "working"
+                                                    ]
+                                     },
+                    "site-lighting-pole":  {
+                                               "width":  81,
+                                               "height":  151,
+                                               "sha12":  "e9509d255c0f",
+                                               "sprite":  "sprites/site-lighting-pole.png",
+                                               "states":  [
+                                                              "working"
+                                                          ]
+                                           },
+                    "site-lighting-tower":  {
+                                                "width":  51,
+                                                "height":  95,
+                                                "sha12":  "e7b62a00e0e1",
+                                                "sprite":  "sprites/site-lighting-tower.png",
+                                                "states":  [
+                                                               "working"
+                                                           ]
+                                            },
+                    "site-lighting-tower-b":  {
+                                                  "width":  66,
+                                                  "height":  97,
+                                                  "sha12":  "e08a4ead2f9a",
+                                                  "sprite":  "sprites/site-lighting-tower-b.png",
+                                                  "states":  [
+
+                                                             ]
+                                              },
+                    "solar-power-array":  {
+                                              "width":  152,
+                                              "height":  98,
+                                              "sha12":  "c998f14049a2",
+                                              "sprite":  "sprites/solar-power-array.png",
+                                              "states":  [
+
+                                                         ]
+                                          },
+                    "spill-response-trailer":  {
+                                                   "width":  141,
+                                                   "height":  93,
+                                                   "sha12":  "dde17cc812ca",
+                                                   "sprite":  "sprites/spill-response-trailer.png",
+                                                   "states":  [
+
+                                                              ],
+                                                   "note":  "vehicle - 8 directions deferred to the trucks.png pass"
+                                               },
+                    "storage-container":  {
+                                              "width":  205,
+                                              "height":  145,
+                                              "sha12":  "174edac0d184",
+                                              "sprite":  "sprites/storage-container.png",
+                                              "states":  [
+
+                                                         ]
+                                          },
+                    "three-phase-separator":  {
+                                                  "width":  146,
+                                                  "height":  97,
+                                                  "sha12":  "cadb4da75c3d",
+                                                  "sprite":  "sprites/three-phase-separator.png",
+                                                  "states":  [
+
+                                                             ]
+                                              },
+                    "wastewater-treatment-tank":  {
+                                                      "width":  119,
+                                                      "height":  112,
+                                                      "sha12":  "946f10b18507",
+                                                      "sprite":  "sprites/wastewater-treatment-tank.png",
+                                                      "states":  [
+                                                                     "working"
+                                                                 ]
+                                                  },
+                    "water-injection-pump":  {
+                                                 "width":  188,
+                                                 "height":  149,
+                                                 "sha12":  "5ed2364a818c",
+                                                 "sprite":  "sprites/water-injection-pump.png",
+                                                 "states":  [
+                                                                "working"
+                                                            ]
+                                             },
+                    "wellhead-tree":  {
+                                          "width":  139,
+                                          "height":  193,
+                                          "sha12":  "7db1a001f827",
+                                          "sprite":  "sprites/wellhead-tree.png",
+                                          "states":  [
+
+                                                     ]
+                                      },
+                    "well-testing-skid":  {
+                                              "width":  169,
+                                              "height":  148,
+                                              "sha12":  "6c0203c4dd78",
+                                              "sprite":  "sprites/well-testing-skid.png",
+                                              "states":  [
+                                                             "working"
+                                                         ]
+                                          },
+                    "wind-sock":  {
+                                      "width":  128,
+                                      "height":  139,
+                                      "sha12":  "364eb9ca5edd",
+                                      "sprite":  "sprites/wind-sock.png",
+                                      "states":  [
+                                                     "working"
+                                                 ]
+                                  },
+                    "worker-accommodation-cabin":  {
+                                                       "width":  185,
+                                                       "height":  95,
+                                                       "sha12":  "8f62b5400144",
+                                                       "sprite":  "sprites/worker-accommodation-cabin.png",
+                                                       "states":  [
+
+                                                                  ]
+                                                   },
+                    "worker-safety-cabin":  {
+                                                "width":  148,
+                                                "height":  164,
+                                                "sha12":  "51e643c74c15",
+                                                "sprite":  "sprites/worker-safety-cabin.png",
+                                                "states":  [
+
+                                                           ]
+                                            },
+                    "workover-rig":  {
+                                         "width":  118,
+                                         "height":  172,
+                                         "sha12":  "2728d532eb08",
+                                         "sprite":  "sprites/workover-rig.png",
+                                         "states":  [
+
+                                                    ],
+                                         "note":  "vehicle - 8 directions deferred to the trucks.png pass"
+                                     }
+                },
+    "animations":  {
+                       "air-cooler-bank_working":  {
+                                                       "sprite":  "air-cooler-bank",
+                                                       "state":  "working",
+                                                       "frames":  8,
+                                                       "fps":  8,
+                                                       "frame_size":  130,
+                                                       "layout":  "horizontal strip, 1 row",
+                                                       "sha12":  "886eed06646d",
+                                                       "spritesheet":  "animations/air-cooler-bank_working.png"
+                                                   },
+                       "communications-tower_beacon":  {
+                                                           "sprite":  "communications-tower",
+                                                           "state":  "beacon",
+                                                           "frames":  8,
+                                                           "fps":  8,
+                                                           "frame_size":  118,
+                                                           "layout":  "horizontal strip, 1 row",
+                                                           "sha12":  "6ffea0b9a536",
+                                                           "spritesheet":  "animations/communications-tower_beacon.png"
+                                                       },
+                       "cooling-tower_working":  {
+                                                     "sprite":  "cooling-tower",
+                                                     "state":  "working",
+                                                     "frames":  8,
+                                                     "fps":  8,
+                                                     "frame_size":  130,
+                                                     "layout":  "horizontal strip, 1 row",
+                                                     "sha12":  "93df106f6479",
+                                                     "spritesheet":  "animations/cooling-tower_working.png"
+                                                 },
+                       "emergency-shutdown-station_alarm":  {
+                                                                "sprite":  "emergency-shutdown-station",
+                                                                "state":  "alarm",
+                                                                "frames":  6,
+                                                                "fps":  8,
+                                                                "frame_size":  90,
+                                                                "layout":  "horizontal strip, 1 row",
+                                                                "sha12":  "d13afabe73c7",
+                                                                "spritesheet":  "animations/emergency-shutdown-station_alarm.png"
+                                                            },
+                       "flare-stack_burning":  {
+                                                   "sprite":  "flare-stack",
+                                                   "state":  "burning",
+                                                   "frames":  8,
+                                                   "fps":  8,
+                                                   "frame_size":  248,
+                                                   "layout":  "horizontal strip, 1 row",
+                                                   "sha12":  "a5a6270450ae",
+                                                   "spritesheet":  "animations/flare-stack_burning.png"
+                                               },
+                       "gas-compressor-unit_working":  {
+                                                           "sprite":  "gas-compressor-unit",
+                                                           "state":  "working",
+                                                           "frames":  8,
+                                                           "fps":  8,
+                                                           "frame_size":  214,
+                                                           "layout":  "horizontal strip, 1 row",
+                                                           "sha12":  "dc457742778e",
+                                                           "spritesheet":  "animations/gas-compressor-unit_working.png"
+                                                       },
+                       "gas-detector-station_alarm":  {
+                                                          "sprite":  "gas-detector-station",
+                                                          "state":  "alarm",
+                                                          "frames":  6,
+                                                          "fps":  8,
+                                                          "frame_size":  98,
+                                                          "layout":  "horizontal strip, 1 row",
+                                                          "sha12":  "ce4f2deb74c6",
+                                                          "spritesheet":  "animations/gas-detector-station_alarm.png"
+                                                      },
+                       "generator-unit_working":  {
+                                                      "sprite":  "generator-unit",
+                                                      "state":  "working",
+                                                      "frames":  8,
+                                                      "fps":  8,
+                                                      "frame_size":  224,
+                                                      "layout":  "horizontal strip, 1 row",
+                                                      "sha12":  "5c2779a3f0ed",
+                                                      "spritesheet":  "animations/generator-unit_working.png"
+                                                  },
+                       "mud-mixing-hopper_working":  {
+                                                         "sprite":  "mud-mixing-hopper",
+                                                         "state":  "working",
+                                                         "frames":  8,
+                                                         "fps":  8,
+                                                         "frame_size":  162,
+                                                         "layout":  "horizontal strip, 1 row",
+                                                         "sha12":  "eb60ebb19b78",
+                                                         "spritesheet":  "animations/mud-mixing-hopper_working.png"
+                                                     },
+                       "mud-pump_working":  {
+                                                "sprite":  "mud-pump",
+                                                "state":  "working",
+                                                "frames":  8,
+                                                "fps":  8,
+                                                "frame_size":  192,
+                                                "layout":  "horizontal strip, 1 row",
+                                                "sha12":  "76dc28a67815",
+                                                "spritesheet":  "animations/mud-pump_working.png"
+                                            },
+                       "power-swivel-unit_working":  {
+                                                         "sprite":  "power-swivel-unit",
+                                                         "state":  "working",
+                                                         "frames":  8,
+                                                         "fps":  8,
+                                                         "frame_size":  138,
+                                                         "layout":  "horizontal strip, 1 row",
+                                                         "sha12":  "66d92c5ec8e6",
+                                                         "spritesheet":  "animations/power-swivel-unit_working.png"
+                                                     },
+                       "road-barrier-gate_barrier":  {
+                                                         "sprite":  "road-barrier-gate",
+                                                         "state":  "barrier",
+                                                         "frames":  8,
+                                                         "fps":  8,
+                                                         "frame_size":  194,
+                                                         "layout":  "horizontal strip, 1 row",
+                                                         "sha12":  "da4fc4867475",
+                                                         "spritesheet":  "animations/road-barrier-gate_barrier.png"
+                                                     },
+                       "security-checkpoint_barrier":  {
+                                                           "sprite":  "security-checkpoint",
+                                                           "state":  "barrier",
+                                                           "frames":  8,
+                                                           "fps":  8,
+                                                           "frame_size":  100,
+                                                           "layout":  "horizontal strip, 1 row",
+                                                           "sha12":  "97735c97c10b",
+                                                           "spritesheet":  "animations/security-checkpoint_barrier.png"
+                                                       },
+                       "shale-shaker_working":  {
+                                                    "sprite":  "shale-shaker",
+                                                    "state":  "working",
+                                                    "frames":  8,
+                                                    "fps":  8,
+                                                    "frame_size":  166,
+                                                    "layout":  "horizontal strip, 1 row",
+                                                    "sha12":  "490a4c08b7e3",
+                                                    "spritesheet":  "animations/shale-shaker_working.png"
+                                                },
+                       "site-lighting-pole_working":  {
+                                                          "sprite":  "site-lighting-pole",
+                                                          "state":  "working",
+                                                          "frames":  4,
+                                                          "fps":  8,
+                                                          "frame_size":  158,
+                                                          "layout":  "horizontal strip, 1 row",
+                                                          "sha12":  "46a04d1deced",
+                                                          "spritesheet":  "animations/site-lighting-pole_working.png"
+                                                      },
+                       "site-lighting-tower_working":  {
+                                                           "sprite":  "site-lighting-tower",
+                                                           "state":  "working",
+                                                           "frames":  4,
+                                                           "fps":  8,
+                                                           "frame_size":  94,
+                                                           "layout":  "horizontal strip, 1 row",
+                                                           "sha12":  "2d889395b7d1",
+                                                           "spritesheet":  "animations/site-lighting-tower_working.png"
+                                                       },
+                       "wastewater-treatment-tank_working":  {
+                                                                 "sprite":  "wastewater-treatment-tank",
+                                                                 "state":  "working",
+                                                                 "frames":  12,
+                                                                 "fps":  8,
+                                                                 "frame_size":  122,
+                                                                 "layout":  "horizontal strip, 1 row",
+                                                                 "sha12":  "ceab63b4f06a",
+                                                                 "spritesheet":  "animations/wastewater-treatment-tank_working.png"
+                                                             },
+                       "water-injection-pump_working":  {
+                                                            "sprite":  "water-injection-pump",
+                                                            "state":  "working",
+                                                            "frames":  8,
+                                                            "fps":  8,
+                                                            "frame_size":  202,
+                                                            "layout":  "horizontal strip, 1 row",
+                                                            "sha12":  "af83f47309b9",
+                                                            "spritesheet":  "animations/water-injection-pump_working.png"
+                                                        },
+                       "well-testing-skid_working":  {
+                                                         "sprite":  "well-testing-skid",
+                                                         "state":  "working",
+                                                         "frames":  8,
+                                                         "fps":  8,
+                                                         "frame_size":  180,
+                                                         "layout":  "horizontal strip, 1 row",
+                                                         "sha12":  "a92e98480f55",
+                                                         "spritesheet":  "animations/well-testing-skid_working.png"
+                                                     },
+                       "wind-sock_working":  {
+                                                 "sprite":  "wind-sock",
+                                                 "state":  "working",
+                                                 "frames":  8,
+                                                 "fps":  8,
+                                                 "frame_size":  142,
+                                                 "layout":  "horizontal strip, 1 row",
+                                                 "sha12":  "82265a6e4004",
+                                                 "spritesheet":  "animations/wind-sock_working.png"
+                                             }
+                   }
+}

@@ -1,0 +1,9 @@
+{
+  "kind": "tech",
+  "id": "hydraulic-fracturing",
+  "name": "$loc:tech.hydraulic-fracturing",
+  "availableFrom": "E3",
+  "diffusionLagTicks": 0,
+  "prerequisites": ["horizontal"],
+  "routes": ["Research", "Licence", "ServiceRental"]
+}

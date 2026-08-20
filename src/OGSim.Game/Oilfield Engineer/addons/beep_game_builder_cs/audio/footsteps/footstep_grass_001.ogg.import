@@ -1,0 +1,19 @@
+[remap]
+
+importer="oggvorbisstr"
+type="AudioStreamOggVorbis"
+uid="uid://cq2its6lv2655"
+path="res://.godot/imported/footstep_grass_001.ogg-4f922df2defde97a4fc3ee06d03c4b06.oggvorbisstr"
+
+[deps]
+
+source_file="res://Oilfield Engineer/addons/beep_game_builder_cs/audio/footsteps/footstep_grass_001.ogg"
+dest_files=["res://.godot/imported/footstep_grass_001.ogg-4f922df2defde97a4fc3ee06d03c4b06.oggvorbisstr"]
+
+[params]
+
+loop=false
+loop_offset=0
+bpm=0
+beat_count=0
+bar_beats=4

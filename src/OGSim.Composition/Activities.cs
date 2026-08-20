@@ -557,7 +557,6 @@ internal sealed class ActivityState : IStateOwner
 internal sealed class ActivityOrders(
     CompanyState company,
     OGSim.Company.MarketState market,
-    FieldControl field,
     ActivityState activities,
     SimulationClock clock,
     OGSim.Environment.WeatherState weather,
@@ -579,14 +578,28 @@ internal sealed class ActivityOrders(
                 $"{template.Value} costs {activity.Terms.Cost.Cents} cents and the company " +
                 $"holds {company.Ledger.Cash.Cents}"));
 
-        if (field.CompartmentCount == 0)
-        {
-            reasons.Add(new RejectionReason(
-                "$loc:reject.no-target", "there is nothing here to work on"));
-
-            // The scheduler's own target check would repeat this in its words.
-            return reasons;
-        }
+        // NO SHARED TARGET CHECK. This asked whether the FIELD held a compartment
+        // and refused everything when it did not — "there is nothing here to work
+        // on" — which is the one refusal that must never gate the two activities
+        // that open a game (SDD-007 §2's GC-4 amendment).
+        //
+        // DRILLING IS HOW A COMPARTMENT COMES TO EXIST, and a survey is what a
+        // company does before there is anything downhole; SeismicSurvey's own
+        // §Complete is built on imaging DRY closures as well as charged ones.
+        // Gating either on a compartment already existing let a player drill only
+        // once they had already found something, which inverts the loop this
+        // engine is for.
+        //
+        // Measured on 2 of 12 generated basins: nothing was charged, so no
+        // accumulation produced a compartment, so every seismic and every drill
+        // was refused for ten years against eleven and twelve structures the read
+        // model was publishing with probabilities attached. A basin with no charge
+        // is a legitimate outcome and the company should be able to spend its
+        // money finding that out.
+        //
+        // Nothing is lost: WELL-WORK REFUSES ITSELF, and better. A test, a log and
+        // a core each refuse on WellCount == 0 in their own OwnRefusals, naming
+        // the wellbore they need rather than the field they are in.
 
         // THE SITE HAS TO BE REACHABLE TO START (SDD-016 §5b's R22.6 amendment).
         // Refused rather than deferred: a company that cannot move a rig until

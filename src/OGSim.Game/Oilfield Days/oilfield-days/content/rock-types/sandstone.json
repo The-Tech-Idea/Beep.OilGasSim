@@ -1,0 +1,7 @@
+{
+  "kind": "rock-type",
+  "id": "sandstone",
+  "typicalPorosity": "22 pct",
+  "typicalPermeability": "250 mD",
+  "netToGross": "80 pct"
+}

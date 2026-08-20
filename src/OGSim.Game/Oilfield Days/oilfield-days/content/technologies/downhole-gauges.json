@@ -1,0 +1,9 @@
+{
+  "kind": "tech",
+  "id": "downhole-gauges",
+  "name": "$loc:tech.downhole-gauges",
+  "availableFrom": "E2",
+  "diffusionLagTicks": 0,
+  "prerequisites": [],
+  "routes": ["Research", "Licence", "ServiceRental"]
+}

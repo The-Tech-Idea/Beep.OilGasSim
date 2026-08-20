@@ -1,0 +1,9 @@
+{
+  "kind": "tech",
+  "id": "vapour-recovery",
+  "name": "$loc:tech.vapour-recovery",
+  "availableFrom": "E3",
+  "diffusionLagTicks": 0,
+  "prerequisites": [],
+  "routes": ["Research", "Licence"]
+}

@@ -1,0 +1,190 @@
+[gd_scene load_steps=10 format=3]
+
+[ext_resource type="Script" path="res://addons/beep_game_builder_cs/ecs/ui/kit/KitPushButton.cs" id="k_pbtn"]
+[ext_resource type="Script" path="res://addons/beep_game_builder_cs/ecs/ui/ThemePresetComponent.cs" id="1_theme"]
+[ext_resource type="Script" path="res://addons/beep_game_builder_cs/ecs/ui/GameInfoBinder.cs" id="2_binder"]
+[ext_resource type="Script" path="res://addons/beep_game_builder_cs/ecs/scenes/puzzle/LevelMap.cs" id="3_script"]
+[ext_resource type="Script" path="res://addons/beep_game_builder_cs/ecs/ui/PanelFrameComponent.cs" id="panelframe"]
+[ext_resource type="Script" path="res://addons/beep_game_builder_cs/ecs/ui/kit/KitColorRect.cs" id="k_color"]
+[ext_resource type="Script" path="res://addons/beep_game_builder_cs/ecs/ui/kit/KitPanelContainer.cs" id="k_panel"]
+[ext_resource type="Script" path="res://addons/beep_game_builder_cs/ecs/ui/kit/KitLabel.cs" id="k_label"]
+
+[sub_resource type="StyleBoxEmpty" id="frame_plate"]
+
+[node name="LevelMap" type="Control"]
+script = ExtResource("3_script")
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Background" type="ColorRect" parent="."]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.14, 0.09, 0.16, 1)
+
+script = ExtResource("k_color")
+[node name="TopBarPanel" type="PanelContainer" parent="."]
+anchors_preset = 10
+anchor_right = 1.0
+offset_bottom = 72.0
+grow_horizontal = 2
+
+theme_override_styles/panel = SubResource("frame_plate")
+script = ExtResource("k_panel")
+[node name="Frame" type="Control" parent="TopBarPanel"]
+layout_mode = 2
+mouse_filter = 2
+script = ExtResource("panelframe")
+Title = "Levels"
+Banner = 2
+
+[node name="TopBarMargin" type="MarginContainer" parent="TopBarPanel"]
+theme_override_constants/margin_left = 24
+theme_override_constants/margin_right = 24
+theme_override_constants/margin_top = 10
+theme_override_constants/margin_bottom = 10
+
+[node name="TopBar" type="HBoxContainer" parent="TopBarPanel/TopBarMargin"]
+theme_override_constants/separation = 16
+
+[node name="BackButton" type="Button" parent="TopBarPanel/TopBarMargin/TopBar"]
+custom_minimum_size = Vector2(120, 44)
+text = "← Back"
+script = ExtResource("k_pbtn")
+
+[node name="TitleLabel" type="Label" parent="TopBarPanel/TopBarMargin/TopBar"]
+theme_type_variation = &"BeepSubtitle"
+text = "Levels"
+size_flags_horizontal = 3
+vertical_alignment = 1
+
+visible = false
+script = ExtResource("k_label")
+[node name="LivesCaption" type="Label" parent="TopBarPanel/TopBarMargin/TopBar"]
+theme_type_variation = &"BeepCaption"
+text = "Lives"
+vertical_alignment = 1
+
+script = ExtResource("k_label")
+[node name="LivesValue" type="Label" parent="TopBarPanel/TopBarMargin/TopBar"]
+theme_type_variation = &"BeepValue"
+text = "5"
+vertical_alignment = 1
+
+script = ExtResource("k_label")
+[node name="GoldCaption" type="Label" parent="TopBarPanel/TopBarMargin/TopBar"]
+theme_type_variation = &"BeepCaption"
+text = "Coins"
+vertical_alignment = 1
+
+script = ExtResource("k_label")
+[node name="GoldValue" type="Label" parent="TopBarPanel/TopBarMargin/TopBar"]
+theme_type_variation = &"BeepValue"
+text = "320"
+vertical_alignment = 1
+
+script = ExtResource("k_label")
+[node name="SettingsButton" type="Button" parent="TopBarPanel/TopBarMargin/TopBar"]
+custom_minimum_size = Vector2(56, 44)
+text = "⚙"
+metadata/action = "settings"
+script = ExtResource("k_pbtn")
+
+[node name="Scroll" type="ScrollContainer" parent="."]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_top = 72.0
+grow_horizontal = 2
+grow_vertical = 2
+horizontal_scroll_mode = 0
+
+[node name="Path" type="VBoxContainer" parent="Scroll"]
+theme_override_constants/separation = 18
+size_flags_horizontal = 4
+alignment = 1
+
+[node name="Level1Row" type="HBoxContainer" parent="Scroll/Path"]
+alignment = 2
+theme_override_constants/separation = 0
+
+[node name="Level1Button" type="Button" parent="Scroll/Path/Level1Row"]
+custom_minimum_size = Vector2(104, 104)
+text = "1
+★★★"
+metadata/action = "level_1"
+script = ExtResource("k_pbtn")
+
+[node name="Level2Row" type="HBoxContainer" parent="Scroll/Path"]
+alignment = 1
+theme_override_constants/separation = 0
+
+[node name="Level2Button" type="Button" parent="Scroll/Path/Level2Row"]
+custom_minimum_size = Vector2(104, 104)
+text = "2
+★★"
+metadata/action = "level_2"
+script = ExtResource("k_pbtn")
+
+[node name="Level3Row" type="HBoxContainer" parent="Scroll/Path"]
+alignment = 0
+theme_override_constants/separation = 24
+
+[node name="Pad" type="Control" parent="Scroll/Path/Level3Row"]
+custom_minimum_size = Vector2(48, 0)
+
+[node name="Level3Button" type="Button" parent="Scroll/Path/Level3Row"]
+custom_minimum_size = Vector2(104, 104)
+text = "3
+★"
+metadata/action = "level_3"
+script = ExtResource("k_pbtn")
+
+[node name="Level4Row" type="HBoxContainer" parent="Scroll/Path"]
+alignment = 1
+theme_override_constants/separation = 0
+
+[node name="Level4Button" type="Button" parent="Scroll/Path/Level4Row"]
+custom_minimum_size = Vector2(104, 104)
+text = "4
+–"
+metadata/action = "level_4"
+script = ExtResource("k_pbtn")
+
+[node name="Level5Row" type="HBoxContainer" parent="Scroll/Path"]
+alignment = 2
+theme_override_constants/separation = 0
+
+[node name="Level5Button" type="Button" parent="Scroll/Path/Level5Row"]
+custom_minimum_size = Vector2(104, 104)
+text = "5
+🔒"
+disabled = true
+metadata/action = "level_5"
+script = ExtResource("k_pbtn")
+
+[node name="Level6Row" type="HBoxContainer" parent="Scroll/Path"]
+alignment = 1
+theme_override_constants/separation = 0
+
+[node name="Level6Button" type="Button" parent="Scroll/Path/Level6Row"]
+custom_minimum_size = Vector2(104, 104)
+text = "6
+🔒"
+disabled = true
+metadata/action = "level_6"
+script = ExtResource("k_pbtn")
+
+[node name="Theme" type="Node" parent="."]
+script = ExtResource("1_theme")
+GenreName = "puzzle"
+
+[node name="GameInfoBinder" type="Node" parent="."]
+script = ExtResource("2_binder")
+TitleLabelPath = NodePath("TopBarPanel/TopBarMargin/TopBar/TitleLabel")
+ThemeComponentPath = NodePath("Theme")

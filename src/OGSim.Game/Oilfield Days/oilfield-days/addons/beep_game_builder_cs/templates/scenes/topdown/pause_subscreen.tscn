@@ -1,0 +1,247 @@
+[gd_scene load_steps=9 format=3]
+
+[ext_resource type="Script" path="res://addons/beep_game_builder_cs/ecs/ui/kit/KitPushButton.cs" id="k_pbtn"]
+[ext_resource type="Script" path="res://addons/beep_game_builder_cs/ecs/ui/kit/KitPanelContainer.cs" id="k_panelc"]
+[ext_resource type="Script" path="res://addons/beep_game_builder_cs/ecs/ui/ThemePresetComponent.cs" id="1_theme"]
+[ext_resource type="Script" path="res://addons/beep_game_builder_cs/ecs/ui/GameInfoBinder.cs" id="2_binder"]
+[ext_resource type="Script" path="res://addons/beep_game_builder_cs/ecs/scenes/topdown/PauseSubscreen.cs" id="3_script"]
+
+[ext_resource type="Script" path="res://addons/beep_game_builder_cs/ecs/ui/kit/KitTabPanel.cs" id="k_tabs"]
+[ext_resource type="Script" path="res://addons/beep_game_builder_cs/ecs/ui/kit/KitColorRect.cs" id="k_color"]
+[ext_resource type="Script" path="res://addons/beep_game_builder_cs/ecs/ui/kit/KitLabel.cs" id="k_label"]
+[node name="PauseSubscreen" type="CanvasLayer"]
+script = ExtResource("3_script")
+layer = 10
+process_mode = 3
+
+[node name="Background" type="ColorRect" parent="."]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.05, 0.05, 0.08, 0.92)
+
+script = ExtResource("k_color")
+[node name="Margin" type="MarginContainer" parent="."]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 48
+theme_override_constants/margin_right = 48
+theme_override_constants/margin_top = 36
+theme_override_constants/margin_bottom = 36
+
+[node name="MainHBox" type="HBoxContainer" parent="Margin"]
+theme_override_constants/separation = 24
+
+[node name="TabRail" type="VBoxContainer" parent="Margin/MainHBox"]
+custom_minimum_size = Vector2(210, 0)
+theme_override_constants/separation = 8
+
+[node name="PauseLabel" type="Label" parent="Margin/MainHBox/TabRail"]
+theme_type_variation = &"BeepTitle"
+text = "Paused"
+
+script = ExtResource("k_label")
+[node name="Spacer" type="Control" parent="Margin/MainHBox/TabRail"]
+custom_minimum_size = Vector2(0, 12)
+
+[node name="InventoryButton" type="Button" parent="Margin/MainHBox/TabRail"]
+custom_minimum_size = Vector2(0, 46)
+alignment = 0
+text = "🎒 Inventory"
+script = ExtResource("k_pbtn")
+
+[node name="MapButton" type="Button" parent="Margin/MainHBox/TabRail"]
+custom_minimum_size = Vector2(0, 46)
+alignment = 0
+text = "🗺 Map"
+script = ExtResource("k_pbtn")
+
+[node name="QuestButton" type="Button" parent="Margin/MainHBox/TabRail"]
+custom_minimum_size = Vector2(0, 46)
+alignment = 0
+text = "❓ Quest"
+script = ExtResource("k_pbtn")
+
+[node name="StatusButton" type="Button" parent="Margin/MainHBox/TabRail"]
+custom_minimum_size = Vector2(0, 46)
+alignment = 0
+text = "❤ Status"
+script = ExtResource("k_pbtn")
+
+[node name="SaveButton" type="Button" parent="Margin/MainHBox/TabRail"]
+custom_minimum_size = Vector2(0, 46)
+alignment = 0
+text = "💾 Save"
+script = ExtResource("k_pbtn")
+
+[node name="ResumeButton" type="Button" parent="Margin/MainHBox/TabRail"]
+custom_minimum_size = Vector2(0, 46)
+alignment = 0
+text = "▶ Resume"
+metadata/action = "resume"
+script = ExtResource("k_pbtn")
+
+[node name="QuitButton" type="Button" parent="Margin/MainHBox/TabRail"]
+custom_minimum_size = Vector2(0, 46)
+alignment = 0
+text = "⏏ Main Menu"
+metadata/action = "menu"
+script = ExtResource("k_pbtn")
+
+[node name="ContentArea" type="VBoxContainer" parent="Margin/MainHBox"]
+size_flags_horizontal = 3
+theme_override_constants/separation = 12
+
+[node name="Tabs" type="TabContainer" parent="Margin/MainHBox/ContentArea"]
+script = ExtResource("k_tabs")
+size_flags_vertical = 3
+
+[node name="Inventory" type="GridContainer" parent="Margin/MainHBox/ContentArea/Tabs"]
+theme_override_constants/h_separation = 6
+theme_override_constants/v_separation = 6
+columns = 8
+
+[node name="ItemSlot1" type="PanelContainer" parent="Margin/MainHBox/ContentArea/Tabs/Inventory"]
+custom_minimum_size = Vector2(56, 56)
+script = ExtResource("k_panelc")
+
+[node name="ItemSlot2" type="PanelContainer" parent="Margin/MainHBox/ContentArea/Tabs/Inventory"]
+custom_minimum_size = Vector2(56, 56)
+script = ExtResource("k_panelc")
+
+[node name="ItemSlot3" type="PanelContainer" parent="Margin/MainHBox/ContentArea/Tabs/Inventory"]
+custom_minimum_size = Vector2(56, 56)
+script = ExtResource("k_panelc")
+
+[node name="ItemSlot4" type="PanelContainer" parent="Margin/MainHBox/ContentArea/Tabs/Inventory"]
+custom_minimum_size = Vector2(56, 56)
+script = ExtResource("k_panelc")
+
+[node name="ItemSlot5" type="PanelContainer" parent="Margin/MainHBox/ContentArea/Tabs/Inventory"]
+custom_minimum_size = Vector2(56, 56)
+script = ExtResource("k_panelc")
+
+[node name="ItemSlot6" type="PanelContainer" parent="Margin/MainHBox/ContentArea/Tabs/Inventory"]
+custom_minimum_size = Vector2(56, 56)
+script = ExtResource("k_panelc")
+
+[node name="ItemSlot7" type="PanelContainer" parent="Margin/MainHBox/ContentArea/Tabs/Inventory"]
+custom_minimum_size = Vector2(56, 56)
+script = ExtResource("k_panelc")
+
+[node name="ItemSlot8" type="PanelContainer" parent="Margin/MainHBox/ContentArea/Tabs/Inventory"]
+custom_minimum_size = Vector2(56, 56)
+script = ExtResource("k_panelc")
+
+[node name="EquipRow" type="HBoxContainer" parent="Margin/MainHBox/ContentArea/Tabs/Inventory"]
+theme_override_constants/separation = 16
+
+[node name="WeaponSlot" type="PanelContainer" parent="Margin/MainHBox/ContentArea/Tabs/Inventory/EquipRow"]
+custom_minimum_size = Vector2(64, 64)
+script = ExtResource("k_panelc")
+
+[node name="ArmorSlot" type="PanelContainer" parent="Margin/MainHBox/ContentArea/Tabs/Inventory/EquipRow"]
+custom_minimum_size = Vector2(64, 64)
+script = ExtResource("k_panelc")
+
+[node name="AccessorySlot" type="PanelContainer" parent="Margin/MainHBox/ContentArea/Tabs/Inventory/EquipRow"]
+custom_minimum_size = Vector2(64, 64)
+script = ExtResource("k_panelc")
+
+[node name="Map" type="TextureRect" parent="Margin/MainHBox/ContentArea/Tabs"]
+custom_minimum_size = Vector2(0, 400)
+
+[node name="Quest" type="VBoxContainer" parent="Margin/MainHBox/ContentArea/Tabs"]
+theme_override_constants/separation = 8
+
+[node name="QuestTitle" type="Label" parent="Margin/MainHBox/ContentArea/Tabs/Quest"]
+theme_type_variation = &"BeepSubtitle"
+text = "Active Quests"
+
+script = ExtResource("k_label")
+[node name="Quest1" type="Label" parent="Margin/MainHBox/ContentArea/Tabs/Quest"]
+text = "• Find the Master Sword (0/1)"
+
+script = ExtResource("k_label")
+[node name="Quest2" type="Label" parent="Margin/MainHBox/ContentArea/Tabs/Quest"]
+text = "• Defeat 5 enemies (2/5)"
+
+script = ExtResource("k_label")
+[node name="Quest3" type="Label" parent="Margin/MainHBox/ContentArea/Tabs/Quest"]
+text = "• Collect 100 gold (45/100)"
+
+script = ExtResource("k_label")
+[node name="Status" type="GridContainer" parent="Margin/MainHBox/ContentArea/Tabs"]
+theme_override_constants/h_separation = 24
+theme_override_constants/v_separation = 12
+columns = 2
+
+[node name="HealthCaption" type="Label" parent="Margin/MainHBox/ContentArea/Tabs/Status"]
+theme_type_variation = &"BeepCaption"
+size_flags_horizontal = 3
+text = "Health"
+
+script = ExtResource("k_label")
+[node name="HealthValue" type="Label" parent="Margin/MainHBox/ContentArea/Tabs/Status"]
+theme_type_variation = &"BeepValue"
+text = "♥ 8 / 10"
+horizontal_alignment = 2
+
+script = ExtResource("k_label")
+[node name="MagicCaption" type="Label" parent="Margin/MainHBox/ContentArea/Tabs/Status"]
+theme_type_variation = &"BeepCaption"
+size_flags_horizontal = 3
+text = "Magic"
+
+script = ExtResource("k_label")
+[node name="MagicValue" type="Label" parent="Margin/MainHBox/ContentArea/Tabs/Status"]
+theme_type_variation = &"BeepValue"
+text = "✦ 30 / 50"
+horizontal_alignment = 2
+
+script = ExtResource("k_label")
+[node name="GoldCaption" type="Label" parent="Margin/MainHBox/ContentArea/Tabs/Status"]
+theme_type_variation = &"BeepCaption"
+size_flags_horizontal = 3
+text = "Gold"
+
+script = ExtResource("k_label")
+[node name="GoldValue" type="Label" parent="Margin/MainHBox/ContentArea/Tabs/Status"]
+theme_type_variation = &"BeepValue"
+text = "🪙 45"
+horizontal_alignment = 2
+
+script = ExtResource("k_label")
+[node name="Save" type="VBoxContainer" parent="Margin/MainHBox/ContentArea/Tabs"]
+theme_override_constants/separation = 8
+
+[node name="SaveHeading" type="Label" parent="Margin/MainHBox/ContentArea/Tabs/Save"]
+theme_type_variation = &"BeepSubtitle"
+text = "Save Game"
+
+script = ExtResource("k_label")
+[node name="ConfirmSaveButton" type="Button" parent="Margin/MainHBox/ContentArea/Tabs/Save"]
+custom_minimum_size = Vector2(0, 48)
+text = "💾 Save to Slot 1"
+metadata/action = "save"
+script = ExtResource("k_pbtn")
+
+[node name="HintLabel" type="Label" parent="Margin/MainHBox/ContentArea/Tabs/Save"]
+theme_type_variation = &"BeepCaption"
+text = "(Saves are managed by the SaveManager autoload.)"
+
+
+script = ExtResource("k_label")
+[node name="Theme" type="Node" parent="Margin"]
+script = ExtResource("1_theme")
+GenreName = "topdown"
+
+[node name="GameInfoBinder" type="Node" parent="."]
+script = ExtResource("2_binder")
+ThemeComponentPath = NodePath("Margin/Theme")
+

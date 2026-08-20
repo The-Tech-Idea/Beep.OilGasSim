@@ -1,0 +1,9 @@
+{
+  "kind": "tech",
+  "id": "high-strength-linepipe",
+  "name": "$loc:tech.high-strength-linepipe",
+  "availableFrom": "E1",
+  "diffusionLagTicks": 120,
+  "prerequisites": [],
+  "routes": ["Licence", "Diffusion"]
+}

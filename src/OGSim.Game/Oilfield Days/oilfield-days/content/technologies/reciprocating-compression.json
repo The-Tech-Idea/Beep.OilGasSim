@@ -1,0 +1,9 @@
+{
+  "kind": "tech",
+  "id": "reciprocating-compression",
+  "name": "$loc:tech.reciprocating-compression",
+  "availableFrom": "E1",
+  "diffusionLagTicks": 0,
+  "prerequisites": [],
+  "routes": ["Diffusion"]
+}

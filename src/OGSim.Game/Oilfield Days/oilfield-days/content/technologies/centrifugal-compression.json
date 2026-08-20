@@ -1,0 +1,9 @@
+{
+  "kind": "tech",
+  "id": "centrifugal-compression",
+  "name": "$loc:tech.centrifugal-compression",
+  "availableFrom": "E2",
+  "diffusionLagTicks": 0,
+  "prerequisites": ["reciprocating-compression"],
+  "routes": ["Research", "Licence"]
+}

@@ -1,0 +1,47 @@
+{
+  "id": "racing",
+  "display_name": "Racing",
+  "icon": "\ud83c\udfc1",
+  "description": "Race HUD, lap counters, garage and vehicle selection",
+  "default_theme": "neon",
+  "default_geometry": "racing",
+  "themes": [
+    "neon",
+    "motorsport",
+    "street",
+    "arcade",
+    "carbon"
+  ],
+  "main_scene": "racing_main.tscn",
+  "scenes": [
+    "garage.tscn",
+    "vehicle_select.tscn",
+    "race_results.tscn"
+  ],
+  "nav_wiring": {
+    "NewGameScenePath": "garage.tscn",
+    "vehicle_select": "vehicle_select.tscn",
+    "LevelCompletePath": "race_results.tscn"
+  },
+  "tuning": {
+    "speedometer_max": 320,
+    "lap_count": 3,
+    "hud_safe_margin": 24,
+    "enable_weather": true,
+    "default_weather": "Clear",
+    "enable_day_night": false,
+    "enable_seasons": false,
+    "default_season": "Spring",
+    "days_per_season": 7,
+    "enable_temperature": false,
+    "ambient_temperature": 20,
+    "enable_forecast": true,
+    "forecast_days": 3,
+    "enable_save_load": true,
+    "max_save_slots": 5,
+    "autosave_enabled": true,
+    "autosave_interval_seconds": 300,
+    "auto_cycle": false,
+    "top_down_view": false
+  }
+}

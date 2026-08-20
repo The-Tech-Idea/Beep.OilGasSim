@@ -1,0 +1,116 @@
+using Godot;
+
+namespace Beep.ECS.Scenes
+{
+    [Tool]
+    [GlobalClass]
+    public partial class MainMenu : Control
+    {
+        private UI.SaveLoadManagerComponent? _saveLoadManager;
+
+        public override void _Ready()
+        {
+            if (Engine.IsEditorHint()) return;
+
+            _saveLoadManager = this.Find<UI.SaveLoadManagerComponent>("SaveLoadManager");
+
+            this.ConnectButton("NewGameButton", OnNewGamePressed);
+
+            // Continue resumes the newest save. It used to be byte-identical to New Game,
+            // so a player with a save silently started over. Hidden when nothing is saved.
+            // GetNodeOrNull (not the throwing GetNode) so a missing node warns instead of killing
+            // every button wired after it. It also carries visibility, so it can't use ConnectPressed.
+            // Find<Control>, not Find<Button>: a KitButton is a KitControl, NOT a Godot Button,
+            // so this typed lookup silently returned null the moment the menu migrated onto the
+            // kit — the scene kept its layout and quietly lost its wiring. The signal goes
+            // through ConnectButton, which knows both kinds; visibility is set here, which is
+            // what stopped this being a plain ConnectButton call in the first place.
+            if (this.Find<Godot.Control>("ContinueButton") is { } continueBtn)
+            {
+                this.ConnectButton("ContinueButton", OnContinuePressed);
+                continueBtn.Visible = NewestSlot() != null;
+            }
+            else GD.PushWarning($"[{Name}] ContinueButton not found — not connected.");
+
+            // Saving needs a running game to capture. This scene is BOTH the startup menu and
+            // the in-game pause overlay (GameFlowComponent instances it over the frozen game),
+            // so the entry is hidden in the first role and shown in the second. It used to be
+            // hidden unconditionally, which is why Save was simply absent from the pause menu —
+            // the one place it is actually useful.
+            if (this.Find<Godot.Control>("SaveGameButton") is { } saveBtn)
+            {
+                this.ConnectButton("SaveGameButton", OnSaveGamePressed);
+                saveBtn.Visible = GameApp.Instance?.IsGameRunning ?? false;
+            }
+            else GD.PushWarning($"[{Name}] SaveGameButton not found — not connected.");
+            this.ConnectButton("LoadGameButton", OnLoadGamePressed);
+            // Open Settings as an OVERLAY, not a scene change. As the pause overlay (this menu shown over
+            // a running game) a ChangeScene would tear the run down; the overlay keeps it alive and Esc
+            // resumes. As the startup menu it simply layers over the title — Close returns here either way.
+            this.ConnectButton("SettingsButton", () => UI.SettingsOverlay.Open(this));
+            this.ConnectButton("QuitButton", () => GetTree().Quit());
+        }
+
+        /// <summary>Start a new run — via the genre's entry screen when it declares one.
+        ///
+        /// Racing wants its garage, shooter its character select, puzzle its level map. This
+        /// used to go straight to GameScenePath, which is why those three screens shipped
+        /// fully built and unreachable. A genre that declares no NewGameScenePath still goes
+        /// directly to the game.</summary>
+        private void OnNewGamePressed()
+        {
+            string? entry = GameBuilder.GameInfo.Instance?.NewGameScenePath;
+            ChangeScene(!string.IsNullOrEmpty(entry) ? entry : GameApp.Instance?.GameScenePath);
+        }
+
+        private void OnSaveGamePressed() => _saveLoadManager?.ShowSaveMenu();
+
+        private void OnLoadGamePressed() => _saveLoadManager?.ShowLoadMenu();
+
+        /// <summary>Slot of the most recent save, or null when there are none. Nullable rather
+        /// than a -1 sentinel because -1 is the autosave slot — and the autosave is included
+        /// here, since the in-game Save button and the autosave timer both write only there.
+        /// GameStateManager is an autoload, so it is reachable from the menu even though
+        /// no game scene is loaded.</summary>
+        private static int? NewestSlot()
+        {
+            var manager = GameStateManagerComponent.Instance;
+            if (manager == null) return null;
+
+            int? best = null;
+            long newest = long.MinValue;
+            foreach (var (slot, metadata) in manager.GetSaveSlots(includeAutosave: true))
+            {
+                if (metadata.Timestamp <= newest) continue;
+                newest = metadata.Timestamp;
+                best = slot;
+            }
+            return best;
+        }
+
+        private void OnContinuePressed()
+        {
+            var manager = GameStateManagerComponent.Instance;
+            int? slot = NewestSlot();
+            if (manager == null || slot == null)
+            {
+                GD.PushError($"[{Name}] Continue pressed but there is no save to load.");
+                return;
+            }
+
+            // Queue the restore; GameFlowComponent applies it once the gameplay scene exists.
+            // Restoring here pushed the save into main_menu.tscn — which has no player, no
+            // health, no inventory — and then freed it, so Continue silently started fresh.
+            if (!manager.LoadForSceneChange(slot.Value))
+            {
+                GD.PushError($"[{Name}] Failed to load save slot {slot.Value}.");
+                return;
+            }
+
+            ChangeScene(GameApp.Instance?.GameScenePath);
+        }
+
+        // Shared helper: this method was byte-identical in all 33 screen scripts.
+        private void ChangeScene(string? path) => UI.SceneNav.ChangeScene(this, path);
+    }
+}
