@@ -1257,6 +1257,45 @@ public sealed class ChainTests
     }
 
     /// <summary>
+    /// FOUR LIFT METHODS HAVE WORKED SINCE R7 AND NEVER REACHED A WELL
+    /// (R12b.2, finding 255). The physics is proven at the unit level
+    /// (`R12b2V1`/`V2`, `OGSim.Wells.Tests`) — what only a composed engine
+    /// can prove is that the command reaches a real well, and that a second
+    /// pump on the same string is refused rather than silently replacing the
+    /// first.
+    /// </summary>
+    [Fact]
+    public void R12b2V3_a_lift_method_can_be_installed_and_not_installed_twice()
+    {
+        (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled();
+        FieldControl field = engine.Provided.Resolve<FieldControl>();
+        EntityId<ICompletion> well = field.Drill(target, new Length(2000.0));
+
+        Assert.Null(field.WellNamed(well)!.Lift);
+
+        Assert.IsType<Accepted>(engine.Commands.Submit(new InstallLiftCommand(well)));
+
+        for (var month = 0; month < 3; month++) engine.Pipeline.AdvanceTick();
+
+        Assert.IsType<OGSim.Wells.RodPump>(field.WellNamed(well)!.Lift);
+
+        Rejected twice = Assert.IsType<Rejected>(
+            engine.Commands.Submit(new InstallLiftCommand(well)));
+
+        Assert.Contains(twice.Reasons, reason => reason.LocId == "$loc:reject.already-lifted");
+    }
+
+    [Fact]
+    public void R12b2V4_installing_a_lift_method_on_a_well_that_does_not_exist_is_refused()
+    {
+        (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled();
+        Produce(engine, target);
+
+        Assert.IsType<Rejected>(engine.Commands.Submit(
+            new InstallLiftCommand(new EntityId<ICompletion>(999_999))));
+    }
+
+    /// <summary>
     /// A COMPANY THAT KEPT ITS PROMISE STILL LOSES THE LICENCE WHEN THE TERM
     /// RUNS OUT (SDD-011 §1's R16 amendment, finding 254). `Licence.Expiry`
     /// was real and unread since R20d.9; `Defaults.LicenceTerms.TermMonths`

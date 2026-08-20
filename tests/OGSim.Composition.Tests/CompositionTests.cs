@@ -137,6 +137,15 @@ internal static class Fixture
             files.Add(new ContentFile("contracts/" + Path.GetFileName(path),
                                       File.ReadAllText(path)));
 
+        // AND THE ONE ROD-PUMP TIER (SDD-003 §6.2's R12b.2 amendment, finding
+        // 255) — the same door.
+        string wells = Path.Combine(here.Parent!.Parent!.FullName, "content", "wells");
+
+        foreach (string path in Directory.EnumerateFiles(wells, "*.json")
+                                         .OrderBy(p => p, StringComparer.Ordinal))
+            files.Add(new ContentFile("wells/" + Path.GetFileName(path),
+                                      File.ReadAllText(path)));
+
         return new DirectorySource(files);
     }
 
@@ -154,6 +163,7 @@ internal static class Fixture
                 new OGSim.Capabilities.TechnologyContentKind(),
                 new OGSim.World.TerrainClassContentKind(),
                 new TakeOrPayContentKind(),
+                new RodPumpContentKind(),
             ],
             new PluginRegistry());
 
@@ -203,6 +213,22 @@ internal static class Fixture
 
         return new OGSim.Company.TakeOrPayTerms(
             definition.CommittedVolume, definition.WindowMonths, definition.PenaltyRate);
+    }
+
+    /// <summary>The shipped rod-pump tier (SDD-003 §6.2's R12b.2 amendment),
+    /// for the tests that build the module list themselves.</summary>
+    public static OGSim.Wells.RodPumpTier RodPump()
+    {
+        RodPumpDefinition definition =
+            Loaded().Of<RodPumpDefinition>()[new ContentId("rod-pump-a")];
+
+        return new OGSim.Wells.RodPumpTier(
+            definition.Id,
+            new LiftEnvelope(
+                definition.MinRate, definition.MaxRate, definition.MaxDepth,
+                definition.MaxDeviationDegrees, definition.MaxGasFraction,
+                definition.MaxTemperature, definition.MaxSolidsFraction),
+            definition.Displacement.CubicMetresPerSecond);
     }
 
     private sealed class DirectorySource(IReadOnlyList<ContentFile> files) : IContentSource
@@ -264,7 +290,7 @@ public sealed class ShippedSetTests
         IReadOnlyList<IModule> modules = EngineBuilder.ShippedModules(
             audit, new SimulationClock(new GameDate(1965, 1)), new RandomSource(1UL),
             Defaults.Simulation, Fixture.Ladders(), Fixture.Registry(), Fixture.TerrainClasses(),
-            Fixture.TakeOrPay());
+            Fixture.TakeOrPay(), Fixture.RodPump());
 
         var provided = new HashSet<Type>();
         foreach (IModule module in modules)
@@ -292,7 +318,7 @@ public sealed class ShippedSetTests
         var reversed = new List<IModule>(EngineBuilder.ShippedModules(
             audit, new SimulationClock(new GameDate(1965, 1)), new RandomSource(1UL),
             Defaults.Simulation, Fixture.Ladders(), Fixture.Registry(), Fixture.TerrainClasses(),
-            Fixture.TakeOrPay()));
+            Fixture.TakeOrPay(), Fixture.RodPump()));
         reversed.Reverse();
 
         Built forward = Assert.IsType<Built>(EngineBuilder.Build(Fixture.Settings()));
@@ -823,7 +849,8 @@ public sealed class AccessWindowTests
 
         var modules = new List<IModule>(EngineBuilder.ShippedModules(
             audit, clock, new RandomSource(20260806UL), Defaults.Simulation,
-            Fixture.Ladders(), Fixture.Registry(), Fixture.TerrainClasses(), Fixture.TakeOrPay()));
+            Fixture.Ladders(), Fixture.Registry(), Fixture.TerrainClasses(), Fixture.TakeOrPay(),
+            Fixture.RodPump()));
 
         for (int i = 0; i < modules.Count; i++)
             if (modules[i] is EnvironmentModule)

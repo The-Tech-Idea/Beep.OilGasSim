@@ -1010,6 +1010,23 @@ internal static class Defaults
     public static double StimulationSkinReduction { get; } = 3.0;
 
     /// <summary>
+    /// What fitting a rod pump costs (R12b.2, finding 255). Same wellsite-
+    /// intervention shape as stimulation and remediating an injector — no
+    /// rig — priced as a real capital install, between an acid job and a
+    /// facility unit: a pump is more than a wireline job and far less than a
+    /// vessel.
+    /// </summary>
+    public static ActivityTerms InstallLiftTerms { get; } = new(
+        Template: new ContentId("install-lift"),
+        Cost: Money.FromMillions(2.5),
+        DurationTicks: 1,
+        Rig: null,
+        WeatherLimit: 6.5,
+        RequiresAccess: false,
+
+        Outcomes: SurveyOutcomes);
+
+    /// <summary>
     /// A PLANNED OVERHAUL (SDD-012 §3). A month and rather less than a new
     /// vessel, because it is the same vessel: what is bought is the years of
     /// hazard the decay curve was about to charge, not a capability the field
@@ -1764,7 +1781,8 @@ public static class EngineBuilder
     private static (FacilityLadders Ladders,
                     IReadOnlyList<OGSim.Capabilities.TechnologyNode> Registry,
                     IReadOnlyList<OGSim.World.TerrainClassDefinition> TerrainClasses,
-                    OGSim.Company.TakeOrPayTerms TakeOrPay)? Ladders(
+                    OGSim.Company.TakeOrPayTerms TakeOrPay,
+                    OGSim.Wells.RodPumpTier RodPump)? Ladders(
         EngineSettings settings)
     {
         ContentLoadResult result = FacilityContent(settings);
@@ -1772,7 +1790,8 @@ public static class EngineBuilder
         return result is ContentLoaded loaded
             ? (FacilityLadders.From(loaded.Catalogues), Registry(loaded.Catalogues),
                loaded.Catalogues.Of<OGSim.World.TerrainClassDefinition>().All,
-               TakeOrPayFrom(loaded.Catalogues))
+               TakeOrPayFrom(loaded.Catalogues),
+               RodPumpFrom(loaded.Catalogues))
             : null;
     }
 
@@ -1793,6 +1812,26 @@ public static class EngineBuilder
 
         return new OGSim.Company.TakeOrPayTerms(
             definition.CommittedVolume, definition.WindowMonths, definition.PenaltyRate);
+    }
+
+    /// <summary>
+    /// SDD-003 §6.2's R12b.2 amendment (finding 255). ONE pump tier, the same
+    /// relationship <see cref="TakeOrPayFrom"/> has to the one sales
+    /// contract — a pump is installed once, not upgraded through a ladder
+    /// this composition has no second rung for yet.
+    /// </summary>
+    private static OGSim.Wells.RodPumpTier RodPumpFrom(ICatalogSet catalogues)
+    {
+        RodPumpDefinition definition =
+            catalogues.Of<RodPumpDefinition>()[new ContentId("rod-pump-a")];
+
+        return new OGSim.Wells.RodPumpTier(
+            definition.Id,
+            new LiftEnvelope(
+                definition.MinRate, definition.MaxRate, definition.MaxDepth,
+                definition.MaxDeviationDegrees, definition.MaxGasFraction,
+                definition.MaxTemperature, definition.MaxSolidsFraction),
+            definition.Displacement.CubicMetresPerSecond);
     }
 
     /// <summary>
@@ -1851,6 +1890,7 @@ public static class EngineBuilder
                 new OGSim.Capabilities.TechnologyContentKind(),
                 new OGSim.World.TerrainClassContentKind(),
                 new TakeOrPayContentKind(),
+                new RodPumpContentKind(),
             ],
             new PluginRegistry())
             .LoadAll(settings.Content);
@@ -1860,7 +1900,8 @@ public static class EngineBuilder
         RealityProfile profile, FacilityLadders ladders,
         IReadOnlyList<OGSim.Capabilities.TechnologyNode> registry,
         IReadOnlyList<OGSim.World.TerrainClassDefinition> terrainClasses,
-        OGSim.Company.TakeOrPayTerms takeOrPay) =>
+        OGSim.Company.TakeOrPayTerms takeOrPay,
+        OGSim.Wells.RodPumpTier rodPump) =>
     [
         new SubsurfaceModule(),
         new WellsModule(),
@@ -1876,7 +1917,7 @@ public static class EngineBuilder
         new HseModule(),
         new ObjectivesModule(),
         new MaterialsModule(profile),
-        new FieldModule(ladders, takeOrPay),
+        new FieldModule(ladders, takeOrPay, rodPump),
         new DiagnosticsModule(audit, clock, random),
     ];
 
@@ -1952,7 +1993,7 @@ public static class EngineBuilder
     {
         ArgumentNullException.ThrowIfNull(settings);
 
-        if (Ladders(settings) is not var (ladders, registry, terrainClasses, takeOrPay))
+        if (Ladders(settings) is not var (ladders, registry, terrainClasses, takeOrPay, rodPump))
             return new BuildRefusedByContent(Failures(settings));
 
         var clock = new SimulationClock(settings.Epoch);
@@ -1962,7 +2003,7 @@ public static class EngineBuilder
             settings,
             ShippedModules(audit, clock, new RandomSource(settings.WorldSeed),
                            Defaults.ProfileNamed(settings.RealityProfile), ladders, registry,
-                           terrainClasses, takeOrPay),
+                           terrainClasses, takeOrPay, rodPump),
             clock, audit);
     }
 
@@ -1984,7 +2025,7 @@ public static class EngineBuilder
     {
         ArgumentNullException.ThrowIfNull(settings);
 
-        if (Ladders(settings) is not var (ladders, registry, terrainClasses, takeOrPay))
+        if (Ladders(settings) is not var (ladders, registry, terrainClasses, takeOrPay, rodPump))
             return new BuildRefusedByContent(Failures(settings));
 
         var clock = new SimulationClock(settings.Epoch);
@@ -1996,7 +2037,7 @@ public static class EngineBuilder
             settings,
             ShippedModules(audit, clock, new RandomSource(settings.WorldSeed),
                            Defaults.ProfileNamed(settings.RealityProfile), ladders, registry,
-                           terrainClasses, takeOrPay),
+                           terrainClasses, takeOrPay, rodPump),
             clock, audit);
     }
 

@@ -306,6 +306,9 @@ public sealed class GasLift : LiftMethod
 /// <para>Rate-limited and deviation-limited, which is why it belongs to shallow,
 /// low-rate, late-life wells — exactly the ones an ESP would be absurd on.</para>
 /// </summary>
+public sealed record RodPumpTier(
+    ContentId Id, LiftEnvelope Envelope, double DisplacementCubicMetresPerSecond);
+
 public sealed class RodPump : LiftMethod
 {
     private readonly double _displacementM3PerS;

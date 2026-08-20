@@ -754,7 +754,8 @@ internal sealed class TakeOrPayStage(
 /// because a failed solve must commit nothing.</para>
 /// </summary>
 internal sealed class FieldModule(
-    FacilityLadders ladders, OGSim.Company.TakeOrPayTerms takeOrPay) : EngineModule(Declare(
+    FacilityLadders ladders, OGSim.Company.TakeOrPayTerms takeOrPay,
+    OGSim.Wells.RodPumpTier rodPump) : EngineModule(Declare(
     "field",
     provides:
     [
@@ -875,6 +876,7 @@ internal sealed class FieldModule(
         typeof(InstallGasPlantCommand),
         typeof(RemediateInjectorCommand),
         typeof(StimulateWellCommand),
+        typeof(InstallLiftCommand),
         typeof(ServiceEquipmentCommand),
         typeof(InstallMonitoringCommand),
         typeof(RepairEquipmentCommand),
@@ -1158,6 +1160,13 @@ internal sealed class FieldModule(
             // the frac or multi-stage that name is short for.
             new StimulateWellActivity(
                 Defaults.StimulateWellTerms, field),
+
+            // A WELL THAT CANNOT LIFT ITSELF CAN BE GIVEN A PUMP (R12b.2,
+            // finding 255). Four lift methods have worked since R7 and no
+            // command ever reached one — the same shape as the stimulation
+            // gap above, on the other half of what a well can be given.
+            new InstallLiftActivity(
+                Defaults.InstallLiftTerms, field, rodPump, composition.Require<SimulationClock>()),
 
             // THE ANSWER THE DRILLING REFUSAL ALREADY NAMED. "A bigger header
             // has to be installed first" has been the reason a well is turned

@@ -1330,6 +1330,56 @@ public interface ICompletion : IFlowElement
 > so building them now would mean inventing the mapping rather than reading
 > it — named and left, not silently dropped.
 
+> **R12b.2 amendment (finding 255): a well can be given a pump.** §6.2
+> declares four working `ILiftMethod`s (R7.1–R7.5, all ✅) and nothing in
+> this composition ever constructs one against a real well — `Completion`
+> opens with `lift: null` always (`CompletionFor`), and no command touches
+> it afterward, the same "real mechanism, joined to nothing" shape as
+> findings 149, 200, 207, 252, 253 and 254.
+>
+> **Two immutable references, not one, and both have to move together.**
+> `Completion.Lift` is one; the other is `_outflow`, because
+> `HydrostaticFrictionOutflowModel` (§6.2) takes its `ILiftMethod?` at
+> construction and has no setter of its own — §6.2's hooks are read INSIDE
+> the outflow model's own `RequiredBottomhole`, not read separately by
+> `Completion`, so installing a lift method that only updated the property
+> a host reads would leave the solve using the old one (an L5 hazard: two
+> places would each answer "what lift is installed" and only one would be
+> true of the physics). `Completion` gains one member that swaps both:
+>
+> ```csharp
+> // Both move together or neither does — `_outflow` is what the solve
+> // actually reads, `Lift` is what a host and R18's hazard model read, and a
+> // half-installed lift would make the two disagree about the same well.
+> void InstallLift(ILiftMethod lift, IOutflowModel outflow);
+> ```
+>
+> **The caller builds the new outflow model, not `Completion`.** A
+> `Completion` holds `IOutflowModel` through the interface (law L1) and
+> cannot rebuild a `HydrostaticFrictionOutflowModel` it has no concrete
+> reference to; asking it to would mean either depending on the concrete
+> type or growing a second construction path outside composition. The
+> tubing geometry the new model needs is not a fact `Completion` loses
+> between drilling and installing lift — `CompletionFor`'s `tubing` is
+> exactly `(totalDepth, totalDepth, 0.0889 m, 4.6e-5)`, and `totalDepth` is
+> recoverable from the well's own perforations (`DeepestMd`, already
+> `ProductionLoop`'s own method for the same reconstruction problem
+> `WellboreNamed` solves) rather than a second stored copy.
+>
+> **One technique, matching R12b.7's own scoping call.** A rod pump: the
+> simplest of the four (`DisplacementCap` alone, no curve, no power draw —
+> §6.2's own "each method fills the fields it uses"), un-gated, and its
+> tier is content — one datasheet (`content/wells/rod-pump-a.json`), the
+> same shape a facility tier takes, mirroring `TakeOrPayContentKind`'s
+> ungated form rather than a facility ladder's gated ANY: a pump is
+> installed once, not upgraded through a progression this composition has
+> no second rung for yet. ESP, gas lift and PCP stay real, tested and
+> unreachable from a command — the same honest gap R12b.7 left for frac.
+>
+> **Refused where installing one would improve nothing**: no such well, the
+> well is plugged, or the well already carries a lift method — a second
+> pump on the same string is not a decision this mechanic models.
+
 ### 6.1 Inflow (SI Darcy form, per perforation)
 
 ```text

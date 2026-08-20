@@ -263,4 +263,69 @@ public class OperatingPointTests
 
         Assert.Equal(2.0, well.Perforations[0].Skin, precision: 9);
     }
+
+    // ---------------------------------------------------------- R12b.2 / 255
+
+    /// <summary>The tubing <see cref="Well"/> builds its own outflow model
+    /// from — installing a lift method has to match it, or the mutation
+    /// would be comparing a well against a different string than the one it
+    /// is actually completed in.</summary>
+    private static readonly TubingGeometry InstallTubing = Fixtures.Tubing();
+
+    [Fact] // The mutation itself: a strong well is capped once a pump is fitted
+    public void R12b2V1_installing_a_rod_pump_caps_a_strong_wells_rate()
+    {
+        Completion well = Well(reservoirBarA: 350.0, skin: 0.0, permeabilityM2: 1.0e-12);
+        var wellhead = new Pressure(10.0e5);
+
+        double before = Rate(well.SolveOperatingPoint(wellhead));
+
+        const double displacement = 1.0e-4;
+        Assert.True(before > displacement, "the well was not strong enough to prove a cap");
+
+        var lift = new RodPump(
+            new EntityId<IWellComponent>(99), new ContentId("rod-pump-a"),
+            Wide, new GameDate(1970, 6), displacement);
+
+        well.InstallLift(
+            lift, new HydrostaticFrictionOutflowModel(
+                InstallTubing, Density.FromSpecificGravity(0.85), lift));
+
+        double after = Rate(well.SolveOperatingPoint(wellhead));
+
+        Assert.Equal(displacement, after, precision: 12);
+        Assert.Same(lift, well.Lift);
+    }
+
+    [Fact] // A weak well is unaffected — the cap is a ceiling, not a floor (R7-V6's claim, through the mutation)
+    public void R12b2V2_installing_a_generous_pump_on_a_weak_well_changes_nothing()
+    {
+        Completion well = Well(reservoirBarA: 250.0, skin: 0.0, permeabilityM2: 1.0e-15);
+        var wellhead = new Pressure(10.0e5);
+
+        double before = Rate(well.SolveOperatingPoint(wellhead));
+
+        const double generousDisplacement = 1.0;
+
+        var lift = new RodPump(
+            new EntityId<IWellComponent>(99), new ContentId("rod-pump-a"),
+            Wide, new GameDate(1970, 6), generousDisplacement);
+
+        well.InstallLift(
+            lift, new HydrostaticFrictionOutflowModel(
+                InstallTubing, Density.FromSpecificGravity(0.85), lift));
+
+        double after = Rate(well.SolveOperatingPoint(wellhead));
+
+        Assert.Equal(before, after, precision: 9);
+    }
+
+    private static readonly LiftEnvelope Wide = new(
+        MinRate: new ReservoirRate(0.0),
+        MaxRate: new ReservoirRate(1.0),
+        MaxDepth: new Length(10_000.0),
+        MaxDeviationDegrees: 90.0,
+        MaxGasFraction: 1.0,
+        MaxTemperature: Temperature.FromCelsius(250.0),
+        MaxSolidsFraction: 1.0);
 }
