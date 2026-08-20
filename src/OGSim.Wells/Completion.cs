@@ -187,7 +187,18 @@ public sealed class Completion : ICompletion
             stimulated[i] = Perforations[i] with { Skin = Perforations[i].Skin - skinReduction };
 
         Perforations = stimulated;
+        SkinReduction += skinReduction;
     }
+
+    /// <summary>
+    /// SDD-003 §6's persistence amendment (finding 256): the sum of every
+    /// <see cref="Stimulate"/> reduction this completion has ever been given.
+    /// Skin itself is a rebuilt list, not a counter, so nothing else on this
+    /// completion says how much of it is stimulation — a save needs exactly
+    /// this to reproduce the effect, by calling <see cref="Stimulate"/> again,
+    /// once, against a freshly reopened well's own zero baseline.
+    /// </summary>
+    public double SkinReduction { get; private set; }
 
     public ILiftMethod? Lift { get; private set; }
 

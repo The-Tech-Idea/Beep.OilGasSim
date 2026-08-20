@@ -91,6 +91,47 @@ internal static class LiftGate
             ?? throw new InvariantFault("R1 §2.5", null,
                 $"well {target.Value} passed validation and no longer exists at completion");
     }
+
+    /// <summary>
+    /// Builds the concrete <see cref="ILiftMethod"/> a saved tier id names
+    /// (SDD-003 §6's persistence amendment, finding 256) — a RELOAD's own
+    /// install, through the same four constructors <c>InstallXxxActivity.
+    /// Complete</c> uses, matched against the tier bundle's four ids rather
+    /// than a second, hand-maintained kind tag (law L5: `LiftTiers` already
+    /// knows which of its four fields is which).
+    /// </summary>
+    public static ILiftMethod Reconstruct(
+        OGSim.Wells.LiftTiers tiers, EntityId<IWellComponent> component,
+        ContentId tierId, GameDate installed)
+    {
+        ArgumentNullException.ThrowIfNull(tiers);
+
+        if (tierId == tiers.RodPump.Id)
+            return new OGSim.Wells.RodPump(
+                component, tierId, tiers.RodPump.Envelope, installed,
+                tiers.RodPump.DisplacementCubicMetresPerSecond);
+
+        if (tierId == tiers.Pcp.Id)
+            return new OGSim.Wells.ProgressingCavityPump(
+                component, tierId, tiers.Pcp.Envelope, installed,
+                tiers.Pcp.DisplacementCubicMetresPerSecond);
+
+        if (tierId == tiers.Esp.Id)
+            return new OGSim.Wells.ElectricSubmersiblePump(
+                component, tierId, tiers.Esp.Envelope, installed,
+                tiers.Esp.HeadCurve, tiers.Esp.Efficiency);
+
+        if (tierId == tiers.GasLift.Id)
+            return new OGSim.Wells.GasLift(
+                component, tierId, tiers.GasLift.Envelope, installed,
+                tiers.GasLift.InjectionRateCubicMetresPerSecond,
+                tiers.GasLift.GasDensityKgPerM3);
+
+        throw new SaveDataFault("SDD-013 §2", null,
+            $"the save names lift tier '{tierId.Value}' on well {component.Value}; this " +
+            "build's catalogue ships no tier with that id, so the well it lifted cannot be " +
+            "rebuilt as it was saved");
+    }
 }
 
 /// <summary>Install a rod pump on a well that has none.</summary>

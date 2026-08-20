@@ -402,6 +402,16 @@ public static class SaveGame
                 Rebuild(engine, loaded);
 
             StateBlock.Restore(owners[i], BlockFor(loaded, owners[i].Key.Value));
+
+            // AND REINSTALL EVERY LIFT METHOD (SDD-003 §6's persistence
+            // amendment, finding 256), immediately after the wells' own
+            // block restores. `WellsState.Restore` above already replayed
+            // stimulation through `Stimulate` itself — it could not do the
+            // same for lift, because rebuilding a concrete `ILiftMethod`
+            // needs `LiftTiers` and `FieldControl`'s tubing geometry, neither
+            // of which `OGSim.Wells` may depend on (law L1).
+            if (string.Equals(owners[i].Key.Value, WellsKey, StringComparison.Ordinal))
+                ReinstallLift(engine, loaded);
         }
 
         var random = engine.Provided.Resolve<IRandomSource>();
@@ -573,7 +583,45 @@ public static class SaveGame
             field.Reopen(wells[i].Id, wells[i].Drains, wells[i].TotalDepth);
     }
 
+    /// <summary>
+    /// Reinstalls the lift method every saved well carried (SDD-003 §6's
+    /// persistence amendment, finding 256), through the same construction
+    /// <c>InstallXxxActivity.Complete</c> uses. A rebuilt completion opens
+    /// with <c>Lift: null</c> (<c>CompletionFor</c>), so without this a
+    /// reload would silently strip every pump a player had bought.
+    ///
+    /// <para>Composition-level rather than <c>WellsState</c>'s own, for the
+    /// same reason <see cref="Rebuild"/> is: reconstructing the concrete
+    /// <see cref="ILiftMethod"/> needs <see cref="OGSim.Wells.LiftTiers"/>
+    /// (which of the four shipped tiers the saved id names) and
+    /// <see cref="FieldControl"/> (<c>LiftGate.OutflowFor</c>'s tubing
+    /// geometry), neither of which <c>OGSim.Wells</c> may depend on
+    /// (law L1).</para>
+    /// </summary>
+    private static void ReinstallLift(Engine engine, Loaded loaded)
+    {
+        IReadOnlyList<OGSim.Wells.SavedWell> wells = OGSim.Wells.WellsState.Saved(
+            StateBlock.ReaderFor(BlockFor(loaded, WellsKey)));
 
+        var field = engine.Provided.Resolve<FieldControl>();
+        var tiers = engine.Provided.Resolve<OGSim.Wells.LiftTiers>();
+
+        for (int i = 0; i < wells.Count; i++)
+        {
+            if (wells[i].LiftTier is not ContentId tierId) continue;
+
+            var well = new EntityId<ICompletion>(wells[i].Id.Value);
+            var component = new EntityId<IWellComponent>(wells[i].Id.Value);
+
+            ILiftMethod lift = LiftGate.Reconstruct(
+                tiers, component, tierId, wells[i].LiftInstalled!.Value);
+
+            OGSim.Wells.Completion completion = LiftGate.CompletionOf(
+                field, new EntityRef(EntityKind.Completion, wells[i].Id.Value));
+
+            completion.InstallLift(lift, LiftGate.OutflowFor(field, well, lift));
+        }
+    }
 
     /// <summary>
     /// One owner's block, or a fault naming it.

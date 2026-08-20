@@ -18,15 +18,21 @@ namespace OGSim.Wells;
 /// One well as a save records it: the decision, not the design.
 ///
 /// <para>Which compartment it drains and how deep it went are the player's;
-/// the tubing, the inflow model and the lift are content the loader supplies
-/// again (SDD-013 §4). The choke is here because it is neither — it is a
-/// setting the player changed after the well was built.</para>
+/// the tubing and the inflow model are content the loader supplies again
+/// (SDD-013 §4). The choke is here because it is neither — it is a setting
+/// the player changed after the well was built. Skin reduction and lift are
+/// here for the same reason (SDD-003 §6's persistence amendment, finding
+/// 256): both are things a player did to the well after it was drilled, not
+/// facts the loader can re-derive from the rock.</para>
 /// </summary>
 public readonly record struct SavedWell(
     EntityId<ICompletion> Id,
     EntityId<IReservoirCompartmentEntity> Drains,
     Length TotalDepth,
-    bool ShutIn);
+    bool ShutIn,
+    double SkinReduction,
+    ContentId? LiftTier,
+    GameDate? LiftInstalled);
 
 /// <summary>Owner of <c>wells.completions</c>.</summary>
 public sealed class WellsState : IStateOwner
@@ -52,7 +58,7 @@ public sealed class WellsState : IStateOwner
 
     public StateKey Key { get; } = new("wells.completions");
 
-    public int SchemaVersion => 2;
+    public int SchemaVersion => 3;
 
     /// <summary>
     /// THE ONE OWNER THAT DEPENDS ON OTHERS (SDD-013 §2b), because restoring
@@ -220,6 +226,30 @@ public sealed class WellsState : IStateOwner
             // carries; the day a real choke position exists it is a fraction and
             // saves as one.
             writer.WriteInt64(at + "shut-in", completion.IsShutIn ? 1L : 0L);
+
+            // WHAT A PLAYER DID TO THE WELL AFTER IT WAS DRILLED (SDD-003 §6's
+            // persistence amendment, finding 256). Neither is re-derivable from
+            // the rock the way the tubing and inflow model are — `Reopen` calls
+            // the same `Drill` a fresh well uses, which always opens clean and
+            // unlifted, so a save made after either command survived the
+            // reload's `Rebuild` and then silently reverted.
+            writer.WriteDouble(at + "skin-reduction", completion.SkinReduction);
+
+            if (completion.Lift is ILiftMethod lift)
+            {
+                writer.WriteString(at + "lift-tier", lift.InstalledTier.Value);
+                writer.WriteInt64(at + "lift-installed-year", lift.Installed.Year);
+                writer.WriteInt64(at + "lift-installed-month", lift.Installed.Month);
+            }
+            else
+            {
+                // EMPTY, NOT OMITTED. `ContentId` cannot itself be empty (SDD-004
+                // §2), so an empty string is an unambiguous "no lift installed"
+                // rather than a sentinel that could collide with a real tier id.
+                writer.WriteString(at + "lift-tier", string.Empty);
+                writer.WriteInt64(at + "lift-installed-year", 0L);
+                writer.WriteInt64(at + "lift-installed-month", 0L);
+            }
         }
     }
 
@@ -244,12 +274,21 @@ public sealed class WellsState : IStateOwner
         {
             string at = Prefix(i);
 
+            string liftTier = reader.ReadString(at + "lift-tier");
+
             wells.Add(new SavedWell(
                 new EntityId<ICompletion>((ulong)reader.ReadInt64(at + "id")),
                 new EntityId<IReservoirCompartmentEntity>(
                     (ulong)reader.ReadInt64(at + "drains")),
                 new Length(reader.ReadDouble(at + "depth")),
-                ShutIn: reader.ReadInt64(at + "shut-in") != 0L));
+                ShutIn: reader.ReadInt64(at + "shut-in") != 0L,
+                SkinReduction: reader.ReadDouble(at + "skin-reduction"),
+                LiftTier: liftTier.Length == 0 ? null : new ContentId(liftTier),
+                LiftInstalled: liftTier.Length == 0
+                    ? null
+                    : new GameDate(
+                        (int)reader.ReadInt64(at + "lift-installed-year"),
+                        (int)reader.ReadInt64(at + "lift-installed-month"))));
         }
 
         return wells;
@@ -286,6 +325,21 @@ public sealed class WellsState : IStateOwner
             // because that is what a new completion is.
             completion.SetChoke(
                 saved[i].ShutIn ? ChokeSetting.Closed : ChokeSetting.Open);
+
+            // REPLAYED THROUGH `Stimulate` ITSELF (finding 256), not a second
+            // mechanism that pokes `Perforations` directly — the rebuilt well
+            // is a fresh, clean completion, so applying the cumulative
+            // reduction once reproduces exactly what every stimulation job
+            // this well ever had left it at.
+            if (saved[i].SkinReduction > 0.0)
+                completion.Stimulate(saved[i].SkinReduction);
+
+            // LIFT IS NOT RESTORED HERE. Rebuilding the concrete `ILiftMethod`
+            // needs `LiftTiers` (which shipped tier the saved id names) and
+            // `FieldControl` (the well's own tubing geometry) — neither of
+            // which `OGSim.Wells` may depend on (law L1). `SaveGame.Restore`
+            // reinstalls it from composition, immediately after this method
+            // returns.
         }
     }
 

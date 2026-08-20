@@ -766,6 +766,11 @@ internal sealed class FieldModule(
         // contract, provided so a test can resolve and assess it directly,
         // the same reason Licence is.
         typeof(OGSim.Company.TakeOrPayContract),
+
+        // SDD-003 §6's persistence amendment (finding 256) — a reload needs
+        // to look a saved tier id up against the four shipped tiers to
+        // reinstall the pump it named.
+        typeof(OGSim.Wells.LiftTiers),
     ],
     requires:
     [
@@ -1044,6 +1049,13 @@ internal sealed class FieldModule(
         // The scenario's door onto the field. Provided rather than reachable, so
         // building a field is something composition hands out deliberately.
         composition.Provide(field);
+
+        // AND THE FOUR LIFT TIERS (SDD-003 §6's persistence amendment, finding
+        // 256) — a reload is a second real consumer, after the four install
+        // activities above, and reinstalling a saved pump needs to look one up
+        // by the tier id the save names rather than guess which of the four it
+        // was.
+        composition.Provide(liftTiers);
 
         var company = composition.Require<OGSim.Company.CompanyState>();
         IAuditTrail audit = composition.Require<IAuditTrail>();

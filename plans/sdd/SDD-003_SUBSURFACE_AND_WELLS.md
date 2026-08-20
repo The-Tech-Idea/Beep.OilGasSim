@@ -1402,6 +1402,64 @@ public interface ICompletion : IFlowElement
 > second pump of any kind on the same string is not a decision this
 > mechanic models.
 
+> **Persistence amendment (finding 256): stimulation and lift do not survive
+> a reload.** `WellsState.Capture`'s own comment claims "the completion's own
+> configuration — tubing, choke, lift — is CONTENT, restored by the loader
+> rather than copied into every save (SDD-013 §4)" — true of the AS-DRILLED
+> default and false of anything a player did to it afterward. `Reopen` calls
+> the same `Drill` a fresh well uses, which always opens at `Skin: 0.0` and
+> `Lift: null` (`CompletionFor`); nothing downstream reapplies a stimulation
+> job or a lift install, so a save made after either command survives the
+> reload's own `Rebuild` and then silently reverts. The same "real mechanism,
+> joined to nothing" shape this file has now found four times (149, 200/207,
+> 252, 253/255) recurs a fifth time, on the save path rather than the command
+> path.
+>
+> **`Completion` gains one read-only fact.** Skin is a REBUILT list, not a
+> counter (§6's R12b.7 amendment), so nothing on the completion previously
+> said how much of it was stimulation; a save needs the decision, not the
+> resulting number, because reapplying it IS `Stimulate` itself and
+> `Stimulate` is written in terms of a reduction, not a floor.
+>
+> ```csharp
+> // The sum of every skinReduction a stimulation job has ever ordered on this
+> // completion — what a save needs to reproduce the effect by calling
+> // Stimulate again, once, against a freshly reopened well's own zero
+> // baseline, rather than a second mechanism that pokes Perforation directly.
+> double SkinReduction { get; }
+> ```
+>
+> **Lift needs no new member at all.** `ILiftMethod.InstalledTier` and
+> `.Installed` already carry exactly what a reinstall needs to ask "which of
+> the four shipped tiers, and when" — the gap was never in what `Completion`
+> exposes, only in nothing reading it before a reload discarded it.
+>
+> **Both restore through the command's own mechanism, not a bypass.**
+> `WellsState.Restore` calls `completion.Stimulate(saved.SkinReduction)`
+> when it is positive — the exact call `StimulateWellActivity.Complete`
+> makes, replayed once against the rebuilt well's own baseline, the same way
+> `Reopen` replays `Drill` rather than laying a second construction path
+> beside it (S013-5's own reasoning, one level up). Lift is reinstalled the
+> same way, but from composition rather than from `WellsState`: rebuilding
+> the concrete `ILiftMethod` and its outflow model needs `LiftTiers` (to look
+> up which tier the saved id names) and `FieldControl` (`LiftGate.OutflowFor`,
+> which reads the well's own tubing geometry) — neither of which
+> `OGSim.Wells` may depend on (law L1). `SaveGame.Restore` calls a new
+> `LiftGate.Reconstruct` right after `wells.completions` restores, the same
+> place `Rebuild` already runs, for the same layering reason.
+>
+> **`LiftTiers` is now provided**, the same way `field` itself is
+> (`FieldModule.Compose`) — a reload is a second real consumer, after the
+> four install activities, and neither could reach it as a constructor
+> parameter alone.
+>
+> **`WellsState.SchemaVersion` moves 2 → 3.** Three fields join the block per
+> well: `skin-reduction` (0.0 when never stimulated), `lift-tier` (empty
+> string when no lift is installed — `ContentId` cannot itself be empty, so
+> the sentinel is unambiguous), and the installed date as
+> `lift-installed-year`/`lift-installed-month` (unread when `lift-tier` is
+> empty).
+
 ### 6.1 Inflow (SI Darcy form, per perforation)
 
 ```text

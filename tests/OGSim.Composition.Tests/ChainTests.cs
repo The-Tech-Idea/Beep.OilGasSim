@@ -1329,6 +1329,58 @@ public sealed class ChainTests
     }
 
     /// <summary>
+    /// STIMULATION AND LIFT SURVIVE A RELOAD (SDD-003 §6's persistence
+    /// amendment, finding 256). `WellsState.Capture`'s own comment claimed
+    /// "the completion's own configuration — tubing, choke, lift — is CONTENT,
+    /// restored by the loader" — true of the AS-DRILLED default and false of
+    /// anything a player did to it afterward: `Reopen` calls the same `Drill`
+    /// a fresh well uses, which always opens clean and unlifted, so a save
+    /// made after either command survived the reload's own rebuild and then
+    /// silently reverted. This is the "make the fixture DO the thing, then ask
+    /// what differs" check this file's own history keeps finding real bugs
+    /// with (findings 197, 198, 205, 206) — written here rather than
+    /// discovered by inspection alone.
+    /// </summary>
+    [Fact]
+    public void R256_stimulation_and_lift_survive_a_reload()
+    {
+        const ulong seed = 20260806UL;
+        (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled(seed);
+        FieldControl field = engine.Provided.Resolve<FieldControl>();
+
+        EntityId<ICompletion> stimulated = field.Drill(target, new Length(2000.0));
+        EntityId<ICompletion> lifted = field.Drill(target, new Length(2000.0));
+
+        Assert.IsType<Accepted>(engine.Commands.Submit(new StimulateWellCommand(stimulated)));
+        Assert.IsType<Accepted>(engine.Commands.Submit(new InstallEspCommand(lifted)));
+
+        for (var month = 0; month < 3; month++) engine.Pipeline.AdvanceTick();
+
+        double skinBefore = field.WellNamed(stimulated)!.Perforations[0].Skin;
+        ILiftMethod? liftBefore = field.WellNamed(lifted)!.Lift;
+
+        // BOTH JOBS ACTUALLY RAN, or the rest of this test would compare a
+        // default against a default and pass at proving nothing — `Beliefs`
+        // compared equal at nothing for exactly this reason (finding 198).
+        Assert.NotEqual(0.0, skinBefore);
+        Assert.IsType<OGSim.Wells.ElectricSubmersiblePump>(liftBefore);
+
+        var container = new MemoryStream();
+        SaveGame.Write(engine, seed, container);
+        container.Position = 0;
+
+        Built reloaded = Assert.IsType<Built>(SaveGame.Load(container, Fixture.Settings()));
+        FieldControl reloadedField = reloaded.Engine.Provided.Resolve<FieldControl>();
+
+        Assert.Equal(skinBefore, reloadedField.WellNamed(stimulated)!.Perforations[0].Skin);
+
+        ILiftMethod? liftAfter = reloadedField.WellNamed(lifted)!.Lift;
+        Assert.IsType<OGSim.Wells.ElectricSubmersiblePump>(liftAfter);
+        Assert.Equal(liftBefore!.InstalledTier, liftAfter!.InstalledTier);
+        Assert.Equal(liftBefore.Installed, liftAfter.Installed);
+    }
+
+    /// <summary>
     /// A COMPANY THAT KEPT ITS PROMISE STILL LOSES THE LICENCE WHEN THE TERM
     /// RUNS OUT (SDD-011 §1's R16 amendment, finding 254). `Licence.Expiry`
     /// was real and unread since R20d.9; `Defaults.LicenceTerms.TermMonths`
