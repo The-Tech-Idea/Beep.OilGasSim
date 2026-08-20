@@ -21,6 +21,29 @@ and presentation. It never edits the engine.
 10. [10_MOCKUP_REVIEW.md](10_MOCKUP_REVIEW.md) — review worksheet for the five mockups in `referenceart/Mockup`.
 11. [11_CASUAL_TOPDOWN_GAME_MODE_PLAN.md](11_CASUAL_TOPDOWN_GAME_MODE_PLAN.md) — tile-based Stardew-style competitive mode for normal players.
 12. [12_OILFIELD_DAYS_MOCKUP_REVIEW.md](12_OILFIELD_DAYS_MOCKUP_REVIEW.md) — review worksheet for the five Oilfield Days mockups.
+13. [13_OILFIELD_DAYS_BUILD_LOG.md](13_OILFIELD_DAYS_BUILD_LOG.md) — how the Godot build was made, decision by decision.
+14. [14_GAME_SDD_CONFORMANCE.md](14_GAME_SDD_CONFORMANCE.md) — the build measured against GAME-SDD-001/002.
+
+### The gameplay redesign
+
+The client shipped a driving game where a base builder was asked for. These are
+the revision, and 20 is where progress lives.
+
+15. [15_GAMEPLAY_REDESIGN.md](15_GAMEPLAY_REDESIGN.md) — **read first.** The base, the yard, the dispatch loop, and the law the whole thing lives under.
+16. [16_STAGE_A_BASE_AND_CAMERA.md](16_STAGE_A_BASE_AND_CAMERA.md) — the truck stops being the player.
+17. [17_STAGE_B_UNITS_AND_DISPATCH.md](17_STAGE_B_UNITS_AND_DISPATCH.md) — crews and vehicles that travel, and arrival submits the command.
+18. [18_STAGE_C_CONSTRUCTION.md](18_STAGE_C_CONSTRUCTION.md) — building the plant as work someone does.
+19. [19_STAGE_D_OPERATIONS.md](19_STAGE_D_OPERATIONS.md) — running a producing field.
+20. [20_GAME_TRACKER.md](20_GAME_TRACKER.md) — **what is built, next and blocked.**
+21. [21_GAME_CODE_PATTERNS.md](21_GAME_CODE_PATTERNS.md) — how the client is built: resources, hierarchy, state, signals.
+22. [22_SETTLERS_SHAPED_GAME.md](22_SETTLERS_SHAPED_GAME.md) — **the plan that matters.** A yard, a budget and ground nobody has looked at: the map goes dark, the plant starts empty, and the player builds it.
+
+**Read 22 before 15.** Plans 15 rebuilt the client and did not touch what the
+world hands the player at the start — which turned out to be the real problem.
+
+`OilField_Days_Beep_Oil_and_Gas_Sim_Game_SDD_Expanded_Godot_WorldGen.html` is the
+game-side SDD and is authoritative for the client, with OGSim authoritative for
+both. It carries eight embedded mockups. Read 14 before changing a screen.
 
 ## Ground rules
 
@@ -32,10 +55,8 @@ and presentation. It never edits the engine.
 
 ## Current Godot state
 
-The current Godot project is a near-empty host:
-
-- `project.godot` runs `node_2d.tscn`.
-- `Control.cs` is an empty `Godot.Control`.
-- `node_2d.tscn` contains a tile map and no game logic.
-
-This plans folder is the bridge between the completed engine and the game work still to be done.
+The game is `Oilfield Days/oilfield-days`, a Godot 4.7.1-mono project that
+references `OGSim.Composition` directly and runs the real engine in process. It
+has a main menu, a seeded New Game and world setup, a playable world, four boards
+and a results screen. `13_OILFIELD_DAYS_BUILD_LOG.md` records how it was built and
+`14_GAME_SDD_CONFORMANCE.md` records where it stands against the game SDD.
