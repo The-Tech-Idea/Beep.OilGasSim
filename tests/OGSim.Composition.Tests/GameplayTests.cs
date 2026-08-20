@@ -488,17 +488,20 @@ public sealed class GameplayTests
         Built built = Assert.IsType<Built>(EngineBuilder.Build(Fixture.Settings()));
         Engine engine = built.Engine;
 
-        // $50M at $300k a month, minus the $12M bond forfeited at month 24
-        // when the licence's one commitment goes unmet (R20d.9), minus the
-        // annual take-or-pay shortfall on the whole committed volume this
-        // idle field never delivers a barrel against (SDD-009 §7's R13.3
-        // amendment, finding 250): insolvency now arrives at month 82,
-        // measured directly rather than hand-derived from three compounding
-        // costs.
-        for (var month = 0; month < 79; month++) engine.Pipeline.AdvanceTick();
+        // $50M at $300k a month, minus the $12M bond forfeited at month 60
+        // when the licence's one commitment goes unmet (`Defaults.LicenceTerms`'s
+        // `Due: new Tick(60)`, R20d.9.1), minus the annual take-or-pay shortfall
+        // on the whole committed volume this idle field never delivers a barrel
+        // against (SDD-009 §7's R13.3 amendment, finding 250): insolvency
+        // arrives at month 111, measured directly rather than hand-derived from
+        // three compounding costs. **Corrected from month 82** (found going
+        // through the plan): R20d.9.1 moved the commitment's due tick from 24
+        // to 60 — the licence's own bond forfeits later, and this test's
+        // number was never revisited.
+        for (var month = 0; month < 111; month++) engine.Pipeline.AdvanceTick();
         Assert.False(engine.ReadModel!.Insolvent, "the company is not out of money yet");
 
-        for (var month = 0; month < 3; month++) engine.Pipeline.AdvanceTick();
+        engine.Pipeline.AdvanceTick();
         Assert.True(engine.ReadModel!.Insolvent, "the company has spent everything");
     }
 

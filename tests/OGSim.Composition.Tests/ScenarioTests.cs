@@ -265,7 +265,10 @@ public sealed class ScenarioTests
     /// §7's R13.3 amendment (finding 250) means an idle company also owes the
     /// shipped take-or-pay contract's full committed volume as shortfall
     /// every window, which brings insolvency in well before the scenario's
-    /// own month-120 deadline — measured at month 82.
+    /// own month-120 deadline — measured at month 111 (**corrected from 82,
+    /// found going through the plan**: R20d.9.1 moved the licence's one work
+    /// commitment from due-at-24 to due-at-60, which moved the bond forfeit
+    /// and everything after it, and this test's number was never revisited).
     /// </summary>
     [Fact]
     public void R24V19_a_failed_objective_is_recorded_once_when_it_actually_fails()
@@ -273,7 +276,7 @@ public sealed class ScenarioTests
         Built built = Assert.IsType<Built>(EngineBuilder.Build(Fixture.Settings()));
         Engine engine = built.Engine;
 
-        for (var month = 0; month < 90; month++) engine.Pipeline.AdvanceTick();
+        for (var month = 0; month < 112; month++) engine.Pipeline.AdvanceTick();
 
         Assert.True(engine.ReadModel!.Insolvent,
             "the fixture must actually go insolvent for this test to prove anything");
@@ -292,10 +295,12 @@ public sealed class ScenarioTests
     /// <summary>
     /// The per-objective event is not a duplicate of the scenario's combined
     /// verdict, even on a fixture where both fire at the SAME tick (SDD-009
-    /// §7's R13.3 amendment moved this fixture's insolvency to month 82,
-    /// before the scenario's own month-120 deadline could ever latch
-    /// <c>Overall</c> to <c>Expired</c> first — so the two events are no
-    /// longer temporally separated the way an earlier measurement found).
+    /// §7's R13.3 amendment moved this fixture's insolvency to month 111 —
+    /// **corrected from 82, the same R20d.9.1 staleness the sibling test
+    /// carried** — still well before the scenario's own month-120 deadline
+    /// could ever latch <c>Overall</c> to <c>Expired</c> first, so the two
+    /// events are no longer temporally separated the way an earlier
+    /// measurement found).
     /// What still makes the per-objective event worth having is CONTENT: it
     /// names WHICH objective broke, and the combined verdict — by design,
     /// SDD-014 §5a's report over a whole scenario rather than one term of
@@ -307,7 +312,7 @@ public sealed class ScenarioTests
         Built built = Assert.IsType<Built>(EngineBuilder.Build(Fixture.Settings()));
         Engine engine = built.Engine;
 
-        for (var month = 0; month < 90; month++) engine.Pipeline.AdvanceTick();
+        for (var month = 0; month < 112; month++) engine.Pipeline.AdvanceTick();
 
         IReadOnlyList<AuditEntry> transitions = engine.Audit.Query(
             new AuditQuery(null, AuditCategory.StateTransition, null, null));
