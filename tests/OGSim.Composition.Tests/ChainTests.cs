@@ -1381,6 +1381,64 @@ public sealed class ChainTests
     }
 
     /// <summary>
+    /// R12b.6's "restore" IS ALREADY REAL, and needed no new code to prove —
+    /// its own row still read "integrity owns no state and runs no stage, so
+    /// nothing has degraded for a workover to restore", which was true before
+    /// R20d.11 shipped condition into the loop and has been stale since. A
+    /// completion is an ordinary registered flow element to `AssetIntegrity`
+    /// (`IntegrityStage`'s own header: "a completion is a flow element too, so
+    /// nothing narrows"), so it ages, can be instrumented, and can be serviced
+    /// through the exact same three commands a separator uses — no well-
+    /// specific command exists or is needed. Deterministic: degradation has a
+    /// base rate independent of severity, so no hazard-stream failure needs to
+    /// be forced for this to prove something.
+    /// </summary>
+    [Fact]
+    public void R12b6_a_worn_well_can_be_serviced_like_any_other_equipment()
+    {
+        (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled();
+        FieldControl field = engine.Provided.Resolve<FieldControl>();
+
+        EntityId<ICompletion> well = field.Drill(target, new Length(2000.0));
+        var element = new EntityRef(EntityKind.FlowElement, well.Value);
+
+        // A TICK FIRST — the same requirement `Instrument`'s own comment
+        // states for the surface chain, confirmed here to hold for a well
+        // too: submitting before this engine has advanced even once left the
+        // well unmonitored through a full 24-month loop below, accepted and
+        // silent, with neither a refusal nor an exception to say why.
+        engine.Pipeline.AdvanceTick();
+
+        Assert.IsType<Accepted>(engine.Commands.Submit(new InstallMonitoringCommand(element)));
+
+        // FOUR YEARS OF DECAY, not one month's worth — so the comparison below
+        // cannot be satisfied by the one tick of fresh wear a repair ALWAYS
+        // shows by the time it is observed (repair runs at Operations, stage
+        // 3; decay runs at Availability, stage 4, the same tick), only by an
+        // actual restoration.
+        for (var month = 0; month < 48; month++) engine.Pipeline.AdvanceTick();
+
+        double worn = Row(engine, element).Condition
+            ?? throw new InvalidOperationException(
+                "the well was never monitored, so it never reported a condition");
+
+        Assert.True(worn < 0.85,
+            $"the well's own row read {worn} after four years, which is not worn enough for " +
+            "the repair below to prove anything against the one tick of fresh decay every " +
+            "repair carries by the time it is observed");
+
+        Assert.IsType<Accepted>(engine.Commands.Submit(new ServiceEquipmentCommand(element)));
+
+        for (var month = 0; month < 3; month++) engine.Pipeline.AdvanceTick();
+
+        double serviced = Row(engine, element).Condition!.Value;
+
+        Assert.True(serviced > worn + 0.05,
+            $"servicing a worn well moved its condition from {worn} to {serviced} — not the " +
+            "restoration `AssetIntegrity.Repair` is supposed to give it");
+    }
+
+    /// <summary>
     /// A COMPANY THAT KEPT ITS PROMISE STILL LOSES THE LICENCE WHEN THE TERM
     /// RUNS OUT (SDD-011 §1's R16 amendment, finding 254). `Licence.Expiry`
     /// was real and unread since R20d.9; `Defaults.LicenceTerms.TermMonths`
