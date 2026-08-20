@@ -146,7 +146,7 @@ the standing moves — but it lives in `OGSim.Integrity` and composition's
 | **R22** Environment and Setting | 5 | 1 | 2 |
 | **R8** Facilities and separation | 8 | 0 | 3 |
 | **R11** Transport and export | 4 | 4 | 2 |
-| **R12** Operations and scheduling | 3 | 4 | 2 |
+| **R12** Operations and scheduling | 4 | 4 | 1 |
 | **R24** Objectives, Challenges and Missions | 6 | 2 | 2 |
 | **R6** Wells | 8 | 4 | 0 |
 | **R14** Information and uncertainty | 7 | 2 | 2 |
@@ -638,7 +638,7 @@ asserts the type has no such field.
 | R12.5 | Completion and workover operations | 🟨 — same shape, same engine; each is a content template with its own outcome table |
 | R12.6 | Construction operations | 🟨 — as R12.5 |
 | R12.7 | `IPersonnel` — skill effect on duration and risk | ⬜ — `ResourceNeeds.Crew` declares the disciplines; the skill model is undeclared (would need an SDD-007 amendment) |
-| R12.8 | Abandonment operations | ⬜ — needs `IObligationRegistry` (SDD-007 §7) and R13's accrual |
+| R12.8 | Abandonment operations | ✅ — stale ⬜ (found going through the plan). Both stated blockers are resolved and have been since R12b.10: `IObligationRegistry` is implemented in `OGSim.Operations/Obligations.cs`, registered unconditionally when a well opens and discharged only by a completed abandonment; R13's accrual (`ArpsReserves.EconomicLimit`/R20d.14's plugging-bill accrual, R13.8) is what it discharges against. `AbandonWellActivity` (`OGSim.Composition`) is this task's actual `IOperation` instance — a field whose wells are all plugged stops costing anything |
 
 <a id="r12b"></a>
 #### R12b — The activity catalogue, and how it reaches every subsystem 🟨
