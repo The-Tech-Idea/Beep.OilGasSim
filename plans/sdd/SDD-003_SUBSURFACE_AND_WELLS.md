@@ -1366,19 +1366,41 @@ public interface ICompletion : IFlowElement
 > `ProductionLoop`'s own method for the same reconstruction problem
 > `WellboreNamed` solves) rather than a second stored copy.
 >
-> **One technique, matching R12b.7's own scoping call.** A rod pump: the
-> simplest of the four (`DisplacementCap` alone, no curve, no power draw —
-> §6.2's own "each method fills the fields it uses"), un-gated, and its
-> tier is content — one datasheet (`content/wells/rod-pump-a.json`), the
-> same shape a facility tier takes, mirroring `TakeOrPayContentKind`'s
-> ungated form rather than a facility ladder's gated ANY: a pump is
+> **Started at one technique and widened to all four in the same task.** A
+> rod pump shipped first — un-gated, its tier content
+> (`content/wells/rod-pump-a.json`), mirroring `TakeOrPayContentKind`'s
+> ungated form rather than a facility ladder's gated one: a pump is
 > installed once, not upgraded through a progression this composition has
-> no second rung for yet. ESP, gas lift and PCP stay real, tested and
-> unreachable from a command — the same honest gap R12b.7 left for frac.
+> no second rung for yet. **All four now ship**: PCP shares the rod pump's
+> exact model (§6.2 gives both the same relation, differing only in the
+> tier's envelope, so both are content-typed as one shared
+> `DisplacementPumpDefinition`/`DisplacementPumpTier` distinguished by
+> which rung a caller reads); ESP adds a piecewise-linear head curve and an
+> efficiency; gas lift adds an injection rate and a gas density. One
+> activity per method (`InstallRodPumpActivity`, `InstallPcpActivity`,
+> `InstallEspActivity`, `InstallGasLiftActivity`), sharing the refusal
+> logic and the tubing-geometry reconstruction through a `LiftGate` static
+> helper — the same shape five equipment installs already share through
+> `RungGate.Buyable`. **Four DISTINCT `ActivityTerms.Template` ids, not
+> one shared across the four**: `ActivityState` keys its catalogue by
+> `Template` in a dictionary, so the first draft's single shared
+> `install-lift` id would have let the last-registered activity silently
+> replace the other three in the lookup — caught building the composition
+> test that exercises all four, not by inspection.
 >
-> **Refused where installing one would improve nothing**: no such well, the
-> well is plugged, or the well already carries a lift method — a second
-> pump on the same string is not a decision this mechanic models.
+> **Gas lift's injection gas is a fixed, content-declared rate with no
+> supply-side modelling**, stated as a limit rather than an oversight:
+> `GasLift.InjectionRate` exists precisely so "R9 replaces the purchased
+> supply with the field's own compressed gas" one day, and R9's own
+> gas-processing chain (compression, dehydration, NGL) is itself still
+> built-and-not-composed (R11.2's open row) — wiring gas lift's supply
+> into gas the field has not yet learned to process would be inventing a
+> second, larger mechanism this task did not scope.
+>
+> **Refused where installing one would improve nothing**: no such well,
+> the well is plugged, or the well already carries ANY lift method — a
+> second pump of any kind on the same string is not a decision this
+> mechanic models.
 
 ### 6.1 Inflow (SI Darcy form, per perforation)
 

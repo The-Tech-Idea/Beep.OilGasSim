@@ -755,7 +755,7 @@ internal sealed class TakeOrPayStage(
 /// </summary>
 internal sealed class FieldModule(
     FacilityLadders ladders, OGSim.Company.TakeOrPayTerms takeOrPay,
-    OGSim.Wells.RodPumpTier rodPump) : EngineModule(Declare(
+    OGSim.Wells.LiftTiers liftTiers) : EngineModule(Declare(
     "field",
     provides:
     [
@@ -876,7 +876,10 @@ internal sealed class FieldModule(
         typeof(InstallGasPlantCommand),
         typeof(RemediateInjectorCommand),
         typeof(StimulateWellCommand),
-        typeof(InstallLiftCommand),
+        typeof(InstallRodPumpCommand),
+        typeof(InstallPcpCommand),
+        typeof(InstallEspCommand),
+        typeof(InstallGasLiftCommand),
         typeof(ServiceEquipmentCommand),
         typeof(InstallMonitoringCommand),
         typeof(RepairEquipmentCommand),
@@ -1164,9 +1167,22 @@ internal sealed class FieldModule(
             // A WELL THAT CANNOT LIFT ITSELF CAN BE GIVEN A PUMP (R12b.2,
             // finding 255). Four lift methods have worked since R7 and no
             // command ever reached one — the same shape as the stimulation
-            // gap above, on the other half of what a well can be given.
-            new InstallLiftActivity(
-                Defaults.InstallLiftTerms, field, rodPump, composition.Require<SimulationClock>()),
+            // gap above, on the other half of what a well can be given. All
+            // four ship: the split between them is entirely in the
+            // datasheet (SDD-003 §6.2's own "each method fills the fields
+            // it uses").
+            new InstallRodPumpActivity(
+                Defaults.InstallRodPumpTerms, field, liftTiers.RodPump,
+                composition.Require<SimulationClock>()),
+            new InstallPcpActivity(
+                Defaults.InstallPcpTerms, field, liftTiers.Pcp,
+                composition.Require<SimulationClock>()),
+            new InstallEspActivity(
+                Defaults.InstallEspTerms, field, liftTiers.Esp,
+                composition.Require<SimulationClock>()),
+            new InstallGasLiftActivity(
+                Defaults.InstallGasLiftTerms, field, liftTiers.GasLift,
+                composition.Require<SimulationClock>()),
 
             // THE ANSWER THE DRILLING REFUSAL ALREADY NAMED. "A bigger header
             // has to be installed first" has been the reason a well is turned

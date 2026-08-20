@@ -320,6 +320,54 @@ public class OperatingPointTests
         Assert.Equal(before, after, precision: 9);
     }
 
+    /// <summary>The mutation generalises: an ESP's pressure boost, not a
+    /// rod pump's displacement cap, still installs through the same
+    /// <see cref="Completion.InstallLift"/> and still revives a well the
+    /// same way R7-V2 already proved for a well built WITH one from the
+    /// start.</summary>
+    [Fact]
+    public void R12b2V3_installing_an_esp_revives_a_well_that_cannot_flow_naturally()
+    {
+        Completion well = Well(reservoirBarA: 120.0, skin: 0.0);
+        var wellhead = new Pressure(10.0e5);
+
+        Assert.IsType<Dead>(well.SolveOperatingPoint(wellhead));
+
+        var lift = new ElectricSubmersiblePump(
+            new EntityId<IWellComponent>(99), new ContentId("esp-a"), Wide, new GameDate(1970, 6),
+            headCurve: [(0.0, 1400.0), (0.005, 1100.0), (0.010, 700.0), (0.020, 0.0)],
+            efficiency: 0.55);
+
+        well.InstallLift(
+            lift, new HydrostaticFrictionOutflowModel(
+                InstallTubing, Density.FromSpecificGravity(0.85), lift));
+
+        var flowing = Assert.IsType<Flowing>(well.SolveOperatingPoint(wellhead));
+        Assert.True(flowing.Rate.CubicMetresPerSecond > 0.0);
+    }
+
+    /// <summary>And gas lift's density reduction — a third, different effect
+    /// — installs and revives through the same mutation too.</summary>
+    [Fact]
+    public void R12b2V4_installing_gas_lift_revives_a_well_that_cannot_flow_naturally()
+    {
+        Completion well = Well(reservoirBarA: 140.0, skin: 0.0);
+        var wellhead = new Pressure(10.0e5);
+
+        Assert.IsType<Dead>(well.SolveOperatingPoint(wellhead));
+
+        var lift = new GasLift(
+            new EntityId<IWellComponent>(99), new ContentId("gas-lift-a"), Wide,
+            new GameDate(1970, 6), injectionRateM3PerS: 0.02, gasDensityKgPerM3: 80.0);
+
+        well.InstallLift(
+            lift, new HydrostaticFrictionOutflowModel(
+                InstallTubing, Density.FromSpecificGravity(0.85), lift));
+
+        var flowing = Assert.IsType<Flowing>(well.SolveOperatingPoint(wellhead));
+        Assert.True(flowing.Rate.CubicMetresPerSecond > 0.0);
+    }
+
     private static readonly LiftEnvelope Wide = new(
         MinRate: new ReservoirRate(0.0),
         MaxRate: new ReservoirRate(1.0),

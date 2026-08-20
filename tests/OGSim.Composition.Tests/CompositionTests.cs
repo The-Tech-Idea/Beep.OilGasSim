@@ -163,7 +163,10 @@ internal static class Fixture
                 new OGSim.Capabilities.TechnologyContentKind(),
                 new OGSim.World.TerrainClassContentKind(),
                 new TakeOrPayContentKind(),
-                new RodPumpContentKind(),
+                new DisplacementPumpContentKind("rod-pump"),
+                new DisplacementPumpContentKind("pcp"),
+                new EspContentKind(),
+                new GasLiftContentKind(),
             ],
             new PluginRegistry());
 
@@ -215,21 +218,48 @@ internal static class Fixture
             definition.CommittedVolume, definition.WindowMonths, definition.PenaltyRate);
     }
 
-    /// <summary>The shipped rod-pump tier (SDD-003 §6.2's R12b.2 amendment),
-    /// for the tests that build the module list themselves.</summary>
-    public static OGSim.Wells.RodPumpTier RodPump()
+    /// <summary>The four shipped lift tiers (SDD-003 §6.2's R12b.2
+    /// amendment), for the tests that build the module list themselves.</summary>
+    public static OGSim.Wells.LiftTiers LiftTiers()
     {
-        RodPumpDefinition definition =
-            Loaded().Of<RodPumpDefinition>()[new ContentId("rod-pump-a")];
+        ICatalogSet loaded = Loaded();
 
-        return new OGSim.Wells.RodPumpTier(
-            definition.Id,
-            new LiftEnvelope(
-                definition.MinRate, definition.MaxRate, definition.MaxDepth,
-                definition.MaxDeviationDegrees, definition.MaxGasFraction,
-                definition.MaxTemperature, definition.MaxSolidsFraction),
-            definition.Displacement.CubicMetresPerSecond);
+        DisplacementPumpDefinition rod =
+            loaded.Of<DisplacementPumpDefinition>()[new ContentId("rod-pump-a")];
+        DisplacementPumpDefinition pcp =
+            loaded.Of<DisplacementPumpDefinition>()[new ContentId("pcp-a")];
+        EspDefinition esp = loaded.Of<EspDefinition>()[new ContentId("esp-a")];
+        GasLiftDefinition gasLift =
+            loaded.Of<GasLiftDefinition>()[new ContentId("gas-lift-a")];
+
+        return new OGSim.Wells.LiftTiers(
+            DisplacementPump(rod), DisplacementPump(pcp),
+            new OGSim.Wells.EspTier(
+                esp.Id, Envelope(esp.MinRate, esp.MaxRate, esp.MaxDepth, esp.MaxDeviationDegrees,
+                                  esp.MaxGasFraction, esp.MaxTemperature, esp.MaxSolidsFraction),
+                esp.HeadCurve, esp.Efficiency),
+            new OGSim.Wells.GasLiftTier(
+                gasLift.Id,
+                Envelope(gasLift.MinRate, gasLift.MaxRate, gasLift.MaxDepth,
+                         gasLift.MaxDeviationDegrees, gasLift.MaxGasFraction,
+                         gasLift.MaxTemperature, gasLift.MaxSolidsFraction),
+                gasLift.InjectionRate.CubicMetresPerSecond, gasLift.GasDensityKgPerM3));
     }
+
+    private static OGSim.Wells.DisplacementPumpTier DisplacementPump(
+        DisplacementPumpDefinition definition) =>
+        new(definition.Id,
+            Envelope(definition.MinRate, definition.MaxRate, definition.MaxDepth,
+                     definition.MaxDeviationDegrees, definition.MaxGasFraction,
+                     definition.MaxTemperature, definition.MaxSolidsFraction),
+            definition.Displacement.CubicMetresPerSecond);
+
+    private static LiftEnvelope Envelope(
+        ReservoirRate minRate, ReservoirRate maxRate, Length maxDepth,
+        double maxDeviationDegrees, double maxGasFraction, Temperature maxTemperature,
+        double maxSolidsFraction) =>
+        new(minRate, maxRate, maxDepth, maxDeviationDegrees, maxGasFraction, maxTemperature,
+            maxSolidsFraction);
 
     private sealed class DirectorySource(IReadOnlyList<ContentFile> files) : IContentSource
     {
@@ -290,7 +320,7 @@ public sealed class ShippedSetTests
         IReadOnlyList<IModule> modules = EngineBuilder.ShippedModules(
             audit, new SimulationClock(new GameDate(1965, 1)), new RandomSource(1UL),
             Defaults.Simulation, Fixture.Ladders(), Fixture.Registry(), Fixture.TerrainClasses(),
-            Fixture.TakeOrPay(), Fixture.RodPump());
+            Fixture.TakeOrPay(), Fixture.LiftTiers());
 
         var provided = new HashSet<Type>();
         foreach (IModule module in modules)
@@ -318,7 +348,7 @@ public sealed class ShippedSetTests
         var reversed = new List<IModule>(EngineBuilder.ShippedModules(
             audit, new SimulationClock(new GameDate(1965, 1)), new RandomSource(1UL),
             Defaults.Simulation, Fixture.Ladders(), Fixture.Registry(), Fixture.TerrainClasses(),
-            Fixture.TakeOrPay(), Fixture.RodPump()));
+            Fixture.TakeOrPay(), Fixture.LiftTiers()));
         reversed.Reverse();
 
         Built forward = Assert.IsType<Built>(EngineBuilder.Build(Fixture.Settings()));
@@ -850,7 +880,7 @@ public sealed class AccessWindowTests
         var modules = new List<IModule>(EngineBuilder.ShippedModules(
             audit, clock, new RandomSource(20260806UL), Defaults.Simulation,
             Fixture.Ladders(), Fixture.Registry(), Fixture.TerrainClasses(), Fixture.TakeOrPay(),
-            Fixture.RodPump()));
+            Fixture.LiftTiers()));
 
         for (int i = 0; i < modules.Count; i++)
             if (modules[i] is EnvironmentModule)

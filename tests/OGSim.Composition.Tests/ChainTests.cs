@@ -1259,13 +1259,39 @@ public sealed class ChainTests
     /// <summary>
     /// FOUR LIFT METHODS HAVE WORKED SINCE R7 AND NEVER REACHED A WELL
     /// (R12b.2, finding 255). The physics is proven at the unit level
-    /// (`R12b2V1`/`V2`, `OGSim.Wells.Tests`) — what only a composed engine
-    /// can prove is that the command reaches a real well, and that a second
-    /// pump on the same string is refused rather than silently replacing the
-    /// first.
+    /// (`R12b2V1`–`V4`, `OGSim.Wells.Tests`) — what only a composed engine
+    /// can prove is that each of the four commands reaches a real well and
+    /// installs the RIGHT concrete type, one well per method so none can be
+    /// masked by another's refusal.
     /// </summary>
     [Fact]
-    public void R12b2V3_a_lift_method_can_be_installed_and_not_installed_twice()
+    public void R12b2V5_all_four_lift_methods_can_be_installed()
+    {
+        (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled();
+        FieldControl field = engine.Provided.Resolve<FieldControl>();
+
+        EntityId<ICompletion> rodWell = field.Drill(target, new Length(2000.0));
+        EntityId<ICompletion> pcpWell = field.Drill(target, new Length(2000.0));
+        EntityId<ICompletion> espWell = field.Drill(target, new Length(2000.0));
+        EntityId<ICompletion> gasLiftWell = field.Drill(target, new Length(2000.0));
+
+        Assert.IsType<Accepted>(engine.Commands.Submit(new InstallRodPumpCommand(rodWell)));
+        Assert.IsType<Accepted>(engine.Commands.Submit(new InstallPcpCommand(pcpWell)));
+        Assert.IsType<Accepted>(engine.Commands.Submit(new InstallEspCommand(espWell)));
+        Assert.IsType<Accepted>(engine.Commands.Submit(new InstallGasLiftCommand(gasLiftWell)));
+
+        for (var month = 0; month < 3; month++) engine.Pipeline.AdvanceTick();
+
+        Assert.IsType<OGSim.Wells.RodPump>(field.WellNamed(rodWell)!.Lift);
+        Assert.IsType<OGSim.Wells.ProgressingCavityPump>(field.WellNamed(pcpWell)!.Lift);
+        Assert.IsType<OGSim.Wells.ElectricSubmersiblePump>(field.WellNamed(espWell)!.Lift);
+        Assert.IsType<OGSim.Wells.GasLift>(field.WellNamed(gasLiftWell)!.Lift);
+    }
+
+    /// <summary>A second pump — of ANY method, not only the same one — is
+    /// refused rather than silently replacing the first.</summary>
+    [Fact]
+    public void R12b2V6_a_lift_method_cannot_be_installed_twice_even_a_different_one()
     {
         (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled();
         FieldControl field = engine.Provided.Resolve<FieldControl>();
@@ -1273,26 +1299,33 @@ public sealed class ChainTests
 
         Assert.Null(field.WellNamed(well)!.Lift);
 
-        Assert.IsType<Accepted>(engine.Commands.Submit(new InstallLiftCommand(well)));
+        Assert.IsType<Accepted>(engine.Commands.Submit(new InstallRodPumpCommand(well)));
 
         for (var month = 0; month < 3; month++) engine.Pipeline.AdvanceTick();
 
         Assert.IsType<OGSim.Wells.RodPump>(field.WellNamed(well)!.Lift);
 
-        Rejected twice = Assert.IsType<Rejected>(
-            engine.Commands.Submit(new InstallLiftCommand(well)));
+        Rejected sameMethod = Assert.IsType<Rejected>(
+            engine.Commands.Submit(new InstallRodPumpCommand(well)));
+        Assert.Contains(sameMethod.Reasons, reason => reason.LocId == "$loc:reject.already-lifted");
 
-        Assert.Contains(twice.Reasons, reason => reason.LocId == "$loc:reject.already-lifted");
+        Rejected differentMethod = Assert.IsType<Rejected>(
+            engine.Commands.Submit(new InstallEspCommand(well)));
+        Assert.Contains(
+            differentMethod.Reasons, reason => reason.LocId == "$loc:reject.already-lifted");
+
+        // Unchanged: neither refused order replaced what was already fitted.
+        Assert.IsType<OGSim.Wells.RodPump>(field.WellNamed(well)!.Lift);
     }
 
     [Fact]
-    public void R12b2V4_installing_a_lift_method_on_a_well_that_does_not_exist_is_refused()
+    public void R12b2V7_installing_a_lift_method_on_a_well_that_does_not_exist_is_refused()
     {
         (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled();
         Produce(engine, target);
 
         Assert.IsType<Rejected>(engine.Commands.Submit(
-            new InstallLiftCommand(new EntityId<ICompletion>(999_999))));
+            new InstallRodPumpCommand(new EntityId<ICompletion>(999_999))));
     }
 
     /// <summary>

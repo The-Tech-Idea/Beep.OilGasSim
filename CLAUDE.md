@@ -13,7 +13,7 @@ code and is still authoritative. **The engine now runs.** Seventeen projects und
 `src/` compose into a playable field — a world is generated, prospects are
 drilled, a chain of surface equipment moves the fluid, a market moves under it, a
 bank lends against reserves, equipment wears out and breaks, and two headless
-clients play the whole arc through `ReadModel` + `Commands` alone. 1134 tests
+clients play the whole arc through `ReadModel` + `Commands` alone. 1137 tests
 across seventeen suites, 0 warnings.
 
 Treat counts in prose as stale until they are re-checked. The project is expected to evolve and some historical notes in this file are intentionally superseded by the live plan and the codebase itself.

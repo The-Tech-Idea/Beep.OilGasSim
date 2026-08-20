@@ -1010,15 +1010,54 @@ internal static class Defaults
     public static double StimulationSkinReduction { get; } = 3.0;
 
     /// <summary>
-    /// What fitting a rod pump costs (R12b.2, finding 255). Same wellsite-
-    /// intervention shape as stimulation and remediating an injector — no
-    /// rig — priced as a real capital install, between an acid job and a
-    /// facility unit: a pump is more than a wireline job and far less than a
-    /// vessel.
+    /// What fitting a lift method costs (R12b.2, finding 255). Same
+    /// wellsite-intervention shape as stimulation and remediating an
+    /// injector — no rig — priced as a real capital install, between an
+    /// acid job and a facility unit: a pump is more than a wireline job and
+    /// far less than a vessel. FOUR distinct templates, not one shared
+    /// across the four activities: `ActivityState` keys its catalogue by
+    /// `Template` in a dictionary, so a shared id would let the last one
+    /// registered silently replace the other three.
+    ///
+    /// <para>Costs differ by what the equipment actually is — a rod pump
+    /// and a PCP are close cousins (§6.2's own "the same relation"), an ESP
+    /// carries a cable, a downhole motor and a surface VSD, and gas lift
+    /// needs a surface interface to a compressed supply — first-pass
+    /// estimates, not calibrated against a fixture.</para>
     /// </summary>
-    public static ActivityTerms InstallLiftTerms { get; } = new(
-        Template: new ContentId("install-lift"),
+    public static ActivityTerms InstallRodPumpTerms { get; } = new(
+        Template: new ContentId("install-rod-pump"),
         Cost: Money.FromMillions(2.5),
+        DurationTicks: 1,
+        Rig: null,
+        WeatherLimit: 6.5,
+        RequiresAccess: false,
+
+        Outcomes: SurveyOutcomes);
+
+    public static ActivityTerms InstallPcpTerms { get; } = new(
+        Template: new ContentId("install-pcp"),
+        Cost: Money.FromMillions(2.7),
+        DurationTicks: 1,
+        Rig: null,
+        WeatherLimit: 6.5,
+        RequiresAccess: false,
+
+        Outcomes: SurveyOutcomes);
+
+    public static ActivityTerms InstallEspTerms { get; } = new(
+        Template: new ContentId("install-esp"),
+        Cost: Money.FromMillions(4.5),
+        DurationTicks: 1,
+        Rig: null,
+        WeatherLimit: 6.5,
+        RequiresAccess: false,
+
+        Outcomes: SurveyOutcomes);
+
+    public static ActivityTerms InstallGasLiftTerms { get; } = new(
+        Template: new ContentId("install-gas-lift"),
+        Cost: Money.FromMillions(3.2),
         DurationTicks: 1,
         Rig: null,
         WeatherLimit: 6.5,
@@ -1782,7 +1821,7 @@ public static class EngineBuilder
                     IReadOnlyList<OGSim.Capabilities.TechnologyNode> Registry,
                     IReadOnlyList<OGSim.World.TerrainClassDefinition> TerrainClasses,
                     OGSim.Company.TakeOrPayTerms TakeOrPay,
-                    OGSim.Wells.RodPumpTier RodPump)? Ladders(
+                    OGSim.Wells.LiftTiers LiftTiers)? Ladders(
         EngineSettings settings)
     {
         ContentLoadResult result = FacilityContent(settings);
@@ -1791,7 +1830,7 @@ public static class EngineBuilder
             ? (FacilityLadders.From(loaded.Catalogues), Registry(loaded.Catalogues),
                loaded.Catalogues.Of<OGSim.World.TerrainClassDefinition>().All,
                TakeOrPayFrom(loaded.Catalogues),
-               RodPumpFrom(loaded.Catalogues))
+               LiftTiersFrom(loaded.Catalogues))
             : null;
     }
 
@@ -1815,24 +1854,49 @@ public static class EngineBuilder
     }
 
     /// <summary>
-    /// SDD-003 §6.2's R12b.2 amendment (finding 255). ONE pump tier, the same
-    /// relationship <see cref="TakeOrPayFrom"/> has to the one sales
-    /// contract — a pump is installed once, not upgraded through a ladder
-    /// this composition has no second rung for yet.
+    /// SDD-003 §6.2's R12b.2 amendment (finding 255). Four pump tiers, the
+    /// same relationship <see cref="TakeOrPayFrom"/> has to the one sales
+    /// contract — each is installed once, not upgraded through a ladder this
+    /// composition has no second rung for yet.
     /// </summary>
-    private static OGSim.Wells.RodPumpTier RodPumpFrom(ICatalogSet catalogues)
+    private static OGSim.Wells.LiftTiers LiftTiersFrom(ICatalogSet catalogues)
     {
-        RodPumpDefinition definition =
-            catalogues.Of<RodPumpDefinition>()[new ContentId("rod-pump-a")];
+        DisplacementPumpDefinition rod =
+            catalogues.Of<DisplacementPumpDefinition>()[new ContentId("rod-pump-a")];
+        DisplacementPumpDefinition pcp =
+            catalogues.Of<DisplacementPumpDefinition>()[new ContentId("pcp-a")];
+        EspDefinition esp = catalogues.Of<EspDefinition>()[new ContentId("esp-a")];
+        GasLiftDefinition gasLift =
+            catalogues.Of<GasLiftDefinition>()[new ContentId("gas-lift-a")];
 
-        return new OGSim.Wells.RodPumpTier(
-            definition.Id,
-            new LiftEnvelope(
-                definition.MinRate, definition.MaxRate, definition.MaxDepth,
-                definition.MaxDeviationDegrees, definition.MaxGasFraction,
-                definition.MaxTemperature, definition.MaxSolidsFraction),
-            definition.Displacement.CubicMetresPerSecond);
+        return new OGSim.Wells.LiftTiers(
+            DisplacementPumpFrom(rod), DisplacementPumpFrom(pcp),
+            new OGSim.Wells.EspTier(
+                esp.Id, EnvelopeOf(esp.MinRate, esp.MaxRate, esp.MaxDepth, esp.MaxDeviationDegrees,
+                                    esp.MaxGasFraction, esp.MaxTemperature, esp.MaxSolidsFraction),
+                esp.HeadCurve, esp.Efficiency),
+            new OGSim.Wells.GasLiftTier(
+                gasLift.Id,
+                EnvelopeOf(gasLift.MinRate, gasLift.MaxRate, gasLift.MaxDepth,
+                           gasLift.MaxDeviationDegrees, gasLift.MaxGasFraction,
+                           gasLift.MaxTemperature, gasLift.MaxSolidsFraction),
+                gasLift.InjectionRate.CubicMetresPerSecond, gasLift.GasDensityKgPerM3));
     }
+
+    private static OGSim.Wells.DisplacementPumpTier DisplacementPumpFrom(
+        DisplacementPumpDefinition definition) =>
+        new(definition.Id,
+            EnvelopeOf(definition.MinRate, definition.MaxRate, definition.MaxDepth,
+                       definition.MaxDeviationDegrees, definition.MaxGasFraction,
+                       definition.MaxTemperature, definition.MaxSolidsFraction),
+            definition.Displacement.CubicMetresPerSecond);
+
+    private static LiftEnvelope EnvelopeOf(
+        ReservoirRate minRate, ReservoirRate maxRate, Length maxDepth,
+        double maxDeviationDegrees, double maxGasFraction, Temperature maxTemperature,
+        double maxSolidsFraction) =>
+        new(minRate, maxRate, maxDepth, maxDeviationDegrees, maxGasFraction, maxTemperature,
+            maxSolidsFraction);
 
     /// <summary>
     /// The technology registry, as a graph (SDD-005 §2's R20d.10 amendment).
@@ -1890,7 +1954,10 @@ public static class EngineBuilder
                 new OGSim.Capabilities.TechnologyContentKind(),
                 new OGSim.World.TerrainClassContentKind(),
                 new TakeOrPayContentKind(),
-                new RodPumpContentKind(),
+                new DisplacementPumpContentKind("rod-pump"),
+                new DisplacementPumpContentKind("pcp"),
+                new EspContentKind(),
+                new GasLiftContentKind(),
             ],
             new PluginRegistry())
             .LoadAll(settings.Content);
@@ -1901,7 +1968,7 @@ public static class EngineBuilder
         IReadOnlyList<OGSim.Capabilities.TechnologyNode> registry,
         IReadOnlyList<OGSim.World.TerrainClassDefinition> terrainClasses,
         OGSim.Company.TakeOrPayTerms takeOrPay,
-        OGSim.Wells.RodPumpTier rodPump) =>
+        OGSim.Wells.LiftTiers liftTiers) =>
     [
         new SubsurfaceModule(),
         new WellsModule(),
@@ -1917,7 +1984,7 @@ public static class EngineBuilder
         new HseModule(),
         new ObjectivesModule(),
         new MaterialsModule(profile),
-        new FieldModule(ladders, takeOrPay, rodPump),
+        new FieldModule(ladders, takeOrPay, liftTiers),
         new DiagnosticsModule(audit, clock, random),
     ];
 
@@ -1993,7 +2060,7 @@ public static class EngineBuilder
     {
         ArgumentNullException.ThrowIfNull(settings);
 
-        if (Ladders(settings) is not var (ladders, registry, terrainClasses, takeOrPay, rodPump))
+        if (Ladders(settings) is not var (ladders, registry, terrainClasses, takeOrPay, liftTiers))
             return new BuildRefusedByContent(Failures(settings));
 
         var clock = new SimulationClock(settings.Epoch);
@@ -2003,7 +2070,7 @@ public static class EngineBuilder
             settings,
             ShippedModules(audit, clock, new RandomSource(settings.WorldSeed),
                            Defaults.ProfileNamed(settings.RealityProfile), ladders, registry,
-                           terrainClasses, takeOrPay, rodPump),
+                           terrainClasses, takeOrPay, liftTiers),
             clock, audit);
     }
 
@@ -2025,7 +2092,7 @@ public static class EngineBuilder
     {
         ArgumentNullException.ThrowIfNull(settings);
 
-        if (Ladders(settings) is not var (ladders, registry, terrainClasses, takeOrPay, rodPump))
+        if (Ladders(settings) is not var (ladders, registry, terrainClasses, takeOrPay, liftTiers))
             return new BuildRefusedByContent(Failures(settings));
 
         var clock = new SimulationClock(settings.Epoch);
@@ -2037,7 +2104,7 @@ public static class EngineBuilder
             settings,
             ShippedModules(audit, clock, new RandomSource(settings.WorldSeed),
                            Defaults.ProfileNamed(settings.RealityProfile), ladders, registry,
-                           terrainClasses, takeOrPay, rodPump),
+                           terrainClasses, takeOrPay, liftTiers),
             clock, audit);
     }
 
