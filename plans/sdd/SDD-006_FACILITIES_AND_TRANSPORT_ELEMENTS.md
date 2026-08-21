@@ -620,6 +620,68 @@ and the products leave as ordinary black-oil material streams — so nothing
 upstream or downstream gains a component field, and the boundary cannot leak by
 accident because there is no member on `MaterialStream` to leak through.
 
+> **R9.2 amendment (finding 260): dehydration was attempted as the ninth
+> socket, following R9.1's and R11.2's own shape, and found to be currently
+> inexpressible — not a wiring gap this time, a modelling one.** `RemovalUnit`
+> gained the same `Tier`/`Fit()` shape the compressor and the pump station
+> already carry (`RemovalUnitTier`: efficiency and by-product yield, no
+> discharge or capacity — a removal unit does not set a pressure), and the
+> placement question resolved the same way R9.1's did: after the compressor,
+> ahead of the plant, additive rather than reopening `GasCapture`'s own
+> conflict with R9 §2.1. A vent-not-burn destination for the reject leg was
+> designed too (a `VentSink`, reporting `DisposedMass.Vented` rather than
+> `Discharged` — the category that has summed into the conservation check
+> since `DisposedMass` was declared with no producer ever setting it above
+> zero). **None of it was composed**, because the target material makes the
+> whole mechanism a no-op on every field this engine can build.
+>
+> **Why: the black-oil fluid model gives water a fixed, deterministic phase,
+> and gas is never it.** `BlackOilModel.SplitAt` (SDD-005 §2, "there is no
+> compositional flash here, deliberately") assigns every material EXACTLY
+> `(1,0,0)`, `(0,1,0)` or `(0,0,1)` — gas, liquid or aqueous — by its
+> DECLARED standard-condition phase, with no equilibrium calculation and no
+> per-(P,T) redistribution. Water is declared `Aqueous`. `FixedEfficiencySeparationModel.SeparateAt`
+> (SDD-006 §2) then applies gas/liquid carry-over and water-into-liquid
+> carry-over PER MATERIAL, starting from that same fixed ideal split — there
+> is no term, anywhere in either stage, that ever moves aqueous mass into the
+> gas fraction. A dehydrator targeting the water ordinal therefore reads
+> `present = 0` on every tick of every field this composition can build,
+> regardless of tier, regardless of efficiency: `removed = 0 · efficiency`,
+> always. This is not a missing carry-over coefficient to tune — it is the
+> fluid model's own deliberate simplification (05 §2) working exactly as
+> specified, one layer below where a removal unit reads from.
+>
+> **Confirmed rather than assumed**: composed against `Undrilled()` +
+> `Produce()`, installed to its real tier, run five ticks — the vent sink's
+> own throughput read exactly zero, matching the trace above by hand. Reverted
+> rather than shipped, because a purchasable item that provably never has an
+> effect on the one field this engine ships is a stub wearing a fully-typed
+> class, not a finished mechanism (F-1's own standard: no member exists
+> without behaviour). `RemovalUnit`'s `Tier`/`Fit()` refactor is kept — it is
+> a genuine, self-contained improvement to a class that was already "built
+> and tested, composed nowhere" before this task touched it, and changes
+> nothing about what is or is not composed. `VentSink` is NOT kept: nothing
+> would consume it once the dehydrator does not compose, and an unconsumed
+> class introduced in this same change is the one case CLAUDE.md's own rule
+> says to remove rather than mark.
+>
+> **What would actually unblock this**: either the fluid model gains a real
+> water-in-gas term (a change to `BlackOilModel.SplitAt`'s own deliberate
+> simplification, SDD-005 §2 — bigger than this task, and a decision for
+> whoever owns that document to make deliberately rather than as a side
+> effect of a facilities join) or the target material is reconsidered
+> entirely. **Sweetening (R9.3) does not share this exact blocker** —
+> `hydrogen-sulphide` and `carbon-dioxide` are both declared `Gas` phase in
+> the shipped material catalogue (`content/materials/`) and so WOULD carry a
+> non-zero fraction into the gas leg once composed — but it has a different
+> one: `Defaults.Materials` currently wires up three of the catalogue's nine
+> materials (oil, gas, water), and acid gas is not one of them. Widening it
+> is already named, separately, as its own task ("Materials are next in that
+> arc... widening it changes every stream's width") rather than a follow-on
+> to either gas-processing socket. Composing a sweetener before that lands
+> would hit the identical always-zero failure this one did, for the same
+> underlying reason — the field simply does not carry the material yet.
+
 ## 5. Tank
 
 The one stateful surface element (state committed at stage 6 only):

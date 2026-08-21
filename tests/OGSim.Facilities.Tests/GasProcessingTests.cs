@@ -213,9 +213,9 @@ public class GasTreatingTests
     public void R9V3_dehydration_removes_water_and_accounts_for_it()
     {
         var dehydrator = new RemovalUnit(
-            new EntityId<IFlowElement>(2), new ContentId("teg-contactor"),
-            targetOrdinal: 2, removalEfficiency: 0.98,
-            byProductOrdinal: 2, byProductYield: 0.0, Fx.MaterialCount);
+            new EntityId<IFlowElement>(2),
+            new RemovalUnitTier(new ContentId("teg-contactor"), RemovalEfficiency: 0.98, ByProductYield: 0.0),
+            targetOrdinal: 2, byProductOrdinal: 2, Fx.MaterialCount);
 
         TransformResult result = dehydrator.Transform(Fx.In(Fx.Stream(0.0, 90.0, 10.0)));
 
@@ -234,9 +234,9 @@ public class GasTreatingTests
         // Ordinal 1 stands for the acid-gas-bearing stream, ordinal 0 for the
         // sulphur product. A third of the removed mass becomes sulphur.
         var amine = new RemovalUnit(
-            new EntityId<IFlowElement>(3), new ContentId("amine-unit"),
-            targetOrdinal: 1, removalEfficiency: 0.90,
-            byProductOrdinal: 0, byProductYield: 1.0 / 3.0, Fx.MaterialCount);
+            new EntityId<IFlowElement>(3),
+            new RemovalUnitTier(new ContentId("amine-unit"), RemovalEfficiency: 0.90, ByProductYield: 1.0 / 3.0),
+            targetOrdinal: 1, byProductOrdinal: 0, Fx.MaterialCount);
 
         TransformResult result = amine.Transform(Fx.In(Fx.Stream(0.0, 30.0, 0.0)));
 
@@ -258,12 +258,32 @@ public class GasTreatingTests
     public void R9V4_a_by_product_yield_above_one_is_a_model_fault()
     {
         var bad = new RemovalUnit(
-            new EntityId<IFlowElement>(3), new ContentId("amine-broken"),
-            targetOrdinal: 1, removalEfficiency: 0.9,
-            byProductOrdinal: 0, byProductYield: 1.5, Fx.MaterialCount);
+            new EntityId<IFlowElement>(3),
+            new RemovalUnitTier(new ContentId("amine-broken"), RemovalEfficiency: 0.9, ByProductYield: 1.5),
+            targetOrdinal: 1, byProductOrdinal: 0, Fx.MaterialCount);
 
         var fault = Assert.Throws<ModelFault>(() => bad.Transform(Fx.In(Fx.Stream(0.0, 30.0, 0.0))));
         Assert.Contains("more sulphur than there was acid gas", fault.Fault.Detail);
+    }
+
+    // Not a declared verification id: RemovalUnit is not composed (see
+    // SDD-006 §4's finding 260) — this exercises Fit() at the unit level only.
+    [Fact]
+    public void A_removal_unit_fits_a_bigger_tier_without_changing_what_it_removes()
+    {
+        var dehydrator = new RemovalUnit(
+            new EntityId<IFlowElement>(2),
+            new RemovalUnitTier(new ContentId("teg-none"), RemovalEfficiency: 0.0, ByProductYield: 0.0),
+            targetOrdinal: 2, byProductOrdinal: 2, Fx.MaterialCount);
+
+        dehydrator.Fit(new RemovalUnitTier(
+            new ContentId("teg-contactor"), RemovalEfficiency: 0.98, ByProductYield: 0.0));
+
+        Assert.Equal(new ContentId("teg-contactor"), dehydrator.Tier.Id);
+
+        TransformResult result = dehydrator.Transform(Fx.In(Fx.Stream(0.0, 90.0, 10.0)));
+
+        Assert.Equal(9.8, result.Outlets[1].MassRates[new MaterialId(2)].KgPerSecond, 9);
     }
 
     // ------------------------------------------------------------ R9-V5

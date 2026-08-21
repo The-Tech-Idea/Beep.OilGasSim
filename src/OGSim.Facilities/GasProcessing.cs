@@ -454,6 +454,17 @@ public sealed class NglExtractionPlant : IFlowElement
 }
 
 /// <summary>
+/// SDD-006 §4's removal-unit datasheet (R9.2's own composition, finding
+/// 260). Efficiency only — a removal unit does not set a pressure, so there
+/// is no discharge to carry the way <see cref="CompressorTier"/> and <see
+/// cref="PumpTier"/> do.
+/// </summary>
+public sealed record RemovalUnitTier(
+    ContentId Id,
+    double RemovalEfficiency,
+    double ByProductYield);
+
+/// <summary>
 /// Dehydration and sweetening: a removal step with a declared efficiency,
 /// routing what it removes to a named outlet.
 ///
@@ -466,42 +477,48 @@ public sealed class NglExtractionPlant : IFlowElement
 public sealed class RemovalUnit : IFlowElement
 {
     private readonly int _targetOrdinal;
-    private readonly double _removalEfficiency;
-    private readonly double _byProductYield;
     private readonly int _byProductOrdinal;
     private readonly int _materialCount;
+    private RemovalUnitTier _tier;
 
     public RemovalUnit(
         EntityId<IFlowElement> id,
-        ContentId tier,
+        RemovalUnitTier tier,
         int targetOrdinal,
-        double removalEfficiency,
         int byProductOrdinal,
-        double byProductYield,
         int materialCount)
     {
-        if (removalEfficiency is < 0.0 or > 1.0)
-            throw new ModelFault("SDD-006 §4", null,
-                $"removal efficiency for tier {tier.Value} is " +
-                removalEfficiency.ToString("R", System.Globalization.CultureInfo.InvariantCulture) +
-                ", not a fraction in [0, 1]");
-
-        if (byProductYield < 0.0)
-            throw new ModelFault("SDD-006 §4", null,
-                $"by-product yield for tier {tier.Value} is negative");
+        ArgumentNullException.ThrowIfNull(tier);
+        Validate(tier);
 
         Id = id;
-        Tier = tier;
+        _tier = tier;
         _targetOrdinal = targetOrdinal;
-        _removalEfficiency = removalEfficiency;
         _byProductOrdinal = byProductOrdinal;
-        _byProductYield = byProductYield;
         _materialCount = materialCount;
     }
 
     public EntityId<IFlowElement> Id { get; }
 
-    public ContentId Tier { get; }
+    public static PortId Inlet { get; } = new(0);
+    public static PortId Outlet { get; } = new(1);
+    public static PortId RejectOutlet { get; } = new(2);
+
+    /// <summary>The rung fitted now (SDD-006 §0c's refit).</summary>
+    public RemovalUnitTier Tier => _tier;
+
+    /// <summary>
+    /// Fits a better removal step into the same socket (SDD-006 §0c, R9.2's
+    /// own composition, finding 260) — the tier alone swaps; which materials
+    /// it acts on stays exactly what the unit was built against.
+    /// </summary>
+    public void Fit(RemovalUnitTier tier)
+    {
+        ArgumentNullException.ThrowIfNull(tier);
+        Validate(tier);
+
+        _tier = tier;
+    }
 
     /// <summary>Inlet, treated outlet, and the removed material's own outlet —
     /// water to disposal, acid gas to the sulphur unit or the flare.</summary>
@@ -530,7 +547,7 @@ public sealed class RemovalUnit : IFlowElement
 
         MaterialStream inlet = input.Inlets[0];
         double present = inlet.MassRates[new MaterialId(_targetOrdinal)].KgPerSecond;
-        double removed = present * _removalEfficiency;
+        double removed = present * _tier.RemovalEfficiency;
 
         var treated = new double[_materialCount];
         var rejected = new double[_materialCount];
@@ -546,15 +563,15 @@ public sealed class RemovalUnit : IFlowElement
         // what was removed. It is a conversion within the reject stream, not new
         // mass — an amine unit that created sulphur out of nothing would break
         // INV1 at its own element, which is where it should break.
-        if (_byProductYield > 0.0 && removed > 0.0)
+        if (_tier.ByProductYield > 0.0 && removed > 0.0)
         {
-            double sulphur = removed * _byProductYield;
+            double sulphur = removed * _tier.ByProductYield;
             rejected[_byProductOrdinal] += sulphur;
             rejected[_targetOrdinal] -= sulphur;
 
             if (rejected[_targetOrdinal] < 0.0)
                 throw new ModelFault("SDD-006 §4", null,
-                    $"tier {Tier.Value} declares a by-product yield above 1: it would " +
+                    $"tier {_tier.Id.Value} declares a by-product yield above 1: it would " +
                     "produce more sulphur than there was acid gas to make it from");
         }
 
@@ -570,4 +587,17 @@ public sealed class RemovalUnit : IFlowElement
     }
 
     public IReadOnlyList<ConstraintEvaluation> EvaluateConstraints(TransformInput input) => [];
+
+    private static void Validate(RemovalUnitTier tier)
+    {
+        if (tier.RemovalEfficiency is < 0.0 or > 1.0)
+            throw new ModelFault("SDD-006 §4", null,
+                $"removal efficiency for tier {tier.Id.Value} is " +
+                tier.RemovalEfficiency.ToString("R", System.Globalization.CultureInfo.InvariantCulture) +
+                ", not a fraction in [0, 1]");
+
+        if (tier.ByProductYield < 0.0)
+            throw new ModelFault("SDD-006 §4", null,
+                $"by-product yield for tier {tier.Id.Value} is negative");
+    }
 }
