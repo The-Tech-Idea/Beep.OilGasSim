@@ -1468,7 +1468,32 @@ internal static class Defaults
     /// every defence somewhat blunted.</summary>
     public const double TopEventPointsUnmitigated = 75.0;
 
-    public const double CrewCompetency = 0.9;
+    /// <summary>An untrained crew's strength on the barrier's own [0, 1]
+    /// scale (SDD-007 §4.1's finding-265 amendment) — noticeably below the
+    /// flat 0.9 this composition charged every crew before there was a lever
+    /// to raise it, so "lean crewing is measurably less safe" (R12 §2.8) is
+    /// something a company starts owing rather than something a purchase
+    /// only ever improves on.</summary>
+    public const double CrewCompetencyUntrained = 0.75;
+
+    /// <summary>What training buys — better than the old flat figure, so the
+    /// investment is a genuine improvement and not merely a return to
+    /// baseline.</summary>
+    public const double CrewCompetencyTrained = 0.95;
+
+    /// <summary>An untrained crew's multiplier on an operation's base
+    /// duration, layered onto the outcome table's own grade rather than
+    /// replacing it (SDD-007 §4.1).</summary>
+    public const double CrewDurationFactorUntrained = 1.15;
+
+    /// <summary>What training buys on duration — faster than nominal,
+    /// because R12-V9 asks skill to reduce duration, not merely restore
+    /// it.</summary>
+    public const double CrewDurationFactorTrained = 0.95;
+
+    /// <summary>One-time, like a technology acquisition — comparable to a
+    /// facility's first upgrade rung.</summary>
+    public static Money CrewTrainingCost { get; } = Money.FromMillions(2.0);
 
     public const double ProcedureCompliance = 0.9;
 

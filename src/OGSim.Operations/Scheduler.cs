@@ -87,6 +87,7 @@ public sealed class OperationScheduler
     private readonly IRandomStream _outcomes;
     private readonly IAuditTrail _audit;
     private readonly int _materialCount;
+    private readonly Func<double> _crewDurationFactor;
     private readonly Dictionary<EntityId<IRig>, RigCalendar> _calendars = [];
     private readonly List<EntityId<IRig>> _rigOrder = [];
 
@@ -115,11 +116,18 @@ public sealed class OperationScheduler
     /// Operations that move mass (SDD-007 §5b) report one, and a zero movement
     /// is still a composition of a particular width — so the scheduler carries
     /// the catalogue's width rather than letting each operation guess.</param>
+    /// <param name="crewDurationFactor">SDD-007 §4.1's finding-265 amendment
+    /// — an ADDITIONAL multiplier on top of the outcome table's own
+    /// `DurationFactor`, asked for rather than held: a company that trains
+    /// its crew mid-game must see every operation scheduled afterwards run
+    /// faster, not only the ones scheduled before the read.</param>
     public OperationScheduler(
-        IRandomStream outcomeStream, IAuditTrail audit, int materialCount)
+        IRandomStream outcomeStream, IAuditTrail audit, int materialCount,
+        Func<double> crewDurationFactor)
     {
         ArgumentNullException.ThrowIfNull(outcomeStream);
         ArgumentNullException.ThrowIfNull(audit);
+        ArgumentNullException.ThrowIfNull(crewDurationFactor);
 
         if (materialCount < 0)
             throw new ModelFault("SDD-002 §2", null,
@@ -128,6 +136,7 @@ public sealed class OperationScheduler
         _outcomes = outcomeStream;
         _audit = audit;
         _materialCount = materialCount;
+        _crewDurationFactor = crewDurationFactor;
     }
 
     /// <summary>Rigs are registered before they can be reserved. A rig the
@@ -290,7 +299,8 @@ public sealed class OperationScheduler
         }
 
         int effective = Math.Max(1, (int)Math.Round(
-            spec.BaseDurationDays * chosen.DurationFactor, MidpointRounding.ToEven));
+            spec.BaseDurationDays * chosen.DurationFactor * _crewDurationFactor(),
+            MidpointRounding.ToEven));
 
         _audit.Record(AuditCategory.StochasticOutcome, null, null, new Dictionary<string, AuditValue>
         {
@@ -309,15 +319,21 @@ public sealed class OperationScheduler
     /// SDD-007 §2's worst case: the longest any outcome could make this
     /// operation. Reserving for it is why a delayed job never finds its rig
     /// double-booked.
+    ///
+    /// <para>AN INSTANCE METHOD rather than static, since SDD-007 §4.1's
+    /// finding-265 amendment: an untrained crew's own worst case is longer
+    /// than the outcome table alone states, and reserving against the table
+    /// figure only would let a lean crew's slow operation overrun the rig it
+    /// booked.</para>
     /// </summary>
-    internal static int WorstCaseDays(OperationSpec spec)
+    private int WorstCaseDays(OperationSpec spec)
     {
         double worst = 1.0;
         for (int i = 0; i < spec.Outcomes.Rows.Count; i++)
             if (spec.Outcomes.Rows[i].DurationFactor > worst)
                 worst = spec.Outcomes.Rows[i].DurationFactor;
 
-        return Math.Max(1, (int)Math.Ceiling(spec.BaseDurationDays * worst));
+        return Math.Max(1, (int)Math.Ceiling(spec.BaseDurationDays * worst * _crewDurationFactor()));
     }
 
     private static string Format(int value) =>

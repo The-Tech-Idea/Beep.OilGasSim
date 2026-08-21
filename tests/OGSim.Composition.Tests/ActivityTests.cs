@@ -341,8 +341,12 @@ public sealed class ActivityTests
 
         // A YEAR OF NORMAL MONTHS FIRST, so there is a non-zero baseline to
         // lose — the well the drilling loop stops on has not necessarily
-        // reached the network yet on the very tick it completes.
-        Fixture.Run(engine, months: 12);
+        // reached the network yet on the very tick it completes. Two years,
+        // not one: an untrained crew (SDD-007 §4.1's finding-265 amendment)
+        // runs every scheduled operation 15% longer, including the repairs
+        // Fixture.Run orders for whatever equipment fails first, so a year
+        // that used to be comfortable margin no longer always is.
+        Fixture.Run(engine, months: 24);
 
         Assert.True(engine.ReadModel!.ProducedThisTick.CubicMetres > 0.0,
             "the fixture field produced nothing even before the test — no baseline to lose");

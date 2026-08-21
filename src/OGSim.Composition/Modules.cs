@@ -570,6 +570,11 @@ internal sealed class CompanyModule() : EngineModule(Declare(
         // The one licence this composition's company holds (SDD-011 §1's
         // R20d.9 amendment).
         typeof(OGSim.Company.Licence),
+
+        // SDD-007 §4.1's finding-265 amendment — composed early so both
+        // FieldModule (the scheduler's duration term) and HseModule (the
+        // barrier's competency term) can require it without a cycle.
+        typeof(OGSim.Company.CrewState),
     ],
 
     // The belief store, because reserves are worked out from what the company
@@ -586,7 +591,7 @@ internal sealed class CompanyModule() : EngineModule(Declare(
     // The licence's commitment progress and whether it has been forfeited are
     // STATE and were not (R20d.9): both change over the game's life and
     // neither is recomputed from Terms alone.
-    ownsState: ["company.ledger", "company.market", "company.licence"],
+    ownsState: ["company.ledger", "company.market", "company.licence", "company.crew"],
     stages: [new StageParticipation(StageId.Company, Order: 0)]))
 {
     public override void Compose(IModuleComposition composition)
@@ -595,6 +600,17 @@ internal sealed class CompanyModule() : EngineModule(Declare(
 
         composition.Provide<IFiscalRegime>(new OGSim.Company.RoyaltyTaxRegime(
             new ContentId("concession"), royaltyRate: 0.125, taxRate: 0.40));
+
+        // THE CREW (SDD-007 §4.1's finding-265 amendment). One owner, so the
+        // barrier strength HseModule reads and the duration term FieldModule's
+        // scheduler reads are the same fact rather than two guesses at it.
+        var crew = new OGSim.Company.CrewState(
+            Defaults.CrewCompetencyUntrained, Defaults.CrewCompetencyTrained,
+            Defaults.CrewDurationFactorUntrained, Defaults.CrewDurationFactorTrained,
+            Defaults.CrewTrainingCost);
+
+        composition.Own(crew);
+        composition.Provide(crew);
 
         // THE MARKET (SDD-009 §6). `IPriceModel` was declared in the contract
         // layer and implemented by nobody, so the oil price was a constant and
@@ -869,6 +885,10 @@ internal sealed class FieldModule(
         typeof(IReserveBasedLending),
         typeof(ReserveHistory),
         typeof(ReservesBook),
+
+        // SDD-007 §4.1's finding-265 amendment — CompanyModule composes it;
+        // the scheduler built here reads its duration term.
+        typeof(OGSim.Company.CrewState),
     ],
     // Provided here because the field is where an asset is CREATED, and
     // registration is unconditional at creation (SDD-007 §6).
@@ -944,6 +964,7 @@ internal sealed class FieldModule(
         typeof(SetWellChokeCommand),
         typeof(SetVoidageReplacementCommand),
         typeof(AbandonWellCommand),
+        typeof(TrainCrewCommand),
     ]))
 {
     public override void Compose(IModuleComposition composition)
@@ -1118,13 +1139,20 @@ internal sealed class FieldModule(
         var company = composition.Require<OGSim.Company.CompanyState>();
         IAuditTrail audit = composition.Require<IAuditTrail>();
 
+        // THE CREW (SDD-007 §4.1's finding-265 amendment), composed by
+        // CompanyModule — the bow-tie's barrier strength (HseModule) reads
+        // the same instance the scheduler's duration term does here, one
+        // owner rather than two guesses at the same crew.
+        OGSim.Company.CrewState crew = composition.Require<OGSim.Company.CrewState>();
+
         // The ONE scheduled-activity engine (SDD-007). Drilling runs on it, and
         // so will every other activity — the well test and the survey that open
         // the exploration game, the workover, the install, the abandonment.
         var scheduler = new OGSim.Operations.OperationScheduler(
             composition.Require<IRandomSource>().Stream(StreamId.Operations),
             audit,
-            materialCount: Defaults.MaterialCount);
+            materialCount: Defaults.MaterialCount,
+            crewDurationFactor: () => crew.DurationFactor);
 
         scheduler.Register(Defaults.TheRig);
 
@@ -1379,6 +1407,12 @@ internal sealed class FieldModule(
 
         composition.HandleCommand(
             new RepayValidator(borrower), new RepayApplier(borrower, audit));
+
+        // NOR IS TRAINING THE CREW (SDD-007 §4.1's finding-265 amendment) —
+        // a one-time decision a company makes on a Tuesday afternoon, the
+        // same reason a voidage target and a drawdown are not activities.
+        composition.HandleCommand(
+            new TrainCrewValidator(borrower, crew), new TrainCrewApplier(borrower, crew, audit));
     }
 }
 
@@ -1769,6 +1803,10 @@ internal sealed class HseModule() : EngineModule(Declare(
         // the condition of the elements the barriers are defined over.
         typeof(IRandomSource),
         typeof(OGSim.Integrity.AssetIntegrity),
+
+        // SDD-007 §4.1's finding-265 amendment — the barrier's crewCompetency
+        // term is the same crew the scheduler's duration term reads.
+        typeof(OGSim.Company.CrewState),
     ],
 
     // The incident record decays, so it is a quantity recomputed from its own
@@ -1796,7 +1834,8 @@ internal sealed class HseModule() : EngineModule(Declare(
                 composition.Require<IRandomSource>().Stream(StreamId.Hazard),
                 composition.Require<IAuditTrail>()),
             composition.Require<OGSim.Integrity.AssetIntegrity>(),
-            standing));
+            standing,
+            composition.Require<OGSim.Company.CrewState>()));
 
         composition.Contribute(order: 0, new EsgStage(standing));
     }
@@ -1859,7 +1898,8 @@ public sealed class EsgAssessment(
 internal sealed class ThreatStage(
     OGSim.Integrity.BowTie bowTie,
     OGSim.Integrity.AssetIntegrity integrity,
-    OGSim.Integrity.EsgStanding standing) : ITickStage
+    OGSim.Integrity.EsgStanding standing,
+    OGSim.Company.CrewState crew) : ITickStage
 {
     public StageId Id => StageId.Availability;
 
@@ -1887,7 +1927,7 @@ internal sealed class ThreatStage(
             Defaults.ContainmentThreat,
             Defaults.Barriers,
             barrier => barrier.StrengthGiven(
-                integrity.ConditionOf, Defaults.CrewCompetency, Defaults.ProcedureCompliance));
+                integrity.ConditionOf, crew.Competency, Defaults.ProcedureCompliance));
 
         if (resolved.Outcome == OGSim.Integrity.ThreatOutcome.TopEvent)
             standing.RecordIncident(ConsequencePoints(resolved));
