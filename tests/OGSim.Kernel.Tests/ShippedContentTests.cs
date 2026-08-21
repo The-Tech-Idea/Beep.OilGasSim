@@ -348,6 +348,7 @@ public class ShippedContentTests
                 new SeparatorContentKind(), new TankContentKind(), new TreaterContentKind(),
                 new GasPlantContentKind(), new ExportLineContentKind(), new ManifoldContentKind(),
                 new CompressorContentKind(),
+                new PumpStationContentKind(),
             ],
             new NoPlugins());
 

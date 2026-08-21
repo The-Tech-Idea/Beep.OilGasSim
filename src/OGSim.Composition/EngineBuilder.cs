@@ -758,6 +758,10 @@ internal static class Defaults
     /// §3c, R9.1's own composition, finding 257) — the seventh socket.</summary>
     public static EntityId<IFlowElement> TheCompressor { get; } = new(1_000_012);
 
+    /// <summary>Between the separator's liquid leg and the treater (SDD-006
+    /// §3d, R11.2's own composition, finding 259) — the eighth socket.</summary>
+    public static EntityId<IFlowElement> TheLiquidPumpStation { get; } = new(1_000_013);
+
     /// <summary>
     /// Where per-well gathering lines start numbering (SDD-006 §1c). Above the
     /// fixed chain elements by a clear margin, so a line laid for the
@@ -985,6 +989,21 @@ internal static class Defaults
         Template: new ContentId("install-compressor"),
         Cost: Money.FromMillions(15.0),
         DurationTicks: 4,
+        Rig: null,
+        WeatherLimit: 5.0,   // heavy lift
+        // a skid delivered and tied in.
+        RequiresAccess: true,
+
+        Outcomes: SurveyOutcomes);
+
+    /// <summary>SDD-006 §3d's own capital item (R11.2's own composition,
+    /// finding 259) — C11's own capex band prices a pump station one tier
+    /// below a compressor station ($$$ against $$$$), which is what its
+    /// cost is set against here.</summary>
+    public static ActivityTerms InstallLiquidPumpStationTerms { get; } = new(
+        Template: new ContentId("install-pump-station"),
+        Cost: Money.FromMillions(10.0),
+        DurationTicks: 3,
         Rig: null,
         WeatherLimit: 5.0,   // heavy lift
         // a skid delivered and tied in.
@@ -1976,7 +1995,7 @@ public static class EngineBuilder
             [
                 new SeparatorContentKind(), new TankContentKind(), new TreaterContentKind(),
                 new GasPlantContentKind(), new ExportLineContentKind(), new ManifoldContentKind(),
-                new CompressorContentKind(),
+                new CompressorContentKind(), new PumpStationContentKind(),
                 new OGSim.Capabilities.TechnologyContentKind(),
                 new OGSim.World.TerrainClassContentKind(),
                 new TakeOrPayContentKind(),

@@ -41,6 +41,10 @@ public sealed record FacilityLadders(
     /// finding 257) — joined the same way the first six were, at R20c.9.</summary>
     IReadOnlyList<Facilities.CompressorTier> Compressor,
 
+    /// <summary>The eighth rung-based socket (R11.2's own composition,
+    /// finding 259) — the compressor's own shape reused for the oil leg.</summary>
+    IReadOnlyList<Facilities.PumpTier> PumpStation,
+
     /// <summary>
     /// When each rung was invented, by tier id (SDD-005 §2's R20d.10b
     /// amendment).
@@ -81,6 +85,7 @@ public sealed record FacilityLadders(
         && Structural.Equal(Export, other.Export)
         && Structural.Equal(Manifold, other.Manifold)
         && Structural.Equal(Compressor, other.Compressor)
+        && Structural.Equal(PumpStation, other.PumpStation)
         && Structural.Equal(InventedIn, other.InventedIn)
         && Structural.Equal(Needs, other.Needs);
 
@@ -89,7 +94,7 @@ public sealed record FacilityLadders(
             Structural.HashOf(Separator), Structural.HashOf(Tank),
             Structural.HashOf(Treater), Structural.HashOf(GasPlant),
             Structural.HashOf(Export), Structural.HashOf(Manifold),
-            HashCode.Combine(Structural.HashOf(Compressor),
+            HashCode.Combine(Structural.HashOf(Compressor), Structural.HashOf(PumpStation),
                              Structural.HashOf(InventedIn), Structural.HashOf(Needs)));
 
     /// <summary>
@@ -114,6 +119,7 @@ public sealed record FacilityLadders(
         Note<ExportLineDefinition>(catalogues, invented, needs);
         Note<ManifoldDefinition>(catalogues, invented, needs);
         Note<CompressorDefinition>(catalogues, invented, needs);
+        Note<PumpStationDefinition>(catalogues, invented, needs);
 
         return new FacilityLadders(
             Rungs<SeparatorDefinition, Facilities.SeparatorTier>(catalogues, "separator", d =>
@@ -152,6 +158,13 @@ public sealed record FacilityLadders(
                     d.MolarMassKgPerMol,
                     d.DerateFractionPerKelvin,
                     new Temperature(d.DerateReferenceKelvin),
+                    new Pressure(d.DischargePascals))),
+
+            Rungs<PumpStationDefinition, Facilities.PumpTier>(catalogues, "pump-station", d =>
+                new Facilities.PumpTier(
+                    d.Id,
+                    new MassRate(d.RatedCapacityKgPerSecond),
+                    d.Efficiency,
                     new Pressure(d.DischargePascals))),
 
             invented,

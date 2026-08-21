@@ -9,15 +9,17 @@ namespace OGSim.Facilities.Tests;
 
 public class PumpStationTests
 {
-    private static PumpTier Tier(double capacity = 50.0, double efficiency = 0.75) =>
-        new(new ContentId("pump-tier-b"), new MassRate(capacity), efficiency);
+    private static PumpTier Tier(
+        double capacity = 50.0, double efficiency = 0.75, double dischargeBar = 70.0) =>
+        new(new ContentId("pump-tier-b"), new MassRate(capacity), efficiency,
+            Pressure.FromBar(dischargeBar));
 
     private static LiquidPumpStation Unit(
         double suctionBar = 10.0, double dischargeBar = 70.0,
         double densityKgPerM3 = 850.0, PumpTier? tier = null) =>
-        new(new EntityId<IFlowElement>(1), tier ?? Tier(),
-            Pressure.FromBar(suctionBar), Pressure.FromBar(dischargeBar),
-            new Density(densityKgPerM3), Fx.MaterialCount);
+        new(new EntityId<IFlowElement>(1),
+            (tier ?? Tier()) with { Discharge = Pressure.FromBar(dischargeBar) },
+            Pressure.FromBar(suctionBar), new Density(densityKgPerM3), Fx.MaterialCount);
 
     [Fact] // SDD-006 §3d: specific work is the pressure rise over density, exactly
     public void R11V6_specific_work_matches_the_incompressible_formula()
@@ -62,6 +64,19 @@ public class PumpStationTests
 
         Assert.Equal(ConstraintKind.TotalCapacity, constraint.Kind);
         Assert.Equal(50.0, constraint.Capacity, 9);
+    }
+
+    [Fact] // R11-V6/finding 259: a bigger station fits without moving its suction
+    public void R11V6_a_bigger_station_is_fitted_without_moving_its_suction()
+    {
+        LiquidPumpStation unit = Unit(suctionBar: 10.0, dischargeBar: 30.0);
+
+        unit.Fit(Tier(dischargeBar: 70.0));
+
+        Assert.Equal(Pressure.FromBar(70.0).Pascals, unit.Tier.Discharge.Pascals, 6);
+
+        double expected = (Pressure.FromBar(70.0).Pascals - Pressure.FromBar(10.0).Pascals) / 850.0;
+        Assert.Equal(expected, unit.SpecificWorkJoulesPerKg, precision: 6);
     }
 
     [Theory] // Content errors are refused where the datasheet is still in hand

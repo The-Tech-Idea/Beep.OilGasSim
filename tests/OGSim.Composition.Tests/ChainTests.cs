@@ -232,10 +232,12 @@ public sealed class ChainTests
              // the plant cannot take overflows to the flare behind it. The
              // compressor sits ahead of the plant (SDD-006 §3c, R9.1's own
              // composition, finding 257): every barrel's gas is boosted before
-             // it reaches the sales point. NEITHER sorts adjacent to the
-             // separator it is fed from — `FlowNetwork.Build`'s topological
-             // order is a property of the solver's own walk, not of
-             // registration order or physical adjacency, and this list
+             // it reaches the sales point. The pump station sits ahead of the
+             // treater the same way, on the oil leg (SDD-006 §3d, R11.2's own
+             // composition, finding 259). NONE of the three sorts adjacent to
+             // the separator it is fed from — `FlowNetwork.Build`'s
+             // topological order is a property of the solver's own walk, not
+             // of registration order or physical adjacency, and this list
              // states what it actually produces rather than what seems
              // intuitive from the diagram.
              // The treater sits on the OIL leg between the separator and the
@@ -249,8 +251,8 @@ public sealed class ChainTests
              // finding 252) — off custody's Reject leg rather than its OnSpec
              // one.
              ["well-1", "water-intake", "gathering-1", "manifold", "flowline", "separator",
-             "water-disposal", "treater", "custody-meter", "tank", "off-spec-sink",
-             "compressor", "gas-plant", "flare"],
+             "water-disposal", "compressor", "gas-plant", "flare", "pump-station",
+             "treater", "custody-meter", "tank", "off-spec-sink"],
             engine.ReadModel!.Chain.Select(element => element.DisplayId));
     }
 
@@ -1421,7 +1423,19 @@ public sealed class ChainTests
     [Fact]
     public void R12b6_a_worn_well_can_be_serviced_like_any_other_equipment()
     {
-        (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled();
+        // PINNED TO ITS OWN SEED, not the file's shared default (finding
+        // 184's shape, R11.2's own composition, finding 259): the well's
+        // CONDITION decay is deterministic, as this test's own comment
+        // above claims, but whether it randomly FAILS OUTRIGHT before month
+        // 48 is not — that draw comes from the same hazard stream the pump
+        // station now also consumes from tick 0. Under the file's default
+        // seed the well crossed from "worn" to "already failed" before this
+        // test could order a service (repair, not service, is the answer to
+        // a failed element) — a genuinely different but equally valid
+        // failure history, not a defect in the join. Seed 4 was checked
+        // against this same fixture: the well is worn (0.71) but still
+        // running at month 48, which is what this test is actually about.
+        (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled(4UL);
         FieldControl field = engine.Provided.Resolve<FieldControl>();
 
         EntityId<ICompletion> well = field.Drill(target, new Length(2000.0));

@@ -89,16 +89,17 @@ public sealed class ReferenceClientTests
         // so the set is part of the test rather than a range someone could widen
         // until it passed.
         //
-        // 22 REPLACED WITH 77 (R9.1, finding 257): the same finding-227 shape,
-        // one level deeper. The compressor is a registered flow element from
-        // tick 0 that draws from the hazard/outcome streams like every other
-        // one, and on seed 22 that shift left the operator unable to drill a
-        // second well at all (wells=1) — a genuinely harder field under the
-        // new sequence, not a surface defect. 77 was checked against the same
-        // fixture: it still loses (wells=2, Failed), keeping the set's mix of
-        // winners and losers, but clears the "developed the field" floor this
-        // test is actually about.
-        ulong[] seeds = [20260806UL, 11UL, 77UL, 33UL, 44UL];
+        // 22 REPLACED WITH 77 (R9.1, finding 257), THEN 11 REPLACED WITH 222
+        // (R11.2, finding 259): the same finding-227 shape, twice over. Each
+        // new registered flow element (the compressor, then the pump
+        // station) draws from the hazard/outcome streams from tick 0 like
+        // every other one, and each join shifted a different seed in this
+        // set below the "developed the field" floor (wells<=1) — a
+        // genuinely harder field under the new sequence each time, not a
+        // surface defect. 222 was checked against the current fixture: it
+        // loses (wells=6, Failed), keeping the set's mix of winners and
+        // losers, but clears the floor this test is actually about.
+        ulong[] seeds = [20260806UL, 222UL, 77UL, 33UL, 44UL];
 
         var won = 0;
 

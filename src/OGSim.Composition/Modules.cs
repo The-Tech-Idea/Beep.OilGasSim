@@ -269,6 +269,18 @@ internal sealed class FacilitiesModule(FacilityLadders ladders) : EngineModule(D
             Defaults.TheTreater, ladders.Treater[0],
             Defaults.WaterOrdinal, Defaults.MaterialCount);
 
+        // AHEAD OF THE TREATER, ON THE OIL LEG (SDD-006 §3d, R11.2's own
+        // composition, finding 259) — the compressor's own shape, reused: a
+        // separator commonly operates below what downstream treating and
+        // export need, and boosting right after the split is the standard
+        // surface-facility answer. Suction is read live from the separator
+        // this station sits behind, matching the compressor's own pattern;
+        // rung 0's own discharge matches that same pressure, so an unbought
+        // station is a true no-op rather than a phantom capacity constraint.
+        var pumpStation = new OGSim.Facilities.LiquidPumpStation(
+            Defaults.TheLiquidPumpStation, ladders.PumpStation[0],
+            separator.Tier.OperatingPressure, Defaults.SurfaceOilDensity, Defaults.MaterialCount);
+
         var gasPlant = new OGSim.Facilities.GasCapture(
             Defaults.TheGasPlant, ladders.GasPlant[0], Defaults.MaterialCount);
 
@@ -341,6 +353,7 @@ internal sealed class FacilitiesModule(FacilityLadders ladders) : EngineModule(D
         network.Add(separator);
         network.Add(custody);
         network.Add(treater);
+        network.Add(pumpStation);
         network.Add(compressor);
         network.Add(gasPlant);
         network.Add(flare);
@@ -387,8 +400,15 @@ internal sealed class FacilitiesModule(FacilityLadders ladders) : EngineModule(D
         // THE OIL LEG GOES THROUGH TREATING (SDD-006 §2). The treater ships
         // taking nothing out, so a young field is unaffected; it earns its place
         // when the water cut rises far enough to put the stream off spec.
+        // THE PUMP STATION SITS AHEAD OF THE TREATER (SDD-006 §3d, finding
+        // 259) — every barrel is boosted before it reaches treating, the
+        // liquid leg's own version of what the compressor does for gas.
         network.Connect(new FlowConnection(
             separator.Id, OGSim.Facilities.Separator.LiquidOutlet,
+            pumpStation.Id, OGSim.Facilities.LiquidPumpStation.Inlet));
+
+        network.Connect(new FlowConnection(
+            pumpStation.Id, OGSim.Facilities.LiquidPumpStation.Outlet,
             treater.Id, OGSim.Facilities.Treater.Inlet));
 
         network.Connect(new FlowConnection(
@@ -438,9 +458,9 @@ internal sealed class FacilitiesModule(FacilityLadders ladders) : EngineModule(D
 
         var chain = new SurfaceChain(
             manifold, flowline, separator, custody, treater, gasPlant, flare,
-            disposal, intake, tank, offSpecSink, compressor);
+            disposal, intake, tank, offSpecSink, compressor, pumpStation);
 
-        // OWNED AS WELL AS PROVIDED (SDD-006 §8b). Seven sockets carry a fitted
+        // OWNED AS WELL AS PROVIDED (SDD-006 §8b). Eight sockets carry a fitted
         // tier and facilities registered no owner, so a reload returned the
         // equipment a company started with and kept the money it had spent
         // (finding 197).
@@ -472,7 +492,8 @@ internal sealed record SurfaceChain(
     OGSim.Facilities.WaterIntake Intake,
     OGSim.Facilities.Tank Tank,
     OGSim.Facilities.OffSpecSink OffSpecSink,
-    OGSim.Facilities.Compressor Compressor)
+    OGSim.Facilities.Compressor Compressor,
+    OGSim.Facilities.LiquidPumpStation PumpStation)
 {
     /// <summary>Where a well ties in, and how many can. One list rather than a
     /// count, so a caller cannot forget which port a slot index means.</summary>
@@ -504,6 +525,7 @@ internal sealed record SurfaceChain(
         if (element == Tank.Id) return "tank";
         if (element == OffSpecSink.Id) return "off-spec-sink";
         if (element == Compressor.Id) return "compressor";
+        if (element == PumpStation.Id) return "pump-station";
 
         // A gathering line, numbered by the well it serves (SDD-006 §1c). Named
         // rather than left to the well-N fallback because a player watching the
@@ -916,6 +938,7 @@ internal sealed class FieldModule(
         typeof(InstallTankCommand),
         typeof(InstallTreaterCommand),
         typeof(InstallCompressorCommand),
+        typeof(InstallLiquidPumpStationCommand),
         typeof(BorrowCommand),
         typeof(RepayCommand),
         typeof(SetWellChokeCommand),
@@ -1254,6 +1277,12 @@ internal sealed class FieldModule(
             // consumer for heat derating.
             new InstallCompressorActivity(
                 Defaults.InstallCompressorTerms, chain.Compressor, ladders.Compressor, ladders, capabilities, eras, gate, effects),
+
+            // THE EIGHTH SOCKET (SDD-006 §3d, R11.2's own composition, finding
+            // 259) — the oil leg's own bottleneck answer, the compressor's
+            // shape reused.
+            new InstallLiquidPumpStationActivity(
+                Defaults.InstallLiquidPumpStationTerms, chain.PumpStation, ladders.PumpStation, ladders, capabilities, eras, gate, effects),
 
             // The ENDING (R12b.10). Finding 153's other reason is gone too: opex
             // scales with the liquid lifted, so a watered-out well genuinely

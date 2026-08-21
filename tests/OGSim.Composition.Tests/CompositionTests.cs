@@ -161,6 +161,7 @@ internal static class Fixture
                 new SeparatorContentKind(), new TankContentKind(), new TreaterContentKind(),
                 new GasPlantContentKind(), new ExportLineContentKind(), new ManifoldContentKind(),
                 new CompressorContentKind(),
+                new PumpStationContentKind(),
                 new OGSim.Capabilities.TechnologyContentKind(),
                 new OGSim.World.TerrainClassContentKind(),
                 new TakeOrPayContentKind(),

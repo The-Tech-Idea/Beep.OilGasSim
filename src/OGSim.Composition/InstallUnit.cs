@@ -430,6 +430,67 @@ internal sealed class InstallCompressorActivity(
 }
 
 /// <summary>
+/// Fit a bigger liquid pump station (SDD-006 §3d, R11.2's own composition,
+/// finding 259).
+///
+/// <para>THE EIGHTH SOCKET, the compressor's own shape reused for the oil
+/// leg: a separator commonly operates below what downstream treating and
+/// export need, and this raises what reaches the treater.</para>
+/// </summary>
+public sealed record InstallLiquidPumpStationCommand() : Command(Subject: null);
+
+internal sealed class InstallLiquidPumpStationActivity(
+    ActivityTerms terms,
+    OGSim.Facilities.LiquidPumpStation pumpStation,
+    IReadOnlyList<OGSim.Facilities.PumpTier> ladder,
+    FacilityLadders ladders,
+    OGSim.Capabilities.CapabilityState capabilities,
+    OGSim.Capabilities.EraCalendar eras,
+    IGatingValidator gate,
+    IEffectState effects) : Activity<InstallLiquidPumpStationCommand>(terms)
+{
+    /// <summary>A rung on the surface ladder (finding 225).</summary>
+    public override MovementCategory Spend => MovementCategory.Development;
+
+    public override bool LeavesAnAsset => true;
+
+    public override bool OnePerTarget => true;
+
+    public override (EntityRef Target, Length Depth) Aim(InstallLiquidPumpStationCommand command) =>
+        (new EntityRef(EntityKind.FlowElement, pumpStation.Id.Value), NoDepth);
+
+    public override IReadOnlyList<RejectionReason> OwnRefusals(InstallLiquidPumpStationCommand command)
+    {
+        if (NextRung() is { } next) return RungGate.Buyable(next.Id, ladders, capabilities, eras, gate, effects);
+
+        return
+        [
+            new RejectionReason(
+                "$loc:reject.top-of-the-ladder",
+                $"'{pumpStation.Tier.Id.Value}' is the largest pump station in the " +
+                "catalogue; the field cannot move more liquid than it already can"),
+        ];
+    }
+
+    public override void Complete(CompletedActivity done, Tick tick)
+    {
+        ArgumentNullException.ThrowIfNull(done);
+
+        if (!done.Succeeded) return;
+
+        if (NextRung() is OGSim.Facilities.PumpTier next) pumpStation.Fit(next);
+    }
+
+    private OGSim.Facilities.PumpTier? NextRung()
+    {
+        for (int i = 0; i < ladder.Count - 1; i++)
+            if (ladder[i].Id == pumpStation.Tier.Id) return ladder[i + 1];
+
+        return null;
+    }
+}
+
+/// <summary>
 /// Whether a rung can be bought, and why not (SDD-005 §2's R20d.10b amendment).
 ///
 /// <para>TWO CHECKS AND TWO KINDS OF FACT. The era is a CALENDAR comparison made

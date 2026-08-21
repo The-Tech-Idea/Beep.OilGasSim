@@ -113,6 +113,18 @@ public sealed record CompressorDefinition(
     : FacilityUnitDefinition(Id, RequiresTech, AvailableFromEra, Rung);
 
 /// <summary>
+/// SDD-006 §3d's liquid pump station datasheet (R11.2's own composition,
+/// finding 259) — the eighth rung-based socket, the compressor's shape
+/// reused for the oil leg.
+/// </summary>
+public sealed record PumpStationDefinition(
+    ContentId Id, ContentId? RequiresTech, Era AvailableFromEra, int Rung,
+    double RatedCapacityKgPerSecond,
+    double Efficiency,
+    double DischargePascals)
+    : FacilityUnitDefinition(Id, RequiresTech, AvailableFromEra, Rung);
+
+/// <summary>
 /// The gate and the rung, read once for all six (SDD-004 §6's R20c.9
 /// amendment). A reader per kind would be six chances to spell
 /// <c>availableFromEra</c> differently.
@@ -377,6 +389,32 @@ public sealed class CompressorContentKind : FacilityContentKind<CompressorDefini
 
         if (unit.DerateFractionPerKelvin < 0.0)
             yield return "derateFractionPerKelvin must not be negative";
+
+        if (unit.DischargePascals <= 0.0) yield return "discharge must be positive";
+    }
+}
+
+public sealed class PumpStationContentKind : FacilityContentKind<PumpStationDefinition>
+{
+    public override string Name => "pump-station";
+
+    public override ContentDefinition Read(JsonElement element)
+    {
+        FacilityGate gate = FacilityGate.Read(element);
+
+        return new PumpStationDefinition(
+            gate.Id, gate.RequiresTech, gate.AvailableFromEra, gate.Rung,
+            SeparatorContentKind.Si(element, "ratedCapacity", Dimension.MassRate),
+            SeparatorContentKind.Si(element, "efficiency", Dimension.Dimensionless),
+            SeparatorContentKind.Si(element, "discharge", Dimension.Pressure));
+    }
+
+    protected override IEnumerable<string> DatasheetProblems(PumpStationDefinition unit)
+    {
+        if (unit.RatedCapacityKgPerSecond < 0.0) yield return "ratedCapacity must not be negative";
+
+        if (unit.Efficiency is <= 0.0 or > 1.0)
+            yield return "efficiency must be a fraction in (0, 1]";
 
         if (unit.DischargePascals <= 0.0) yield return "discharge must be positive";
     }

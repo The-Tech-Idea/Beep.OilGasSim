@@ -531,6 +531,54 @@ at the tier's rated flow and its `PowerDraw` is `W_shaft`, consumed by stage
 > **Persisted the same way the other six sockets are** (§8b): `FacilitiesState`
 > carries the fitted tier's id, one string, exactly like the separator's.
 
+> **R11.2 amendment (finding 259): the liquid pump station, joined the same
+> way — built, tested, composed nowhere.** `LiquidPumpStation`/`PumpTier`
+> have shipped and passed R11-V6 since finding 246 pinned the model; the
+> gap this row itself already named: "Neither is composed into the live
+> network — both are built and tested in isolation, same gap the R8 audit
+> found for R9's gas-processing chain... joining either is that gap, not a
+> new one." R9.1 closed the compressor's half; this closes the pump's,
+> reusing the same eight-socket mechanism (`FacilityContentKind<TDefinition>`,
+> `FacilityGate`, `Rungs<TDef,TTier>`) rather than inventing a second one —
+> the eighth rung-based socket.
+>
+> **Discharge moves onto the tier and suction stays off it, for the same
+> reason §3c's compressor join gives**: `PumpTier` gains a `Discharge`
+> field, sized when the station is bought; suction is read once at compose
+> time from where the train sits in the network, and `Fit(PumpTier)`
+> swaps the tier alone.
+>
+> **Rung 0 is a true no-op, the same shape as the compressor's**: its own
+> discharge equals the suction it is built against, so specific work and
+> shaft power are both exactly zero — an unbought pump station passes the
+> liquid through unboosted rather than throttling it to nothing at a
+> phantom `ConstraintKind.TotalCapacity` of zero.
+>
+> **Placement — mirrors the compressor's, on the liquid leg's own
+> equivalent step.** C11's own text places a pump station "mid-line," and
+> this composition has no long-haul export pipeline modelled as an
+> `IFlowElement` to sit mid-line ON (`ExportTerminal` is not a network
+> node — SDD-006 §8b's `FacilitiesState.ExportState` comment says why: it
+> is owned separately, by the module that composes it, and a company's
+> export rate is read off it directly rather than solved through the
+> network). Inventing that pipeline is out of scope for a join. What IS
+> in scope, and physically the same decision the compressor made for gas,
+> is the step immediately after primary separation: gas got a booster
+> ahead of the plant it feeds (`separator → compressor → gas plant`); the
+> pump station takes the same slot on the oil leg, ahead of the treating
+> it feeds (`separator → pump station → treater`) — a separator commonly
+> operates below what downstream treating and export need, and boosting
+> right after the split is the standard surface-facility answer to that,
+> not a fabricated position.
+>
+> **Ahead of the treater, not instead of anything.** Nothing currently
+> occupies this slot — the oil leg ran `separator → treater` directly — so
+> this is a pure insertion with no working mechanism to reconcile against,
+> unlike the compressor's `GasCapture` conflict.
+>
+> **Persisted the same way**: `FacilitiesState` carries the fitted tier's
+> id.
+
 ## 4. Gas treating (dehydration · sweetening · NGL)
 
 ```text
