@@ -70,6 +70,34 @@ the registry is a content fault — so an objective can never reference data the
 player cannot see (GM4/R24-V14 mechanised), and a read-model rename breaks
 content loudly at load, not silently at runtime.
 
+> **Amendment (finding 267) — `company.value` joins the registry.**
+> SDD-017 §2's finding-262 amendment gave `FieldReadModel` a `CompanyValue`
+> (`cash + PV(1P) − debt − provisions`, the same figure SDD-014 §4 already
+> scored Capital efficiency against) and said plainly what it did not do:
+> "it does not by itself close R24.6 … or rebuild R11.6's reverted berth/cargo
+> mechanic." What it also did not do, unnamed at the time, is reach an
+> OBJECTIVE — `Defaults.ProjectedPaths` registered `company.cash` and
+> `company.insolvent` the same task and never added `company.value` beside
+> them, so a scenario asking for "the company is worth $X" was and is refused
+> at composition as an unknown path, the exact GM4 mechanism this section
+> exists to guarantee working against the one figure R11.6's own row names as
+> its prerequisite.
+>
+> **Computed once, at stage 12, not twice.** `FieldPosition` — the position an
+> objective sees (§5a) — gains `Money CompanyValue`, computed in
+> `FieldProjection.Take` from the same three facts `Publish` already read it
+> from (`Bank.Terms.ReserveValue`, `Bank.Drawn`, the ledger's cash and
+> abandonment-provision balances). `Publish` now reads `position.CompanyValue`
+> instead of recomputing it — one owner (law L5), where before the value
+> existed only late enough for a host to see it and too late for an objective
+> to ask about it.
+>
+> **Still does not rebuild R11.6.** This closes the one prerequisite
+> `FieldReadModel.CompanyValue`'s own doc comment names for "a mechanic that
+> defers revenue reading as a decision rather than a loss" — a scenario CAN
+> now be authored against `company.value` — not the berth/cargo mechanic
+> itself, which stays its own task exactly as SDD-017 said.
+
 ## 3. Evaluation
 
 Stage 12, pure over the sealed snapshot + sealed event list (SDD-001 §6):

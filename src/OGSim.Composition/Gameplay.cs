@@ -141,7 +141,16 @@ public sealed record FieldPosition(
     int Wells,
     int ActivitiesRunning,
     SurfaceVolume ProducedThisTick,
-    bool Insolvent);
+    bool Insolvent,
+
+    /// <summary>
+    /// What this company is worth, not merely what it holds (SDD-014 §2's
+    /// finding-267 amendment): <c>cash + PV(1P) − debt − provisions</c>.
+    /// Computed here rather than only at <see cref="FieldProjection.Publish"/>
+    /// so an objective can be measured against it — R11.6's own prerequisite,
+    /// unreachable from stage 12 until this field existed this early.
+    /// </summary>
+    Money CompanyValue);
 
 /// <summary>
 /// What the player can see, rebuilt at the close of every tick.
@@ -529,19 +538,16 @@ internal sealed class FieldProjection(
     /// a job, short enough that ρ^h has not collapsed to the seasonal mean.</summary>
     private const int ForecastHorizonDays = 7;
 
-    public FieldPosition Take(Tick tick, GameDate date, bool insolvent) =>
-        new(tick, date, company.Ledger.Cash, field.WellCount, activities.InProgress,
-            loop.ProducedThisTick, insolvent);
-
-    public FieldReadModel Publish(FieldPosition position, ScenarioProgress progress)
+    public FieldPosition Take(Tick tick, GameDate date, bool insolvent)
     {
-        // Credits are negative in this ledger (SDD-009 §1), so what is held
-        // against abandonment is the negation of the account balance — the
-        // same convention `Bank.Drawn` and `ProductionLoop`'s own accrual use.
-        Money provisions = -company.Ledger.BalanceOf(Account.AbandonmentProvision);
-        Money companyValue = position.Cash + bank.Terms.ReserveValue - bank.Drawn - provisions;
+        Money cash = company.Ledger.Cash;
 
-        return new(position.Tick, position.Date, position.Cash, position.Wells,
+        return new(tick, date, cash, field.WellCount, activities.InProgress,
+            loop.ProducedThisTick, insolvent, CompanyValueOf(cash));
+    }
+
+    public FieldReadModel Publish(FieldPosition position, ScenarioProgress progress) =>
+        new(position.Tick, position.Date, position.Cash, position.Wells,
             position.ActivitiesRunning, position.ProducedThisTick, position.Insolvent,
             progress, Project(beliefs), loop.Chain(), field.Wells(), Prospects(),
             loop.Market.OilPrice, loop.Market.CostIndex,
@@ -559,7 +565,7 @@ internal sealed class FieldProjection(
             history.Ratio(
                 reserves.Remaining(loop.CumulativeProduced).Proved,
                 loop.CumulativeProduced),
-            bank.Terms, bank.Covenant, bank.Drawn, companyValue,
+            bank.Terms, bank.Covenant, bank.Drawn, position.CompanyValue,
             loop.CumulativeFlared,
             esg.Of(),
             new WaterFloodView(
@@ -569,6 +575,21 @@ internal sealed class FieldProjection(
             company.Ledger.CashByCause(position.Tick),
             activities.Operations(),
             world.View);
+
+    /// <summary>
+    /// What this company is worth (SDD-014 §2's finding-267 amendment): the same
+    /// three facts <see cref="Publish"/> used to read directly, now the one
+    /// place either stage reads from (law L5).
+    ///
+    /// <para>Credits are negative in this ledger (SDD-009 §1), so what is held
+    /// against abandonment is the negation of the account balance — the same
+    /// convention <c>Bank.Drawn</c> and <c>ProductionLoop</c>'s own accrual
+    /// use.</para>
+    /// </summary>
+    private Money CompanyValueOf(Money cash)
+    {
+        Money provisions = -company.Ledger.BalanceOf(Account.AbandonmentProvision);
+        return cash + bank.Terms.ReserveValue - bank.Drawn - provisions;
     }
 
     /// <summary>

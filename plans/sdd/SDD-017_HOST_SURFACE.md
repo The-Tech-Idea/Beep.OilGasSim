@@ -229,6 +229,14 @@ public sealed record ObjectiveView(
 > (Capital efficiency also needs the change in this figure over the scenario
 > span, plus cumulative distributions and capex) or rebuild R11.6's reverted
 > berth/cargo mechanic.
+>
+> **Reached an objective too, one task later (finding 267, SDD-014 §2's own
+> amendment).** The figure existed at Publish (stage 13) and nowhere earlier,
+> so `Defaults.ProjectedPaths` had nothing to register it against — an
+> objective evaluates at stage 12. `FieldPosition` now carries it, computed
+> once in `Take` from the same three facts, and `company.value` is a valid
+> path; `Publish` reads it off the position instead of computing it a second
+> time.
 
 > **R20d.1 amendment — the chain, as one row per element.** §2's views split the
 > two halves of the bottleneck report across the hierarchy: `FieldView` carries

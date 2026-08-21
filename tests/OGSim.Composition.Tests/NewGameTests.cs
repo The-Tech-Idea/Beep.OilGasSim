@@ -1496,6 +1496,14 @@ public sealed class NewGameTests
                 - debt - provisions;
 
             Assert.Equal(expected, engine.ReadModel!.CompanyValue);
+
+            // SDD-014 §2's finding-267 amendment: computed ONCE, at stage 12,
+            // not recomputed a second time at stage 13. `ObjectiveStage.Position`
+            // is what an objective was actually measured against this tick; if
+            // it disagreed with what the host is shown, "one owner" (L5) would
+            // be false regardless of what either number happened to equal.
+            FieldPosition position = engine.Provided.Resolve<ObjectiveStage>().Position!;
+            Assert.Equal(position.CompanyValue, engine.ReadModel!.CompanyValue);
             return;
         }
 

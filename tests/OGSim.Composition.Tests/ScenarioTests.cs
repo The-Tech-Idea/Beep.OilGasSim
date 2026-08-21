@@ -44,7 +44,8 @@ public sealed class ScenarioTests
 
     private static FieldPosition Position(long cents, int wells = 0) =>
         new(new Tick(1), new GameDate(1970, 1), new Money(cents), wells,
-            ActivitiesRunning: 0, new SurfaceVolume(0.0), Insolvent: false);
+            ActivitiesRunning: 0, new SurfaceVolume(0.0), Insolvent: false,
+            CompanyValue: new Money(cents));
 
     private static ObjectiveState Ask(ScenarioRunner runner, FieldPosition position, int tick) =>
         runner.Evaluate(Paths.SnapshotOf(position), new Tick(tick)).Overall;
@@ -252,6 +253,45 @@ public sealed class ScenarioTests
         var runner = new ScenarioRunner(Defaults.FirstField, paths.Schema);
 
         Assert.Equal(new ContentId("first-field"), runner.Id);
+    }
+
+    /// <summary>
+    /// SDD-014 §2's finding-267 amendment: a scenario CAN now ask for what the
+    /// company is worth, not only what it holds — `company.value` composes
+    /// (GM4's registry accepts it, so a mission naming it does not refuse at
+    /// load) and reads the one figure `FieldPosition.CompanyValue` carries
+    /// rather than a zero nobody computed.
+    /// </summary>
+    [Fact]
+    public void Company_value_is_a_registered_path_reading_the_position_it_names()
+    {
+        ProjectedPath? path = Defaults.ProjectedPaths
+            .FirstOrDefault(p => string.Equals(p.Path, "company.value", StringComparison.Ordinal));
+
+        Assert.NotNull(path);
+
+        var position = new FieldPosition(
+            new Tick(1), new GameDate(1970, 1), Cash: new Money(1),
+            Wells: 0, ActivitiesRunning: 0, new SurfaceVolume(0.0), Insolvent: false,
+            CompanyValue: new Money(123_456_00));
+
+        Assert.Equal(123_456_00.0, path!.Read(position), precision: 6);
+
+        // AND A SCENARIO CAN COMPOSE AGAINST IT — the same registry the shipped
+        // scenario is checked against above, refusing nothing this content asks.
+        // Built against `paths` directly rather than the file's own `Ask`
+        // helper: that helper's `Paths` is a smaller, hand-picked list that
+        // does not carry `company.value`, and the point here is the REAL one
+        // (`Defaults.ProjectedPaths`) does.
+        var paths = new ReadModelPaths(Defaults.ProjectedPaths);
+        var runner = new ScenarioRunner(
+            Asking(new Compare(
+                new Metric(new ReadModelPath("company.value")), CompareOp.Ge, new Const(0.0))),
+            paths.Schema);
+
+        ObjectiveState outcome = runner.Evaluate(paths.SnapshotOf(position), new Tick(1)).Overall;
+
+        Assert.Equal(ObjectiveState.Met, outcome);
     }
 
     // ------------------------------------------------- R24-V19: the audit trail

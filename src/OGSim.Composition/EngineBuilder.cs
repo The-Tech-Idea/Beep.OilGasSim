@@ -649,6 +649,12 @@ internal static class Defaults
     [
         new("company.cash", position => position.Cash.Cents),
         new("company.insolvent", position => position.Insolvent ? 1.0 : 0.0),
+
+        // SDD-014 §2's finding-267 amendment — what the company is worth, not
+        // only what it holds, and R11.6's own named prerequisite for a mechanic
+        // that defers revenue.
+        new("company.value", position => position.CompanyValue.Cents),
+
         new("field.wells", position => position.Wells),
         new("field.activitiesRunning", position => position.ActivitiesRunning),
         new("field.producedThisTick", position => position.ProducedThisTick.CubicMetres),
