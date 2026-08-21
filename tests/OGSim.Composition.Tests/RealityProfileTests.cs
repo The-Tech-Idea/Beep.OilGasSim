@@ -134,10 +134,14 @@ public sealed class RealityProfileTests
             Engine engine = At(profile);
             engine.Pipeline.AdvanceTick();
 
+            // NOT physical adjacency (SDD-006 §3c, R9.1's own composition,
+            // finding 257): `FlowNetwork.Build`'s topological order is a
+            // property of the solver's own walk. Stated as what it actually
+            // produces, matching R20d-V1's own sibling assertion.
             Assert.Equal(
                 ["well-1", "water-intake", "gathering-1", "manifold", "flowline", "separator",
-                 "water-disposal", "gas-plant", "flare", "treater", "custody-meter", "tank",
-                 "off-spec-sink"],
+                 "water-disposal", "treater", "custody-meter", "tank", "off-spec-sink",
+                 "compressor", "gas-plant", "flare"],
                 engine.ReadModel!.Chain.Select(element => element.DisplayId));
 
             // And the verb that answers a bottleneck is on offer either way.

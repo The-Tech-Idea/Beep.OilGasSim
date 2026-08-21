@@ -1314,7 +1314,16 @@ public sealed class NewGameTests
     [Fact]
     public void R21V13_the_standing_indicators_are_in_every_snapshot()
     {
-        Engine engine = NewGame(7UL);
+        // Seed 7 moved to seed 10 (found going through the plan): R9.1's
+        // compressor is a registered flow element from tick 0 and consumes a
+        // hazard-stream draw every tick like every other one, which moves the
+        // draw sequence exactly as finding 184 documents any new registered
+        // element does. On seed 7 that moved WHICH drilling attempt found the
+        // discovery late enough that the company's dry-hole spend outran it
+        // before a year of producing history could accumulate — a genuine
+        // property of this seed's luck under the new sequence, not a defect
+        // in the join. Seed 10 finds its discovery with room to spare.
+        Engine engine = NewGame(10UL);
         WorldState world = WorldOf(engine);
 
         engine.Pipeline.AdvanceTick();

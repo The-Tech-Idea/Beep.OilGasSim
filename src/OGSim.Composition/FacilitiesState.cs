@@ -1,12 +1,13 @@
 // R20d.12 — what the chain owns between ticks (SDD-006 §8b, finding 197).
 //
 // FACILITIES REGISTERED NO STATE OWNER, so nothing the surface chain holds
-// reached a container — and what it holds is everything a company BUYS. Six
+// reached a container — and what it holds is everything a company BUYS. Seven
 // sockets carry a fitted tier apiece: the separator that answers a bottleneck,
 // the export line that costs more than any well, the gas plant that answers the
 // flaring penalty, the treater that lets a watering-out field sell at all, the
-// manifold that decides how many wells can tie in, and the tank. A reloaded
-// company had the equipment it started with and the cash it had already spent.
+// manifold that decides how many wells can tie in, the tank, and the compressor
+// that raises what reaches the plant (R9.1, finding 257). A reloaded company had
+// the equipment it started with and the cash it had already spent.
 //
 // IT WAS INVISIBLE FOR A PARTICULAR REASON and the reason is worth keeping: the
 // continuation test drills and floods and never INSTALLS, so two engines could
@@ -28,7 +29,9 @@ internal sealed class FacilitiesState(SurfaceChain chain, FacilityLadders ladder
 {
     public StateKey Key { get; } = new("facilities.units");
 
-    public int SchemaVersion => 1;
+    // R9.1's own composition (finding 257): the compressor joined the six
+    // sockets this block already carried.
+    public int SchemaVersion => 2;
 
     /// <summary>Nothing has to be back before this is (SDD-013 §2b).</summary>
     public IReadOnlyList<StateKey> RestoreAfter => [];
@@ -45,6 +48,7 @@ internal sealed class FacilitiesState(SurfaceChain chain, FacilityLadders ladder
         writer.WriteString("tank-tier", chain.Tank.Tier.Id.Value);
         writer.WriteString("gas-plant-tier", chain.GasPlant.Tier.Id.Value);
         writer.WriteString("treater-tier", chain.Treater.Tier.Id.Value);
+        writer.WriteString("compressor-tier", chain.Compressor.Tier.Id.Value);
 
         // WHAT THE CHAIN IS HOLDING, as distinct from what it IS. A line
         // restored empty delivers its first month's oil out of nowhere (§6's V7
@@ -96,6 +100,10 @@ internal sealed class FacilitiesState(SurfaceChain chain, FacilityLadders ladder
 
         chain.Treater.Fit(
             Rung(ladders.Treater, reader.ReadString("treater-tier"), "treater",
+                 tier => tier.Id));
+
+        chain.Compressor.Fit(
+            Rung(ladders.Compressor, reader.ReadString("compressor-tier"), "compressor",
                  tier => tier.Id));
 
         chain.Flowline.CommitLinefill(Inventory(reader, "linefill"));

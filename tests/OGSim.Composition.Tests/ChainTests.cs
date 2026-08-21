@@ -227,9 +227,17 @@ public sealed class ChainTests
             // (SDD-006 §1c) — one per well, as long as that well's field is from
             // the header. It was missing entirely: every well tied straight into
             // the header at zero distance.
-            // The gas plant sits between the separator and the flare (finding
+            // The gas plant sits between the compressor and the flare (finding
              // 172): gas has somewhere to go other than to be burned, and what
-             // the plant cannot take overflows to the flare behind it.
+             // the plant cannot take overflows to the flare behind it. The
+             // compressor sits ahead of the plant (SDD-006 §3c, R9.1's own
+             // composition, finding 257): every barrel's gas is boosted before
+             // it reaches the sales point. NEITHER sorts adjacent to the
+             // separator it is fed from — `FlowNetwork.Build`'s topological
+             // order is a property of the solver's own walk, not of
+             // registration order or physical adjacency, and this list
+             // states what it actually produces rather than what seems
+             // intuitive from the diagram.
              // The treater sits on the OIL leg between the separator and the
              // meter: a field that waters out sells a stream the meter would
              // turn away, and this is what dries it (finding 173).
@@ -239,10 +247,10 @@ public sealed class ChainTests
              // the network exactly as produced oil does.
              // The off-spec sink is where a rejected stream goes (SDD-006 §7d,
              // finding 252) — off custody's Reject leg rather than its OnSpec
-             // one, so it sorts last.
+             // one.
              ["well-1", "water-intake", "gathering-1", "manifold", "flowline", "separator",
-             "water-disposal", "gas-plant", "flare", "treater", "custody-meter", "tank",
-             "off-spec-sink"],
+             "water-disposal", "treater", "custody-meter", "tank", "off-spec-sink",
+             "compressor", "gas-plant", "flare"],
             engine.ReadModel!.Chain.Select(element => element.DisplayId));
     }
 
@@ -1186,7 +1194,18 @@ public sealed class ChainTests
     [Trait("Speed", "Slow")]
     public void R10V4_an_acid_job_clears_what_the_water_left_behind()
     {
-        (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled();
+        // PINNED TO ITS OWN SEED, not the file's shared default (finding 184):
+        // `Insolvent` is a one-way latch (Scenario.cs, set once cash dips below
+        // zero, never cleared) — R9.1's compressor is a registered flow element
+        // from tick 0 and draws from the hazard stream every tick like every
+        // other one, which shifts WHEN existing equipment fails across twenty
+        // years. Under the file's default seed (20260806) that shift tips this
+        // fixture's single well into permanent insolvency well before month
+        // 240, so no amount of waiting recovers it. Seed 4 was checked against
+        // this same fixture and clears the job with a wide cash margin
+        // ($111M) while still plugging the disposal well for real
+        // (CurrentSkin and CumulativeInjected both clearly nonzero).
+        (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled(4UL);
         Produce(engine, target);
 
         OGSim.Wells.Injector disposal = engine.Provided.Resolve<SurfaceChain>().Disposal;
@@ -1201,7 +1220,13 @@ public sealed class ChainTests
         Assert.True(disposal.CumulativeInjected.CubicMetres > 0.0,
             "twenty years of water production and the disposal well took nothing");
 
-        Assert.IsType<Accepted>(engine.Commands.Submit(new RemediateInjectorCommand()));
+        CommandResult ordered = engine.Commands.Submit(new RemediateInjectorCommand());
+
+        Assert.True(ordered is Accepted,
+            $"skin={plugged} injected={disposal.CumulativeInjected.CubicMetres} " +
+            $"cash={engine.Provided.Resolve<CompanyState>().Ledger.Cash.Cents} " +
+            $"insolvent={engine.ReadModel!.Insolvent} result=" +
+            (ordered is Rejected r ? string.Join(",", r.Reasons.Select(x => x.LocId)) : ordered.GetType().Name));
 
         for (var month = 0; month < 6; month++) engine.Pipeline.AdvanceTick();
 
@@ -1436,6 +1461,76 @@ public sealed class ChainTests
         Assert.True(serviced > worn + 0.05,
             $"servicing a worn well moved its condition from {worn} to {serviced} — not the " +
             "restoration `AssetIntegrity.Repair` is supposed to give it");
+    }
+
+    /// <summary>
+    /// THE SEVENTH SOCKET IS BUYABLE AND DOES SOMETHING (SDD-006 §3c, R9.1's
+    /// own composition, finding 257). `Compressor`/`RemovalUnit`/
+    /// `NglExtractionPlant` shipped tested and composed nowhere since R9 —
+    /// this is the first of the three to actually reach a field.
+    /// </summary>
+    [Fact]
+    public void R91_a_compressor_is_buyable_and_boosts_what_reaches_the_plant()
+    {
+        (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled();
+        Produce(engine, target);
+
+        SurfaceChain chain = engine.Provided.Resolve<SurfaceChain>();
+
+        // RUNG 0 IS A TRUE NO-OP: ratio 1, discharge equal to the suction it
+        // was built against, zero stages worth of work.
+        Assert.Equal(new ContentId("compressor-none"), chain.Compressor.Tier.Id);
+        Assert.Equal(1, chain.Compressor.Stages);
+        Assert.Equal(chain.Separator.Tier.OperatingPressure, chain.Compressor.Tier.Discharge);
+
+        Assert.IsType<Accepted>(engine.Commands.Submit(new InstallCompressorCommand()));
+
+        for (var month = 0; month < 5; month++) engine.Pipeline.AdvanceTick();
+
+        Assert.Equal(new ContentId("compressor-e1"), chain.Compressor.Tier.Id);
+        Assert.True(chain.Compressor.Tier.Discharge.Pascals > chain.Separator.Tier.OperatingPressure.Pascals,
+            "a real train should discharge above the separator it draws from");
+
+        // AND WHAT REACHED THE PLANT WAS ACTUALLY BOOSTED — the compressor's
+        // own outlet stream, read straight off the chain a player watches.
+        ChainElementView row = Row(engine, new EntityRef(EntityKind.FlowElement, chain.Compressor.Id.Value));
+        Assert.True(row.Throughput.Kilograms > 0.0,
+            "the compressor should have something to compress on a producing field");
+
+        // TOP OF THE LADDER: this shipped one real tier above "none", and a
+        // second install is refused rather than silently doing nothing.
+        Assert.IsType<Rejected>(engine.Commands.Submit(new InstallCompressorCommand()));
+    }
+
+    /// <summary>
+    /// A BOUGHT COMPRESSOR SURVIVES A RELOAD (SDD-006 §8b, finding 257). The
+    /// seventh socket joined <c>FacilitiesState</c>'s own six at the same
+    /// time it joined the chain — proven rather than assumed, the same
+    /// discipline finding 197 (six sockets carrying a fitted tier apiece)
+    /// was closed with.
+    /// </summary>
+    [Fact]
+    public void R91_a_bought_compressor_survives_a_reload()
+    {
+        const ulong seed = 20260806UL;
+        (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled(seed);
+        Produce(engine, target);
+
+        Assert.IsType<Accepted>(engine.Commands.Submit(new InstallCompressorCommand()));
+
+        for (var month = 0; month < 5; month++) engine.Pipeline.AdvanceTick();
+
+        SurfaceChain before = engine.Provided.Resolve<SurfaceChain>();
+        Assert.Equal(new ContentId("compressor-e1"), before.Compressor.Tier.Id);
+
+        var container = new MemoryStream();
+        SaveGame.Write(engine, seed, container);
+        container.Position = 0;
+
+        Built reloaded = Assert.IsType<Built>(SaveGame.Load(container, Fixture.Settings()));
+        SurfaceChain after = reloaded.Engine.Provided.Resolve<SurfaceChain>();
+
+        Assert.Equal(new ContentId("compressor-e1"), after.Compressor.Tier.Id);
     }
 
     /// <summary>

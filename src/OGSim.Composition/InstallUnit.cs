@@ -367,6 +367,69 @@ internal sealed class InstallTreaterActivity(
 }
 
 /// <summary>
+/// Fit a bigger compression train (SDD-006 §3c, R9.1's own composition,
+/// finding 257).
+///
+/// <para>THE SEVENTH SOCKET, and the first the gas leg has had since the
+/// plant itself. `GasCapture` has been the field's real sales point since
+/// R20d.17; this raises what reaches it, and — through §2.6's heat derating —
+/// is R20d.13's own missing consumer, closing the reason a desert field's gas
+/// handling was never seasonal.</para>
+/// </summary>
+public sealed record InstallCompressorCommand() : Command(Subject: null);
+
+internal sealed class InstallCompressorActivity(
+    ActivityTerms terms,
+    OGSim.Facilities.Compressor compressor,
+    IReadOnlyList<OGSim.Facilities.CompressorTier> ladder,
+    FacilityLadders ladders,
+    OGSim.Capabilities.CapabilityState capabilities,
+    OGSim.Capabilities.EraCalendar eras,
+    IGatingValidator gate,
+    IEffectState effects) : Activity<InstallCompressorCommand>(terms)
+{
+    /// <summary>A rung on the surface ladder (finding 225).</summary>
+    public override MovementCategory Spend => MovementCategory.Development;
+
+    public override bool LeavesAnAsset => true;
+
+    public override bool OnePerTarget => true;
+
+    public override (EntityRef Target, Length Depth) Aim(InstallCompressorCommand command) =>
+        (new EntityRef(EntityKind.FlowElement, compressor.Id.Value), NoDepth);
+
+    public override IReadOnlyList<RejectionReason> OwnRefusals(InstallCompressorCommand command)
+    {
+        if (NextRung() is { } next) return RungGate.Buyable(next.Id, ladders, capabilities, eras, gate, effects);
+
+        return
+        [
+            new RejectionReason(
+                "$loc:reject.top-of-the-ladder",
+                $"'{compressor.Tier.Id.Value}' is the largest compression train in the " +
+                "catalogue; the field cannot move more gas than it already can"),
+        ];
+    }
+
+    public override void Complete(CompletedActivity done, Tick tick)
+    {
+        ArgumentNullException.ThrowIfNull(done);
+
+        if (!done.Succeeded) return;
+
+        if (NextRung() is OGSim.Facilities.CompressorTier next) compressor.Fit(next);
+    }
+
+    private OGSim.Facilities.CompressorTier? NextRung()
+    {
+        for (int i = 0; i < ladder.Count - 1; i++)
+            if (ladder[i].Id == compressor.Tier.Id) return ladder[i + 1];
+
+        return null;
+    }
+}
+
+/// <summary>
 /// Whether a rung can be bought, and why not (SDD-005 §2's R20d.10b amendment).
 ///
 /// <para>TWO CHECKS AND TWO KINDS OF FACT. The era is a CALENDAR comparison made

@@ -17,15 +17,18 @@ public class CompressionTests
         double maxStageRatio = 3.5,
         double n = 1.25,
         double efficiency = 0.75,
-        double derate = 0.004) =>
+        double derate = 0.004,
+        double dischargeBar = 70.0) =>
         new(new ContentId("comp-tier-b"), new MassRate(capacity), maxStageRatio, n, efficiency,
             MolarMassKgPerMol: 0.019, DerateFractionPerKelvin: derate,
-            DerateReference: Temperature.FromCelsius(15.0));
+            DerateReference: Temperature.FromCelsius(15.0),
+            Discharge: Pressure.FromBar(dischargeBar));
 
     private static Compressor Unit(
         double suctionBar = 10.0, double dischargeBar = 70.0, CompressorTier? tier = null) =>
-        new(new EntityId<IFlowElement>(1), tier ?? Tier(),
-            Pressure.FromBar(suctionBar), Pressure.FromBar(dischargeBar),
+        new(new EntityId<IFlowElement>(1),
+            (tier ?? Tier()) with { Discharge = Pressure.FromBar(dischargeBar) },
+            Pressure.FromBar(suctionBar),
             averageCompressibility: 0.9, Fx.MaterialCount);
 
     // ------------------------------------------------------------ R9-V1 / MX6
@@ -163,6 +166,28 @@ public class CompressionTests
         Assert.Equal(0.0, result.FuelConsumed.Total.KgPerSecond, 12);
 
         // And it did raise the pressure.
+        Assert.Equal(Pressure.FromBar(70.0).Pascals, result.Outlets[0].P.Pascals, 6);
+    }
+
+    /// <summary>
+    /// R9.1's own join (finding 257): a bigger train is fitted the way every
+    /// other socket in this engine is — suction stays where the unit SITS,
+    /// only what is fitted into it changes.
+    /// </summary>
+    [Fact]
+    public void R9V1_a_bigger_train_is_fitted_without_moving_its_suction()
+    {
+        Compressor unit = Unit(suctionBar: 10.0, dischargeBar: 30.0);
+
+        Assert.Equal(1, unit.Stages);
+        Assert.Equal(Tier(dischargeBar: 30.0), unit.Tier);
+
+        unit.Fit(Tier(dischargeBar: 70.0));
+
+        Assert.Equal(2, unit.Stages);
+        Assert.Equal(Pressure.FromBar(70.0), unit.Tier.Discharge);
+
+        TransformResult result = unit.Transform(Fx.In(Fx.Stream(0.0, 40.0, 0.0)));
         Assert.Equal(Pressure.FromBar(70.0).Pascals, result.Outlets[0].P.Pascals, 6);
     }
 

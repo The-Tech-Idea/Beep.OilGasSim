@@ -464,6 +464,73 @@ when the station is bought. Its constraint is `ConstraintKind.TotalCapacity`
 at the tier's rated flow and its `PowerDraw` is `W_shaft`, consumed by stage
 4's balance exactly as the compressor's is.
 
+> **R9.1 amendment (finding 257): the compressor was specified, tested and
+> composed nowhere.** §3c pinned the polytropic model at finding 115 and
+> `Compressor`/`CompressorTier` have shipped and passed MX6/R9-V1/R9-V2 since
+> — the same "real mechanism, joined to nothing" shape as findings 149, 200,
+> 207, 252, 253, 254, 255, and R20d.13's own row named it directly:
+> "`Compressor`'s heat derating (built, composed nowhere)". Wired as the
+> SEVENTH rung-based socket, joining the six R20c.9 already gave a ladder,
+> content and an install command — `SeparatorContentKind` through
+> `ManifoldContentKind`'s shared `FacilityContentKind<TDefinition>`/
+> `FacilityGate` base, not a parallel one-off mechanism.
+>
+> **Discharge moved onto the tier, and this is the one design decision this
+> join had to make.** §3c/§3d both say sizing a boosting element's discharge
+> is "the player's decision, made when the station is bought" — and the
+> precedent for where that decision lives already exists: `SeparatorTier.
+> OperatingPressure`. `CompressorTier` gains a `Discharge` field for the same
+> reason, rather than a free-form number threaded through
+> `InstallCompressorCommand` — no other install command in this composition
+> carries one, and inventing the first would be a second shape for one
+> decision every other socket already makes through its ladder.
+>
+> ```csharp
+> public sealed record CompressorTier(
+>     ContentId Id, MassRate RatedCapacity, double MaxStageRatio,
+>     double PolytropicExponent, double PolytropicEfficiency,
+>     double MolarMassKgPerMol, double DerateFractionPerKelvin,
+>     Temperature DerateReference,
+>     Pressure Discharge);   // joined the tier, R9.1
+> ```
+>
+> **Suction is NOT on the tier.** It is where the train sits in the network —
+> read once, at compose time, from the separator's own operating pressure —
+> and a bigger train fitted later does not move where it sits. `Compressor`
+> gained a `Fit(CompressorTier)` mirroring every other socket's, swapping the
+> tier alone; suction stays exactly what it was built against.
+>
+> **Rung 0 is a true no-op, not a phantom cost or a phantom bottleneck.**
+> Every other ladder's rung 0 is a zero — no plant, no treatment, no
+> capacity — because a missing separation or treating step means NOTHING
+> reaches downstream of it. A missing compressor means the opposite: gas
+> flows through UNBOOSTED, not blocked. Rung 0's own discharge equals the
+> suction it is built against (ratio 1: zero stages, zero stage work, zero
+> power drawn) rather than zero capacity, which would have made an unbought
+> compressor a `ConstraintKind.TotalCapacity` binding at zero — throttling a
+> field's gas to nothing before anyone had bought or refused to buy
+> anything.
+>
+> **Ahead of the plant, not instead of it.** `GasCapture` (R20d.17, finding
+> 172) has been the field's real sales point since it shipped — "the plant
+> IS the sales point, and gas leaves the field the moment it is processed."
+> R9 §2.1's own "there is no gas plant, each treating step is an independent
+> unit" is a genuinely different design for the same domain concept, and
+> reconciling the two by REPLACING the working, tested sales mechanism was
+> weighed and set aside: the compressor is composed ADDITIVELY, ahead of
+> `GasCapture` in the network (`separator → compressor → gas plant → flare`),
+> raising what reaches the existing sales point rather than replacing it.
+> Dehydration, sweetening and NGL extraction — `RemovalUnit` and
+> `NglExtractionPlant`, equally real and equally unwired — are named rather
+> than built in the same task: each carries its own version of this same
+> sizing and topology question (what a removal unit's reject leg connects
+> to, where NGL revenue is booked) and answering all three at once would be
+> guessing at three design forks instead of the one this task actually
+> settled.
+>
+> **Persisted the same way the other six sockets are** (§8b): `FacilitiesState`
+> carries the fitted tier's id, one string, exactly like the separator's.
+
 ## 4. Gas treating (dehydration · sweetening · NGL)
 
 ```text

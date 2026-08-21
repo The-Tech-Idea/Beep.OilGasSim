@@ -754,6 +754,10 @@ internal static class Defaults
     /// finding 252) — a permanent loss, accounted rather than silent.</summary>
     public static EntityId<IFlowElement> TheOffSpecSink { get; } = new(1_000_011);
 
+    /// <summary>Between the separator's gas leg and the gas plant (SDD-006
+    /// §3c, R9.1's own composition, finding 257) — the seventh socket.</summary>
+    public static EntityId<IFlowElement> TheCompressor { get; } = new(1_000_012);
+
     /// <summary>
     /// Where per-well gathering lines start numbering (SDD-006 §1c). Above the
     /// fixed chain elements by a clear margin, so a line laid for the
@@ -862,6 +866,12 @@ internal static class Defaults
     /// flaring an emissions problem rather than merely a waste one.</summary>
     public const double FlareCombustionEfficiency = 0.98;
 
+    /// <summary>SDD-006 §3c's Z̄ — the average compressibility factor the
+    /// polytropic formula takes as a property of the stream a train is built
+    /// for, exactly as a liquid pump's ρ̄ is (§3d). 0.9 is a typical value for
+    /// associated gas across the pressure range this composition ships.</summary>
+    public const double GasCompressibilityFactor = 0.9;
+
 
 
 
@@ -960,6 +970,21 @@ internal static class Defaults
         Template: new ContentId("install-treater"),
         Cost: Money.FromMillions(5.0),
         DurationTicks: 3,
+        Rig: null,
+        WeatherLimit: 5.0,   // heavy lift
+        // a skid delivered and tied in.
+        RequiresAccess: true,
+
+        Outcomes: SurveyOutcomes);
+
+    /// <summary>SDD-006 §3c's own capital item (R9.1's own composition,
+    /// finding 257) — a real compression train, priced against a gas plant
+    /// module rather than a vessel: it is heavier iron than a separator and
+    /// lighter than the plant it feeds.</summary>
+    public static ActivityTerms InstallCompressorTerms { get; } = new(
+        Template: new ContentId("install-compressor"),
+        Cost: Money.FromMillions(15.0),
+        DurationTicks: 4,
         Rig: null,
         WeatherLimit: 5.0,   // heavy lift
         // a skid delivered and tied in.
@@ -1937,7 +1962,7 @@ public static class EngineBuilder
     }
 
     /// <summary>
-    /// The six facility kinds and the technology registry over the host's
+    /// The seven facility kinds and the technology registry over the host's
     /// sources.
     ///
     /// <para>No plugin binding: a facility datasheet names no model, so the
@@ -1951,6 +1976,7 @@ public static class EngineBuilder
             [
                 new SeparatorContentKind(), new TankContentKind(), new TreaterContentKind(),
                 new GasPlantContentKind(), new ExportLineContentKind(), new ManifoldContentKind(),
+                new CompressorContentKind(),
                 new OGSim.Capabilities.TechnologyContentKind(),
                 new OGSim.World.TerrainClassContentKind(),
                 new TakeOrPayContentKind(),
