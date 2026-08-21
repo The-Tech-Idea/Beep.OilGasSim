@@ -255,6 +255,51 @@ public sealed record ObjectiveView(
 > supposed to be found. It folds into `WellView` when a site and an operating
 > point have sources.
 
+> **R21.6 amendment — the operating point has a source now, and it needed no
+> new solve.** SDD-002 §9's `SolveReport.CompletionStates` already carries
+> every completion's converged rate AND wellhead backpressure — "S0 of the
+> next segment/tick initialises from these" — so the value this row was
+> waiting on has existed since R4 shipped; nothing downstream of the solve had
+> ever asked for it a second time.
+>
+> ```csharp
+> public sealed record WellStatusView(
+>     EntityRef Well, string DisplayId,
+>     WellStatus Status,
+>     SurfaceVolume ProducedThisTick,
+>     OperatingPoint? OperatingPoint,           // null: not solved this tick
+>     IReadOnlyList<ContentId> InstalledTiers);  // the fitted lift's tier, 0 or 1
+> ```
+>
+> **Reconstructed, not stored, and that is deliberate (law L5).** `Completion.
+> SolveOperatingPoint` is a pure function of the reservoir pressure it already
+> holds (refreshed every tick regardless of whether the well solves,
+> `WellsState.RefreshFromReservoir`) and the wellhead backpressure it is asked
+> about. `ProductionLoop` retains the LAST segment's `CompletionState` per
+> completion across a tick's `Accumulate` calls — cleared at `SolveFlow`'s own
+> tick boundary, the same place `_byCompartment` already clears — and the read
+> model calls `SolveOperatingPoint` once more against that retained backpressure
+> rather than caching the `OperatingPoint` object itself, which would be a
+> second value derived from the same inputs and liable to disagree with the
+> commit that actually ran (finding 137's own lesson, one layer up).
+>
+> **`null` is a well that did not solve this tick**, not a fabricated `Dead`:
+> a freshly-drilled completion before its first `SolveFlow`, or one shut out of
+> every segment by an upstream failure the whole month, has no converged state
+> to reconstruct from and says so rather than guessing.
+>
+> **`InstalledTiers` is 0 or 1 element today**, not a placeholder for a list
+> that never grows: `Completion.Lift` is a single nullable reference (R12b.2's
+> own scope limit — a second pump on one string is a ladder this composition
+> does not model), so the field is plural because `WellView`'s existing name
+> already is, not because a well can carry more than one.
+>
+> **Site and the sampled IPR/VLP curves remain out of scope**, named rather
+> than silently dropped: a site needs R20d.8's spatial half, which this task
+> does not touch, and a curve needs a SAMPLING pass across a rate range that
+> a single operating point does not — a real, separate feature rather than a
+> field this task happened not to fill in.
+
 > **Contract pass 10 — `FinanceView` was missing from the root.** This section
 > listed fourteen members and claimed "the exact 16-section ⇔ R21 §2.4b
 > correspondence (V11)" while omitting the projection R21 §2.4b calls *"where

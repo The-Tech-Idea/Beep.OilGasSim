@@ -59,7 +59,35 @@ public sealed record WellStatusView(
     EntityRef Well,
     string DisplayId,
     WellStatus Status,
-    SurfaceVolume ProducedThisTick);
+    SurfaceVolume ProducedThisTick,
+
+    /// <summary>
+    /// SDD-017 §2's R21.6 amendment: reconstructed from the last segment's
+    /// converged wellhead backpressure, not cached — <c>null</c> means the
+    /// well did not solve this tick (freshly drilled, or shut out of every
+    /// segment by an upstream failure the whole month), never a fabricated
+    /// <see cref="Dead"/>.
+    /// </summary>
+    OperatingPoint? OperatingPoint,
+
+    /// <summary>The fitted lift method's tier, if any — 0 or 1 element today,
+    /// because <see cref="ICompletion.Lift"/> is a single nullable reference
+    /// (R12b.2's own scope limit), not because a well can carry more than
+    /// one.</summary>
+    IReadOnlyList<ContentId> InstalledTiers)
+{
+    // Finding 131 — InstalledTiers is a collection.
+    public bool Equals(WellStatusView? other) =>
+        other is not null && Well == other.Well
+        && string.Equals(DisplayId, other.DisplayId, StringComparison.Ordinal)
+        && Status == other.Status && ProducedThisTick == other.ProducedThisTick
+        && OperatingPoint == other.OperatingPoint
+        && Structural.Equal(InstalledTiers, other.InstalledTiers);
+
+    public override int GetHashCode() =>
+        HashCode.Combine(Well, DisplayId, Status, ProducedThisTick,
+                         OperatingPoint, Structural.HashOf(InstalledTiers));
+}
 
 /// <summary>
 /// An undrilled structure and what the company thinks its chances are

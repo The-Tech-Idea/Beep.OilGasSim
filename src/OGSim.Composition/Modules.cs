@@ -916,6 +916,14 @@ internal sealed class FieldModule(
 
         var gatheringLines = 0UL;
 
+        // THE OTHER HALF OF A MUTUAL DEPENDENCY (SDD-017 §2's R21.6
+        // amendment): `loop` needs `field` (`() => field.IsAbandoned`, below)
+        // and `field` now needs `loop`'s own solve state — a genuine cycle
+        // composition breaks the same way for both directions, a forward
+        // reference assigned once its target exists and invoked only much
+        // later, at read-model time, never during either constructor.
+        ProductionLoop? loop = null;
+
         var field = new FieldControl(
             composition.Require<OGSim.Subsurface.SubsurfaceState>(),
             composition.Require<OGSim.Wells.WellsState>(),
@@ -939,7 +947,9 @@ internal sealed class FieldModule(
                 Defaults.SurfaceOilDensity,
                 Defaults.MaterialCount),
 
-            Defaults.CompletionFor);
+            Defaults.CompletionFor,
+
+            well => loop?.LastSolvedStateOf(well));
 
 
         // THE ROUTE TO MARKET. One per field, so its identity is the field's
@@ -948,7 +958,7 @@ internal sealed class FieldModule(
         var terminal = new OGSim.Facilities.ExportTerminal(
             new EntityRef(EntityKind.Facility, 1), ladders.Export[0]);
 
-        var loop = new ProductionLoop(
+        loop = new ProductionLoop(
             composition.Require<OGSim.Subsurface.SubsurfaceState>(),
             composition.Require<OGSim.Wells.WellsState>(),
             composition.Require<OGSim.Company.CompanyState>(),

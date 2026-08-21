@@ -217,6 +217,15 @@ internal sealed class ProductionLoop : IStateOwner
     // a tick that produced nothing cannot commit last month's volumes.
     private readonly Dictionary<EntityId<IReservoirCompartmentEntity>, double> _byCompartment = [];
 
+    // THE LAST SEGMENT'S CONVERGED STATE PER COMPLETION (SDD-017 §2's R21.6
+    // amendment) — what a read model reconstructs an operating point from.
+    // Overwritten every segment, so by the tick's own close this holds the
+    // final one; cleared at the same SolveFlow boundary `_byCompartment` is,
+    // so a completion absent from every segment this tick (never drilled far
+    // enough, or shut out of the whole month by an upstream failure) reports
+    // none rather than a stale month.
+    private readonly Dictionary<EntityId<ICompletion>, CompletionState> _lastSolved = [];
+
     // The chain, rebuilt each tick in the solver's topological order.
     private readonly List<ChainElement> _chain = [];
 
@@ -227,6 +236,15 @@ internal sealed class ProductionLoop : IStateOwner
     /// a second copy handed to every stage that needs a label (law L5).</summary>
     public string NameOf(EntityRef element) =>
         _names(new EntityId<IFlowElement>(element.Value));
+
+    /// <summary>
+    /// A well's converged state as of the last segment it solved this tick, or
+    /// <c>null</c> if it solved none (SDD-017 §2's R21.6 amendment). The loop
+    /// owns the solve, so this is the one door a read model reconstructs an
+    /// operating point through rather than a second copy of the same lookup.
+    /// </summary>
+    public CompletionState? LastSolvedStateOf(EntityId<ICompletion> well) =>
+        _lastSolved.TryGetValue(well, out CompletionState? state) ? state : null;
 
     private readonly OGSim.Integrity.AssetIntegrity _integrity;
 
@@ -662,6 +680,7 @@ internal sealed class ProductionLoop : IStateOwner
         CommandTheIntake();
 
         _byCompartment.Clear();
+        _lastSolved.Clear();
         _chain.Clear();
         _importedThisTick = 0.0;
         FlaredThisTick = new Mass(0.0);
@@ -853,13 +872,18 @@ internal sealed class ProductionLoop : IStateOwner
         for (int i = 0; i < report.CompletionStates.Count; i++)
         {
             CompletionState state = report.CompletionStates[i];
+            var well = new EntityId<ICompletion>(state.Completion.Value);
 
-            EntityId<IReservoirCompartmentEntity> compartment =
-                _wells.CompartmentOf(new EntityId<ICompletion>(state.Completion.Value));
+            EntityId<IReservoirCompartmentEntity> compartment = _wells.CompartmentOf(well);
 
             _byCompartment[compartment] =
                 _byCompartment.GetValueOrDefault(compartment)
                 + state.Rate.CubicMetresPerSecond * seconds;
+
+            // LAST WRITE WINS (SDD-017 §2's R21.6 amendment): segments run in
+            // order, so by the time the tick's last one has been accumulated
+            // this holds what the well was doing when the month closed.
+            _lastSolved[well] = state;
         }
 
         // What reached the meter. The custody point's ON-SPEC outlet only: its
@@ -1786,6 +1810,15 @@ public sealed class FieldControl : IStateOwner
     private readonly GatheringLine _gatheringLine;
     private readonly WellDesign _design;
 
+    // THE OTHER HALF OF A MUTUAL DEPENDENCY (SDD-017 §2's R21.6 amendment):
+    // `ProductionLoop` already closes over THIS object (`() => field.
+    // IsAbandoned`) because it is built second, and a field needs the loop's
+    // own solve state, which does not exist yet when a field is built first.
+    // Composition breaks the cycle the same way it already does for the other
+    // direction — a forward reference assigned once the loop exists, invoked
+    // only much later, at read-model time.
+    private readonly Func<EntityId<ICompletion>, CompletionState?> _lastSolvedStateOf;
+
     private int _slotsTaken;
 
     internal FieldControl(
@@ -1797,7 +1830,8 @@ public sealed class FieldControl : IStateOwner
         ContentId abandonmentTemplate,
         WorldState world,
         GatheringLine gatheringLine,
-        WellDesign design)
+        WellDesign design,
+        Func<EntityId<ICompletion>, CompletionState?> lastSolvedStateOf)
     {
         _subsurface = subsurface;
         _wells = wells;
@@ -1808,6 +1842,7 @@ public sealed class FieldControl : IStateOwner
         _world = world;
         _gatheringLine = gatheringLine;
         _design = design;
+        _lastSolvedStateOf = lastSolvedStateOf;
     }
 
     /// <summary>
@@ -2034,8 +2069,8 @@ public sealed class FieldControl : IStateOwner
     public bool IsAbandoned => _wells.Count > 0 && _abandoned.Count == _wells.Count;
 
     /// <summary>
-    /// Every well and its state (SDD-017 §2's R21.5 amendment) — the list a
-    /// well-level command is aimed with.
+    /// Every well and its state (SDD-017 §2's R21.5/R21.6 amendments) — the
+    /// list a well-level command is aimed with.
     ///
     /// <para>Walked in the order the wells were opened, so a host's list does
     /// not reshuffle between months (D-5). Production is deliberately absent
@@ -2043,6 +2078,12 @@ public sealed class FieldControl : IStateOwner
     /// split of the solve, and the loop totals the field — a number invented per
     /// well would be a plausible fiction, so the honest answer is the field's
     /// own total on the read model beside it.</para>
+    ///
+    /// <para>The operating point is RECONSTRUCTED against the last segment's
+    /// converged wellhead backpressure the loop retained, not cached from the
+    /// solve itself (law L5) — <c>null</c> where the loop retained nothing,
+    /// which is a well that did not solve this tick rather than one guessed
+    /// at.</para>
     /// </summary>
     public IReadOnlyList<WellStatusView> Wells()
     {
@@ -2053,12 +2094,21 @@ public sealed class FieldControl : IStateOwner
         {
             Completion well = completions[i];
 
+            OperatingPoint? point = _lastSolvedStateOf(well.CompletionId) is CompletionState state
+                ? well.SolveOperatingPoint(state.WellheadBackpressure)
+                : null;
+
+            IReadOnlyList<ContentId> installedTiers =
+                well.Lift is ILiftMethod lift ? [lift.InstalledTier] : [];
+
             rows.Add(new WellStatusView(
                 new EntityRef(EntityKind.Completion, well.CompletionId.Value),
                 "well-" + well.CompletionId.Value.ToString(
                     System.Globalization.CultureInfo.InvariantCulture),
                 StatusOf(well),
-                new SurfaceVolume(0.0)));
+                new SurfaceVolume(0.0),
+                point,
+                installedTiers));
         }
 
         return rows;

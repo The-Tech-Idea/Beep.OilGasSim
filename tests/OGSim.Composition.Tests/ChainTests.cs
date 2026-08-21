@@ -1439,6 +1439,39 @@ public sealed class ChainTests
     }
 
     /// <summary>
+    /// A WELL'S OPERATING POINT REACHES THE READ MODEL (SDD-017 §2's R21.6
+    /// amendment). `SolveReport.CompletionStates` has carried the converged
+    /// rate and wellhead backpressure since R4; nothing between the solve and
+    /// `FieldControl.Wells()` had ever asked for it again, so a host could
+    /// name a well but not say what it was doing.
+    /// </summary>
+    [Fact]
+    public void R216_a_producing_wells_operating_point_reaches_the_read_model()
+    {
+        (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled();
+        FieldControl field = engine.Provided.Resolve<FieldControl>();
+
+        EntityId<ICompletion> producing = field.Drill(target, new Length(2000.0));
+
+        engine.Pipeline.AdvanceTick();
+
+        WellStatusView row = field.Wells().Single(w => w.Well.Value == producing.Value);
+
+        Flowing flowing = Assert.IsType<Flowing>(row.OperatingPoint);
+        Assert.True(flowing.Rate.CubicMetresPerSecond > 0.0,
+            "a well on a real reservoir should be flowing something");
+        Assert.Empty(row.InstalledTiers);
+
+        // AND A WELL THAT HAS NEVER SOLVED REPORTS NONE, not a fabricated
+        // Dead — drilled after the tick above, so SolveFlow has not reached
+        // it yet.
+        EntityId<ICompletion> justDrilled = field.Drill(target, new Length(2000.0));
+        WellStatusView freshRow = field.Wells().Single(w => w.Well.Value == justDrilled.Value);
+
+        Assert.Null(freshRow.OperatingPoint);
+    }
+
+    /// <summary>
     /// A COMPANY THAT KEPT ITS PROMISE STILL LOSES THE LICENCE WHEN THE TERM
     /// RUNS OUT (SDD-011 §1's R16 amendment, finding 254). `Licence.Expiry`
     /// was real and unread since R20d.9; `Defaults.LicenceTerms.TermMonths`
