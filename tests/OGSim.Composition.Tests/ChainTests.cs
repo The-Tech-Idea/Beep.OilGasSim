@@ -1548,6 +1548,81 @@ public sealed class ChainTests
     }
 
     /// <summary>
+    /// SC7 / R18-V4 (design 12 §4, phase R18 §2.3): a compressor failure
+    /// limits gas handling and therefore oil, with correct attribution — "the
+    /// phase's most important behaviour," and the design's own claim is that
+    /// it needs no special code: <see cref="OGSim.Contracts.FlowElementRegistry.Close"/>'s
+    /// route law already removes an element once what it feeds is absent, so
+    /// the compressor going down takes the separator with it (its gas leg
+    /// has nowhere to send anything) and that cascades back to the well —
+    /// the whole field, not merely the gas side, which is a genuinely
+    /// stronger claim than "gas handling limited" reads on its own and this
+    /// proves rather than assumes.
+    ///
+    /// <para>The compressor is a registered flow element from tick 0 (R9.1),
+    /// so it is already subject to a natural hazard-stream failure the same
+    /// way any other element is — no forced failure is engineered, matching
+    /// R12b6's own "no hazard-stream failure needs to be forced" precedent.
+    /// Seed 1 was checked against this fixture: the well is still actively
+    /// flowing (not watered out, not itself broken) when the compressor
+    /// fails naturally at month 13, so the drop is attributable to the
+    /// compressor and nothing else.</para>
+    /// </summary>
+    [Fact]
+    [Trait("Speed", "Slow")]
+    public void R18V4_a_compressor_failure_shuts_in_the_field_it_feeds_with_correct_attribution()
+    {
+        (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled(1UL);
+        Produce(engine, target);
+
+        SurfaceChain chain = engine.Provided.Resolve<SurfaceChain>();
+        var compressorRef = new EntityRef(EntityKind.FlowElement, chain.Compressor.Id.Value);
+        var separatorRef = new EntityRef(EntityKind.FlowElement, chain.Separator.Id.Value);
+
+        // THE SEPARATOR'S OWN THROUGHPUT, not the custody meter's: the meter
+        // only shows what crossed it, and this single-well field with no
+        // export line sells in batches off the tank rather than every tick
+        // — a zero month there is normal cadence, not evidence of anything.
+        // The separator sees the well's own delivery directly and is
+        // continuous while producing.
+        double priorMonthOil = 0.0;
+
+        for (var month = 0; month < 240; month++)
+        {
+            engine.Pipeline.AdvanceTick();
+
+            if (!Row(engine, compressorRef).Failed)
+            {
+                priorMonthOil = Row(engine, separatorRef).Throughput.Kilograms;
+                continue;
+            }
+
+            Assert.True(priorMonthOil > 0.0,
+                $"month={month} priorMonthOil={priorMonthOil} the field never established " +
+                "steady production before the compressor failed, so this seed cannot prove a " +
+                "drop against anything");
+
+            double thisMonthOil = Row(engine, separatorRef).Throughput.Kilograms;
+
+            Assert.True(thisMonthOil < priorMonthOil,
+                $"a failed compressor should have limited oil, not left it at {thisMonthOil} kg " +
+                $"against {priorMonthOil} kg the month before");
+
+            Tick now = engine.ReadModel!.Tick;
+
+            AuditEntry attributed = Assert.Single(
+                engine.Audit.Query(new AuditQuery(
+                    separatorRef, AuditCategory.ConstraintBinding, new TickRange(now, now), null)));
+
+            Assert.Equal("compressor", attributed.Data["shut-in-by"].Value);
+
+            return;
+        }
+
+        Assert.Fail("seed 1's compressor did not fail within 240 months");
+    }
+
+    /// <summary>
     /// A WELL'S OPERATING POINT REACHES THE READ MODEL (SDD-017 §2's R21.6
     /// amendment). `SolveReport.CompletionStates` has carried the converged
     /// rate and wellhead backpressure since R4; nothing between the solve and
