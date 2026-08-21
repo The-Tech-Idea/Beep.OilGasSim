@@ -1455,7 +1455,18 @@ internal static class Defaults
 
     public const double ThreatRateAtFailure = 0.15;
 
-    public const double TopEventPoints = 25.0;
+    /// <summary>What a top event costs when every mitigating barrier held
+    /// (SDD-012 §4b's finding-263 amendment). Unchanged from this
+    /// composition's original flat cost, so nothing already tuned against it
+    /// moves.</summary>
+    public const double TopEventPointsMitigated = 25.0;
+
+    /// <summary>What it costs when none did — three times the mitigated
+    /// figure, the same asymmetry already priced between planned and
+    /// emergency maintenance (`repair-equipment` at 3× `service-equipment`,
+    /// R20d.26.2): a consequence nothing stood against costs more than one
+    /// every defence somewhat blunted.</summary>
+    public const double TopEventPointsUnmitigated = 75.0;
 
     public const double CrewCompetency = 0.9;
 

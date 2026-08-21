@@ -1890,7 +1890,24 @@ internal sealed class ThreatStage(
                 integrity.ConditionOf, Defaults.CrewCompetency, Defaults.ProcedureCompliance));
 
         if (resolved.Outcome == OGSim.Integrity.ThreatOutcome.TopEvent)
-            standing.RecordIncident(Defaults.TopEventPoints);
+            standing.RecordIncident(ConsequencePoints(resolved));
+    }
+
+    /// <summary>
+    /// HOW MANY HELD SELECTS THE CONSEQUENCE (SDD-012 §4b's finding-263
+    /// amendment) — a flat cost regardless of what a player's mitigating
+    /// barriers stopped was a cost with no response, the same shape as
+    /// findings 172 and 177. A pure function of the resolution rather than
+    /// inline arithmetic, so the formula is testable without a stochastic
+    /// engine run.
+    /// </summary>
+    internal static double ConsequencePoints(OGSim.Integrity.ThreatResolution resolved)
+    {
+        double heldFraction =
+            (double)resolved.MitigatingBarriersHeld / resolved.TotalMitigatingBarriers;
+
+        return Defaults.TopEventPointsUnmitigated - heldFraction *
+            (Defaults.TopEventPointsUnmitigated - Defaults.TopEventPointsMitigated);
     }
 }
 

@@ -2700,4 +2700,25 @@ public sealed class ChainTests
 
         return engine;
     }
+
+    // ------------------------------------------------------- top-event consequence
+
+    /// <summary>
+    /// SDD-012 §4b's finding-263 amendment: a top event's cost is a straight
+    /// line between the mitigated and unmitigated bounds, driven by how many
+    /// mitigating barriers held — not a flat cost regardless (finding 249).
+    /// </summary>
+    [Theory]
+    [InlineData(1, 1, 25.0)]   // every mitigating barrier held: the shipped, unchanged cost
+    [InlineData(0, 1, 75.0)]   // none held: three times it
+    [InlineData(2, 4, 50.0)]   // halfway held: the midpoint of the line
+    public void A_top_events_cost_scales_with_how_many_mitigating_barriers_held(
+        int held, int total, double expected)
+    {
+        var resolved = new OGSim.Integrity.ThreatResolution(
+            new ContentId("loss-of-containment"), OGSim.Integrity.ThreatOutcome.TopEvent,
+            [], held, total);
+
+        Assert.Equal(expected, ThreatStage.ConsequencePoints(resolved), precision: 12);
+    }
 }

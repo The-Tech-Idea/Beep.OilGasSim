@@ -390,6 +390,48 @@ so a clean decade genuinely rehabilitates. The lender spread table (SDD-009
 > candidates while the diagnosis was "the scale is mis-calibrated"; neither was
 > the defect. A scale that cannot move is not mis-calibrated.
 
+> **Amendment (finding 263) — the top event's consequence, not only its
+> occurrence.** §4b's own text already says mitigating barriers are "sampled
+> the same way to select the consequence tier (14 §8 table)", and
+> `BowTie.Resolve` has computed `MitigatingBarriersHeld` since R23.2 — but
+> `ThreatStage` (`OGSim.Composition/Modules.cs`) never read it: every top
+> event charged the identical flat `Defaults.TopEventPoints`, whether every
+> mitigating barrier held or none did (finding 249). A player who lets every
+> mitigating barrier rot paid the same ESG bill as one who kept them all —
+> which is a cost with no response, the same shape as findings 172 and 177.
+>
+> **14 §8's five tiers stay a future content task, not this one's.**
+> Distinguishing near miss/minor/serious/major/catastrophic needs more
+> mitigating barriers than this composition ships — `Defaults.Barriers`
+> declares exactly one (`response`), so `MitigatingBarriersHeld` is 0 or 1 and
+> can express two states, not four. Inventing four named tiers against two
+> reachable states would read as more precision than the content supports.
+> Instead the points scale LINEARLY with the fraction of mitigating barriers
+> that held, between two content-declared bounds:
+>
+> ```text
+> heldFraction = mitigatingHeld / totalMitigating   (0 when none exist to hold,
+>                                                     which ModelFault refuses —
+>                                                     a top event with no
+>                                                     mitigation at all is not
+>                                                     modelled by this bow-tie,
+>                                                     the same refusal §4b
+>                                                     already makes for a threat
+>                                                     with no preventive barrier)
+> points = worstCasePoints − heldFraction · (worstCasePoints − bestCasePoints)
+> ```
+>
+> `bestCasePoints` keeps the shipped `TopEventPoints = 25.0` unchanged — a
+> field whose mitigation held in full costs exactly what every top event cost
+> before this amendment, so nothing already tuned against that number moves.
+> `worstCasePoints = 75.0`, three times it: the same asymmetry this
+> composition already prices between planned and emergency maintenance
+> (`repair-equipment` at 3× `service-equipment`, R20d.26.2) for the same
+> reason — a consequence nothing stood against costs more than one every
+> defence somewhat blunted. With one mitigating barrier this reaches exactly
+> its two ends (25.0 held, 75.0 failed); a second mitigating barrier would
+> land a real interior point on the same line without a code change.
+
 **Social licence** (0–100): `SL += Σ driver deltas` per tick, clamped;
 driver deltas are content per event class (visible flaring near settlements,
 spills scaled by sensitivity, local employment, community investment).
