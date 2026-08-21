@@ -343,6 +343,31 @@ public sealed record ObjectiveView(
 > something a world GENERATED, and a scenario that placed its reservoir directly
 > has nothing to explore.
 
+> **R21.6 amendment — `WorldView` had a producer and no consumer that may
+> reach it.** `WorldState.View` (§1's amendment above) has built a complete
+> `WorldView` since world generation shipped, and had exactly one reader in
+> the whole repository: its own unit test, resolving `WorldState` straight out
+> of the composition DI container. Neither real client may do that — §1's
+> "commands in, read model out" is the whole of what a client may touch — so a
+> map game's own map was unreachable through the one surface a map screen is
+> required to use.
+>
+> **Carried on `FieldReadModel` itself, not split beside it.** `IEngine.World`
+> is declared as its own top-level member, separate from `ReadModel`, because
+> that interface's split treats immutable state as a different KIND of thing
+> from the tick-to-tick record — but this composition's `Engine` does not
+> implement `IEngine` (§0's own reason: eleven of that interface's fifteen
+> projections have no source) and its `FieldReadModel` has never been split
+> that way for anything else. Rebuilding a `WorldView` from state already held
+> costs nothing a second field on one record does not already cost every other
+> unchanging fact on it, and a second read-model shape existing solely for one
+> field would be the second-owner shape law L5 forbids.
+>
+> `null` before generation has run, the same answer for the same reason a
+> read model itself is `null` before the first tick: a game that has not been
+> created has no map, and an empty one would be a lie about a world never
+> drawn.
+
 ## 3. The path registry (SDD-014 §2's source)
 
 Generated **from these records by reflection at build time**: every public

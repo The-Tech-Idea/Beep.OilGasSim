@@ -411,6 +411,28 @@ public sealed class NewGameTests
     }
 
     /// <summary>
+    /// AND A HOST CAN ACTUALLY REACH IT (SDD-017 §2's R21.6 amendment, found
+    /// going through the plan). `WorldState.View` above is real and has had
+    /// exactly one reader anywhere in the repository — this test's own
+    /// sibling, resolving `WorldState` straight out of the DI container.
+    /// Neither real client may do that (SDD-017 §1: commands in, read model
+    /// out), so a map game's own map was unreachable through the surface a
+    /// map screen is required to use until `FieldReadModel` carried it too.
+    /// </summary>
+    [Fact]
+    public void R216_the_read_model_carries_the_same_world_a_host_can_actually_reach()
+    {
+        Engine engine = NewGame(seed: 5UL);
+        engine.Pipeline.AdvanceTick();
+
+        WorldView? direct = WorldOf(engine).View;
+        WorldView? published = engine.ReadModel!.World;
+
+        Assert.NotNull(published);
+        Assert.Equal(direct, published);
+    }
+
+    /// <summary>
     /// A world is never generated into an engine that would not compose. The
     /// refusal comes back untouched, because there is nowhere to put a world.
     /// </summary>

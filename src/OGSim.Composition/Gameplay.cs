@@ -418,7 +418,29 @@ public sealed record FieldReadModel(
     /// well was nearly down or barely started, and could not tell an operation
     /// that had stalled from one progressing normally.</para>
     /// </summary>
-    IReadOnlyList<OperationView> Operations)
+    IReadOnlyList<OperationView> Operations,
+
+    /// <summary>
+    /// The renderable world — terrain, settlements, transport, harbours,
+    /// climate regions and jurisdictions (SDD-017 §2's R21.6 amendment).
+    ///
+    /// <para><c>WorldState.View</c> has built this in full since world
+    /// generation shipped and had exactly one reader anywhere in the
+    /// repository — its own unit test, resolving `WorldState` straight out of
+    /// the DI container — because neither real client may do that (SDD-017
+    /// §1's "commands in, read model out"). A map game's own map was
+    /// unreachable through the surface a map screen is required to use.</para>
+    ///
+    /// <para><c>null</c> before generation has run, the same answer for the
+    /// same reason a read model before the first tick is null: a game that
+    /// has not been created has no map, and an empty one would be a lie about
+    /// a world never drawn. IMMUTABLE after creation and carried on the flat
+    /// record anyway rather than split beside it the way `IEngine.World` is
+    /// — this composition's own read model has always been one record, and
+    /// splitting one field out of it for a reason no consumer here asked for
+    /// would be a second shape competing with the one that already works.</para>
+    /// </summary>
+    WorldView? World)
 {
     /// <summary>Where the chain is jammed, if anywhere — the elements that
     /// refused production this tick.</summary>
@@ -450,12 +472,13 @@ public sealed record FieldReadModel(
         && Structural.Equal(Chain, other.Chain)
         && Structural.Equal(Wellbores, other.Wellbores)
         && Structural.Equal(CashByCause, other.CashByCause)
-        && Structural.Equal(Operations, other.Operations);
+        && Structural.Equal(Operations, other.Operations)
+        && World == other.World;
 
     public override int GetHashCode() =>
         HashCode.Combine(Tick, Date, Cash, Wells, ActivitiesRunning, ProducedThisTick,
             HashCode.Combine(Insolvent, Progress, Structural.HashOf(Beliefs),
-                             Structural.HashOf(Chain), Structural.HashOf(Wellbores)));
+                             Structural.HashOf(Chain), Structural.HashOf(Wellbores), World));
 }
 
 /// <summary>
@@ -523,7 +546,8 @@ internal sealed class FieldProjection(
                 loop.SourFraction),
             loop.Storage,
             company.Ledger.CashByCause(position.Tick),
-            activities.Operations());
+            activities.Operations(),
+            world.View);
 
     /// <summary>
     /// The undrilled structures, in the order the world placed them (D-5).
