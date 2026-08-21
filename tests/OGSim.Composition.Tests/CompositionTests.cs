@@ -1391,6 +1391,15 @@ public sealed class LicenceTests
         var licence = engine.Provided.Resolve<OGSim.Company.Licence>();
         OGSim.Company.CompanyState company = engine.Provided.Resolve<OGSim.Company.CompanyState>();
 
+        // AN UNDRILLED FIELD ALSO OWES TAKE-OR-PAY (R13.3, finding 258): it
+        // delivers nothing, so every window this fixture crosses is a full
+        // shortfall against the shipped contract's committed volume — the
+        // same formula `TakeOrPayContract.AssessAt` posts, read from the
+        // shipped terms rather than a second hardcoded number.
+        OGSim.Company.TakeOrPayTerms takeOrPay = Fixture.TakeOrPay();
+        Money windowPenalty = Money.RoundHalfEven(
+            takeOrPay.PenaltyRate.Cents * takeOrPay.CommittedVolume.CubicMetres);
+
         // Up to but not including the deadline tick — the commitment is still
         // outstanding and nothing has been forfeited yet.
         for (var month = 0; month < 59; month++) engine.Pipeline.AdvanceTick();
@@ -1399,14 +1408,17 @@ public sealed class LicenceTests
         Money cashBeforeForfeit = company.Ledger.Cash;
 
         // The deadline tick itself: the commitment is unmet, so the bond
-        // forfeits ON TOP OF the month's ordinary standing charge.
+        // forfeits ON TOP OF the month's ordinary standing charge — and this
+        // tick is ALSO a take-or-pay window boundary (12-month windows from
+        // tick 0 land on every multiple of 12, and the deadline is tick 60).
         engine.Pipeline.AdvanceTick();
 
         Assert.False(licence.IsLive, "the commitment went unmet at its own deadline");
 
         Assert.Equal(
             cashBeforeForfeit.Cents - Defaults.LicenceTerms.Bond.Cents
-                - Defaults.Economics.FixedOperatingCostPerTick.Cents,
+                - Defaults.Economics.FixedOperatingCostPerTick.Cents
+                - windowPenalty.Cents,
             company.Ledger.Cash.Cents);
 
         AuditEntry forfeit = Assert.Single(
@@ -1417,7 +1429,11 @@ public sealed class LicenceTests
         Assert.True(forfeit.Data.ContainsKey("unmet-count"));
 
         // NEVER TWICE (the repeated-forfeit bug this join found and fixed):
-        // another sixty months costs nothing further.
+        // another sixty months costs nothing further FROM THE LICENCE — but
+        // take-or-pay is its own clock, independent of the licence's, and
+        // keeps assessing a still-undrilled field every window regardless of
+        // whether the licence is even live. Five more windows close in the
+        // next sixty months (ticks 72, 84, 96, 108, 120).
         Money afterFirstForfeit = company.Ledger.Cash;
 
         for (var month = 0; month < 60; month++) engine.Pipeline.AdvanceTick();
@@ -1425,7 +1441,8 @@ public sealed class LicenceTests
         Assert.Equal(
             0L,
             afterFirstForfeit.Cents - company.Ledger.Cash.Cents
-                - (60L * Defaults.Economics.FixedOperatingCostPerTick.Cents));
+                - (60L * Defaults.Economics.FixedOperatingCostPerTick.Cents)
+                - (5L * windowPenalty.Cents));
 
         // AND FURTHER DRILLING REFUSES, naming the reason.
         Rejected refused = Assert.IsType<Rejected>(
