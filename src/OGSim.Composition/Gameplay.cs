@@ -348,6 +348,20 @@ public sealed record FieldReadModel(
     Money Debt,
 
     /// <summary>
+    /// What this company is worth, not merely what it holds (SDD-017 §2's
+    /// finding-262 amendment): <c>cash + PV(1P) − debt − provisions</c>
+    /// (SDD-014 §4, SDD-009 §5).
+    ///
+    /// <para>Cash and production between them cannot say this — the same gap
+    /// <see cref="Reserves"/>'s own doc comment names, and the reason: a field
+    /// run to exhaustion improves both right up to the month it stops. This is
+    /// the number a company is actually sold on, and the prerequisite R11.6's
+    /// own row named for any mechanic that defers revenue to read as a
+    /// decision rather than a loss.</para>
+    /// </summary>
+    Money CompanyValue,
+
+    /// <summary>
     /// Everything this company has ever burned, and its record (SDD-012 §4).
     ///
     /// <para>Both, because one without the other cannot be acted on. The mass
@@ -519,8 +533,15 @@ internal sealed class FieldProjection(
         new(tick, date, company.Ledger.Cash, field.WellCount, activities.InProgress,
             loop.ProducedThisTick, insolvent);
 
-    public FieldReadModel Publish(FieldPosition position, ScenarioProgress progress) =>
-        new(position.Tick, position.Date, position.Cash, position.Wells,
+    public FieldReadModel Publish(FieldPosition position, ScenarioProgress progress)
+    {
+        // Credits are negative in this ledger (SDD-009 §1), so what is held
+        // against abandonment is the negation of the account balance — the
+        // same convention `Bank.Drawn` and `ProductionLoop`'s own accrual use.
+        Money provisions = -company.Ledger.BalanceOf(Account.AbandonmentProvision);
+        Money companyValue = position.Cash + bank.Terms.ReserveValue - bank.Drawn - provisions;
+
+        return new(position.Tick, position.Date, position.Cash, position.Wells,
             position.ActivitiesRunning, position.ProducedThisTick, position.Insolvent,
             progress, Project(beliefs), loop.Chain(), field.Wells(), Prospects(),
             loop.Market.OilPrice, loop.Market.CostIndex,
@@ -538,7 +559,7 @@ internal sealed class FieldProjection(
             history.Ratio(
                 reserves.Remaining(loop.CumulativeProduced).Proved,
                 loop.CumulativeProduced),
-            bank.Terms, bank.Covenant, bank.Drawn,
+            bank.Terms, bank.Covenant, bank.Drawn, companyValue,
             loop.CumulativeFlared,
             esg.Of(),
             new WaterFloodView(
@@ -548,6 +569,7 @@ internal sealed class FieldProjection(
             company.Ledger.CashByCause(position.Tick),
             activities.Operations(),
             world.View);
+    }
 
     /// <summary>
     /// The undrilled structures, in the order the world placed them (D-5).

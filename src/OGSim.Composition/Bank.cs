@@ -50,7 +50,7 @@ public sealed class Bank : IStateOwner
 
     /// <summary>What the bank will lend today, and at what price.</summary>
     public BorrowingTerms Terms { get; private set; } =
-        new(Money.Zero, Rate: 0.0, EsgSpread: 0.0);
+        new(Money.Zero, ReserveValue: Money.Zero, Rate: 0.0, EsgSpread: 0.0);
 
     /// <summary>Where the company stands against its covenant.</summary>
     public CovenantStatus Covenant { get; private set; } = new(CovenantState.Clear, 0);

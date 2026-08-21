@@ -298,6 +298,46 @@ the cure window is the player's warning (IR-consistent).
 > posts a movement, so the cure-window pin above stays a statement about state
 > transitions rather than about money moving.
 
+> **Amendment (finding 262): the reserves' own value, not only what the bank
+> will advance against it.** SDD-014 §4 pins a Capital efficiency score
+> dimension on "value = cash + PV(1P) − debt − provisions", and R11.6's own
+> blocker names "company VALUE (not just cash)" as a read-model projection
+> that does not exist — both read a PV(1P) this section never exposed, because
+> `PresentValue` computed it and immediately applied the advance-rate haircut
+> before returning, so only the LENDABLE fraction of the reserves' worth ever
+> left `ReserveBasedLending`.
+>
+> **`BorrowingTerms` gains the raw figure beside the haircut one**, from the
+> same computation rather than a second one (law L5 — one discounted-cash-flow
+> walk, two roundings of it):
+>
+> ```csharp
+> public sealed record BorrowingTerms(
+>     Money BorrowingBase,
+>     Money ReserveValue,      // PV(1P), BEFORE the advance-rate haircut —
+>                              // what the oil is worth, not what it is lent
+>                              // against (SDD-014 §4's "company value")
+>     double Rate,
+>     double EsgSpread);
+> ```
+>
+> `Redetermine` walks the decline curve once into an unrounded total and rounds
+> it twice — once bare for `ReserveValue`, once scaled by the advance rate for
+> `BorrowingBase` — rather than rounding `ReserveValue` and then scaling the
+> rounded figure, which would compound two roundings into one and could move
+> `BorrowingBase` by a cent against every test already pinned to it.
+>
+> **Company value itself is composition arithmetic, not a new model.** There is
+> no second "how much is this company worth" policy to swap — it is
+> `cash + ReserveValue − debt − provisions`, four facts each already owned
+> elsewhere (the ledger's cash and abandonment-provision balances, `Bank.Drawn`,
+> and now `Terms.ReserveValue`) summed once in `FieldProjection.Publish` and
+> published as `FieldReadModel.CompanyValue` (SDD-017 §2). Nothing here scores
+> R24.6: Capital efficiency also needs Δ-over-the-scenario-span and cumulative
+> distributions/capex, which this amendment does not touch. And it does not by
+> itself rebuild the berth/cargo mechanic R11.6 reverted — it closes the one
+> prerequisite that row named, not the mechanic itself.
+
 ## 6. Prices
 
 ```csharp

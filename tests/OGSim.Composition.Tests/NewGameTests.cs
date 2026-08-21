@@ -1448,6 +1448,62 @@ public sealed class NewGameTests
     }
 
     /// <summary>
+    /// SDD-017 §2's finding-262 amendment: `CompanyValue` is
+    /// `cash + PV(1P) − debt − provisions`, not a fifth number invented beside
+    /// the four it is made of. Proven with all four terms non-zero — a field
+    /// that has produced long enough to accrue a plugging provision, and a
+    /// company that has borrowed against its reserves — so none of the four
+    /// terms is silently multiplying by zero and hiding a wiring mistake.
+    /// </summary>
+    [Fact]
+    public void A_companys_value_is_exactly_cash_plus_reserves_less_debt_and_provisions()
+    {
+        for (ulong seed = 1UL; seed < 60UL; seed++)
+        {
+            Engine engine = NewGame(seed);
+            WorldState world = WorldOf(engine);
+
+            var charged = -1;
+
+            for (int i = 0; i < world.Prospects.Count; i++)
+                if (world.Beneath(world.Prospects[i]) is not null) { charged = i; break; }
+
+            if (charged < 0) continue;
+
+            engine.Commands.Submit(
+                new DrillWellCommand(world.Prospects[charged], new Length(2000.0)));
+
+            Fixture.Run(engine, 48);
+
+            if (engine.ReadModel!.Wells == 0) continue;      // the hole was lost
+
+            Money available = engine.ReadModel!.Borrowing.BorrowingBase;
+            if (available <= Money.Zero) continue;
+
+            Assert.IsType<Accepted>(engine.Commands.Submit(
+                new BorrowCommand(Money.RoundHalfEven(available.Cents / 2.0))));
+
+            Fixture.Run(engine, 1);
+
+            Money provisions = -engine.Provided.Resolve<CompanyState>()
+                .Ledger.BalanceOf(Account.AbandonmentProvision);
+            if (provisions <= Money.Zero) continue;
+
+            Money debt = engine.ReadModel!.Debt;
+            Assert.True(debt > Money.Zero, "the drawdown did not register as debt");
+
+            Money expected = engine.ReadModel!.Cash + engine.ReadModel!.Borrowing.ReserveValue
+                - debt - provisions;
+
+            Assert.Equal(expected, engine.ReadModel!.CompanyValue);
+            return;
+        }
+
+        Assert.Fail("sixty basins produced no field with a discovery, a drawdown " +
+                     "and an accrued provision all at once");
+    }
+
+    /// <summary>
     /// A COMPANY THAT USES ITS FACILITY DEVELOPS FASTER (SDD-009 §5). A field
     /// pays for itself only once it is built, so a company waiting to afford the
     /// next well out of revenue is waiting on the very thing that well would

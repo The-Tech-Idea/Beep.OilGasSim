@@ -92,7 +92,7 @@ public sealed class LendingTests
     public void R20d15V1_a_breach_opens_a_window_before_it_bites()
     {
         ReserveBasedLending bank = Bank();
-        var terms = new BorrowingTerms(Money.FromMillions(10.0), 0.08, 0.0);
+        var terms = new BorrowingTerms(Money.FromMillions(10.0), Money.FromMillions(10.0), 0.08, 0.0);
         Money debt = Money.FromMillions(15.0);
 
         CovenantStatus status = bank.Assess(terms, debt, Clear);
@@ -123,7 +123,7 @@ public sealed class LendingTests
     public void R20d15V1_the_clock_stops_when_the_breach_ends()
     {
         ReserveBasedLending bank = Bank();
-        var tight = new BorrowingTerms(Money.FromMillions(10.0), 0.08, 0.0);
+        var tight = new BorrowingTerms(Money.FromMillions(10.0), Money.FromMillions(10.0), 0.08, 0.0);
 
         CovenantStatus curing = bank.Assess(tight, Money.FromMillions(15.0), Clear);
         Assert.Equal(CovenantState.Curing, curing.State);
@@ -137,7 +137,7 @@ public sealed class LendingTests
         Assert.Equal(
             CovenantState.Clear,
             bank.Assess(
-                new BorrowingTerms(Money.FromMillions(20.0), 0.08, 0.0),
+                new BorrowingTerms(Money.FromMillions(20.0), Money.FromMillions(20.0), 0.08, 0.0),
                 Money.FromMillions(15.0), curing).State);
     }
 
@@ -157,5 +157,41 @@ public sealed class LendingTests
 
         Assert.Throws<ContentFault>(() =>
             new ReserveBasedLending(0.6, 0.1, 0, 0.08, 0.04, Curve(), () => Money.Zero));
+    }
+
+    /// <summary>
+    /// SDD-009 §5's finding-262 amendment: <c>ReserveValue</c> is what the
+    /// reserves are worth, not what the bank will lend against them — so it
+    /// must not carry the advance rate at all. Two banks that agree on
+    /// everything except the advance rate must still agree on this.
+    /// </summary>
+    [Fact]
+    public void The_reserve_value_does_not_carry_the_advance_rate()
+    {
+        SurfaceVolume proved = new(2.0e6);
+
+        Money low = new ReserveBasedLending(
+                0.20, 0.10, 15, 0.08, 0.04, Curve(), () => Money.FromMillions(0.003))
+            .Redetermine(proved, Money.Zero, 1.0).ReserveValue;
+        Money high = new ReserveBasedLending(
+                0.90, 0.10, 15, 0.08, 0.04, Curve(), () => Money.FromMillions(0.003))
+            .Redetermine(proved, Money.Zero, 1.0).ReserveValue;
+
+        Assert.Equal(low, high);
+    }
+
+    /// <summary>
+    /// AND IT IS ALWAYS WORTH MORE THAN THE BANK WILL ADVANCE — the advance
+    /// rate is a fraction in (0, 1) (§5), so the haircut can only shrink what
+    /// the bank lends against, never grow it past what the oil is worth.
+    /// </summary>
+    [Fact]
+    public void The_reserve_value_is_never_less_than_the_borrowing_base()
+    {
+        BorrowingTerms terms = Bank().Redetermine(new SurfaceVolume(2.0e6), Money.Zero, 1.0);
+
+        Assert.True(terms.ReserveValue > Money.Zero, "a field with reserves was worth nothing");
+        Assert.True(terms.ReserveValue > terms.BorrowingBase,
+            "the bank advanced the full value of the reserves rather than a haircut of it");
     }
 }

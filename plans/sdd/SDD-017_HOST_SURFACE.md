@@ -205,6 +205,31 @@ public sealed record ObjectiveView(
     ContentId RealityProfile);            // scores are stamped (18 §5b.6)
 ```
 
+> **Amendment (finding 262) — `CompanyView` gains what the company is worth,
+> not only what it holds.** `Cash` and `Debt` say what a company has been paid
+> and what it owes; neither says what it could sell for, which is the number
+> SDD-014 §4 scores Capital efficiency against and the one R11.6's own row
+> names as the missing prerequisite for any mechanic that defers revenue
+> reading as a decision rather than a loss:
+>
+> ```csharp
+> public sealed record CompanyView(
+>     Money Cash, Money Debt, Money BorrowingBase, double BorrowingRate,
+>     double EsgRateSpread, double ReserveReplacementRatio,
+>     SurfaceVolume Reserves1P, SurfaceVolume Reserves2P, SurfaceVolume Reserves3P,
+>     double EsgStanding, double SocialLicence,
+>     Money CompanyValue);   // cash + PV(1P) − debt − provisions (SDD-009 §5)
+> ```
+>
+> `FieldReadModel.CompanyValue` is composition arithmetic over facts already
+> owned elsewhere — `Bank.Terms.ReserveValue` (SDD-009 §5's amendment), the
+> ledger's own cash and abandonment-provision balances, and `Bank.Drawn` —
+> summed once in `FieldProjection.Publish`, never a second model. It answers
+> "what is this business worth" on its own; it does not by itself close R24.6
+> (Capital efficiency also needs the change in this figure over the scenario
+> span, plus cumulative distributions and capex) or rebuild R11.6's reverted
+> berth/cargo mechanic.
+
 > **R20d.1 amendment — the chain, as one row per element.** §2's views split the
 > two halves of the bottleneck report across the hierarchy: `FieldView` carries
 > `DeferredByElement` and `FacilityView` carries `UnitUtilisation`. That is right
