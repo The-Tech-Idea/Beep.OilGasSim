@@ -453,6 +453,103 @@ public sealed class ShippedSetTests
     }
 }
 
+/// <summary>
+/// SDD-004 §6's own amendment (finding 261): the material catalogue widened
+/// from three to the shipped nine, and the ordinals oil, gas and water were
+/// built against moved — proven here rather than only asserted in the SDD,
+/// the same discipline every other widening in this file has been held to.
+/// </summary>
+public sealed class MaterialCatalogueTests
+{
+    [Fact]
+    public void The_catalogue_carries_all_nine_shipped_materials()
+    {
+        Assert.Equal(9, Defaults.MaterialCount);
+        Assert.Equal(9, Defaults.Materials.Count);
+    }
+
+    /// <summary>
+    /// Oil, gas and water moved off the ordinals the chain was originally
+    /// built against — the id-sorted catalogue now has six more entries
+    /// ahead of and between them. A caller reaching for a raw literal
+    /// instead of `Defaults.OilOrdinal`/`GasOrdinal`/`WaterOrdinal` would
+    /// silently move the wrong material through the wrong leg; nothing in
+    /// `src/` does, and this pins the values so a future change to the
+    /// catalogue's own id-sort has something to disagree with.
+    /// </summary>
+    [Fact]
+    public void Oil_gas_and_water_ordinals_moved_with_the_widened_catalogue()
+    {
+        Assert.Equal(2, Defaults.OilOrdinal.Ordinal);
+        Assert.Equal(4, Defaults.GasOrdinal.Ordinal);
+        Assert.Equal(6, Defaults.WaterOrdinal.Ordinal);
+    }
+
+    /// <summary>
+    /// The six materials nothing produces yet are still real catalogue
+    /// entries a caller can resolve by id — carbon dioxide, condensate,
+    /// hydrogen sulphide, nitrogen, sales gas and sulphur are not silently
+    /// absent, they are silently zero, which is the honest difference
+    /// finding 261 draws against finding 260's reverted dehydrator.
+    /// </summary>
+    [Theory]
+    [InlineData("carbon-dioxide")]
+    [InlineData("condensate")]
+    [InlineData("hydrogen-sulphide")]
+    [InlineData("nitrogen")]
+    [InlineData("sales-gas")]
+    [InlineData("sulphur")]
+    public void An_unproduced_material_still_resolves_from_the_catalogue(string id)
+    {
+        var catalogue = new MaterialCatalogue(Defaults.Materials);
+
+        IMaterial material = catalogue.Resolve(new ContentId(id));
+
+        Assert.Equal(id, material.Id.Value);
+    }
+
+    /// <summary>
+    /// The composed engine builds and plays at the widened material count —
+    /// the ordinal shift is invisible to a field that never reaches for a
+    /// raw literal, proven by running rather than only by inspection.
+    /// </summary>
+    [Fact]
+    public void A_field_composes_and_produces_at_the_widened_material_count()
+    {
+        Built built = Assert.IsType<Built>(EngineBuilder.Build(Fixture.Settings()));
+
+        FieldControl field = built.Engine.Provided.Resolve<FieldControl>();
+
+        EntityId<IReservoirCompartmentEntity> compartment = field.AddCompartment(
+            new GeneratedCompartment(
+                PoreVolume: new ReservoirVolume(100.0e6),
+                Porosity: 0.22,
+                OilSaturation: 0.7,
+                InitialPressure: new Pressure(30.0e6),
+                Temperature: Temperature.FromCelsius(93.3),
+                Depth: new Length(2000.0)),
+            permeability: new Permeability(1.0e-13),
+            netThickness: new Length(20.0),
+            drainageArea: new Area(2.0e5),
+            rockCompressibility: 4.5e-10,
+            gasOilContact: new Length(1900.0),
+            oilWaterContact: new Length(2100.0),
+            Defaults.Wettability, Defaults.Drive,
+            Defaults.AquiferStrength, Defaults.AquiferResponseTime);
+
+        built.Engine.Provided.Resolve<WorldState>().DeclareKnownField(
+            compartment, new ReservoirVolume(100.0e6));
+
+        field.Drill(compartment, new Length(2000.0));
+
+        built.Engine.Pipeline.AdvanceTick();
+
+        Assert.True(built.Engine.ReadModel!.ProducedThisTick.CubicMetres > 0.0,
+            "a field must still produce oil at the widened material count, through the " +
+            "ordinal the catalogue now assigns rather than the one it used to");
+    }
+}
+
 public sealed class RefusalTests
 {
     /// <summary>

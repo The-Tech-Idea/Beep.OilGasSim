@@ -204,36 +204,59 @@ internal static class Defaults
     public const double CostDrift = 0.0008;
 
     /// <summary>
-    /// The catalogue, as content would carry it. ONE material, because the chain
-    /// this composition ships has one thing to move; the nine of
-    /// `content/materials/` arrive with R20c.9.
+    /// The catalogue, as content would carry it — all nine of
+    /// `content/materials/`, hardcoded here rather than read through it
+    /// (SDD-004 §6's amendment, finding 261). Oil, gas and water are what this
+    /// composition's own chain moves; the other six exist in the catalogue and
+    /// nowhere else — no completion, drive or facility produces carbon
+    /// dioxide, condensate, hydrogen sulphide, nitrogen, sales gas or sulphur,
+    /// so every stream this engine solves carries six ordinals that stay
+    /// exactly zero.
     ///
     /// <para>The PHASE is what makes this more than a name: `SplitAt` reads it to
     /// decide which leg of a separator a material leaves by, so "oil is a liquid
     /// at standard conditions" is the statement that sends every kilogram down
-    /// the liquid leg to the meter.</para>
+    /// the liquid leg to the meter. `Properties` stays empty for every entry,
+    /// the same as the three it replaces — nothing reads a material's own
+    /// properties today.</para>
     /// </summary>
     public static IReadOnlyList<(ContentId Id, PhaseAtStandardConditions Phase,
                                  IReadOnlyList<IProperty> Properties)> Materials { get; } =
     [
+        (new ContentId("carbon-dioxide"), PhaseAtStandardConditions.Gas, []),
+        (new ContentId("condensate"), PhaseAtStandardConditions.Liquid, []),
         (new ContentId("crude-oil"), PhaseAtStandardConditions.Liquid, []),
+        (new ContentId("hydrogen-sulphide"), PhaseAtStandardConditions.Gas, []),
         (new ContentId("natural-gas"), PhaseAtStandardConditions.Gas, []),
+        (new ContentId("nitrogen"), PhaseAtStandardConditions.Gas, []),
         (new ContentId("produced-water"), PhaseAtStandardConditions.Aqueous, []),
+        (new ContentId("sales-gas"), PhaseAtStandardConditions.Gas, []),
+        (new ContentId("sulphur"), PhaseAtStandardConditions.Solid, []),
     ];
 
     /// <summary>
     /// Ordinals are assigned by the CATALOGUE from the id-sorted list, never
-    /// here (SDD-004 §6) — "crude-oil" sorts before "natural-gas". Named so a
-    /// completion is built with the ordinal the catalogue chose rather than one
-    /// this file assumed.
+    /// here (SDD-004 §6) — DERIVED from `Materials` itself rather than
+    /// hand-typed, so a future widening cannot leave one of these three out
+    /// of sync with what the catalogue actually assigned (finding 261: the
+    /// bug §6's own text warns an implementer against committing "in week
+    /// two"). Widening moved oil from ordinal 0 to 2 and gas from 1 to 4;
+    /// nothing reads a raw literal instead of these three properties, which
+    /// is what makes the move invisible to every caller.
     /// </summary>
-    public static MaterialId OilOrdinal { get; } = new(0);
+    private static readonly MaterialCatalogue OrdinalCatalogue = new(Materials);
 
-    public static MaterialId GasOrdinal { get; } = new(1);
+    public static MaterialId OilOrdinal { get; } =
+        OrdinalCatalogue.Resolve(new ContentId("crude-oil")).Ordinal;
 
-    /// <summary>"crude-oil" &lt; "natural-gas" &lt; "produced-water" by ordinal
-    /// comparison, which is the sort the catalogue uses (SDD-004 §6).</summary>
-    public static MaterialId WaterOrdinal { get; } = new(2);
+    public static MaterialId GasOrdinal { get; } =
+        OrdinalCatalogue.Resolve(new ContentId("natural-gas")).Ordinal;
+
+    /// <summary>"carbon-dioxide" &lt; ... &lt; "produced-water" &lt; ... by
+    /// ordinal comparison, which is the sort the catalogue uses (SDD-004
+    /// §6) — water is no longer third, it is seventh (ordinal 6).</summary>
+    public static MaterialId WaterOrdinal { get; } =
+        OrdinalCatalogue.Resolve(new ContentId("produced-water")).Ordinal;
 
     /// <summary>
     /// Which materials a pump has to lift. Oil and water — gas comes up with
@@ -252,12 +275,13 @@ internal static class Defaults
         Fluid.GasSpecificGravity * PhysicalConstants.AirDensityAtStandardKgPerM3);
 
     /// <summary>
-    /// How many materials this composition's catalogue carries. One — oil —
-    /// until R20c.9 loads the nine of `content/materials/`. Stated once because
-    /// three places must agree on it: the completion's stream width, an
-    /// operation's mass report, and any zero composition either of them builds.
+    /// How many materials this composition's catalogue carries — nine, the
+    /// full width of `Materials` above (finding 261), not the three this
+    /// composition's own chain actually moves. Stated once because three
+    /// places must agree on it: the completion's stream width, an operation's
+    /// mass report, and any zero composition either of them builds.
     /// </summary>
-    public const int MaterialCount = 3;
+    public const int MaterialCount = 9;
 
     /// <summary>
     /// The company's one rig. **One**, deliberately: a rig drills a single well

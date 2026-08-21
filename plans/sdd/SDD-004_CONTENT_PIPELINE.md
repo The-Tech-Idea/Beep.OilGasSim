@@ -334,6 +334,78 @@ public interface ICatalogSet
 > defines, because a game that cannot read its own equipment has nothing to
 > start (G2).
 
+> **Amendment (finding 261): the material catalogue widened from three to
+> the shipped nine, hardcoded rather than content-loaded — a narrower step
+> than "materials are their own task" was scoped as when that line was
+> written (this file's own tracker, found going through the plan while
+> R9.2's dehydration investigation named the three-of-nine limit as its
+> second blocker).** `Defaults.Materials` (`OGSim.Composition`) carried oil,
+> gas and water alone since composition began, with its own comment naming
+> the gap: "the nine of `content/materials/` arrive with R20c.9." R20c.9's
+> own row names wells and reservoirs as what remained of ITS scope — never
+> materials — so this was not that task's unfinished half, it was nobody's
+> numbered task at all, only a line in this file's "Next" prose.
+> `MaterialContentKind` (`OGSim.Kernel`) has shipped
+> and been content-tested since it was written and is registered in
+> `EngineBuilder.FacilityContent`'s loader nowhere, the same "built and
+> tested, composed nowhere" shape this tracker keeps finding (findings 257,
+> 259 most recently).
+>
+> **Not closed the same way, on purpose.** Reading `content/materials/`
+> through `MaterialContentKind` would make `MaterialCount` a per-build,
+> content-derived value — and `Defaults` is a static class, read by every
+> module at compose time; a static field cannot hold one engine build's
+> content without leaking into the next build in the same process, which is
+> exactly the static-mutable-state law L2 forbids and exactly what would
+> make two engines built in the same test run interfere with each other.
+> Threading a dynamic material count through every one of `Defaults`'s
+> current callers (every facility, every well component, every test fixture)
+> is a real refactor and a materially larger task than widening a list —
+> named here rather than attempted in the same change, matching R9.1's own
+> precedent for not guessing at more than one design fork at once.
+>
+> **What this amendment actually does: `Defaults.Materials` gains all nine
+> entries, hand-authored the same way the existing three already were**
+> (id and declared phase, `Properties: []` — nothing reads a material's
+> `Properties` today either, so this changes nothing about what was already
+> inert). `MaterialCount` moves from `3` to `9`. **Ordinals are DERIVED, not
+> hand-typed**: `OilOrdinal`/`GasOrdinal`/`WaterOrdinal` are read off a
+> `MaterialCatalogue` built from `Materials` itself (`.Resolve(id).Ordinal`)
+> rather than written as numeric literals that would have to be kept in sync
+> by hand — the ordinal-drift bug §6's own text warns an implementer against
+> committing "in week two." The catalogue's id-sort (§6, unaffected by this
+> amendment) moves oil from ordinal 0 to 2, gas from 1 to 4 and water from 2
+> to 6; `LiquidOrdinals` derives from the two properties and needed no
+> change.
+>
+> **Confirmed safe against every existing caller before it was trusted**:
+> no production code holds a raw `new MaterialId(0/1/2)` literal anywhere in
+> `src/` — every consumer reaches oil, gas or water through
+> `Defaults.OilOrdinal`/`GasOrdinal`/`WaterOrdinal`, exactly as §6's own
+> ordinal-assignment rule requires, so the shift is invisible to every
+> caller that follows the rule and would have been the one thing worth
+> catching if any caller did not.
+>
+> **The six new materials — carbon dioxide, condensate, hydrogen sulphide,
+> nitrogen, sales gas, sulphur — are honestly zero everywhere, not a phantom
+> capability.** Nothing in this composition produces any of them: a well's
+> completion still declares its stream from oil, gas and water alone, so
+> every stream this engine solves carries six ordinals that are always zero.
+> This is not the same defect a purchasable no-op is (finding 260's own
+> dehydrator, reverted for exactly that reason) — nobody pays for a material
+> existing in the catalogue, and the catalogue accurately naming nine
+> materials the design specifies, six of them not yet produced by anything,
+> is a truer statement than naming three and hiding the other six entirely.
+> **What would actually make them non-zero**: a completion, or the drive
+> mechanism behind it, would need to declare a real composition for sour or
+> wet gas — R18's own `SourFraction` already exists as a scalar the hazard
+> model reads and is the closest existing concept to reuse, but turning it
+> into real H₂S/CO₂ mass crossing the network is genuinely separate physics,
+> not a consequence of the catalogue existing. Named rather than guessed at.
+> Sweetening (R9.3) needed exactly this catalogue widening and still needs
+> that separate step before it can compose meaningfully — finding 260's own
+> "a different blocker" is this amendment closing half of it, not all of it.
+
 ## 7. Mods
 
 ```csharp
