@@ -824,6 +824,11 @@ internal sealed class FieldModule(
         typeof(FieldControl), typeof(CloseStage), typeof(IObligationRegistry),
         typeof(Bank), typeof(ReserveHistory),
 
+        // SDD-014 §5a's finding-266 amendment — SaveGame.Load resolves this to
+        // rebuild the read model immediately after a restore, the same reason
+        // CloseStage above is provided.
+        typeof(ObjectiveStage),
+
         // SDD-009 §7's R13.3 amendment (finding 250) — the one take-or-pay
         // contract, provided so a test can resolve and assess it directly,
         // the same reason Licence is.
@@ -896,7 +901,12 @@ internal sealed class FieldModule(
     ownsState: [
         "field.activities", "company.obligations", "field.flood", "field.export",
         "company.facility", "company.reserve-history", "field.abandoned",
-        "company.take-or-pay"],
+        "company.take-or-pay",
+
+        // SDD-014 §5a's finding-266 amendment — a run's verdict and what has
+        // already been told to the trail about it are both history across
+        // ticks, not a value today's state alone reproduces.
+        "objectives.evaluation", "objectives.reporting"],
     stages:
     [
         new StageParticipation(StageId.Operations, Order: 0),
@@ -1342,9 +1352,16 @@ internal sealed class FieldModule(
         // composition time if it names a path this read model cannot fill.
         var paths = new ReadModelPaths(Defaults.ProjectedPaths);
         var runner = new ScenarioRunner(Defaults.FirstField, paths.Schema);
+        composition.Own(runner);
 
         var objectives = new ObjectiveStage(company, runner, paths, projection, audit);
         composition.Contribute(order: 0, objectives);
+        composition.Own(objectives);
+
+        // Provided (SDD-014 §5a's finding-266 amendment) so SaveGame.Load can
+        // resolve it and call Execute once, immediately after Restore — the
+        // same reason CloseStage below is provided rather than only contributed.
+        composition.Provide(objectives);
 
         var close = new CloseStage(projection, objectives);
         composition.Contribute(order: 0, close);

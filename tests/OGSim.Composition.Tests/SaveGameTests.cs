@@ -170,6 +170,38 @@ public sealed class SaveGameTests
             : "fields apart: " + string.Join(", ", apart);
     }
 
+    /// <summary>
+    /// SDD-013 §4 / SDD-014 §5a's finding-266 amendment. Which read-model fields
+    /// differ, OTHER than this tick's own FLOW — throughput, rates, and the two
+    /// terms `Bank.Settle` and the flood controller redraw from scratch every
+    /// tick rather than store, the same "recomputed, never saved" shape
+    /// `Bank.Terms` already had (finding 210, SDD-013 §4). A reload's immediate
+    /// read model is the restored POSITION, not a resimulated tick — running
+    /// stages 1–11 to reproduce these five would mean consuming random draws
+    /// beyond the header's recorded stream positions, which is the thing loading
+    /// a save must never do (SDD-013 §2's stream-position refusal exists for
+    /// exactly this). They read at their fresh-composition default until the
+    /// next real tick recomputes them on both sides, which is what
+    /// <see cref="Fields"/> — used once a tick has actually run — still checks
+    /// in full.
+    /// </summary>
+    private static string FieldsBeforeATick(FieldReadModel a, FieldReadModel b)
+    {
+        string[] recomputedEachTick = ["ProducedThisTick", "Chain", "Wellbores", "Borrowing", "Flood"];
+
+        string apart = Fields(a, b);
+        if (apart == "no named field differs") return apart;
+
+        List<string> unexpected = apart["fields apart: ".Length..]
+            .Split(", ", StringSplitOptions.None)
+            .Where(name => !recomputedEachTick.Contains(name, StringComparer.Ordinal))
+            .ToList();
+
+        return unexpected.Count == 0
+            ? "no named field differs, other than this tick's own flow"
+            : "fields apart: " + string.Join(", ", unexpected);
+    }
+
     /// <summary>Which chain ROWS differ, and in which of their parts — the same
     /// reasoning as <see cref="Fields"/>, one level down.</summary>
     private static string Rows(FieldReadModel a, FieldReadModel b)
@@ -489,19 +521,33 @@ public sealed class SaveGameTests
         // in (finding 198). This is what makes the one below mean something.
         Assert.NotEmpty(original.ReadModel!.Beliefs);
 
-        // A LOADED ENGINE HAS NO READ MODEL UNTIL IT TICKS, by design: the
-        // projection is built at the close of a month, and a game that has not
-        // run one has nothing to show. So both are compared after each tick,
-        // never before the first.
-        // AND THE MAINTENANCE IS SYMMETRIC, which it was not: `Fixture.Repair`
-        // reads the READ MODEL to find what has failed, and the reloaded engine
-        // has none until it ticks — so on the first pass the original submitted
-        // a repair and the reloaded could not, which is a difference the fixture
-        // created rather than one the save did. It stayed invisible while
-        // nothing happened to need repairing on that exact tick; the moment a
-        // change made one fall due there, PV2 reported a $2.16M cash divergence
-        // that no state block could explain, because every block was identical
-        // (finding 226).
+        // A RELOAD HAS A MONTH BEHIND IT, and now shows it (SDD-013 §4 / SDD-014
+        // §5a's finding-266 amendment, closing the client's own GC-2). Until this
+        // amendment `SaveGame.Load` left every engine with a null read model —
+        // "a game that has not started has nothing to show" was true of a fresh
+        // engine and quietly applied to a reloaded one too, which is not the same
+        // fact. Checked here, before either side has ticked again, against the
+        // ORIGINAL's own last read model rather than a fresh one the reload might
+        // have fabricated — with `FieldsBeforeATick` rather than `Fields`,
+        // because the position is restored and this tick's own flow is not
+        // (that method's own doc comment says why).
+        Assert.Equal(
+            "no named field differs, other than this tick's own flow",
+            FieldsBeforeATick(original.ReadModel!, reloaded.ReadModel!));
+
+        // AND THE MAINTENANCE IS SYMMETRIC, which it was not: at the time this
+        // was written `Fixture.Repair` read the READ MODEL to find what had
+        // failed, and the reloaded engine had none until it ticked — so on the
+        // first pass the original submitted a repair and the reloaded could not,
+        // which is a difference the fixture created rather than one the save
+        // did. It stayed invisible while nothing happened to need repairing on
+        // that exact tick; the moment a change made one fall due there, PV2
+        // reported a $2.16M cash divergence that no state block could explain,
+        // because every block was identical (finding 226). Finding 266 removed
+        // the precondition this relied on — a reload now has a read model before
+        // either side ticks — but the shape below is kept rather than moved: it
+        // still proves the same symmetry and moving it buys nothing this test
+        // needs.
         //
         // Repairing at the END of the body fixes it: both engines have a
         // projection by then, so both see the same failures and submit the same
@@ -942,5 +988,113 @@ public sealed class SaveGameTests
                 return row.Status;
 
         throw new InvalidOperationException($"well {well.Value} is not on the read model");
+    }
+
+    /// <summary>
+    /// SDD-014 §5a's finding-266 amendment (GC-2, second half): a reload's
+    /// immediate read model is non-null, and a fact already latched before the
+    /// save — here, insolvency — reads correctly without a further tick.
+    ///
+    /// <para>No compartment, matching <c>GameplayTests.
+    /// A_company_that_runs_out_of_money_is_insolvent</c>: every well is refused,
+    /// so the company simply pays its standing charge until there is nothing
+    /// left — cheap and deterministic, with nothing to drill or produce that
+    /// could pull a five-field exception into this comparison.</para>
+    /// </summary>
+    [Fact]
+    public void A_reload_shows_insolvency_before_any_tick_runs()
+    {
+        Built built = Assert.IsType<Built>(EngineBuilder.Build(Fixture.Settings()));
+        Engine engine = built.Engine;
+
+        for (var month = 0; month < 112; month++) engine.Pipeline.AdvanceTick();
+
+        Assert.True(engine.ReadModel!.Insolvent,
+            "the fixture must actually go insolvent for this test to prove anything");
+
+        Engine reloaded = Assert.IsType<Built>(
+            SaveGame.Load(Saved(engine), Fixture.Settings())).Engine;
+
+        Assert.NotNull(reloaded.ReadModel);
+        Assert.True(reloaded.ReadModel!.Insolvent,
+            "the reload's own Insolvent latch (objectives.reporting) did not survive");
+        Assert.Equal(engine.ReadModel!.Progress, reloaded.ReadModel!.Progress);
+    }
+
+    /// <summary>
+    /// The reload above cannot tell a restored latch from `Execute`'s own
+    /// re-derivation (`if (cash &lt; 0) Insolvent = true`) — cash is still
+    /// negative on both sides, so the recompute alone would set it regardless
+    /// of whether the block came back. This test removes that confound: cash
+    /// recovers to comfortably positive BEFORE the save, so nothing left to
+    /// re-derive it, and only the persisted latch can be the reason it survives.
+    ///
+    /// <para>Posted straight to the ledger rather than through
+    /// <c>BorrowCommand</c>: this fixture has no borrowing base (no compartment,
+    /// no reserves) to draw against, and the fact under test is the LATCH, not
+    /// how a company legitimately comes by cash.</para>
+    /// </summary>
+    [Fact]
+    public void A_reload_keeps_the_insolvency_latch_even_once_cash_has_recovered()
+    {
+        Built built = Assert.IsType<Built>(EngineBuilder.Build(Fixture.Settings()));
+        Engine engine = built.Engine;
+
+        for (var month = 0; month < 112; month++) engine.Pipeline.AdvanceTick();
+        Assert.True(engine.ReadModel!.Insolvent,
+            "the fixture must actually go insolvent for this test to prove anything");
+
+        CompanyState company = engine.Provided.Resolve<CompanyState>();
+        company.Ledger.Post(new Movement(
+            engine.Pipeline.CurrentTick, Account.Cash, Account.Debt,
+            Money.FromMillions(1000.0), MovementCategory.Financing, Asset: null,
+            Cause: new AuditId(1)));
+
+        engine.Pipeline.AdvanceTick();
+
+        Assert.True(engine.ReadModel!.Cash.Cents > 0, "the windfall did not land");
+        Assert.True(engine.ReadModel!.Insolvent,
+            "the latch should not reverse in the SAME live engine either " +
+            "(GameplayTests.Insolvency_does_not_reverse)");
+
+        Engine reloaded = Assert.IsType<Built>(
+            SaveGame.Load(Saved(engine), Fixture.Settings())).Engine;
+
+        Assert.True(reloaded.ReadModel!.Insolvent,
+            "the reload's Insolvent latch did not survive, now that positive cash means " +
+            "Execute's own recompute cannot be re-deriving it");
+    }
+
+    /// <summary>
+    /// A verdict already on the trail is not re-announced on a reload — the
+    /// duplicate-audit-entry defect finding 266's own amendment exists to close.
+    /// Before the fix, an empty `objectives.evaluation`/`objectives.reporting`
+    /// pair diffed the restored (Failed) reading against a fabricated Pending
+    /// default and re-recorded `objective.failed` plus the scenario's own
+    /// combined verdict a second time.
+    /// </summary>
+    [Fact]
+    public void A_reload_does_not_re_announce_a_verdict_already_on_the_trail()
+    {
+        Built built = Assert.IsType<Built>(EngineBuilder.Build(Fixture.Settings()));
+        Engine engine = built.Engine;
+
+        for (var month = 0; month < 112; month++) engine.Pipeline.AdvanceTick();
+
+        Assert.True(engine.ReadModel!.Insolvent,
+            "the fixture must actually go insolvent for this test to prove anything");
+
+        IReadOnlyList<AuditEntry> before = engine.Audit.Query(
+            new AuditQuery(Subject: null, AuditCategory.StateTransition, Range: null, CauseChainLeaf: null));
+
+        Assert.NotEmpty(before);
+
+        Engine reloaded = Assert.IsType<Built>(
+            SaveGame.Load(Saved(engine), Fixture.Settings())).Engine;
+
+        IReadOnlyList<AuditEntry> after = reloaded.Audit.Query(
+            new AuditQuery(Subject: null, AuditCategory.StateTransition, Range: null, CauseChainLeaf: null));
+
+        Assert.Equal(before.Count, after.Count);
     }
 }

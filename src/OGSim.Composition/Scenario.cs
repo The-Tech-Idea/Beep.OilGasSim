@@ -113,7 +113,7 @@ internal sealed class ReadModelPaths
 /// rather than surface as an objective that never fires. That is composition's
 /// all-or-nothing rule reaching content (design 03 §3.1).</para>
 /// </summary>
-internal sealed class ScenarioRunner : IScenarioRunner
+internal sealed class ScenarioRunner : IScenarioRunner, IStateOwner
 {
     private readonly Scenario _scenario;
     private readonly ObjectiveEvaluator _evaluator = new();
@@ -235,6 +235,73 @@ internal sealed class ScenarioRunner : IScenarioRunner
         _states.Add(ObjectiveState.Pending);
     }
 
+    // ---------------------------------------------------- IStateOwner (SDD-014
+    // §5a's finding-266 amendment, SDD-013 §4's same-numbered amendment). What a
+    // run has COME TO is history across ticks, not a value today's state alone
+    // reproduces — the same shape the covenant clock and the RRR window already
+    // carved out of SDD-013 §4's derived-state table.
+
+    public StateKey Key { get; } = new("objectives.evaluation");
+
+    public int SchemaVersion => 1;
+
+    /// <summary>Nothing this owner restores depends on another owner's facts —
+    /// the bytes are the runner's own latches and counters (SDD-013 §2b).</summary>
+    public IReadOnlyList<StateKey> RestoreAfter => [];
+
+    public void Capture(IStateWriter writer)
+    {
+        ArgumentNullException.ThrowIfNull(writer);
+
+        writer.WriteInt64("overall", (long)_overall);
+        writer.WriteInt64("count", _tracked.Count);
+
+        for (int i = 0; i < _tracked.Count; i++)
+        {
+            string at = Prefix(i);
+
+            writer.WriteString(at + "id", _tracked[i].Objective.Id.Value);
+            writer.WriteInt64(at + "state", (long)_states[i]);
+            _tracked[i].State.Capture(writer, at);
+        }
+    }
+
+    /// <summary>
+    /// The tracked SET is content, not something a save reshapes — refused by
+    /// name rather than approximated when the scenario and the save disagree
+    /// about what objective sits at a position (finding 266).
+    /// </summary>
+    public void Restore(IStateReader reader)
+    {
+        ArgumentNullException.ThrowIfNull(reader);
+
+        _overall = (ObjectiveState)reader.ReadInt64("overall");
+
+        long count = reader.ReadInt64("count");
+
+        if (count != _tracked.Count)
+            throw new SaveDataFault("SDD-014 §5a", null,
+                $"the save holds {count} tracked objectives for scenario " +
+                $"'{_scenario.Id.Value}', which declares {_tracked.Count}");
+
+        for (int i = 0; i < _tracked.Count; i++)
+        {
+            string at = Prefix(i);
+            string id = reader.ReadString(at + "id");
+
+            if (!string.Equals(id, _tracked[i].Objective.Id.Value, StringComparison.Ordinal))
+                throw new SaveDataFault("SDD-014 §5a", null,
+                    $"objective at position {i} is '{id}' in the save and " +
+                    $"'{_tracked[i].Objective.Id.Value}' in '{_scenario.Id.Value}'");
+
+            _states[i] = (ObjectiveState)reader.ReadInt64(at + "state");
+            _tracked[i].State.Restore(reader, at);
+        }
+    }
+
+    private static string Prefix(int index) =>
+        "objective." + index.ToString("D4", System.Globalization.CultureInfo.InvariantCulture) + ".";
+
     /// <summary>
     /// Every reason this scenario cannot be run, not the first — the same rule
     /// as a command rejection and a composition refusal.
@@ -349,7 +416,7 @@ internal sealed class ObjectiveStage(
     IScenarioRunner runner,
     ReadModelPaths paths,
     FieldProjection projection,
-    IAuditTrail audit) : ITickStage
+    IAuditTrail audit) : ITickStage, IStateOwner
 {
     private ObjectiveState _reported = ObjectiveState.Pending;
 
@@ -392,8 +459,10 @@ internal sealed class ObjectiveStage(
     // keeps it unable to reach IAuditTrail at all, so ownership of "what did
     // we already report" sits with the one consumer that already holds the
     // trail. Point lookups only (TryGetValue / indexer), never enumerated,
-    // so this stays a store rather than an iteration order (SDD-000 §3).
+    // so this stays a store rather than an iteration order (SDD-000 §3) — the
+    // parallel `_reportedOrder` below is what Capture walks instead.
     private readonly Dictionary<ContentId, ObjectiveState> _reportedByObjective = [];
+    private readonly List<ContentId> _reportedOrder = [];
 
     public void Execute(TickContext context)
     {
@@ -416,6 +485,7 @@ internal sealed class ObjectiveStage(
             _reportedByObjective.TryGetValue(id, out ObjectiveState before);
             if (state == before) continue;
 
+            if (!_reportedByObjective.ContainsKey(id)) _reportedOrder.Add(id);
             _reportedByObjective[id] = state;
             RecordObjectiveTransition(id, state, context.Tick);
         }
@@ -459,4 +529,62 @@ internal sealed class ObjectiveStage(
                 ["tick"] = new(tick.Value.ToString(System.Globalization.CultureInfo.InvariantCulture)),
             });
     }
+
+    // ---------------------------------------------------- IStateOwner (SDD-014
+    // §5a's finding-266 amendment). What this owns is not the run's verdict —
+    // that is ScenarioRunner's own `objectives.evaluation` block — it is what
+    // has already been told to the trail about it, plus Insolvent, which was
+    // unpersisted for the same reason and folded in here rather than left a
+    // second, smaller gap beside this one.
+
+    public StateKey Key { get; } = new("objectives.reporting");
+
+    public int SchemaVersion => 1;
+
+    public IReadOnlyList<StateKey> RestoreAfter => [];
+
+    public void Capture(IStateWriter writer)
+    {
+        ArgumentNullException.ThrowIfNull(writer);
+
+        writer.WriteInt64("insolvent", Insolvent ? 1L : 0L);
+        writer.WriteInt64("overall-reported", (long)_reported);
+
+        writer.WriteInt64("count", _reportedOrder.Count);
+
+        for (int i = 0; i < _reportedOrder.Count; i++)
+        {
+            string at = Prefix(i);
+            ContentId id = _reportedOrder[i];
+
+            writer.WriteString(at + "objective", id.Value);
+            writer.WriteInt64(at + "state", (long)_reportedByObjective[id]);
+        }
+    }
+
+    public void Restore(IStateReader reader)
+    {
+        ArgumentNullException.ThrowIfNull(reader);
+
+        Insolvent = reader.ReadInt64("insolvent") != 0;
+        _reported = (ObjectiveState)reader.ReadInt64("overall-reported");
+
+        _reportedByObjective.Clear();
+        _reportedOrder.Clear();
+
+        long count = reader.ReadInt64("count");
+
+        for (long i = 0; i < count; i++)
+        {
+            string at = Prefix(i);
+            var id = new ContentId(reader.ReadString(at + "objective"));
+            var state = (ObjectiveState)reader.ReadInt64(at + "state");
+
+            _reportedByObjective[id] = state;
+            _reportedOrder.Add(id);
+        }
+    }
+
+    private static string Prefix(long index) =>
+        "reported." + index.ToString("D4", System.Globalization.CultureInfo.InvariantCulture) + ".";
 }

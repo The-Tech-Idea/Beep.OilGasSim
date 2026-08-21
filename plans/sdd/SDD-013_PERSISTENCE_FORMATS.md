@@ -313,6 +313,40 @@ this table (a new mechanical check for [22](../design/22_DESIGN_COHERENCE.md)
 > notice those two solve calls differ deserves to find this note instead of
 > repeating the day. The flood residual (S013-8) has some other cause.
 
+> **Amendment (finding 266): the read model row is right about the OUTPUT and
+> silent about the INPUT.** "Read model | everything | R21" is correct for
+> `CloseStage.Published` itself — nothing saves it, and `SaveGame.Load` now
+> rebuilds it by calling stage 12 (`ObjectiveStage`) and stage 13
+> (`CloseStage`) once, immediately after `Restore`, against the state that
+> restore just put back — closing the client's own GC-2 finding ("a restored
+> engine has no read model until a tick runs").
+>
+> But stage 12's own verdict is not purely a function of today's state the way
+> a barrier strength or a covenant PRICE is. `ScenarioRunner` latches a
+> terminal `ObjectiveState` per objective and accumulates `SustainedFor` /
+> `InSequence` / `Never` counters across ticks, and `ObjectiveStage` tracks
+> what it has already told the audit trail — all three are HISTORY, the same
+> shape the covenant clock (finding 210) and the RRR window (finding 208)
+> already carved out of this table, and none of it was saved before this
+> amendment: a reload rewound every stateful objective to zero and could
+> un-latch an already-failed `Never`.
+>
+> **Two new blocks**: `objectives.evaluation` (`ScenarioRunner`) and
+> `objectives.reporting` (`ObjectiveStage`). SDD-014 §5a's own finding-266
+> amendment specifies what each holds and why restoring them FIRST is what
+> lets the immediate re-`Execute` above stay silent on the trail instead of
+> re-announcing verdicts the trail already has.
+>
+> **And the immediate re-`Execute` is not a full tick — this table is still
+> why five fields differ.** `FieldProjection.Take` draws on `ProducedThisTick`,
+> `Chain`, `Wellbores`, `Borrowing` and `Flood`, every one of them already
+> above as recomputed-each-tick and never saved. Running stages 1–11 to put
+> them back would mean consuming random draws past the header's recorded
+> stream positions, which a load must never do, so the reload's immediate
+> read model carries those five at their fresh-composition default until the
+> next real tick — SDD-014 §5a's own S014-5 names the one place that is not
+> merely cosmetic.
+
 ## 5. Migrations
 
 ```csharp

@@ -400,3 +400,117 @@ public class ObserveNeverInfluenceTests
         Assert.Contains("registry and the projection disagree", fault.Fault.Detail);
     }
 }
+
+// ------------------------------------------------------------------ finding 266
+
+/// <summary>
+/// SDD-014 §5a's finding-266 amendment: a stateful node's counter is history
+/// across ticks, not a value the next evaluation alone reproduces, so a reload
+/// that lost it was not "back to where the save was" — it was back to zero.
+///
+/// <para>A minimal <see cref="IStateWriter"/>/<see cref="IStateReader"/> rather
+/// than <c>OGSim.Persistence.StateBlock</c>: this assembly is <c>OGSim.Kernel</c>
+/// and <c>OGSim.Contracts</c> only (R24-V15, above), and <c>PredicateState</c>'s
+/// contract is the two Kernel interfaces — testing against a hand-rolled
+/// implementation of exactly that contract is the more direct proof, not a
+/// weaker one.</para>
+/// </summary>
+public class PredicatePersistenceTests
+{
+    private sealed class FakeState : IStateWriter, IStateReader
+    {
+        private readonly Dictionary<string, string> _strings = new(StringComparer.Ordinal);
+        private readonly Dictionary<string, long> _longs = new(StringComparer.Ordinal);
+        private readonly Dictionary<string, double> _doubles = new(StringComparer.Ordinal);
+
+        public void WriteString(string key, string value) => _strings[key] = value;
+        public void WriteInt64(string key, long value) => _longs[key] = value;
+        public void WriteDouble(string key, double value) => _doubles[key] = value;
+
+        public string ReadString(string key) => _strings[key];
+        public long ReadInt64(string key) => _longs[key];
+        public double ReadDouble(string key) => _doubles[key];
+    }
+
+    private static readonly ObjectiveEvaluator Evaluator = new();
+
+    private static bool Eval(Predicate condition, ObjectiveSnapshot snapshot, PredicateState state) =>
+        Evaluator.Evaluate(Fx.Obj(condition), snapshot, state);
+
+    [Fact] // A sustained count resumes rather than restarting from zero
+    public void A_sustained_counter_survives_a_capture_and_restore()
+    {
+        var state = new PredicateState();
+        var condition = new SustainedFor(Fx.Above("field.rate", 100.0), Ticks: 3);
+
+        // Two consecutive months in — one short of the target.
+        Assert.False(Eval(condition, Fx.With(("field.rate", 150.0)), state));
+        Assert.False(Eval(condition, Fx.With(("field.rate", 150.0)), state));
+
+        var block = new FakeState();
+        state.Capture(block, "p.");
+
+        var restored = new PredicateState();
+        restored.Restore(block, "p.");
+
+        // The THIRD consecutive month, against the RESTORED state. A counter
+        // that came back at zero reads false here (1 of 3) instead of true.
+        Assert.True(Eval(condition, Fx.With(("field.rate", 150.0)), restored));
+    }
+
+    [Fact] // A sequence step resumes at its own index, not step zero
+    public void A_sequence_step_survives_a_capture_and_restore()
+    {
+        var state = new PredicateState();
+        var condition = new InSequence(
+            [Fx.Above("company.cash", 10.0), Fx.Above("field.rate", 100.0)]);
+
+        // Step 0 satisfied; step 1 not yet touched.
+        Assert.False(Eval(condition, Fx.With(("company.cash", 50.0), ("field.rate", 0.0)), state));
+
+        var block = new FakeState();
+        state.Capture(block, "p.");
+
+        var restored = new PredicateState();
+        restored.Restore(block, "p.");
+
+        // Satisfying ONLY step 1 completes the sequence — an index reset back to
+        // 0 would fail this too, since cash is 0 here and step 0 needs cash > 10.
+        Assert.True(Eval(condition, Fx.With(("company.cash", 0.0), ("field.rate", 500.0)), restored));
+    }
+
+    [Fact] // A `Never` that already broke stays broken after a restore
+    public void A_broken_never_stays_broken_after_a_restore()
+    {
+        var state = new PredicateState();
+        var condition = new Never(Fx.Above("field.rate", 1000.0));
+
+        // The one breach.
+        Assert.False(Eval(condition, Fx.With(("field.rate", 2000.0)), state));
+
+        var block = new FakeState();
+        state.Capture(block, "p.");
+
+        var restored = new PredicateState();
+        restored.Restore(block, "p.");
+
+        // Read with an innocuous value, against the RESTORED state. A latch that
+        // came back cleared would read true (safe) instead of false (broken) —
+        // the one place in this suite that would be the WRONG direction to fail.
+        Assert.False(Eval(condition, Fx.With(("field.rate", 0.0)), restored));
+    }
+
+    [Fact] // Nothing touched yet captures and restores as nothing touched
+    public void An_untouched_state_captures_and_restores_empty()
+    {
+        var state = new PredicateState();
+        var block = new FakeState();
+        state.Capture(block, "p.");
+
+        var restored = new PredicateState();
+        restored.Restore(block, "p.");
+
+        var condition = new SustainedFor(Fx.Above("field.rate", 100.0), Ticks: 1);
+        Assert.True(Eval(condition, Fx.With(("field.rate", 150.0)), restored));
+    }
+}
