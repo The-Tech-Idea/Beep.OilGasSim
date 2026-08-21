@@ -33,7 +33,9 @@ public class DriveMechanismTests
             CumulativeWaterInflux: new ReservoirVolume(influxM3),
             CumulativeInjected: new ReservoirVolume(0.0),
             StartPressure: new Pressure(startPa),
-            WithdrawnThisTick: new ReservoirVolume(0.0));
+            WithdrawnThisTick: new ReservoirVolume(0.0),
+            GasInPlace: new StandardGasVolume(0.0),
+            ReservoirTemperature: Temperature.FromCelsius(93.3));
 
     [Fact] // §4.2b: the six are distinguished by which terms they admit
     public void R5V4_each_mechanism_declares_the_terms_it_admits()

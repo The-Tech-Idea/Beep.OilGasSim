@@ -70,10 +70,19 @@ internal sealed record InitialConditions(
     /// without the other (law L5).</para>
     /// </summary>
     ReservoirVolume PoreVolume,
-    StandardGasVolume GasInPlace,           // G (free gas cap)
+    StandardGasVolume GasInPlace,           // G (free gas cap, or a dry-gas compartment's own N)
     double GasCapRatio,                     // m
     double ConnateWaterSaturation,          // Swc
-    double WaterCompressibility);
+    double WaterCompressibility,
+
+    /// <summary>
+    /// T, reservoir temperature (SDD-003 §3.1b's finding-264 amendment). Every
+    /// other fluid call in this document folds temperature into the model;
+    /// `IFluidPropertyModel.Z(p, t)` alone takes it as an argument, because
+    /// real-gas compressibility genuinely depends on it — so the gas balance
+    /// needs a fact the oil balance never asked a compartment to carry.
+    /// </summary>
+    Temperature ReservoirTemperature);
 
 /// <summary>
 /// SDD-003 §3. The hydraulically connected volume on which material balance is

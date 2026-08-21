@@ -1874,6 +1874,29 @@ public sealed class FieldControl : IStateOwner
             rockCompressibility, gasOilContact, oilWaterContact, wettability, drive,
             aquiferStrength, aquiferResponseTime);
 
+    /// <summary>A DRY-GAS compartment (SDD-003 §3.1b's finding-264 amendment)
+    /// — hand-declared, the same reason and the same way <see cref="AddCompartment"/>
+    /// hand-declares an oil one.</summary>
+    public EntityId<IReservoirCompartmentEntity> AddGasCompartment(
+        ReservoirVolume poreVolume,
+        double porosity,
+        double gasSaturation,
+        Pressure initialPressure,
+        Temperature reservoirTemperature,
+        Permeability permeability,
+        Length netThickness,
+        Area drainageArea,
+        double rockCompressibility,
+        Length gasWaterContact,
+        RelativePermeabilityCurve wettability,
+        ContentId drive,
+        double aquiferStrength,
+        Duration aquiferResponseTime) =>
+        _subsurface.CreateGas(
+            poreVolume, porosity, gasSaturation, initialPressure, reservoirTemperature,
+            permeability, netThickness, drainageArea, rockCompressibility, gasWaterContact,
+            wettability, drive, aquiferStrength, aquiferResponseTime);
+
     /// <summary>
     /// Brings a completion online against a compartment and ties it into the
     /// header. From the next tick it is a source element the solver sees, flowing

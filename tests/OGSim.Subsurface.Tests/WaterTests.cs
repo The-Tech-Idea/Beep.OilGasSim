@@ -139,7 +139,9 @@ public class WaterfloodTests
             CumulativeWaterInflux: new ReservoirVolume(influxM3),
             CumulativeInjected: new ReservoirVolume(injectedM3),
             StartPressure: new Pressure(30e6),
-            WithdrawnThisTick: new ReservoirVolume(0.0));
+            WithdrawnThisTick: new ReservoirVolume(0.0),
+            GasInPlace: new StandardGasVolume(0.0),
+            ReservoirTemperature: Temperature.FromCelsius(93.3));
 
     [Fact] // R10 §2.3: waterflood is an ADDITION — a distinct, named mechanism
     public void R10V6_the_waterflood_is_its_own_mechanism()

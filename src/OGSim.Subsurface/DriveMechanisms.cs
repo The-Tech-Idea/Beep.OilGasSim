@@ -223,3 +223,87 @@ internal sealed class WaterfloodDrive()
     protected override double MaxTickVoidageFraction => 0.4;
 
 }
+
+/// <summary>
+/// SDD-003 §3.1b's finding-264 amendment — the dry-gas balance, dispatched.
+///
+/// <para>NOT a <see cref="DriveMechanism"/> subclass: that base class's
+/// <c>SolveEndPressure</c> calls §3.1's OIL form unconditionally. A dry-gas
+/// compartment needs a different equation entirely
+/// (<see cref="GasMaterialBalance"/>, R5.7), not a different set of admitted
+/// terms on the same one.</para>
+/// </summary>
+internal sealed class VolumetricGasDrive : IDriveMechanism
+{
+    public ContentId Id { get; } = new("volumetric-gas-drive");
+
+    // Water drive bends the p/Z line (05 §3.2) — a real and common case for a
+    // gas reservoir, admitted the same way WaterDrive admits it for oil.
+    // GasCap is an OIL-ZONE ratio (m); a dry-gas compartment has none.
+    public AdmittedTerms Admits { get; } = new(GasCap: false, AquiferInflux: true);
+
+    // Nothing is injected into a gas reservoir by this composition yet — R10's
+    // waterflood targets oil compartments, and extending it to gas storage is
+    // its own future task, not assumed here.
+    public IReadOnlyList<ContentId> AcceptedInjectants { get; } = [];
+
+    public Pressure SolveEndPressure(MaterialBalanceInput input, IFluidPropertyModel fluid)
+    {
+        ArgumentNullException.ThrowIfNull(input);
+        ArgumentNullException.ThrowIfNull(fluid);
+
+        return Solve(input, fluid);
+    }
+
+    /// <summary>
+    /// NO SEPARATE STEP LIMIT, unlike the oil drives' own restore path. §3.1's
+    /// per-tick fraction exists because Bo/Bg/Rs integrate nonlinearly across a
+    /// large pressure step; the gas balance is LINEAR in cumulative production
+    /// by construction (§3.1b) and has no analogous integration error to bound
+    /// — so there is only one Solve, honest at any step size.
+    /// </summary>
+    public Pressure SolveFromInitial(MaterialBalanceInput input, IFluidPropertyModel fluid)
+    {
+        ArgumentNullException.ThrowIfNull(input);
+        ArgumentNullException.ThrowIfNull(fluid);
+
+        return Solve(input, fluid);
+    }
+
+    private static Pressure Solve(MaterialBalanceInput input, IFluidPropertyModel fluid)
+    {
+        AssertCoherent(input);
+
+        double initialZ = fluid.Z(input.InitialPressure, input.ReservoirTemperature);
+        GasFormationVolumeFactor initialBg = fluid.Bg(input.InitialPressure);
+
+        // Water that has invaded the gas-occupied pore volume, whatever its
+        // provenance — an aquifer and an injector both replace voidage the
+        // same way, and the balance cannot tell them apart (mirroring
+        // WaterfloodDrive's own reasoning for the oil form).
+        var netWaterInflux = new ReservoirVolume(
+            input.CumulativeWaterInflux.CubicMetres + input.CumulativeInjected.CubicMetres);
+
+        return GasMaterialBalance.Solve(
+            input.InitialPressure, initialZ, input.GasInPlace, input.CumulativeGasProduced,
+            netWaterInflux, initialBg, fluid, input.ReservoirTemperature);
+    }
+
+    /// <summary>The gas balance's own coherence, mirroring §4.2b's oil-side check.</summary>
+    private static void AssertCoherent(MaterialBalanceInput input)
+    {
+        if (input.OriginalOilInPlace.CubicMetres != 0.0)
+            throw new ModelFault("SDD-003 §3.1b", null,
+                "a volumetric gas drive was handed a compartment declaring " +
+                $"{Format(input.OriginalOilInPlace.CubicMetres)} m³ of original oil in place; " +
+                "the dry-gas form has no term for it");
+
+        if (input.GasInPlace.CubicMetres <= 0.0)
+            throw new ModelFault("SDD-003 §3.1b", null,
+                "a volumetric gas drive was handed a compartment declaring no gas in place; " +
+                "the p/Z line has no denominator without one");
+    }
+
+    private static string Format(double value) =>
+        value.ToString("R", System.Globalization.CultureInfo.InvariantCulture);
+}

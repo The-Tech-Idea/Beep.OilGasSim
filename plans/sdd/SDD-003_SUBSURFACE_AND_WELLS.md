@@ -373,6 +373,74 @@ invited to extrapolate it and read `G` off the x-intercept. A line that drifted
 by a percent would make a correct deduction give a wrong answer, and the mechanic
 depends on the player being able to trust their own arithmetic.
 
+> **Amendment (finding 264) — the line was implemented and dispatched by
+> nothing.** `GasMaterialBalance.Solve` (`OGSim.Subsurface`, R5.7) has carried
+> this exact arithmetic since it was written, tested only against inputs a
+> fixture assembled by hand — the tracker's own words were "there is no
+> dry-gas compartment anywhere in this composition, so `p/Z` has no subject to
+> fit a line against." Two gaps stood between the formula and a real
+> compartment, and this closes the RESERVOIR half of both, deliberately not
+> the WELL half (below).
+>
+> **§3.1's oil form is dispatched by `Drive.SolveEndPressure`, one
+> `IDriveMechanism` per compartment (§4.2b); this gains a sibling rather than
+> a branch inside the oil path.**
+>
+> ```csharp
+> // A standalone IDriveMechanism — NOT a DriveMechanism subclass, because that
+> // base class's SolveEndPressure calls §3.1's oil form unconditionally. Two
+> // different balance equations are two different mechanisms, not one
+> // mechanism with a flag.
+> internal sealed class VolumetricGasDrive : IDriveMechanism
+> {
+>     public ContentId Id { get; } = new("volumetric-gas-drive");
+>     public AdmittedTerms Admits { get; } =
+>         new(GasCap: false, AquiferInflux: true);   // water drive bends the line; §3.1's
+>                                                     // gas-cap ratio is an OIL-ZONE concept
+>                                                     // a dry-gas compartment has none of
+>     public IReadOnlyList<ContentId> AcceptedInjectants { get; } = [];
+> }
+> ```
+>
+> **`MaterialBalanceInput` and `InitialConditions` both gain two fields the gas
+> form needs and the oil form never asked for**: `GasInPlace` (G — already
+> declared on `InitialConditions`, hardcoded to zero at both of its
+> construction sites, which is finding 145's own shape one level down) and a
+> new `ReservoirTemperature`, because `IFluidPropertyModel.Z(p, t)` is the one
+> fluid call in this whole document that takes temperature as an argument
+> rather than folding it into the model. Every existing drive receives both
+> and reads neither, the same way every drive already receives `GasCapRatio`
+> and only the gas-cap drive reads it.
+>
+> **A compartment must be BUILT as dry gas, not discovered as one.** World
+> generation decides oil-versus-gas nowhere in this composition — G6 §2.7's
+> handoff carries an oil saturation and nothing names a hydrocarbon phase —
+> and deciding that is a real petroleum-systems question (source maturity,
+> not merely structure size) this amendment does not answer. So a dry-gas
+> compartment is HAND-DECLARED, the same way every fixture in this codebase
+> already hand-declares an oil one: `SubsurfaceState.CreateGas` /
+> `FieldControl.AddGasCompartment`, mirroring `Create`/`AddCompartment`'s own
+> shape — pore volume, gas saturation (against the SAME connate-water
+> agreement check §3.1 already makes for oil, substituting Sg for So),
+> pressure, reservoir temperature, rock, a single gas-water contact (`Contacts`
+> carries two lengths and reads neither anywhere in this assembly today — a
+> pre-existing gap this amendment does not create and does not close), a
+> drive, and an optional aquifer. `GasInPlace = PV·Sg / Bg(Pi)`, the gas
+> form's own N.
+>
+> **What this amendment does NOT close, and why it stops here.** §6.1 already
+> pins the well half — `q_sc = C·(Pr² − Pwf²)ⁿ`, C and n content per
+> completion test — but §6.1b's produced-stream conversion is written entirely
+> in terms of a completion's TOTAL LIQUID rate, split by water cut with
+> solution gas lifted out of the oil by `Rs`. A gas well has no liquid rate at
+> its core; it has a gas rate with a possible condensate yield, and nothing in
+> this document says how that stream reaches the network. Building the
+> inflow model alone would let a gas well solve a rate and have no specified
+> path to turn it into a `MaterialStream` — a design gap, not an
+> implementation one, and exactly the kind of fork this project stops at
+> rather than invents past. It is R14.6's own remaining half, named rather
+> than guessed at.
+
 ### 3.1c Water cut — the fractional-flow S-curve
 
 > **R10.0 amendment (finding 119): CAL3 asks for "a recognisable S-curve after

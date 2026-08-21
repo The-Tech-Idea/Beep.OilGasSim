@@ -188,7 +188,9 @@ internal sealed class ReservoirCompartment : IReservoirCompartment
             CumulativeWaterInflux: next.WaterInflux,
             CumulativeInjected: next.Injected,
             StartPressure: startOfTick,
-            WithdrawnThisTick: withdrawnThisTick);
+            WithdrawnThisTick: withdrawnThisTick,
+            GasInPlace: Initial.GasInPlace,
+            ReservoirTemperature: Initial.ReservoirTemperature);
 
         // The DRIVE solves, not this class. Which expansion terms are admitted
         // is the mechanism's answer (SDD-003 §4.2b), and it is the reason
@@ -237,7 +239,9 @@ internal sealed class ReservoirCompartment : IReservoirCompartment
             // has no defaults (law L2), and the honest values for "how much room
             // is there right now" are the position this compartment is in.
             StartPressure: Pr,
-            WithdrawnThisTick: new ReservoirVolume(0.0));
+            WithdrawnThisTick: new ReservoirVolume(0.0),
+            GasInPlace: Initial.GasInPlace,
+            ReservoirTemperature: Initial.ReservoirTemperature);
 
         double room = -MaterialBalance.Residual(input, fluid, Initial.Pressure);
 
@@ -285,7 +289,9 @@ internal sealed class ReservoirCompartment : IReservoirCompartment
             // (finding 205). `SolveFromInitial` below is the half that was
             // missing.
             StartPressure: Initial.Pressure,
-            WithdrawnThisTick: new ReservoirVolume(0.0));
+            WithdrawnThisTick: new ReservoirVolume(0.0),
+            GasInPlace: Initial.GasInPlace,
+            ReservoirTemperature: Initial.ReservoirTemperature);
 
         Pr = Drive.SolveFromInitial(input, fluid);
     }

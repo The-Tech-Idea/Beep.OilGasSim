@@ -47,7 +47,9 @@ public class MaterialBalanceTests
             CumulativeWaterInflux: new ReservoirVolume(0.0),
             CumulativeInjected: new ReservoirVolume(0.0),
             StartPressure: new Pressure(startPressurePa),
-            WithdrawnThisTick: new ReservoirVolume(0.0));
+            WithdrawnThisTick: new ReservoirVolume(0.0),
+            GasInPlace: new StandardGasVolume(0.0),
+            ReservoirTemperature: ReservoirT);
 
     // ------------------------------------------------------------- the balance
 

@@ -116,7 +116,13 @@ public sealed record MaterialBalanceInput(
 
     // This tick alone: the validity limit is a statement about one step.
     Pressure StartPressure,
-    ReservoirVolume WithdrawnThisTick);
+    ReservoirVolume WithdrawnThisTick,
+
+    // §3.1b's finding-264 amendment — the gas form's own two facts. Every
+    // oil drive receives both and reads neither, the same way every drive
+    // already receives GasCapRatio and only the gas-cap drive reads it.
+    StandardGasVolume GasInPlace,                // G, sm³ — zero for an oil compartment
+    Temperature ReservoirTemperature);           // T — Z(p, t) is the one fluid call that needs it
 
 /// <summary>
 /// Design 02 §2.2 — a plugin, deliberately: recovery factor EMERGES from the

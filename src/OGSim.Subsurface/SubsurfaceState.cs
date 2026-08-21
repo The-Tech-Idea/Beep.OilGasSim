@@ -99,7 +99,12 @@ internal sealed class SubsurfaceState : IStateOwner
     // (SDD-012 §5's R20d.25 amendment). Souring cares which water it was, and
     // the balance cannot tell — so the provenance is written beside the volume
     // rather than derived from it, which is not possible after the fact.
-    public int SchemaVersion => 3;
+    //
+    // 4: gas in place and reservoir temperature (SDD-003 §3.1b's finding-264
+    // amendment) — the dry-gas balance's own N and the one fluid call in this
+    // document that takes temperature as an argument. Both were previously
+    // hardcoded to zero on restore because nothing had ever populated them.
+    public int SchemaVersion => 4;
 
     /// <summary>Nothing has to be back before this is (SDD-013 §2b).</summary>
     public IReadOnlyList<StateKey> RestoreAfter => [];
@@ -135,6 +140,7 @@ internal sealed class SubsurfaceState : IStateOwner
         "compaction-drive" => new CompactionDrive(),
         "gravity-drainage-drive" => new GravityDrainageDrive(),
         "combination-drive" => new CombinationDrive(),
+        "volumetric-gas-drive" => new VolumetricGasDrive(),
         _ => throw new ContentFault("SDD-003 §4.2b", null,
             $"no drive mechanism '{drive.Value}' exists; a compartment cannot be created " +
             "with a drive nobody implements"),
@@ -211,7 +217,8 @@ internal sealed class SubsurfaceState : IStateOwner
             GasInPlace: new StandardGasVolume(0.0),
             GasCapRatio: 0.0,
             ConnateWaterSaturation: wettability.ConnateWaterSaturation,
-            WaterCompressibility: WaterCompressibility);
+            WaterCompressibility: WaterCompressibility,
+            ReservoirTemperature: generated.Temperature);
 
         var compartment = new ReservoirCompartment(
             id, initial, contacts, rock, DriveNamed(drive), []);
@@ -231,6 +238,100 @@ internal sealed class SubsurfaceState : IStateOwner
                     / (generated.InitialPressure.Pascals * aquiferResponseTime.Seconds),
                 generated.InitialPressure,
                 new ReservoirVolume(aquiferStrength * generated.PoreVolume.CubicMetres)));
+
+        return id;
+    }
+
+    /// <summary>
+    /// Creates a DRY-GAS compartment (SDD-003 §3.1b's finding-264 amendment) —
+    /// HAND-DECLARED rather than discovered: world generation decides no
+    /// hydrocarbon phase anywhere in this composition, so a caller states one
+    /// directly, the same way every oil fixture in this codebase already
+    /// states its compartment directly through <see cref="Create"/>.
+    ///
+    /// <para>No <c>GeneratedCompartment</c> handoff, because that contract's
+    /// one saturation field is named and read as an OIL saturation
+    /// (<see cref="Create"/>'s own connate-water check above) — reusing it to
+    /// mean "hydrocarbon saturation" for a gas call would be the field lying
+    /// about what it holds for one of its two callers.</para>
+    /// </summary>
+    public EntityId<IReservoirCompartmentEntity> CreateGas(
+        ReservoirVolume poreVolume,
+        double porosity,
+        double gasSaturation,
+        Pressure initialPressure,
+        Temperature reservoirTemperature,
+        Permeability permeability,
+        Length netThickness,
+        Area drainageArea,
+        double rockCompressibility,
+        Length gasWaterContact,
+        RelativePermeabilityCurve wettability,
+        ContentId drive,
+        double aquiferStrength,
+        Duration aquiferResponseTime)
+    {
+        ArgumentNullException.ThrowIfNull(wettability);
+
+        if (aquiferStrength < 0.0 || !double.IsFinite(aquiferStrength))
+            throw new ContentFault("SDD-003 §3.3a", null,
+                $"aquifer strength {Number(aquiferStrength)} is not a finite multiple of pore " +
+                "volume; zero is how a compartment says it has no aquifer");
+
+        var rock = new RockTruth(
+            porosity, permeability, netThickness, drainageArea, rockCompressibility, wettability);
+
+        // THE SAME CONNATE-WATER AGREEMENT §3.1 already makes for oil (finding
+        // 206), substituting Sg for So: a dry-gas compartment above its
+        // transition zone holds nothing but gas and irreducible water.
+        if (Math.Abs(1.0 - gasSaturation - wettability.ConnateWaterSaturation)
+            > ConnateAgreementTolerance)
+            throw new ContentFault("SDD-003 §3.1", null,
+                "this compartment is generated at gas saturation " +
+                $"{Number(gasSaturation)}, which leaves {Number(1.0 - gasSaturation)} of " +
+                $"water, and its rock curve declares an irreducible " +
+                $"{Number(wettability.ConnateWaterSaturation)}. At discovery, above the " +
+                "transition zone, those are the same number — so these are two statements " +
+                "about one reservoir and they disagree");
+
+        // A single gas-water contact — a dry-gas reservoir has no oil zone to
+        // give it a second one. `ContactSet` still carries two lengths (it is
+        // shared with the oil path) and neither is read anywhere in this
+        // assembly today (a pre-existing gap this constructor does not close),
+        // so both are stated as the one contact this reservoir actually has.
+        var contacts = new ContactSet(gasWaterContact, gasWaterContact);
+
+        var id = new EntityId<IReservoirCompartmentEntity>(++_nextId);
+
+        // Free gas in place, standard m³: PV × Sg ÷ Bg(Pi) — the gas form's own
+        // N (SDD-003 §3.1b). Shrink, not a division inline, for the same
+        // reason Create's oil case uses it: the FVF owns the conversion.
+        var freeGas = new ReservoirVolume(poreVolume.CubicMetres * gasSaturation);
+        StandardGasVolume gasInPlace = _fluid.Bg(initialPressure).Shrink(freeGas);
+
+        var initial = new InitialConditions(
+            Pressure: initialPressure,
+            OilInPlace: new SurfaceVolume(0.0),
+            PoreVolume: poreVolume,
+            GasInPlace: gasInPlace,
+            GasCapRatio: 0.0,       // an oil-zone ratio; this compartment has no oil zone
+            ConnateWaterSaturation: wettability.ConnateWaterSaturation,
+            WaterCompressibility: WaterCompressibility,
+            ReservoirTemperature: reservoirTemperature);
+
+        var compartment = new ReservoirCompartment(
+            id, initial, contacts, rock, DriveNamed(drive), []);
+
+        _compartments.Add(compartment);
+        _byId.Add(id, compartment);
+
+        _aquifers.Add(id, aquiferStrength == 0.0
+            ? null
+            : new FetkovichAquifer(
+                productivityIndex: aquiferStrength * poreVolume.CubicMetres
+                    / (initialPressure.Pascals * aquiferResponseTime.Seconds),
+                initialPressure,
+                new ReservoirVolume(aquiferStrength * poreVolume.CubicMetres)));
 
         return id;
     }
@@ -492,10 +593,13 @@ internal sealed class SubsurfaceState : IStateOwner
             // produced, and the restore re-solves it anyway.
             writer.WriteDouble(at + "initial-pressure", compartment.Initial.Pressure.Pascals);
             writer.WriteDouble(at + "ooip", compartment.Initial.OilInPlace.CubicMetres);
+            writer.WriteDouble(at + "gas-in-place", compartment.Initial.GasInPlace.CubicMetres);
             writer.WriteDouble(at + "gas-cap-ratio", compartment.Initial.GasCapRatio);
             writer.WriteDouble(at + "swc", compartment.Initial.ConnateWaterSaturation);
             writer.WriteDouble(at + "cw", compartment.Initial.WaterCompressibility);
             writer.WriteDouble(at + "pv", compartment.Initial.PoreVolume.CubicMetres);
+            writer.WriteDouble(at + "reservoir-temperature-k",
+                compartment.Initial.ReservoirTemperature.Kelvin);
 
             writer.WriteDouble(at + "porosity", compartment.Rock.Porosity);
             writer.WriteDouble(at + "permeability", compartment.Rock.Permeability.SquareMetres);
@@ -573,11 +677,12 @@ internal sealed class SubsurfaceState : IStateOwner
             var initial = new InitialConditions(
                 Pressure: new Pressure(reader.ReadDouble(at + "initial-pressure")),
                 OilInPlace: new SurfaceVolume(reader.ReadDouble(at + "ooip")),
-                GasInPlace: new StandardGasVolume(0.0),
+                GasInPlace: new StandardGasVolume(reader.ReadDouble(at + "gas-in-place")),
                 GasCapRatio: reader.ReadDouble(at + "gas-cap-ratio"),
                 ConnateWaterSaturation: reader.ReadDouble(at + "swc"),
                 WaterCompressibility: reader.ReadDouble(at + "cw"),
-                PoreVolume: new ReservoirVolume(reader.ReadDouble(at + "pv")));
+                PoreVolume: new ReservoirVolume(reader.ReadDouble(at + "pv")),
+                ReservoirTemperature: new Temperature(reader.ReadDouble(at + "reservoir-temperature-k")));
 
             var rock = new RockTruth(
                 reader.ReadDouble(at + "porosity"),
