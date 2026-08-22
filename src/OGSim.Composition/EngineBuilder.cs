@@ -1501,6 +1501,21 @@ internal static class Defaults
     /// facility's first upgrade rung.</summary>
     public static Money CrewTrainingCost { get; } = Money.FromMillions(2.0);
 
+    /// <summary>
+    /// SDD-006 §7a.3's finding-268 amendment — a berth loads ONE standard
+    /// parcel at a time rather than draining continuously. Aframax class
+    /// (~600,000 bbl), a globally recognised mid-size crude parcel: 53% of
+    /// the shipped E1 tank (150,000 t), so a cargo and continuing production
+    /// both fit in it at once, and roughly 6.6 ticks of the shipped field's
+    /// own make to fill alone — meaningfully short of shipping every month
+    /// and meaningfully short of shipping once a year, the range §7a.1 asked
+    /// this decision to land in. A bigger export tier loads it faster
+    /// (<c>Berth.LoadingRate</c> already carries that decision); this stays
+    /// one fixed size regardless, because "ships come in standard parcels"
+    /// (§7a.1) is a statement about the parcel, not about the terminal.
+    /// </summary>
+    public static Mass CargoSize { get; } = new(80_000_000.0);
+
     public const double ProcedureCompliance = 0.9;
 
     /// <summary>

@@ -283,6 +283,80 @@ public sealed class ProductionLoopTests
         Assert.Contains(transfers, entry => entry.Id == revenue!.Cause);
     }
 
+    /// <summary>
+    /// SDD-006 §7a.3's finding-268 amendment: one cargo at a time, gated on
+    /// what the tank actually holds. Set well short of a full parcel directly
+    /// (<c>Tank.RestoreTo</c>, the same door a reload uses) rather than played
+    /// to it — a played field would take dozens of ticks to approach the
+    /// threshold and this is a fact about one tick's gate, not about the
+    /// field's own rate.
+    ///
+    /// <para>40 million kg, not one: <c>Receive</c> runs before the gate
+    /// checks <c>Held</c>, so this tick's OWN production counts too, and this
+    /// fixture's one well — good rock, kept for the facility-limited test
+    /// above — turned out to clear tens of millions of kg in a single tick,
+    /// comfortably crossing a margin that looked generous until it was
+    /// measured. Held BEFORE the tick still bounds what a wrongly-open gate
+    /// could have drawn it down to (well under the seed), which the threshold
+    /// check alone cannot tell apart from the gate correctly staying
+    /// shut.</para>
+    /// </summary>
+    [Fact]
+    public void A_cargo_does_not_lift_below_a_full_parcel()
+    {
+        (Engine engine, _) = Field();
+        var tank = engine.Provided.Resolve<SurfaceChain>().Tank;
+
+        var kilograms = new double[Defaults.MaterialCount];
+        kilograms[Defaults.OilOrdinal.Ordinal] = 40_000_000.0;
+
+        tank.RestoreTo(
+            MaterialInventory.Of(kilograms),
+            Allocation.FromSingle(new EntityRef(EntityKind.Compartment, 1)));
+
+        engine.Pipeline.AdvanceTick();
+
+        double held = engine.ReadModel!.Storage.Held.Kilograms;
+
+        // The threshold itself: whatever this tick's own well cleared, the
+        // gate stays shut below a full parcel.
+        Assert.True(held < Defaults.CargoSize.Kilograms,
+            $"the tank drew a cargo before it was full: held={held} against " +
+            $"a {Defaults.CargoSize.Kilograms} kg cargo");
+
+        // AND held did not fall below the seed: a wrongly-open gate would draw
+        // at the berth's rate (tens of millions of kg) regardless of this
+        // tick's production, which the threshold check above cannot catch
+        // starting from a value already under it.
+        Assert.True(held >= 40_000_000.0 - 2_000_000.0,
+            $"the tank drew from a cargo that was not full: held={held}, seeded at 40,000,000");
+    }
+
+    /// <summary>SDD-006 §7a.3's finding-268 amendment: the other half of the
+    /// same gate — a full cargo departs at the berth's rate rather than
+    /// waiting for a schedule step 2 does not build.</summary>
+    [Fact]
+    public void A_full_cargo_lifts_at_the_berths_rate()
+    {
+        (Engine engine, _) = Field();
+        var tank = engine.Provided.Resolve<SurfaceChain>().Tank;
+
+        var kilograms = new double[Defaults.MaterialCount];
+        kilograms[Defaults.OilOrdinal.Ordinal] = Defaults.CargoSize.Kilograms + 1_000_000.0;
+
+        tank.RestoreTo(
+            MaterialInventory.Of(kilograms),
+            Allocation.FromSingle(new EntityRef(EntityKind.Compartment, 1)));
+
+        Mass before = tank.Held.Total;
+
+        engine.Pipeline.AdvanceTick();
+
+        Mass after = engine.ReadModel!.Storage.Held;
+
+        Assert.True(after.Kilograms < before.Kilograms - 1_000_000.0,
+            $"a full cargo did not lift: before={before.Kilograms} after={after.Kilograms}");
+    }
 
     /// <summary>
     /// R23-V16, the reachability half. SDD-012 §4b's R23.1 amendment, and

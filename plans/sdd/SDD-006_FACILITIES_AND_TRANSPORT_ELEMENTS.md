@@ -968,6 +968,94 @@ into as well.
    (finding 203's three dangling declarations, joined at the point where they
    finally have a source).
 
+### 7a.3 Step 2, built (finding 268) — and the prerequisite this section named was wrong
+
+**§7a.2's own "company-value prerequisite" does not hold up.** It reasoned from
+"a parcel-sized float sits permanently unsold" to "lifetime revenue is
+permanently short" to "cash alone mis-values a business holding one" — three
+plausible steps that were never checked against the WIRING. They are wrong at
+the first: `Modules.cs` connects `custody.Id, CustodyTransferPoint.OnSpecOutlet`
+**to** `tank.Id, Tank.Inlet` — the custody meter sits upstream of the tank, so
+`ProductionLoop.Delivered` (`RecordCustody`'s revenue trigger) is set at stage 5
+from the network solve, before `StoreAndExport` draws the tank at stage 7.
+**Revenue is recognised when oil reaches spec, not when a cargo departs, and a
+cargo sitting in the tank was never "unsold" in the ledger's sense** — it is
+already sold; it just has not yet left the yard. Cash and `company.value` both
+already count it as soon as it is metered.
+
+**What actually moves is `Tank.cs`'s own documented coupling** (R8-V5, FV5): a
+full tank throttles every completion feeding it pro-rata, and the throttle
+reaches the reservoir within the tick. A cargo-gated tank sits nearer capacity
+between liftings than a continuously-draining one, so it binds MORE OFTEN —
+fewer barrels are produced over the field's life, and fewer barrels ever reach
+the custody meter to be sold. §7a.1's own prediction list already named this
+("MOVES how often the tank binds and shuts wells in") as the mechanism; §7a.2
+diagnosed the SYMPTOM (revenue fell) and reached for the wrong CAUSE (deferred
+recognition) because the wiring was assumed rather than read. No `company.value`
+step, no inventory valuation, and no scenario recalibration is a precondition
+for step 2 — the fix, if the win condition genuinely needs one, is downstream
+of a real measurement against the shipped field, not upstream of any code.
+
+**Step 2, scoped narrowly.** Occupancy and cargo-sized lifting only — no
+laytime, no demurrage, no `ConstraintKind`/`LogisticsView` (steps 3 and 4 stay
+open, each its own task per this section's own ordering).
+
+```text
+CargoSize: ONE fixed content constant, not a per-tier ladder. §7a.1's own text
+  ("a fixed content size is the realistic answer... ships come in standard
+  parcels") asks for one size a field is measured against, not a size that
+  grows with the terminal a player buys — Berth.LoadingRate already carries
+  that decision (a bigger line fills the same cargo faster).
+  80,000 t (Aframax class — the recognised mid-size global crude-trading
+  parcel, ~600,000 bbl). Against the shipped field's own numbers (§7a.1):
+  53% of the E1 tank (150,000 t, so 70,000 t of genuine headroom sits above
+  a full cargo before the tank's own ullage constraint would ever reach the
+  reservoir, R8-V5) and ~6.6 ticks of the shipped field's own make
+  (12.1e6 kg/tick) to fill alone — meaningfully short of "ships every month"
+  and meaningfully short of "ships once a year", which is the range §7a.1
+  asked this decision to land in.
+Gate, not accumulator: nothing draws from the tank while `tank.Held <
+  CargoSize`. The first version of this amendment specified a separate
+  "mass loaded so far" counter that left the tank drawing continuously
+  regardless of readiness — measured, and reverted before landing (below) —
+  because oil drawn into that counter left `tank.Held` the moment it was
+  drawn, so the tank read as permanently near-empty and the counter was
+  invisible to everything else, including a save. THE TANK'S OWN HELD MASS
+  is the only state this needs: once it reaches CargoSize the berth clears
+  it at its own rate; below CargoSize nothing leaves. No second store, and
+  nothing for a save to launder (law L5) — `Tank.RestoreTo` already owns
+  what a reload has to get back.
+Load, once gated open: draw = min(Berth.LoadingRate · tick.Seconds,
+  tank.Held) each tick — uncapped by CargoSize itself, because the berth
+  clears whatever backlog exists at its own rate rather than metering out
+  exactly one parcel's worth and stopping mid-tick. `Tank.Draw` already
+  clamps to what is held.
+Depart / next cargo: implicit. The gate re-closes the moment `tank.Held`
+  drops back under CargoSize, and reopens once production has rebuilt it —
+  no day-count, no scheduled arrival, no partial-cargo state. Time pressure
+  on an unfinished cargo is what laytime (step 3) exists to add; this step
+  does not invent an early substitute for it.
+```
+
+**Measured, not assumed — and the first version of this amendment was wrong.**
+A draft that added a separate "cargo loaded so far" accumulator (drawing
+continuously toward it, departing on a reset) was implemented, built clean,
+and reproduced §7a.2's exact regression: `A_player_who_develops_the_field_wins`
+went `Met` → `Expired`. Traced rather than shrugged off — the tank held
+essentially nothing at every checkpoint (`stored≈0` from month 0 to 36 on a
+diagnostic run), because that draft drained the tank at the berth's rate every
+tick regardless of whether a cargo was anywhere near full, into a counter nothing
+else could see. It was the OLD continuous draw wearing a cargo-shaped
+disguise, not the rhythm §7a describes. **The gate-on-`tank.Held` version above
+replaced it before this finding shipped**, and against it: the full
+`Speed=Slow` composition suite (47/47) and the full fast gate (1152/1152) are
+both clean, `A_player_who_develops_the_field_wins` included, on the first
+complete run. Cumulative sold oil, tank rhythm and cash timing all still MOVE
+tick to tick exactly as §7a.1 predicted; none of the 29 slow tests that price
+a played field needed re-stating this time, because 70,000 t of headroom above
+one cargo is enough that the ullage constraint essentially never has to reach
+the reservoir over a normal run.
+
 ## 7b. Export capacity — a socket, not a constant
 
 > **R20d.8 amendment (finding 165). The offtake rate was a constant and the

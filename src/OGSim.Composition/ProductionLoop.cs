@@ -1279,14 +1279,23 @@ internal sealed class ProductionLoop : IStateOwner
     /// would be satisfied by a fiction.</para>
     /// </summary>
     /// <summary>
-    /// Stage 6, after the solve: what reached the tank is held, and what the
-    /// export line contracts to take is lifted.
+    /// Stage 6, after the solve: what reached the tank is held, and a cargo
+    /// loads against it (SDD-006 §7a.3's finding-268 amendment).
     ///
-    /// <para>The two together are the buffer. A field producing below its export
-    /// rate never fills the tank and never notices it; one producing above fills
-    /// it, and when it is full the ullage constraint reaches back down the chain
-    /// and shuts wells in (R8-V5) — which is the moment a player has to decide
-    /// between more storage, more export and less production.</para>
+    /// <para>ONE CARGO AT A TIME, occupying the berth until it is full — a
+    /// schedule rather than the continuous draw this replaced. A field
+    /// producing below the berth's rate never assembles a cargo and never
+    /// notices the berth exists; one producing above it fills the tank
+    /// between departures, and when the tank is full the ullage constraint
+    /// reaches back down the chain and shuts wells in (R8-V5) MORE OFTEN
+    /// than a continuous draw ever did — which is the real lever this step
+    /// adds, not a change to when revenue is recognised (§7a.3 corrects
+    /// §7a.2 on exactly that point).</para>
+    ///
+    /// <para>NO STATE OF ITS OWN. The gate is <c>tank.Held</c>, which the tank
+    /// already owns and already persists — a cargo in progress is oil still
+    /// sitting in the tank, not a second store of how much has left it, so
+    /// there is nothing here for a save to launder (law L5).</para>
     /// </summary>
     public void StoreAndExport(Duration tick)
     {
@@ -1297,13 +1306,17 @@ internal sealed class ProductionLoop : IStateOwner
         // and stage 9 will account it as fugitive emissions.
         _tank.VapourLossOver(tick);
 
-        // Asked of the TERMINAL each tick rather than held: a line laid this
-        // month must lift against its new capacity from this month
-        // (SDD-006 §7b). Through the berth (SDD-006 §7a's L5 decision, step
-        // 1, finding 251) — the same rate, read through the seam a schedule
-        // will eventually attach to.
-        MaterialInventory lifted = _tank.Draw(
-            new Mass(_terminal.Berth.LoadingRate.KgPerSecond * tick.Seconds));
+        // ONE CARGO AT A TIME: nothing draws until the tank holds a full
+        // cargo's worth, then the berth clears it — at its own rate, so a
+        // very full tank still takes more than one tick — until the tank
+        // drops back under that line (SDD-006 §7a.3's finding-268 amendment).
+        // Through the berth (SDD-006 §7a's L5 decision, step 1, finding 251)
+        // — the same rate, read through the seam a schedule now attaches to.
+        bool cargoReady = _tank.Held.Total.Kilograms >= Defaults.CargoSize.Kilograms;
+
+        MaterialInventory lifted = cargoReady
+            ? _tank.Draw(new Mass(_terminal.Berth.LoadingRate.KgPerSecond * tick.Seconds))
+            : MaterialInventory.Empty(_materialCount);
 
         Exported = lifted.Total;
     }
