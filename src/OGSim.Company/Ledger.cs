@@ -24,7 +24,7 @@ public enum Account
 {
     Cash, Debt, Equity, Revenue, Opex, Capex_PPE, Depreciation,
     Royalty, Tax, AbandonmentProvision, Inventory, PartnerPayable,
-    InsurancePremium, Penalty, Hedge,
+    InsurancePremium, Penalty, Hedge, InsuranceClaim,
 }
 
 public enum MovementCategory
@@ -277,6 +277,6 @@ public sealed class CostLedger
         Account.Cash, Account.Debt, Account.Equity, Account.Revenue, Account.Opex,
         Account.Capex_PPE, Account.Depreciation, Account.Royalty, Account.Tax,
         Account.AbandonmentProvision, Account.Inventory, Account.PartnerPayable,
-        Account.InsurancePremium, Account.Penalty, Account.Hedge,
+        Account.InsurancePremium, Account.Penalty, Account.Hedge, Account.InsuranceClaim,
     ];
 }

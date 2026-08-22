@@ -604,6 +604,77 @@ Insurance (ED6): premium(class) = exposure(class) · rate(record) per year;
 > different shape of surprise than findings 265/268's, worth telling apart
 > from a false start in the mechanism itself.
 
+> **Amendment (finding 273): §7's insurance, typed and priced — the third
+> of `ISalesContract`'s four kinds and the deepest of the three, because its
+> own formula had nothing to read.** `min(loss − deductible, limit)` needs a
+> `loss`, and until this amendment a top event cost the company only ESG
+> standing points (SDD-012 §4b) — never a dollar. That gap is closed
+> alongside this one, in SDD-012 §4b's own finding-273 amendment, and this
+> amendment prices what a STANDING POLICY does about the loss that
+> amendment now produces, not the loss itself.
+>
+> **One shipped policy, the same shape `HedgeTerms` already has:**
+>
+> ```csharp
+> public sealed record InsuranceTerms(
+>     Money Exposure,          // the worst loss this policy is priced against
+>     double BaseRatePerYear,  // of Exposure, at a perfect (100) ESG standing
+>     double EsgRateSpread,    // additional, at the worst (0) standing
+>     Money Deductible,
+>     Money Limit);
+> ```
+>
+> **`Exposure` is `TopEventLossUnmitigated` itself** (SDD-012 §4b's own
+> finding-273 amendment) — the worst this policy could ever have to pay,
+> reused rather than a THIRD invented dollar figure alongside the two that
+> amendment already grounds.
+>
+> **`rate(record)` reuses the ESG standing `ReserveBasedLending` already
+> reads (SDD-009 §5), not a second record.** Design 08 §7 ED6's own words —
+> "gives the HSE record a second economic channel beside ESG" — are the
+> instruction: `rate = BaseRatePerYear + (100 − standing)/100 · EsgRateSpread`,
+> the identical base-rate-plus-spread shape the borrowing base is already
+> priced with (8% base, up to 4% ESG spread) — 3% base, up to 9% spread here,
+> scaled for a different risk rather than copying the lending numbers
+> verbatim. A spotless company pays 3% of exposure a year; the worst-rated
+> one pays 12%.
+>
+> **`Deductible = $0.5M`, `Limit = Exposure` ($6.0M)** — a company still
+> carries a small loss itself (the deductible), and the policy fully covers
+> even the worst top event once that clears.
+>
+> **Premium charges every tick, whether or not a loss lands — `1/12` of the
+> annual figure, SDD-001 §3's 30/360 month.** A claim settles only on the
+> tick a loss does, and for the SAME tick — a claim is what the loss caused,
+> not an independent event with its own timing. Posted `Account.
+> InsurancePremium` against `Account.Cash` (`MovementCategory.Insurance`,
+> both declared since this composition's very first chart of accounts and
+> read by nothing until now) and, on a claim, `Account.Cash` against a new
+> `Account.InsuranceClaim` — a separate account rather than netting against
+> `InsurancePremium`, so a read model can show what a policy cost and what
+> it paid back as two numbers rather than one that hides both.
+>
+> **No player-facing command — the same scope decision findings 250/272
+> made for take-or-pay and the hedge.** A player-chosen policy (which class,
+> which deductible, which limit, at what premium) is a real decision this
+> amendment does not invent; what ships is a standing policy the company is
+> already in, granted the same way `TakeOrPayContract` is at tick 0.
+>
+> **Stateless, like the hedge and unlike take-or-pay** — a policy's premium
+> and claim are both pure functions of one tick's own standing or loss, so
+> `Insurance` is a static class (`OGSim.Company`) with nothing to persist
+> between ticks.
+>
+> **A field with nothing running still pays the premium, and it moves a
+> fixed-cash test's own number.** `GameplayTests.
+> A_company_that_runs_out_of_money_is_insolvent` measured an idle field's
+> insolvency tick directly rather than re-deriving it from five compounding
+> costs, and re-measured it after this amendment: month 111 → month 95, the
+> ~$15,000/month premium a spotless standing still prices against a $6.0M
+> exposure, compounding against a fixture with almost nothing else moving.
+> Corrected the same way findings 258/265 were — measured, not guessed, and
+> the test re-stated in terms of the new number rather than tuned to hide it.
+
 | Situation | Response |
 |---|---|
 | Trial balance off by one cent | INV2 — halt (integers make this a real bug, never rounding) |

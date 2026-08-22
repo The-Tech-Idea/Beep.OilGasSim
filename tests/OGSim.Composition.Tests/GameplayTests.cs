@@ -493,13 +493,16 @@ public sealed class GameplayTests
         // when the licence's one commitment goes unmet (`Defaults.LicenceTerms`'s
         // `Due: new Tick(60)`, R20d.9.1), minus the annual take-or-pay shortfall
         // on the whole committed volume this idle field never delivers a barrel
-        // against (SDD-009 §7's R13.3 amendment, finding 250): insolvency
-        // arrives at month 111, measured directly rather than hand-derived from
-        // three compounding costs. **Corrected from month 82** (found going
-        // through the plan): R20d.9.1 moved the commitment's due tick from 24
-        // to 60 — the licence's own bond forfeits later, and this test's
-        // number was never revisited.
-        for (var month = 0; month < 111; month++) engine.Pipeline.AdvanceTick();
+        // against (SDD-009 §7's R13.3 amendment, finding 250), minus the
+        // insurance premium this idle field pays every tick regardless of
+        // whether it ever has an incident to claim against (SDD-009 §7's
+        // finding-273 amendment): insolvency arrives at month 95, measured
+        // directly rather than hand-derived from four compounding costs.
+        // **Corrected from month 111** (finding 273): the premium is a real,
+        // small monthly cost even with nothing running, and this idle
+        // field's own solvency clock was always going to be the fixture
+        // most sensitive to it.
+        for (var month = 0; month < 95; month++) engine.Pipeline.AdvanceTick();
         Assert.False(engine.ReadModel!.Insolvent, "the company is not out of money yet");
 
         engine.Pipeline.AdvanceTick();

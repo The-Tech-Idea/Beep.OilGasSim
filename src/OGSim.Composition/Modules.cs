@@ -1909,6 +1909,10 @@ internal sealed class HseModule() : EngineModule(Declare(
         // SDD-007 §4.1's finding-265 amendment — the barrier's crewCompetency
         // term is the same crew the scheduler's duration term reads.
         typeof(OGSim.Company.CrewState),
+
+        // SDD-012 §4b's finding-273 amendment — a top event and the one
+        // shipped insurance policy both post real Movements now.
+        typeof(OGSim.Company.CompanyState),
     ],
 
     // The incident record decays, so it is a quantity recomputed from its own
@@ -1918,6 +1922,11 @@ internal sealed class HseModule() : EngineModule(Declare(
     [
         new StageParticipation(StageId.Availability, Order: 1),
         new StageParticipation(StageId.HseRegulation, Order: 0),
+
+        // InsurancePremiumStage (SDD-009 §7's finding-273 amendment), beside
+        // TakeOrPayStage/HedgeStage on the same stage — order 4, the next
+        // free slot.
+        new StageParticipation(StageId.Company, Order: 4),
     ]))
 {
     public override void Compose(IModuleComposition composition)
@@ -1931,15 +1940,25 @@ internal sealed class HseModule() : EngineModule(Declare(
         var assessment = new EsgAssessment(standing, Defaults.Record);
 
         composition.Provide(assessment);
+
+        OGSim.Company.CompanyState company = composition.Require<OGSim.Company.CompanyState>();
+        IAuditTrail audit = composition.Require<IAuditTrail>();
+
         composition.Contribute(order: 1, new ThreatStage(
             new OGSim.Integrity.BowTie(
                 composition.Require<IRandomSource>().Stream(StreamId.Hazard),
-                composition.Require<IAuditTrail>()),
+                audit),
             composition.Require<OGSim.Integrity.AssetIntegrity>(),
             standing,
-            composition.Require<OGSim.Company.CrewState>()));
+            composition.Require<OGSim.Company.CrewState>(),
+            company,
+            Defaults.Insurance,
+            audit));
 
         composition.Contribute(order: 0, new EsgStage(standing));
+
+        composition.Contribute(order: 4, new InsurancePremiumStage(
+            assessment, Defaults.Insurance, company, audit));
     }
 }
 
@@ -2001,7 +2020,10 @@ internal sealed class ThreatStage(
     OGSim.Integrity.BowTie bowTie,
     OGSim.Integrity.AssetIntegrity integrity,
     OGSim.Integrity.EsgStanding standing,
-    OGSim.Company.CrewState crew) : ITickStage
+    OGSim.Company.CrewState crew,
+    OGSim.Company.CompanyState company,
+    OGSim.Company.InsuranceTerms insurance,
+    IAuditTrail audit) : ITickStage
 {
     public StageId Id => StageId.Availability;
 
@@ -2031,8 +2053,48 @@ internal sealed class ThreatStage(
             barrier => barrier.StrengthGiven(
                 integrity.ConditionOf, crew.Competency, Defaults.ProcedureCompliance));
 
-        if (resolved.Outcome == OGSim.Integrity.ThreatOutcome.TopEvent)
-            standing.RecordIncident(ConsequencePoints(resolved));
+        if (resolved.Outcome != OGSim.Integrity.ThreatOutcome.TopEvent) return;
+
+        standing.RecordIncident(ConsequencePoints(resolved));
+
+        // THE LOSS IS REAL CASH NOW (SDD-012 §4b's finding-273 amendment) —
+        // posted whether or not a policy exists, the same way a real
+        // incident costs a real operator money whether or not it is insured.
+        Money loss = ConsequenceLoss(resolved);
+
+        AuditId lossCause = audit.Record(
+            AuditCategory.Financial, subject: null, cause: null,
+            new Dictionary<string, AuditValue>(StringComparer.Ordinal)
+            {
+                ["spend"] = new("top-event-loss"),
+                ["mitigating-held"] = new(resolved.MitigatingBarriersHeld.ToString(
+                    System.Globalization.CultureInfo.InvariantCulture)),
+                ["mitigating-total"] = new(resolved.TotalMitigatingBarriers.ToString(
+                    System.Globalization.CultureInfo.InvariantCulture)),
+            });
+
+        company.Ledger.Post(new OGSim.Company.Movement(
+            context.Tick, OGSim.Company.Account.Opex, OGSim.Company.Account.Cash,
+            loss, OGSim.Company.MovementCategory.Operating, Asset: null, Cause: lossCause));
+
+        // AND THE POLICY ANSWERS FOR ITS SHARE (SDD-009 §7's finding-273
+        // amendment) — the same tick, since a claim is what the loss caused
+        // rather than an independent event with its own timing.
+        Money? claim = OGSim.Company.Insurance.ClaimFor(insurance, loss);
+        if (claim is not Money paid) return;
+
+        AuditId claimCause = audit.Record(
+            AuditCategory.Financial, subject: null, cause: null,
+            new Dictionary<string, AuditValue>(StringComparer.Ordinal)
+            {
+                ["spend"] = new("insurance-claim"),
+                ["loss-cents"] = new(loss.Cents.ToString(
+                    System.Globalization.CultureInfo.InvariantCulture)),
+            });
+
+        company.Ledger.Post(new OGSim.Company.Movement(
+            context.Tick, OGSim.Company.Account.Cash, OGSim.Company.Account.InsuranceClaim,
+            paid, OGSim.Company.MovementCategory.Insurance, Asset: null, Cause: claimCause));
     }
 
     /// <summary>
@@ -2051,6 +2113,20 @@ internal sealed class ThreatStage(
         return Defaults.TopEventPointsUnmitigated - heldFraction *
             (Defaults.TopEventPointsUnmitigated - Defaults.TopEventPointsMitigated);
     }
+
+    /// <summary>
+    /// THE SAME STRAIGHT LINE, IN CASH (SDD-012 §4b's finding-273 amendment)
+    /// — <see cref="ConsequencePoints"/>'s own shape, priced.
+    /// </summary>
+    internal static Money ConsequenceLoss(OGSim.Integrity.ThreatResolution resolved)
+    {
+        double heldFraction =
+            (double)resolved.MitigatingBarriersHeld / resolved.TotalMitigatingBarriers;
+
+        return Money.RoundHalfEven(
+            Defaults.TopEventLossUnmitigated.Cents - heldFraction *
+            (Defaults.TopEventLossUnmitigated.Cents - Defaults.TopEventLossMitigated.Cents));
+    }
 }
 
 /// <summary>Stage 9: the record ages, which is the rehabilitation §4b promises
@@ -2064,6 +2140,43 @@ internal sealed class EsgStage(OGSim.Integrity.EsgStanding standing) : ITickStag
         ArgumentNullException.ThrowIfNull(context);
 
         standing.Age(Duration.FromTicks(1.0));
+    }
+}
+
+/// <summary>
+/// Beside <see cref="TakeOrPayStage"/>/<see cref="HedgeStage"/> — SDD-009 §7's
+/// finding-273 amendment. The premium leg of the one shipped policy: charged
+/// every tick, whether or not a loss lands, priced off THIS tick's own ESG
+/// standing (read after <see cref="EsgStage"/> has aged it, so a premium
+/// always prices against the record as it stands going into the month it is
+/// charged for).
+/// </summary>
+internal sealed class InsurancePremiumStage(
+    EsgAssessment assessment,
+    OGSim.Company.InsuranceTerms terms,
+    OGSim.Company.CompanyState company,
+    IAuditTrail audit) : ITickStage
+{
+    public StageId Id => StageId.Company;
+
+    public void Execute(TickContext context)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+
+        Money premium = OGSim.Company.Insurance.PremiumThisTick(terms, assessment.Of());
+
+        if (premium.Cents <= 0) return;
+
+        AuditId cause = audit.Record(
+            AuditCategory.Financial, subject: null, cause: null,
+            new Dictionary<string, AuditValue>(StringComparer.Ordinal)
+            {
+                ["spend"] = new("insurance-premium"),
+            });
+
+        company.Ledger.Post(new OGSim.Company.Movement(
+            context.Tick, OGSim.Company.Account.InsurancePremium, OGSim.Company.Account.Cash,
+            premium, OGSim.Company.MovementCategory.Insurance, Asset: null, Cause: cause));
     }
 }
 

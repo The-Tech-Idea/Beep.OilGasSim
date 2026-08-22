@@ -431,9 +431,13 @@ public sealed class ShippedSetTests
     /// stage 4's segmentation the SAME month it diffused (SDD-005's R20d.10
     /// correction).</para>
     ///
-    /// <para>R13.9 gave <b>Company</b> a fourth contributor: <c>HedgeStage</c>
+    /// <para>R13.3 gave <b>Company</b> a fourth contributor: <c>HedgeStage</c>
     /// (order 3, SDD-009 §7's finding-272 amendment), settling the one
     /// shipped collar against that tick's own production and benchmark.</para>
+    ///
+    /// <para>And a fifth: <c>InsurancePremiumStage</c> (order 4, SDD-009 §7's
+    /// finding-273 amendment), charging the one shipped policy's premium
+    /// every tick off that tick's own ESG standing.</para>
     /// </summary>
     [Fact]
     public void The_shipped_engine_runs_the_stages_its_modules_declared()
@@ -446,12 +450,15 @@ public sealed class ShippedSetTests
              StageId.SolveFlow, StageId.MaterialBalance, StageId.Custody,
              StageId.Economics, StageId.HseRegulation, StageId.Information,
 
-             // Four StageId.Company participants: CompanyModule's
+             // Five StageId.Company participants: CompanyModule's
              // LicenceStage (order 0), CapabilitiesModule's diffusion
              // (order 1), FieldModule's TakeOrPayStage (order 2, SDD-009 §7's
-             // R13.3 amendment, finding 250), and FieldModule's HedgeStage
-             // (order 3, SDD-009 §7's finding-272 amendment).
+             // R13.3 amendment, finding 250), FieldModule's HedgeStage
+             // (order 3, SDD-009 §7's finding-272 amendment), and HseModule's
+             // InsurancePremiumStage (order 4, SDD-009 §7's finding-273
+             // amendment).
              StageId.Company, StageId.Company, StageId.Company, StageId.Company,
+             StageId.Company,
              StageId.Objectives, StageId.Close],
             built.Engine.Pipeline.DeclaredOrder());
     }
@@ -1541,6 +1548,15 @@ public sealed class LicenceTests
         Money windowPenalty = Money.RoundHalfEven(
             takeOrPay.PenaltyRate.Cents * takeOrPay.CommittedVolume.CubicMetres);
 
+        // AND THE ONE SHIPPED POLICY, EVERY TICK (SDD-009 §7's finding-273
+        // amendment): a standing policy prices whether or not there is
+        // anything to insure against, and this field never has an incident
+        // to move its ESG standing off the record's own resting value — read
+        // from the real assessment rather than hand-derived, the exact
+        // mistake finding 258 itself was about.
+        Money insurancePremium = OGSim.Company.Insurance.PremiumThisTick(
+            Defaults.Insurance, engine.Provided.Resolve<EsgAssessment>().Of());
+
         // Up to but not including the deadline tick — the commitment is still
         // outstanding and nothing has been forfeited yet.
         for (var month = 0; month < 59; month++) engine.Pipeline.AdvanceTick();
@@ -1559,7 +1575,8 @@ public sealed class LicenceTests
         Assert.Equal(
             cashBeforeForfeit.Cents - Defaults.LicenceTerms.Bond.Cents
                 - Defaults.Economics.FixedOperatingCostPerTick.Cents
-                - windowPenalty.Cents,
+                - windowPenalty.Cents
+                - insurancePremium.Cents,
             company.Ledger.Cash.Cents);
 
         AuditEntry forfeit = Assert.Single(
@@ -1583,7 +1600,8 @@ public sealed class LicenceTests
             0L,
             afterFirstForfeit.Cents - company.Ledger.Cash.Cents
                 - (60L * Defaults.Economics.FixedOperatingCostPerTick.Cents)
-                - (5L * windowPenalty.Cents));
+                - (5L * windowPenalty.Cents)
+                - (60L * insurancePremium.Cents));
 
         // AND FURTHER DRILLING REFUSES, naming the reason.
         Rejected refused = Assert.IsType<Rejected>(

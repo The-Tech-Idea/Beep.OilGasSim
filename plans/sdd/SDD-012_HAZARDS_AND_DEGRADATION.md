@@ -432,6 +432,44 @@ so a clean decade genuinely rehabilitates. The lender spread table (SDD-009
 > its two ends (25.0 held, 75.0 failed); a second mitigating barrier would
 > land a real interior point on the same line without a code change.
 
+> **Amendment (finding 273) — the top event costs real cash now, the same
+> line in dollars.** Finding 263 priced how much a top event costs the ESG
+> record; nothing priced what it costs the company directly. `EsgStanding`
+> has no `Money` field and never did, and design 08 §7 ED6's own insurance
+> decision — "insurable classes with premiums rated on the player's record"
+> — has nothing to insure without one: `min(loss − deductible, limit)`
+> needs a loss, and this composition produced none.
+>
+> **The SAME straight line finding 263 already drew, priced instead of
+> pointed:**
+>
+> ```text
+> loss = worstCaseLoss − heldFraction · (worstCaseLoss − bestCaseLoss)
+> ```
+>
+> `bestCaseLoss = $2.0M`, `worstCaseLoss = $6.0M` (the SAME 3× asymmetry
+> `worstCasePoints`/`bestCasePoints` already use, reused rather than a
+> second invented ratio) — a well-contained loss of containment for a field
+> this size: cleanup, regulatory response, investigation, some downtime.
+> Scaled to the shipped scenario's own economics (opening cash $50M, a
+> $600M/decade target) rather than a real-world catastrophic outlier — this
+> bow-tie's single threat and single mitigating barrier span roughly design
+> 14 §8's "Serious" to "Major" tiers, not "Catastrophic," the same
+> two-reachable-states boundary finding 263 already named.
+>
+> **Posted as `Account.Opex` against `Account.Cash`, `MovementCategory.
+> Operating`** — no new ledger vocabulary for the loss itself, the same
+> reason the take-or-pay penalty needed none (finding 250): an incident's
+> cleanup and response cost is an operating cost, which is what design 14
+> §8's own "Response is an `IOperation`" line already says, even though the
+> operation itself stays unbuilt (S012's own open item, not this
+> amendment's to close).
+>
+> **The loss is real whether or not a policy exists** — the same way an
+> uninsured operator still pays for a real spill. Insurance (SDD-009 §7's
+> finding-273 amendment) is what a STANDING policy does about it, priced
+> separately and reading this figure rather than re-deriving it.
+
 **Social licence** (0–100): `SL += Σ driver deltas` per tick, clamped;
 driver deltas are content per event class (visible flaring near settlements,
 spills scaled by sensitivity, local employment, community investment).

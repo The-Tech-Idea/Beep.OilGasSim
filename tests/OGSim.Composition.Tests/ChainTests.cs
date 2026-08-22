@@ -2831,4 +2831,22 @@ public sealed class ChainTests
 
         Assert.Equal(expected, ThreatStage.ConsequencePoints(resolved), precision: 12);
     }
+
+    /// <summary>
+    /// SDD-012 §4b's finding-273 amendment: the same straight line, in cash
+    /// — $2.0M held in full, $6.0M held in none, the midpoint between.
+    /// </summary>
+    [Theory]
+    [InlineData(1, 1, 2_00_000_000L)]   // every mitigating barrier held
+    [InlineData(0, 1, 6_00_000_000L)]   // none held: three times it
+    [InlineData(2, 4, 4_00_000_000L)]   // halfway held: the midpoint of the line
+    public void A_top_events_loss_scales_with_how_many_mitigating_barriers_held(
+        int held, int total, long expectedCents)
+    {
+        var resolved = new OGSim.Integrity.ThreatResolution(
+            new ContentId("loss-of-containment"), OGSim.Integrity.ThreatOutcome.TopEvent,
+            [], held, total);
+
+        Assert.Equal(new Money(expectedCents), ThreatStage.ConsequenceLoss(resolved));
+    }
 }

@@ -1515,6 +1515,42 @@ internal static class Defaults
     /// every defence somewhat blunted.</summary>
     public const double TopEventPointsUnmitigated = 75.0;
 
+    /// <summary>
+    /// What a top event costs in real cash when every mitigating barrier held
+    /// (SDD-012 §4b's finding-273 amendment) — the same straight-line shape
+    /// <see cref="TopEventPointsMitigated"/> already prices in ESG points,
+    /// now in dollars. A well-contained loss of containment for a field this
+    /// size: cleanup, regulatory response, investigation and some downtime —
+    /// proportionate to the shipped scenario's own economics (opening cash
+    /// $50M, a $600M/decade target), not a real-world catastrophic outlier.
+    /// </summary>
+    public static Money TopEventLossMitigated { get; } = Money.FromMillions(2.0);
+
+    /// <summary>Three times the mitigated figure — the SAME asymmetry
+    /// <see cref="TopEventPointsUnmitigated"/> already uses, reused rather
+    /// than a second invented ratio.</summary>
+    public static Money TopEventLossUnmitigated { get; } = Money.FromMillions(6.0);
+
+    /// <summary>
+    /// SDD-009 §7's finding-273 amendment — the one insurance policy this
+    /// composition ships. Exposure is <see cref="TopEventLossUnmitigated"/>
+    /// itself: the worst this policy could ever have to pay, reused rather
+    /// than a third invented figure. 3% of exposure a year at a spotless
+    /// (100) ESG standing, rising to 12% at the worst (0) — the same
+    /// base-rate-plus-spread shape <see cref="Lender"/> already prices the
+    /// borrowing base with (8% base, up to 4% ESG spread), scaled for a
+    /// different risk. A $0.5M deductible (the company still carries a small
+    /// loss itself) and a limit equal to the full exposure (the worst top
+    /// event this policy could ever face is fully covered once the
+    /// deductible clears).
+    /// </summary>
+    public static OGSim.Company.InsuranceTerms Insurance { get; } = new(
+        Exposure: TopEventLossUnmitigated,
+        BaseRatePerYear: 0.03,
+        EsgRateSpread: 0.09,
+        Deductible: Money.FromMillions(0.5),
+        Limit: TopEventLossUnmitigated);
+
     /// <summary>An untrained crew's strength on the barrier's own [0, 1]
     /// scale (SDD-007 §4.1's finding-265 amendment) — noticeably below the
     /// flat 0.9 this composition charged every crew before there was a lever
