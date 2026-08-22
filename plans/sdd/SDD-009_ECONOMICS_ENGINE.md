@@ -338,6 +338,57 @@ the cure window is the player's warning (IR-consistent).
 > itself rebuild the berth/cargo mechanic R11.6 reverted — it closes the one
 > prerequisite that row named, not the mechanic itself.
 
+> **Amendment (finding 274) — the forced amortisation schedule this section
+> already promised, run for the first time. R13.10's first of three, player-
+> side restructuring findings.** "Cure window → forced amortisation schedule"
+> is this section's OWN text, above, since the section was first pinned —
+> `CovenantState.Amortising` (`OGSim.Contracts/EconomicsContracts.cs`) has
+> carried a doc comment saying so since it was declared, and nothing has ever
+> read the state to act on it. A company that breached its covenant and let
+> the six-tick cure window run out sat in `Amortising` forever, doing nothing
+> different from a company that had never breached at all.
+>
+> **The schedule: 5% of what is drawn, swept from cash every tick the
+> covenant reads `Amortising`.** Grounded in real distressed-refinancing
+> practice — a rapid-amortisation covenant breach typically targets curing or
+> retiring the facility within 12–24 months; 5%/month retires a loan in
+> ~20 months if sustained, inside that range. Confirmed with Fahad before
+> landing, the same gate laytime/demurrage, the quality differential, the
+> hedge and insurance all went through (F-2 — a number with no derivation is
+> a violation regardless of how it is arrived at).
+>
+> **Capped at both `Drawn` and available cash** — a sweep can retire a loan
+> early but never manufacture debt beyond what is owed, and never drives cash
+> negative: a company that cannot afford even the swept amount pays what it
+> has and nothing more. Posted `Account.Debt` against `Account.Cash`,
+> `MovementCategory.Financing` — the same category `ChargeInterest` already
+> uses one call above it, since a principal repayment is the same kind of
+> financing movement interest already is, not a new one.
+>
+> **Re-assessed the SAME tick, against the post-sweep balance, same terms.**
+> `Bank.Settle` calls `IReserveBasedLending.Assess` a second time after the
+> sweep, with the unchanged `Terms` (the base does not move mid-tick) and the
+> now-lower `Drawn` `Bank` computes live off the ledger. `Assess`'s own first
+> line — `debt <= terms.BorrowingBase ⇒ Clear` — already handles "swept its
+> way back under the base" without any change to the state machine itself:
+> a company that sweeps enough clears the SAME tick, which is exactly what
+> the `Amortising` enum member's own doc comment ("a company that starts
+> producing its way out of it recovers") already promised and nothing had
+> ever delivered.
+>
+> **Scope, named rather than solved**: R13.10's other two levers — a
+> working-interest sale (design 08 §7's "asset sales"/"forced farm-outs",
+> merged from the seller's side) and takeover as a last resort — are each
+> their own finding, their own amendment. The FULL asset market SDD-011 §4
+> already specifies (a rival buying a PLAYER'S distressed assets, with a
+> "data room" observation replay) stays blocked: `Rival` is a complete,
+> real design and is never instantiated anywhere in the composed engine
+> (`new Rival(` — zero hits in `src/`, despite R16.4 being marked done), and
+> the data room's own claim does not hold up independently even if it were —
+> `IBeliefStore` has no bulk-import path by design, and the audit trail does
+> not record enough of an observation to replay one. Named as a separate,
+> larger task this amendment does not attempt.
+
 ## 6. Prices
 
 ```csharp
