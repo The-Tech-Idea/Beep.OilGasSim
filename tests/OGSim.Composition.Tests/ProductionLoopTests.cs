@@ -458,6 +458,14 @@ public sealed class ProductionLoopTests
         engine.Pipeline.AdvanceTick();
 
         Assert.Empty(DemurrageEntries(engine));
+
+        // SDD-017 §2's `LogisticsView.Berths` row (finding 281): a cargo
+        // that departed the same tick it filled leaves no active days
+        // behind and is not late.
+        BerthView berth = engine.ReadModel!.Berth;
+        Assert.Equal(0.0, berth.ActiveDays);
+        Assert.False(berth.IsLate);
+        Assert.True(berth.LoadingRate.KgPerSecond > 0.0, "the berth's own rate must be real");
     }
 
     /// <summary>SDD-006 §7a.4's finding-269 amendment: a cargo that takes
@@ -480,12 +488,16 @@ public sealed class ProductionLoopTests
             Allocation.FromSingle(new EntityRef(EntityKind.Compartment, 1)));
 
         var ticks = 0;
+        var sawLate = false;
+
         while (engine.ReadModel is null
                || engine.ReadModel.Storage.Held.Kilograms >= Defaults.CargoSize.Kilograms)
         {
             engine.Pipeline.AdvanceTick();
             ticks++;
             Assert.True(ticks < 20, "the seeded cargo never departed");
+
+            if (engine.ReadModel!.Berth.IsLate) sawLate = true;
         }
 
         IReadOnlyList<AuditEntry> demurrage = DemurrageEntries(engine);
@@ -496,6 +508,15 @@ public sealed class ProductionLoopTests
                 demurrage[0].Data["overrun-days"].Value,
                 System.Globalization.CultureInfo.InvariantCulture) > 0.0,
             "the charged entry names no positive overrun");
+
+        // SDD-017 §2's `LogisticsView.Berths` row (finding 281): the read
+        // model showed the overrun coming, live, before the charge ever
+        // posted — the same active-day count `ChargeDemurrageIfLate` used
+        // to price it.
+        Assert.True(sawLate, "the read model never showed the berth running late");
+
+        // AND THE CLOCK RESET the tick the cargo actually departed.
+        Assert.Equal(0.0, engine.ReadModel!.Berth.ActiveDays);
     }
 
     /// <summary>

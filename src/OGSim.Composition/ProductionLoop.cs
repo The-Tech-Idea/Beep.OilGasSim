@@ -1468,6 +1468,15 @@ internal sealed class ProductionLoop : IStateOwner
     /// </summary>
     public StorageView Storage => new(_tank.Held.Total, _tank.Ullage);
 
+    /// <summary>SDD-017 §2's `LogisticsView.Berths` row (finding 281) — the
+    /// current cargo's own active-day count, live, against the same laytime
+    /// <see cref="ChargeDemurrageIfLate"/> already reads. Zero active days
+    /// doubles as "nothing is loading" (law L5); no second flag says the
+    /// same thing twice.</summary>
+    public BerthView Berth => new(
+        _terminal.Berth.LoadingRate, _cargoActiveDays, Defaults.CargoLaytimeDays,
+        _cargoActiveDays > Defaults.CargoLaytimeDays);
+
     /// <summary>Everything this company has ever flared (SDD-012 §4).</summary>
     public Mass CumulativeFlared { get; private set; }
 

@@ -531,6 +531,42 @@ public sealed record ObjectiveView(
 > `ProductionLoop.Chain()` where the real `IFlowElement` instance
 > (`ordered[i]`) is already in hand.
 
+> **Amendment (finding 281) — `LogisticsView.Berths`, Phase 2's fourth
+> landed item, and a correction to the roadmap's own framing of it.** The
+> roadmap named this "real, missing only `NextFree` scheduling" — wrong on
+> the "only": `LogisticsView.Berths` as SDD-017 literally specifies it is
+> `IReadOnlyList<(EntityRef Berth, Tick NextFree)>`, a SCHEDULED future
+> tick a berth becomes free. **No such schedule exists anywhere in this
+> composition, and none is being built here** — R11.6's own shipped
+> mechanic (findings 268/269) gates loading on TANK LEVEL, reactively:
+> nothing draws from the tank until it holds a full `Defaults.CargoSize`
+> parcel, the berth clears it at its own rate once it does, and there is
+> no advance booking to compute a `NextFree` tick FROM. Publishing one
+> would mean inventing a number with no derivation (F-2).
+>
+> **What is real, and was published instead**: `ProductionLoop.
+> _cargoActiveDays` (SDD-006 §7a.4's finding-269 amendment) — how many
+> days the CURRENT cargo has occupied the berth, live, the same fact
+> `ChargeDemurrageIfLate` already reads to decide whether a departing
+> cargo owes demurrage. Held against `Defaults.CargoLaytimeDays`, a host
+> can already answer the more actionable question a schedule would only
+> approximate — "is this berth already running past its free time" —
+> without this composition ever needing to predict WHEN a reactive gate
+> will next trip.
+>
+> ```csharp
+> public sealed record BerthView(
+>     MassRate LoadingRate, double ActiveDays, double LaytimeDays, bool IsLate);
+> ```
+>
+> **A single field, not a list** — one `ExportTerminal`, one `Berth`, the
+> same "one, always" reasoning `LicenceView`/`Bank`/the one `Tank` already
+> rest on. `ActiveDays == 0` doubles as "no cargo is currently loading",
+> the same state `_cargoActiveDays` itself already carries — no second
+> flag invented to say the same thing twice (law L5). Read via a new
+> `ProductionLoop.Berth` property, the same shape `Storage` already is,
+> rather than a new constructor dependency.
+
 ## 3. The path registry (SDD-014 §2's source)
 
 Generated **from these records by reflection at build time**: every public

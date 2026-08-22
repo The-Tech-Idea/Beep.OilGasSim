@@ -244,6 +244,17 @@ public sealed record WaterFloodView(
 public readonly record struct StorageView(Mass Held, Mass Ullage);
 
 /// <summary>
+/// SDD-017 §2's `LogisticsView.Berths` row (finding 281) — a single field
+/// rather than a list, since this composition holds exactly one export
+/// terminal and one berth, always. `ActiveDays`/`LaytimeDays`/`IsLate`
+/// stand in for SDD-017's own `NextFree: Tick`, which this reactive,
+/// tank-level-gated mechanic has no schedule to compute (this record's
+/// own doc comment names why).
+/// </summary>
+public readonly record struct BerthView(
+    MassRate LoadingRate, double ActiveDays, double LaytimeDays, bool IsLate);
+
+/// <summary>
 /// SDD-017 §2's `ExplorationView.Licences` row (finding 278) — a single
 /// field rather than a list, since this composition holds exactly one
 /// licence, always (SDD-011 §1's R20d.9 amendment). `IsLive`/`LossReason`
@@ -502,7 +513,12 @@ public sealed record FieldReadModel(
     /// TRUTH-side figure — what the custody meter delivered this close —
     /// not a belief, and real since SDD-012 §1's souring mechanic needed
     /// it; never published until now.</summary>
-    double WaterCut)
+    double WaterCut,
+
+    /// <summary>SDD-017 §2's `LogisticsView.Berths` row (finding 281) — the
+    /// one berth's current cargo, live: how long it has occupied the berth
+    /// and against what laytime.</summary>
+    BerthView Berth)
 {
     /// <summary>Where the chain is jammed, if anywhere — the elements that
     /// refused production this tick.</summary>
@@ -620,7 +636,8 @@ internal sealed class FieldProjection(
             world.View,
             position.TakenOver,
             LicenceOf(),
-            loop.WaterCut);
+            loop.WaterCut,
+            loop.Berth);
 
     /// <summary>SDD-017 §2's finding-278 amendment — the read model's one
     /// window onto the licence `LicenceStage`/`DrillWellCommand` already own.
