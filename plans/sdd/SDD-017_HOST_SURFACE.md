@@ -478,6 +478,59 @@ public sealed record ObjectiveView(
 > delivery `ProducedThisTick` already reads, so the two figures describe
 > the same close and cannot disagree about which month they are from.
 
+> **Amendment (finding 280) — `FacilityView.SpecMargins`, Phase 2's third
+> landed item, breaches only.** `CustodyTransferPoint.LastBreaches`
+> (`OGSim.Facilities/SpecificationGate.cs`) is real and live — reset every
+> `Transform`, so it always describes the pass just made — and finding 252
+> already gave it a real consumer: `ProductionLoop.RecordRejection` writes
+> every breach (property, limit, measured, margin) into the audit trail the
+> same tick it happens. **So this is not quite the "discarded every
+> transform" gap the roadmap named it as** — it is recorded, just not
+> LIVE. A host asking "is the custody point on spec right now" has to
+> replay and parse `AuditCategory.Rejection` string-typed entries rather
+> than read a field, which is the same live-status gap `LicenceView` closed
+> for the licence: an event stream answers "what happened", never "what is
+> true this instant" without extra work on the reading end.
+>
+> **Not a margin for every spec property, as the roadmap's own framing
+> warned** — `SpecificationCheck.Evaluate` reports only what actually
+> FAILED (SDD-006 §7's own "every breach, not the first"), so a stream
+> comfortably on spec publishes an empty list, not five margins sitting
+> safely negative. `SpecBreach.Margin` names how far over, which is what a
+> player sizing a fix needs; a passing property's distance from its own
+> limit is not computed anywhere and is not what this closes.
+>
+> **`SpecBreachView`, a composition-owned mirror, not `OGSim.Facilities.
+> SpecBreach` itself** — `Layering_TheReadModelNamesNoDomainModule`
+> (`MetadataRules.cs`) only walks `FieldReadModel`'s own direct properties,
+> so a domain type nested inside `ChainElementView` would slip past that
+> guard's shallow check without tripping it — and sliding through a blind
+> spot is not the same as being allowed. `ICustodyTransferPoint`
+> (`OGSim.Contracts`) declares `Spec` and not `LastBreaches`, so there is
+> no contract-level type to read this off across the layering boundary
+> either way; a composition-owned record with the identical shape, keyed
+> off `OGSim.Contracts.SpecProperty` (already contracts-level), is the same
+> pattern `LicenceView`/`WeatherView`/`WaterFloodView` already use rather
+> than a new one:
+>
+> ```csharp
+> public sealed record SpecBreachView(SpecProperty Property, double Limit, double Measured)
+> {
+>     public double Margin => Measured - Limit;
+> }
+> ```
+>
+> **Placed on `ChainElementView`, not a new top-level field** — exactly one
+> `CustodyTransferPoint` exists in this composition (the same "one, always"
+> reasoning `LicenceView`/`Bank`/the one `Tank` already rest on), but WHICH
+> element is off spec is exactly the fact `ChainElementView` already exists
+> to carry (`Deferred` is the same idiom: a per-element list of "why this
+> element behaved as it did", keyed to the element a host is already
+> looking at). `ChainElementView.Breaches` is `[]` for every element but
+> the custody point, and its own `LastBreaches` for that one, read in
+> `ProductionLoop.Chain()` where the real `IFlowElement` instance
+> (`ordered[i]`) is already in hand.
+
 ## 3. The path registry (SDD-014 §2's source)
 
 Generated **from these records by reflection at build time**: every public

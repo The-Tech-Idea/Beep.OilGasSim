@@ -63,6 +63,18 @@ public sealed record FieldEconomics(
     Money InjectionWaterCostPerCubicMetre);
 
 /// <summary>
+/// A composition-owned mirror of <see cref="OGSim.Facilities.SpecBreach"/>
+/// (SDD-017 §2's `FacilityView.SpecMargins` row, finding 280) — the same
+/// shape, kept out of the domain module so the read model never requires a
+/// host to reference one (`Layering_TheReadModelNamesNoDomainModule`).
+/// </summary>
+public sealed record SpecBreachView(SpecProperty Property, double Limit, double Measured)
+{
+    /// <summary>How far over — the number the player needs to size the fix.</summary>
+    public double Margin => Measured - Limit;
+}
+
+/// <summary>
 /// One element of the chain, as a player watches it (SDD-017 §2).
 ///
 /// <para><b>Throughput is the flow and deferral is the jam</b>, and together
@@ -102,18 +114,26 @@ public sealed record ChainElementView(
 
     /// <summary>Whether it is out of service — the reason a row that used to
     /// carry the whole field's oil is suddenly carrying none.</summary>
-    bool Failed)
+    bool Failed,
+
+    /// <summary>SDD-017 §2's `FacilityView.SpecMargins` row (finding 280) —
+    /// what this element's own last pass failed, if anything. Empty for
+    /// every element but the one custody transfer point in this
+    /// composition, and empty there too on a tick that passed clean.
+    /// </summary>
+    IReadOnlyList<SpecBreachView> Breaches)
 {
     // Finding 131.
     public bool Equals(ChainElementView? other) =>
         other is not null && Element == other.Element && DisplayId == other.DisplayId
         && Throughput == other.Throughput
         && Condition == other.Condition && Failed == other.Failed
-        && Structural.Equal(Deferred, other.Deferred);
+        && Structural.Equal(Deferred, other.Deferred)
+        && Structural.Equal(Breaches, other.Breaches);
 
     public override int GetHashCode() =>
         HashCode.Combine(Element, DisplayId, Throughput, Condition, Failed,
-                         Structural.HashOf(Deferred));
+                         Structural.HashOf(Deferred), Structural.HashOf(Breaches));
 
     /// <summary>Whether this element refused anything this tick — what a host
     /// highlights, and what "the chain is jammed here" means.</summary>
@@ -152,13 +172,15 @@ internal sealed class ChainElement(EntityId<IFlowElement> element)
     }
 
     public ChainElementView Published(
-        Func<EntityId<IFlowElement>, string> nameOf, double? condition, bool failed) =>
+        Func<EntityId<IFlowElement>, string> nameOf, double? condition, bool failed,
+        IReadOnlyList<SpecBreachView> breaches) =>
         new(new EntityRef(EntityKind.FlowElement, Element.Value),
             nameOf(Element),
             new Mass(Throughput),
             [.. _deferred],
             condition,
-            failed);
+            failed,
+            breaches);
 }
 
 /// <summary>
@@ -1011,10 +1033,31 @@ internal sealed class ProductionLoop : IStateOwner
             rows.Add(SolvedRow(element).Published(
                 _names,
                 _integrity.IsMonitored(element) ? _integrity.ConditionOf(element) : null,
-                _integrity.HasFailed(element)));
+                _integrity.HasFailed(element),
+                BreachesOf(ordered[i])));
         }
 
         return rows;
+    }
+
+    /// <summary>SDD-017 §2's `FacilityView.SpecMargins` row (finding 280) —
+    /// empty for every element but the one custody transfer point this
+    /// composition has, mirrored off its own <c>LastBreaches</c> rather
+    /// than exposing the domain type directly (`SpecBreachView`'s own
+    /// doc comment).</summary>
+    private static IReadOnlyList<SpecBreachView> BreachesOf(IFlowElement element)
+    {
+        if (element is not OGSim.Facilities.CustodyTransferPoint custody) return [];
+        if (custody.LastBreaches.Count == 0) return [];
+
+        var views = new List<SpecBreachView>(custody.LastBreaches.Count);
+        for (int i = 0; i < custody.LastBreaches.Count; i++)
+        {
+            OGSim.Facilities.SpecBreach breach = custody.LastBreaches[i];
+            views.Add(new SpecBreachView(breach.Property, breach.Limit, breach.Measured));
+        }
+
+        return views;
     }
 
     /// <summary>

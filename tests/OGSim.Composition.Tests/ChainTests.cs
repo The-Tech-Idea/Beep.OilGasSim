@@ -312,6 +312,14 @@ public sealed class ChainTests
 
         Assert.Equal(0.0, sink.Throughput.Kilograms, precision: 9);
         Assert.False(sink.IsBottleneck);
+
+        // SDD-017 §2's `FacilityView.SpecMargins` row (finding 280): a young
+        // field failing no spec publishes an empty breach list at the
+        // custody point too, not a fabricated pass.
+        ChainElementView custody = Assert.Single(
+            engine.ReadModel!.Chain, element => element.DisplayId == "custody-meter");
+
+        Assert.Empty(custody.Breaches);
     }
 
     /// <summary>
@@ -2048,6 +2056,56 @@ public sealed class ChainTests
         Assert.True(soldDry > soldWet,
             $"a field that dried its oil earned {soldDry} against {soldWet} for selling it " +
             "wet; either the spec never bites or the treater does not fix it");
+    }
+
+    /// <summary>
+    /// <b>The read model shows the custody point's own breach, not only its
+    /// consequence</b> (SDD-017 §2's `FacilityView.SpecMargins` row, finding
+    /// 280). Finding 252 already wrote every breach into the audit trail;
+    /// this is the same fact read LIVE, off the element a host is already
+    /// watching in <c>engine.ReadModel.Chain</c>, rather than replayed from
+    /// an event.
+    ///
+    /// <para>The same untreated, five-well field
+    /// <see cref="R20d21V1_a_watered_out_field_sells_wet_oil_until_it_is_treated"/>
+    /// uses earns less than its treated twin, but that gap turns out to be
+    /// FACILITY CAPACITY competing with water for room on the liquid leg,
+    /// measured directly: the water cut this fixture develops (seed 2, the
+    /// same six wells) stays under the shipped 0.5% BS&amp;W limit through
+    /// the whole 480-tick horizon that test runs (0.33% at month 456,
+    /// climbing) — so a revenue gap does not by itself prove the spec gate
+    /// ever fired. This samples every tick out to 720, well past where the
+    /// measured trend crosses 0.5%, rather than only a fixed horizon's last
+    /// tick, since a shut-in-for-repair month reads an empty breach list too
+    /// (<c>Transform</c>'s own "no inlet, no breach" rule).</para>
+    /// </summary>
+    [Fact]
+    [Trait("Speed", "Slow")]
+    public void The_read_models_custody_point_shows_its_own_breach_when_a_field_sells_wet()
+    {
+        (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled(2UL);
+        Produce(engine, target);
+
+        FieldControl field = engine.Provided.Resolve<FieldControl>();
+        for (var well = 0; well < 5; well++) field.Drill(target, new Length(2000.0));
+
+        SpecBreachView? found = null;
+
+        for (var month = 0; month < 720 && found is null; month++)
+        {
+            Fixture.Repair(engine);
+            engine.Pipeline.AdvanceTick();
+
+            ChainElementView custody = Assert.Single(
+                engine.ReadModel!.Chain, element => element.DisplayId == "custody-meter");
+
+            foreach (SpecBreachView breach in custody.Breaches)
+                if (breach.Property == SpecProperty.BasicSedimentAndWater) found = breach;
+        }
+
+        Assert.NotNull(found);
+        Assert.True(found.Margin > 0.0,
+            "the custody point rejected wet oil with no positive margin recorded");
     }
 
     private static Money Earned(bool treated)
