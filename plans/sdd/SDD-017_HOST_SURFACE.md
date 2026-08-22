@@ -451,6 +451,33 @@ public sealed record ObjectiveView(
 > Licence>()` at the same call site `bank`/`history` are already threaded
 > from) — one owner, no second copy.
 
+> **Amendment (finding 279) — `FieldView.WaterCut`, Phase 2's second
+> landed item.** `ProductionLoop.WaterCut` (`OGSim.Composition/
+> ProductionLoop.cs`) has been real since SDD-012 §1's souring mechanic
+> needed a `k_w` term — a plain ratio of what the custody meter delivered
+> last close (`water / (water + oil)`, zero on a field that has produced
+> nothing) — and it already has a real consumer, `AssetIntegrity.Advance`'s
+> corrosion rate (`OGSim.Integrity`). It never reached `FieldReadModel`: a host could watch a
+> field water out only by reading tank inventory trends by eye. **This is
+> the truth-side figure, not a belief** — SDD-017 §2's own `FieldView`
+> pairs `WaterCut`/`GasOilRatio` beside `ProducedActual`/
+> `ProducedPotential`, both real quantities the custody meter measured
+> this tick, distinct from `CompartmentView`'s BELIEVED pressure/water-cut/
+> GOR triple a few lines above it in this same document (R21-V4's truth/
+> belief boundary). `GasOilRatio` stays out — the roadmap already named it
+> genuinely unbuilt (no `TrueGasOilRatioOf` or equivalent exists anywhere
+> in `OGSim.Subsurface`) — this amendment publishes only the half that is
+> already computed.
+>
+> **A flat field, not a nested `FieldView`** — `FieldReadModel.WaterCut`,
+> matching every other scalar this record already carries directly
+> (`Cash`, `Wells`, `ProducedThisTick`) rather than introducing SDD-017's
+> nesting for one number, the same precedent `LicenceView` broke from only
+> because five related facts belonged together. Read straight off
+> `loop.WaterCut` at `Publish` (stage 13) — the same tick's custody-metered
+> delivery `ProducedThisTick` already reads, so the two figures describe
+> the same close and cannot disagree about which month they are from.
+
 ## 3. The path registry (SDD-014 §2's source)
 
 Generated **from these records by reflection at build time**: every public

@@ -496,7 +496,13 @@ public sealed record FieldReadModel(
     /// <summary>SDD-017 §2's `ExplorationView.Licences` row (finding 278) —
     /// the player's own licence clock and work commitment, invisible to a
     /// host until now.</summary>
-    LicenceView Licence)
+    LicenceView Licence,
+
+    /// <summary>SDD-017 §2's `FieldView.WaterCut` row (finding 279). The
+    /// TRUTH-side figure — what the custody meter delivered this close —
+    /// not a belief, and real since SDD-012 §1's souring mechanic needed
+    /// it; never published until now.</summary>
+    double WaterCut)
 {
     /// <summary>Where the chain is jammed, if anywhere — the elements that
     /// refused production this tick.</summary>
@@ -613,7 +619,8 @@ internal sealed class FieldProjection(
             activities.Operations(),
             world.View,
             position.TakenOver,
-            LicenceOf());
+            LicenceOf(),
+            loop.WaterCut);
 
     /// <summary>SDD-017 §2's finding-278 amendment — the read model's one
     /// window onto the licence `LicenceStage`/`DrillWellCommand` already own.

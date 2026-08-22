@@ -1034,6 +1034,26 @@ public sealed class ProductionLoopTests
         Assert.False(engine.ReadModel!.TakenOver);
     }
 
+    /// <summary>
+    /// <b>The read model's water cut is the real field's, not a second
+    /// computation of it</b> (SDD-017 §2's `FieldView.WaterCut` row, finding
+    /// 279) — a truth-side figure the custody meter already delivers, `loop.
+    /// WaterCut` (SDD-012 §1's own `k_w` term), and until now invisible to a
+    /// host. Ten ticks is enough for a small connate cut to appear behind a
+    /// single well on good rock, before that well needs its first repair.
+    /// </summary>
+    [Fact]
+    public void The_read_model_publishes_the_real_field_water_cut()
+    {
+        (Engine engine, _) = Field();
+        ProductionLoop loop = Find<ProductionLoop>(engine);
+
+        for (var month = 0; month < 10; month++) engine.Pipeline.AdvanceTick();
+
+        Assert.True(loop.WaterCut > 0.0, "the field made no water at all by month 10");
+        Assert.Equal(loop.WaterCut, engine.ReadModel!.WaterCut);
+    }
+
     private static void ClearDrawnDebt(Engine engine, CompanyState company, Bank bank)
     {
         if (bank.Drawn <= Money.Zero) return;
