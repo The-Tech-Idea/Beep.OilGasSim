@@ -1964,4 +1964,26 @@ public sealed class NewGameTests
             Assert.Equal(original.TemperatureOn(0, day).ToCelsius(),
                 afterLoad.TemperatureOn(0, day).ToCelsius(), 9);
     }
+
+    /// <summary>
+    /// SDD-011 §2/§3's finding-277 amendment — R16.4 real at last.
+    /// `Basin()`'s own `RivalCount: 3` composes real rivals, and every
+    /// OTHER test in this file already proves they do not disturb the
+    /// player's own field/licence (all pass, unchanged, with rivals active
+    /// throughout). This one proves the other half: a rival actually
+    /// explores and its result reaches the audit trail.
+    /// </summary>
+    [Fact]
+    public void Rivals_explore_and_disclose_a_result()
+    {
+        Engine engine = NewGame(1);
+
+        for (var month = 0; month < 24; month++) engine.Pipeline.AdvanceTick();
+
+        IReadOnlyList<AuditEntry> results = engine.Audit.Query(
+            new AuditQuery(null, AuditCategory.StateTransition, null, null));
+
+        Assert.Contains(results, e =>
+            e.Data.TryGetValue("kind", out AuditValue kind) && kind.Value == "rival.result");
+    }
 }

@@ -196,7 +196,11 @@ internal static class Defaults
     /// What a cubic metre is worth to a lender after lifting it — the margin the
     /// loan is actually secured on, not the headline price.
     /// </summary>
-    private static Money Netback =>
+    /// <summary>What a cubic metre of oil is worth net of lifting cost, in
+    /// cents. Was `private`; widened to `internal` (SDD-011 §2's finding-277
+    /// amendment) so a rival's own rough prospect valuation can reuse the
+    /// SAME figure the lender's does rather than a second one.</summary>
+    internal static Money Netback =>
         Money.RoundHalfEven(
             (Economics.OilPricePerTonne.Cents - Economics.LiftingCostPerTonne.Cents)
             * SurfaceOilDensity.KgPerCubicMetre / 1000.0);
@@ -459,6 +463,19 @@ internal static class Defaults
             // A volume, so multiplicative — and a structure that could hold a
             // NEGATIVE amount is not a belief anybody could act on.
             "structure-capacity" => BeliefSpace.Log,
+
+            // SDD-011 §3's finding-277 amendment — a rival's own disclosed
+            // result. Its OWN kind, not oil-in-place or structure-capacity:
+            // both of those are kinds `DrillWell.cs`'s own `IBeliefStore.
+            // ReKey` migrates from a prospect onto its compartment the
+            // moment the PLAYER drills it, and `ReKey` refuses to MERGE two
+            // beliefs about one kind (SDD-008 §4) — a third party writing
+            // either kind about a subject the player might independently
+            // come to hold a belief about (their own seismic survey, their
+            // own discovery) is a real collision, found the hard way by a
+            // full slow-suite run against the first draft of this amendment.
+            "rival-disclosure" => BeliefSpace.Log,
+
             _ => throw new ModelFault("SDD-008 §2", null,
                 $"no belief space is declared for property kind '{kind.Value}'"),
         };
@@ -533,6 +550,12 @@ internal static class Defaults
             // answers, and merging the two would let a big structure read as a
             // big discovery.
             "structure-capacity" => 0.10,
+
+            // SDD-011 §3's finding-277 amendment — the same floor a
+            // discovery well's own oil-in-place carries; a rival's result IS
+            // a real drilling result, just not the player's own.
+            "rival-disclosure" => 0.30,
+
             _ => throw new ModelFault("INV8", null,
                 $"no sigma floor is declared for property kind '{kind.Value}'"),
         };
@@ -1718,6 +1741,85 @@ internal static class Defaults
             // the same as enforcing it.
             HseRegime: new ContentId("standard"));
 
+    /// <summary>
+    /// SDD-011 §2.1's finding-277 amendment — R16.4's roster, cycled
+    /// round-robin up to `WorldParameters.RivalCount`. Three archetypes, the
+    /// same "single hand-authored instance ahead of R20's content" precedent
+    /// this class already has for <see cref="LicenceTerms"/>: illustrative
+    /// game-balance figures, not industry-derived like most of this file's
+    /// other numbers, confirmed with Fahad before landing regardless (F-2).
+    /// </summary>
+    public static IReadOnlyList<OGSim.Company.RivalPersonality> Rivals { get; } =
+    [
+        // Bids ABOVE its own EMV and follows the tech frontier closely — the
+        // real, motivating competitor design 06 §6.2 wants.
+        new(new ContentId("aggressive-prospector"),
+            Aggressiveness: 1.3, TechLagTicks: 6, BudgetPerRound: Money.FromMillions(15.0)),
+
+        // Disciplined (bids under EMV) and AT the tech frontier — §2.1's own
+        // "leaders have small lags" — well-financed enough to act on most of
+        // what it believes.
+        new(new ContentId("cautious-major"),
+            Aggressiveness: 0.9, TechLagTicks: 0, BudgetPerRound: Money.FromMillions(40.0)),
+
+        // §2.1's own "laggards" — 18 ticks behind the frontier, and
+        // budget-capped tightly enough that it often cannot act on what it
+        // believes is worth pursuing.
+        new(new ContentId("under-financed-independent"),
+            Aggressiveness: 1.1, TechLagTicks: 18, BudgetPerRound: Money.FromMillions(5.0)),
+    ];
+
+    /// <summary>How many ticks between one rival exploration attempt and the
+    /// next, per rival — loosely longer than the player's own ~4-month
+    /// drilling timeline, since a rival's resolution is a cheaper, instant
+    /// abstraction (SDD-011 §2's finding-277 amendment) and should not
+    /// outpace the real thing.</summary>
+    public const int RivalExplorationCadenceTicks = 6;
+
+    /// <summary>A structure with no accumulation still has geometric
+    /// capacity a regional survey can see; a value of exactly zero has none
+    /// to seed a belief from at all — floored rather than skipped, so
+    /// `Rival.BidFor` still correctly prices it near-worthless instead of
+    /// silently never considering it.</summary>
+    public const double RivalMinimumCapacityCubicMetres = 1.0;
+
+    /// <summary>The regional sigma a rival's own structure-capacity belief
+    /// carries — the SAME order of magnitude `RegionalObservationModel`'s
+    /// own `("regional", "oil-in-place")` row already uses, reused rather
+    /// than a second invented figure.</summary>
+    public const double RivalCapacityBeliefSigma = 1.2;
+
+    /// <summary>What a rival's own discovery observation carries before
+    /// disclosure widens it — the SAME sigma the player's own discovery well
+    /// carries (`("discovery-well", "oil-in-place")`, reused rather than
+    /// invented a second time).</summary>
+    public const double RivalDiscoverySigma = 0.30;
+
+    /// <summary>How much wider a rival's result reads once it becomes public
+    /// data — "a press release, not their logs" (SDD-011 §3). Landing the
+    /// widened sigma at √(0.30² + 0.6²) ≈ 0.67: worse than the player's own
+    /// discovery well, sharper than a 2D seismic survey (0.6) — a rival's
+    /// real drilling result becoming public is qualitatively better
+    /// information than a survey shot over acreage that is not yours.
+    /// </summary>
+    public const double RivalDisclosureExtraSigma = 0.6;
+
+    /// <summary>SDD-011 §3's finding-277 amendment — the property kind a
+    /// rival's disclosed result carries. Its own kind, never
+    /// oil-in-place/structure-capacity, because `DrillWell.cs`'s own
+    /// `IBeliefStore.ReKey` migrates both of those from a prospect onto its
+    /// compartment the moment the player drills it, and refuses to merge
+    /// two beliefs about the same kind — a real collision found the hard
+    /// way by this amendment's own first draft.</summary>
+    public static readonly ContentId RivalDisclosureKind = new("rival-disclosure");
+
+    /// <summary>`Defaults.TypeCurve`'s own recovery factor (0.35), reused
+    /// rather than invented a second time — a rival's own rough valuation of
+    /// an undrilled structure's capacity applies the SAME assumption the
+    /// shipped development type-curve already prices reserves against.
+    /// </summary>
+    public const double RivalValueRecoveryFactor = 0.35;
+
     public static Environment.ClimateProfile Climate { get; } =
         new(new ContentId("temperate-offshore"),
             Persistence: 0.75,
@@ -2303,7 +2405,68 @@ public static class EngineBuilder
         ready.Engine.Provided.Resolve<Environment.WeatherState>()
             .SealGeneration([Defaults.ScaledClimate(world.ClimateSeverity)]);
 
+        // AND THE RIVAL ROSTER, THE SAME INSTANT (SDD-011 §2's finding-277
+        // amendment) — a rival needs prospects to explore, and nothing had
+        // placed any until the `Generate` call three lines above this one.
+        SealRivals(ready.Engine, world);
+
         return built;
+    }
+
+    /// <summary>
+    /// SDD-011 §2/§2.1/§3's finding-277 amendment: builds R16.4's rival
+    /// roster and seeds each rival's own belief store from truth, run at the
+    /// SAME instant world generation itself is sealed — a new game
+    /// (<see cref="CreateNew"/>) and every reload (<c>SaveGame.Load</c>,
+    /// which re-runs this same `Generate` call with the saved parameters)
+    /// alike, since rival beliefs are ephemeral and rebuilt deterministically
+    /// rather than persisted (`BeliefStore`'s own `IStateOwner` key is a
+    /// hardcoded literal; a second owned instance would throw under the
+    /// write-once-per-key law).
+    /// </summary>
+    internal static void SealRivals(Engine engine, WorldParameters world)
+    {
+        ArgumentNullException.ThrowIfNull(engine);
+        ArgumentNullException.ThrowIfNull(world);
+
+        RivalRoster roster = engine.Provided.Resolve<RivalRoster>();
+        WorldState worldState = engine.Provided.Resolve<WorldState>();
+        IAuditTrail audit = engine.Provided.Resolve<IAuditTrail>();
+        ISimulationClock clock = engine.Provided.Resolve<SimulationClock>();
+        IRandomSource random = engine.Provided.Resolve<IRandomSource>();
+
+        IReadOnlyList<EntityId<IProspect>> prospects = worldState.Prospects;
+        var rivals = new List<OGSim.Company.Rival>();
+
+        for (int i = 0; i < world.RivalCount; i++)
+        {
+            OGSim.Company.RivalPersonality personality = Defaults.Rivals[i % Defaults.Rivals.Count];
+
+            var beliefs = new OGSim.Information.BeliefStore(
+                audit, Defaults.SigmaFloorFor, () => clock.Date);
+
+            for (int p = 0; p < prospects.Count; p++)
+            {
+                ReservoirVolume capacity = worldState.CapacityOf(prospects[p]);
+
+                beliefs.Apply(new Observation(
+                    new EntityRef(EntityKind.Prospect, prospects[p].Value),
+                    Defaults.StructureCapacityKind,
+                    DetMath.Ln(System.Math.Max(
+                        capacity.CubicMetres, Defaults.RivalMinimumCapacityCubicMetres)),
+                    Defaults.RivalCapacityBeliefSigma,
+                    BeliefSpace.Log,
+                    Provenance.Analogue));
+            }
+
+            rivals.Add(new OGSim.Company.Rival(
+                new EntityId<OGSim.Company.ICompany>((ulong)(i + 1)),
+                personality,
+                beliefs,
+                random.Stream(StreamId.Market)));
+        }
+
+        roster.SealRoster(rivals);
     }
 
     /// <summary>Composes the shipped set.</summary>

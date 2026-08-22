@@ -1549,10 +1549,23 @@ internal sealed class InformationModule() : EngineModule(Declare(
         typeof(IObservationModel),
         typeof(OGSim.Information.ObservationSampler),
         typeof(OGSim.Information.ProspectRisks),
+
+        // SDD-011 §2's finding-277 amendment — R16.4's roster, provided so
+        // EngineBuilder.SealRivals (run outside any module's Compose, the
+        // same reason WorldState/WeatherState's own SealGeneration is) can
+        // resolve it after world generation has run.
+        typeof(RivalRoster),
     ],
-    requires: [typeof(IAuditTrail), typeof(IRandomSource), typeof(SimulationClock), typeof(WorldState)],
-    ownsState: ["information.beliefs", "information.prospect-risk"],
-    stages: NoStagesYet))
+    requires:
+    [
+        typeof(IAuditTrail), typeof(IRandomSource), typeof(SimulationClock), typeof(WorldState),
+
+        // A rival's own discovery reads truth the same door DrillWellCommand
+        // does (SDD-011 §2's finding-277 amendment).
+        typeof(OGSim.Subsurface.SubsurfaceState),
+    ],
+    ownsState: ["information.beliefs", "information.prospect-risk", "company.rivals"],
+    stages: [new StageParticipation(StageId.Company, Order: 5)]))
 {
     public override void Compose(IModuleComposition composition)
     {
@@ -1615,6 +1628,20 @@ internal sealed class InformationModule() : EngineModule(Declare(
             random.Stream(StreamId.Exploration),
             random.Stream(StreamId.Measurement),
             audit));
+
+        // SDD-011 §2/§2.1/§3's finding-277 amendment — R16.4's roster.
+        // COMPOSED EMPTY: nothing has generated a world yet, so there is
+        // nothing to explore. EngineBuilder.SealRivals fills it in, the
+        // same "empty then filled" shape WorldState/WeatherState's own
+        // SealGeneration already has, and for the same reason: this module
+        // composes before world generation runs, not after.
+        var rivals = new RivalRoster();
+        composition.Own(rivals);
+        composition.Provide(rivals);
+
+        composition.Contribute(order: 5, new RivalExplorationStage(
+            rivals, composition.Require<WorldState>(),
+            composition.Require<OGSim.Subsurface.SubsurfaceState>(), beliefs, audit));
     }
 }
 

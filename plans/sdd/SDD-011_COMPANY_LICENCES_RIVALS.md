@@ -228,6 +228,120 @@ declared extra σ (you read their press release, not their logs). Updates the
 player's play-shared Betas exactly like own data — R16-V5 with no new
 mechanism.
 
+> **Amendment (finding 277) — `Rival` composed for the first time, the
+> narrower slice this section's own §2.2 rationale already calls for.**
+> `Rival`/`LicenceRound`/`PublicDisclosure` shipped as a complete, unit-tested
+> class set at R16.3/R16.4 and were never instantiated anywhere in the
+> composed engine — a real mechanism with zero production callers, the
+> session's own dominant defect pattern. §1's own R20d.9 amendment already
+> settled that this composition has ONE field and ONE licence, granted
+> unconditionally at tick 0, and that a multi-licence company is R20's
+> content — so the fuller vision above (a `Block` entity, a round cadence,
+> the player's own licence contestable) is not this composition's to build
+> without reopening a decision already pinned correctly. `R16_COMPANY.md`
+> §2.2 independently narrows to the same place: "Rivals are simple and their
+> *results* are the point... full AI operators are deferred."
+>
+> **What is built: rivals independently explore prospects in the SAME
+> basin — never the player's own field/licence, which stays exactly as
+> unconditionally granted as it always has been — and a completed result
+> becomes public data (this section's own subject) feeding the player's
+> real beliefs.** `WorldParameters.RivalCount` (a real, exposed, saved
+> new-game knob nothing had ever read) drives a roster of `Defaults.Rivals`
+> personalities, cycled round-robin — three hand-authored archetypes,
+> the same "single hand-authored instance ahead of R20's content" precedent
+> §1 already established for `Defaults.LicenceTerms`. Each rival owns its
+> own `BeliefStore` (confirmed safe to construct independently — no
+> shared/static state), EPHEMERAL rather than persisted: `BeliefStore`'s
+> `IStateOwner.Key` is a hardcoded literal, so a second `composition.Own`
+> call on it would throw under the write-once-per-key law (L5) — persisting
+> N independent belief stores is a change to a shipped SDD-008 class
+> (a parameterised key, a schema bump), a materially larger, separate task,
+> and rivals rebuild their beliefs deterministically from truth every game
+> regardless.
+>
+> **A rival's belief about an undrilled prospect is `structure-capacity`,
+> not `oil-in-place`.** `RegionalObservationModel`'s own rule (SDD-008 §3)
+> is that oil-in-place needs an accumulation to measure — an undrilled
+> prospect legitimately has none, the same reason the PLAYER cannot buy an
+> oil-in-place belief before a discovery well either. Seeded DIRECTLY from
+> truth (`WorldState.CapacityOf`) at the SAME regional sigma
+> (1.2, matching `RegionalObservationModel`'s own `("regional",
+> "oil-in-place")` order of magnitude) — no RNG draw, deliberately: sampling
+> through `ObservationSampler` would consume `StreamId.Measurement`, the
+> SAME stream every existing pinned-value test in the slow suite depends on
+> the exact draw sequence of, and inserting new draws anywhere in it would
+> shift every one of them (finding 265's own crew-multiplier experience).
+> `Rival.BidFor`'s own `valueOf` converts capacity into a dollar figure via
+> `Defaults.TypeCurve`'s OWN recovery factor (0.35) — reused, not a second
+> invented one — and the shipped oil price, the same "$/m³" conversion
+> `Defaults.Economics`'s own comment already uses.
+>
+> **`Rival.BidFor` is used exactly as shipped — its `EMV · a · U` formula,
+> not extended to this section's own fuller "SDD-008 §5 volumetrics × their
+> POS × a coarse development template NPV".** Adding POS-weighting is a
+> real further refinement this amendment does not attempt; named rather
+> than silently narrowed. Every 6 ticks, each rival (in declared roster
+> order) ranks not-yet-explored prospects and attempts its top bid, if one
+> clears: reads TRUE oil-in-place for that prospect (the same door
+> `DrillWell.cs` reads for the player's own discovery), resolves INSTANTLY
+> — no rig-scheduled multi-month activity, a stated simplification matching
+> this section's own "not full AI operators, at a fraction of the cost"
+> framing — and builds a discovery-well-sigma (0.30, the SAME sigma the
+> player's own discovery well carries) observation of what it found.
+>
+> **Keyed to a NEW, rival-exclusive kind (`rival-disclosure`), not
+> `oil-in-place` or `structure-capacity` — two corrections made during
+> implementation, both caught by full slow-suite runs (F-4).** The first
+> draft disclosed oil-in-place directly: `Defaults.OilInPlaceKind` on a
+> PROSPECT subject is reserved for `DrillWell.cs`'s own discovery, which
+> writes the compartment's oil-in-place DIRECTLY and then calls
+> `IBeliefStore.ReKey` to move whatever else the prospect held onto the same
+> compartment — and `ReKey` refuses to MERGE two beliefs about one kind
+> (SDD-008 §4). The second draft moved to `structure-capacity`, reasoning it
+> was the SAME safe kind the player's own pre-drill seismic surveys already
+> re-key through — and a second slow-suite run found that reasoning
+> incomplete: `ReKey` migrates STRUCTURE-CAPACITY from a prospect too, so a
+> rival's own pre-populated belief on that SAME prospect collided exactly
+> the same way the moment the player drilled it (`Compartment:N already
+> holds a belief about 'structure-capacity'`, reproduced in
+> `NewGameTests.cs`'s own established fixtures both times). **The kind that
+> is actually safe is one `DrillWell.cs` never writes and `ReKey` never
+> migrates** — a brand-new `rival-disclosure` kind (`Defaults.SpaceOf`/
+> `SigmaFloorFor` both gain a row for it), keyed DIRECTLY to the compartment
+> for a genuine discovery (the compartment already exists in truth the
+> instant a rival's own attempt confirms it, bypassing the prospect and so
+> bypassing `ReKey` entirely) or to the prospect itself for a dry result (no
+> compartment exists, and a dry outcome never triggers `DrillWell.cs`'s own
+> re-key either, so nothing ever migrates it onto anything else).
+>
+> **The observation widens through `PublicDisclosure.Publish` at
+> `extraSigma ≈ 0.6`** (landing the widened sigma at `√(0.30² + 0.6²) ≈
+> 0.67`, worse than the player's own discovery well but sharper than a 2D
+> seismic survey (0.6) — a rival's real drilling result becoming public is
+> qualitatively better information than a survey shot over acreage that
+> isn't yours) **and applies into the player's real `IBeliefStore` through
+> the SAME conjugate-update door every other observation already uses** —
+> no new belief-update machinery. All three numbers (the roster, the
+> 6-tick cadence, `extraSigma ≈ 0.6`) were confirmed with Fahad before
+> landing, the same gate every other invented number this session has gone
+> through.
+>
+> **A resolved prospect is never re-attempted** — a small new persisted
+> `IStateOwner` tracks which prospects already carry a rival result, so a
+> reload cannot repeat or duplicate one.
+>
+> **Named rather than solved, again**: technology gating
+> (`Rival.HasTechnologyAt` stays uncalled — exploring isn't gated on
+> technology in this engine, and a rival that never produces never needs
+> lift technology); host/read-model visibility beyond the audit trail
+> (`ExplorationView` and the whole SDD-017 read-model surface for
+> exploration data is never constructed anywhere in this composition —
+> a separate, pre-existing, much larger gap); and the rival-side asset
+> market (SDD-011 §4, below) — still blocked, because a rival that only
+> explores never holds reserves, drills a producing well, or goes
+> distressed, so it has nothing an asset market could sell.
+
 ## 4. The asset market (08 §5b)
 
 ```text

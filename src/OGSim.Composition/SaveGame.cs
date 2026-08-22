@@ -591,6 +591,12 @@ public static class SaveGame
         // already found once for the reservoir.
         engine.Provided.Resolve<Environment.WeatherState>()
             .SealGeneration([Defaults.ScaledClimate(from.ClimateSeverity)]);
+
+        // AND THE RIVAL ROSTER, THE SAME WAY (SDD-011 §2's finding-277
+        // amendment) — rebuilt fresh from the SAME saved parameters and the
+        // SAME regenerated prospects rather than persisted, the same reason
+        // weather is resealed here rather than restored from a block.
+        EngineBuilder.SealRivals(engine, from);
     }
 
     /// <summary>

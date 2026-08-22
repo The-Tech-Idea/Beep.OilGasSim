@@ -438,6 +438,10 @@ public sealed class ShippedSetTests
     /// <para>And a fifth: <c>InsurancePremiumStage</c> (order 4, SDD-009 §7's
     /// finding-273 amendment), charging the one shipped policy's premium
     /// every tick off that tick's own ESG standing.</para>
+    ///
+    /// <para>And a sixth: <c>RivalExplorationStage</c> (order 5, SDD-011 §2's
+    /// finding-277 amendment), a rival's own exploration attempt every 6
+    /// ticks, disclosed into the player's beliefs.</para>
     /// </summary>
     [Fact]
     public void The_shipped_engine_runs_the_stages_its_modules_declared()
@@ -450,15 +454,16 @@ public sealed class ShippedSetTests
              StageId.SolveFlow, StageId.MaterialBalance, StageId.Custody,
              StageId.Economics, StageId.HseRegulation, StageId.Information,
 
-             // Five StageId.Company participants: CompanyModule's
+             // Six StageId.Company participants: CompanyModule's
              // LicenceStage (order 0), CapabilitiesModule's diffusion
              // (order 1), FieldModule's TakeOrPayStage (order 2, SDD-009 §7's
              // R13.3 amendment, finding 250), FieldModule's HedgeStage
-             // (order 3, SDD-009 §7's finding-272 amendment), and HseModule's
+             // (order 3, SDD-009 §7's finding-272 amendment), HseModule's
              // InsurancePremiumStage (order 4, SDD-009 §7's finding-273
-             // amendment).
+             // amendment), and InformationModule's RivalExplorationStage
+             // (order 5, SDD-011 §2's finding-277 amendment).
              StageId.Company, StageId.Company, StageId.Company, StageId.Company,
-             StageId.Company,
+             StageId.Company, StageId.Company,
              StageId.Objectives, StageId.Close],
             built.Engine.Pipeline.DeclaredOrder());
     }
