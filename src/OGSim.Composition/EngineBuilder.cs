@@ -133,6 +133,29 @@ internal static class Defaults
         jumpScale: 0.27);
 
     /// <summary>
+    /// SDD-009 §7's finding-272 amendment — the one hedge this composition
+    /// ships, the same "one contract, not a ladder" shape
+    /// <see cref="OGSim.Company.TakeOrPayTerms"/> already has.
+    ///
+    /// <para>A year-long, one-standard-deviation collar around the shipped
+    /// price model's OWN long-run mean, using the volatility <see
+    /// cref="Market"/> is already built from (0.09 a month, log space) rather
+    /// than inventing a fresh band: annualised σ = 0.09·√12 ≈ 0.3118, so
+    /// floor = mean·e⁻σ ≈ mean·0.7322 and cap = mean·e⁺σ ≈ mean·1.3658.</para>
+    ///
+    /// <para>Half of each tick's own production is hedged — an ordinary
+    /// middle ground between full exposure and giving up all the upside a
+    /// full hedge would. Settlement is against the RAW market benchmark, not
+    /// design 08 §3.1's quality-adjusted realised price (SDD-009 §6's
+    /// finding-271 amendment): a financial hedge references the market a
+    /// company sells INTO, not the specific barrel's own grade.</para>
+    /// </summary>
+    public static OGSim.Company.HedgeTerms Hedge { get; } = new(
+        HedgedFraction: 0.5,
+        Floor: Money.RoundHalfEven(Economics.OilPricePerTonne.Cents * 0.7322),
+        Cap: Money.RoundHalfEven(Economics.OilPricePerTonne.Cents * 1.3658));
+
+    /// <summary>
     /// The development type-curve this composition ships (SDD-009 §4). Content
     /// in a finished game, like every other catalogue entry here.
     ///

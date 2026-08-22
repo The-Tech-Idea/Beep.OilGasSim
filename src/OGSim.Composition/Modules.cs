@@ -802,6 +802,63 @@ internal sealed class TakeOrPayStage(
     }
 }
 
+/// <summary>
+/// Beside <see cref="TakeOrPayStage"/> — SDD-009 §7's finding-272 amendment.
+/// A collar settles fresh every tick against that tick's own production and
+/// that tick's own benchmark, so unlike take-or-pay this stage owns no state
+/// of its own: there is nothing here for a save to carry.
+/// </summary>
+internal sealed class HedgeStage(
+    OGSim.Company.HedgeTerms terms,
+    ProductionLoop loop,
+    OGSim.Company.CompanyState company,
+    OGSim.Company.MarketState market,
+    IAuditTrail audit) : ITickStage
+{
+    public StageId Id => StageId.Company;
+
+    public void Execute(TickContext context)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+
+        // TONNES, THE SAME CONVERSION composition already applies to relate a
+        // per-tonne price to a stock-tank cubic metre (`Defaults.Netback`) —
+        // one owner of the density fact, not a second copy of it.
+        double hedgedTonnes = terms.HedgedFraction * loop.ProducedThisTick.CubicMetres
+            * Defaults.SurfaceOilDensity.KgPerCubicMetre / 1000.0;
+
+        OGSim.Company.HedgeSettlement? settlement =
+            OGSim.Company.Hedge.SettleAt(terms, hedgedTonnes, market.OilPrice);
+
+        if (settlement is null) return;
+
+        AuditId cause = audit.Record(
+            AuditCategory.Financial, subject: null, cause: null,
+            new Dictionary<string, AuditValue>(StringComparer.Ordinal)
+            {
+                ["spend"] = new("hedge-settlement"),
+                ["benchmark-cents"] = new(market.OilPrice.Cents.ToString(
+                    System.Globalization.CultureInfo.InvariantCulture)),
+                ["hedged-tonnes"] = new(hedgedTonnes.ToString(
+                    "R", System.Globalization.CultureInfo.InvariantCulture)),
+            });
+
+        // WHICH WAY, NOT A SIGNED AMOUNT: the ledger's double entry already
+        // says direction through debit/credit (SDD-009 §1) — a negative
+        // `Money` posted as an amount would be a second, competing way to
+        // say the same thing.
+        company.Ledger.Post(settlement.CompanyReceives
+            ? new OGSim.Company.Movement(
+                context.Tick, OGSim.Company.Account.Cash, OGSim.Company.Account.Hedge,
+                settlement.Amount, OGSim.Company.MovementCategory.Contractual,
+                Asset: null, Cause: cause)
+            : new OGSim.Company.Movement(
+                context.Tick, OGSim.Company.Account.Hedge, OGSim.Company.Account.Cash,
+                settlement.Amount, OGSim.Company.MovementCategory.Contractual,
+                Asset: null, Cause: cause));
+    }
+}
+
 // ---------------------------------------------------------------- field
 
 /// <summary>
@@ -933,6 +990,10 @@ internal sealed class FieldModule(
         // modules — the three are independent, so which runs first does not
         // matter beyond that.
         new StageParticipation(StageId.Company, Order: 2),
+
+        // HedgeStage (SDD-009 §7's finding-272 amendment), beside
+        // TakeOrPayStage on the same stage — order 3, the next free slot.
+        new StageParticipation(StageId.Company, Order: 3),
 
         // STALENESS (SDD-008 §2d.3). Declared by THIS module rather than by the
         // information one, and the choice is worth stating: what fixes the
@@ -1386,6 +1447,13 @@ internal sealed class FieldModule(
         composition.Own(takeOrPayContract);
         composition.Provide(takeOrPayContract);
         composition.Contribute(order: 2, new TakeOrPayStage(takeOrPayContract, loop, company, audit));
+
+        // THE ONE HEDGE (SDD-009 §7's finding-272 amendment), beside the one
+        // take-or-pay contract — no `Own`, because it carries no state
+        // between ticks to save.
+        OGSim.Company.Hedge.Validate(Defaults.Hedge);
+        composition.Contribute(order: 3, new HedgeStage(
+            Defaults.Hedge, loop, company, composition.Require<OGSim.Company.MarketState>(), audit));
 
         // Stage 3: rigs that finished this month hand over a well or a dry hole,
         // BEFORE stage 5 solves — so a well completed in January produces in

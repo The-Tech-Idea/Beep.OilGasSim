@@ -430,6 +430,10 @@ public sealed class ShippedSetTests
     /// analogy rather than checking §4.2) would have let a diffusing node reach
     /// stage 4's segmentation the SAME month it diffused (SDD-005's R20d.10
     /// correction).</para>
+    ///
+    /// <para>R13.9 gave <b>Company</b> a fourth contributor: <c>HedgeStage</c>
+    /// (order 3, SDD-009 §7's finding-272 amendment), settling the one
+    /// shipped collar against that tick's own production and benchmark.</para>
     /// </summary>
     [Fact]
     public void The_shipped_engine_runs_the_stages_its_modules_declared()
@@ -442,11 +446,12 @@ public sealed class ShippedSetTests
              StageId.SolveFlow, StageId.MaterialBalance, StageId.Custody,
              StageId.Economics, StageId.HseRegulation, StageId.Information,
 
-             // Three StageId.Company participants: CompanyModule's
+             // Four StageId.Company participants: CompanyModule's
              // LicenceStage (order 0), CapabilitiesModule's diffusion
-             // (order 1), and FieldModule's TakeOrPayStage (order 2,
-             // SDD-009 §7's R13.3 amendment, finding 250).
-             StageId.Company, StageId.Company, StageId.Company,
+             // (order 1), FieldModule's TakeOrPayStage (order 2, SDD-009 §7's
+             // R13.3 amendment, finding 250), and FieldModule's HedgeStage
+             // (order 3, SDD-009 §7's finding-272 amendment).
+             StageId.Company, StageId.Company, StageId.Company, StageId.Company,
              StageId.Objectives, StageId.Close],
             built.Engine.Pipeline.DeclaredOrder());
     }

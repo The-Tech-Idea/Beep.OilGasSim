@@ -528,7 +528,81 @@ Insurance (ED6): premium(class) = exposure(class) · rate(record) per year;
 > a grounded quality term would be exactly the kind of number this session's
 > standing discipline forbids.
 
-## 8. Error surface
+> **Amendment (finding 272): §7's hedge, typed and priced — R13.3's own
+> second casualty, the mechanism finding 250's own amendment named and
+> deliberately left open rather than fabricating alongside take-or-pay.**
+> The formula block above
+> pins the SHAPE (`settle = volume · (clamp(benchmark, floor, cap) −
+> benchmark)`) and no number — the same gap laytime/demurrage and the
+> quality differential each closed in their own tasks, confirmed with Fahad
+> before landing rather than invented at the call site.
+>
+> **One shipped collar, the same "one contract, not a ladder" shape
+> `TakeOrPayTerms` already has:**
+>
+> ```csharp
+> public sealed record HedgeTerms(
+>     double HedgedFraction,   // of the tick's own production, 0..1
+>     Money Floor,              // per tonne
+>     Money Cap);               // per tonne
+> ```
+>
+> **Settles fresh every tick, against that tick's OWN production and that
+> tick's OWN benchmark — no window, no accumulator, no state to own.**
+> Take-or-pay needs a clock because its penalty is a per-WINDOW shortfall;
+> a collar's settlement is a per-TICK spot difference and nothing about one
+> month's figure depends on any other's, so `Hedge.SettleAt` is a static,
+> stateless function rather than a class — the deliberately smaller
+> surface, not an oversight.
+>
+> **The numbers, grounded in the shipped market's OWN parameters rather
+> than a fresh invented band.** `Defaults.Market`'s volatility (0.09 a
+> month, log space) already exists to describe how far this engine's price
+> actually moves; a year-long, one-standard-deviation collar around its
+> long-run mean reuses it rather than asking Fahad for a second, unrelated
+> figure: annualised σ = 0.09·√12 ≈ 0.3118, floor = mean·e⁻σ ≈ mean·0.7322,
+> cap = mean·e⁺σ ≈ mean·1.3658. Half of each tick's own production is
+> hedged (`HedgedFraction = 0.5`) — an ordinary middle ground between full
+> exposure and giving up all the upside a full hedge would.
+>
+> **Settlement is against the RAW benchmark, never the quality-adjusted
+> realised price (SDD-009 §6's finding-271 amendment).** A financial hedge
+> references the market a company sells INTO — a published benchmark
+> quote — not the specific parcel's own API gravity; conflating the two
+> would make a company's hedge payout depend on which grade it happened to
+> produce that month, which is not how a collar struck against a market
+> index works.
+>
+> **No command, no player-facing acquisition — the same scope decision
+> finding 250 made for take-or-pay.** `ISalesContract` was already
+> corrected to a concrete type with no polymorphic plugin surface (finding
+> 250); a hedge a player could choose to buy, size, or re-strike needs its
+> own premium/cost model before it is a real decision rather than a free
+> option, and that is a materially larger task this amendment does not
+> invent an answer to. What ships is a standing collar the company is
+> already in, the same way `TakeOrPayContract` is granted at tick 0 rather
+> than bought.
+>
+> **`Account.Hedge` joins the chart of accounts.** Direction is which side
+> of the `Movement` the settlement posts to, never a signed `Money` —
+> SDD-009 §1's own rule, that the ledger says direction through debit/credit
+> rather than through the sign of an amount.
+>
+> **A real INV2 violation surfaced in the slow suite, and is worth recording
+> because it is not this amendment's formula that was wrong.** `Account` is
+> a C# enum `CostLedger.AssertBalanced` never enumerates directly — it walks
+> a SEPARATE, hand-maintained `AllAccounts` array, and `Hedge` was added to
+> the enum without being added to that array. Every hedge settlement still
+> posted correctly (debit one account, credit the other, same amount), but
+> `AssertBalanced` silently summed only the CASH side of each one and never
+> the `Hedge` side, so forty years of accumulated settlements read as a
+> trial-balance residue with no posting responsible for it — seven slow
+> tests failed with `INV2`, each naming a different accumulated figure, none
+> of them a bug in what was posted. Fixed by adding `Account.Hedge` to
+> `AllAccounts`; the fix touches only how the balance is CHECKED, not
+> anything computed, so no test needed re-pinning once it was closed — a
+> different shape of surprise than findings 265/268's, worth telling apart
+> from a false start in the mechanism itself.
 
 | Situation | Response |
 |---|---|
