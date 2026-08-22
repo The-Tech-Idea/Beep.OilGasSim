@@ -255,6 +255,13 @@ internal sealed class ProductionLoop : IStateOwner
     private OGSim.Kernel.Composition _stored;
     private Allocation _tankProvenance;
 
+    // SDD-006 §7a.4's finding-269 amendment — how many ACTIVE days the cargo
+    // now loading has taken, zero when the berth is idle. Persisted: a save
+    // mid-overrun that came back at zero would let a player launder
+    // demurrage by saving and loading (the same class SDD-013 §4's covenant
+    // clock carve-out exists to close, finding 210).
+    private double _cargoActiveDays;
+
     // What the field handled this tick, per material — what a lifting cost is
     // charged on, and the reason a watered-out field stops paying.
     private readonly double[] _handled;
@@ -460,7 +467,9 @@ internal sealed class ProductionLoop : IStateOwner
 
     public StateKey Key { get; } = new("field.flood");
 
-    public int SchemaVersion => 1;
+    /// <summary>2 (SDD-006 §7a.4's finding-269 amendment): the cargo now
+    /// loading's active days joined the block.</summary>
+    public int SchemaVersion => 2;
 
     /// <summary>Nothing has to be back before this is (SDD-013 §2b).</summary>
     public IReadOnlyList<StateKey> RestoreAfter => [];
@@ -472,6 +481,10 @@ internal sealed class ProductionLoop : IStateOwner
         writer.WriteDouble("voidage-replacement", VoidageReplacement);
         writer.WriteDouble("voidage-last-tick", _voidageLastTick);
         writer.WriteDouble("produced-water-last-tick", _producedWaterLastTick);
+
+        // THE CARGO NOW LOADING'S ACTIVE DAYS (SDD-006 §7a.4's finding-269
+        // amendment) — zero when the berth is idle between episodes.
+        writer.WriteDouble("cargo-active-days", _cargoActiveDays);
 
         // WHICH COMPARTMENTS THE FLOOD IS SPLIT BETWEEN, and in what proportion.
         // The fourth cross-tick field on this class and the one that made a
@@ -531,6 +544,7 @@ internal sealed class ProductionLoop : IStateOwner
         VoidageReplacement = reader.ReadDouble("voidage-replacement");
         _voidageLastTick = reader.ReadDouble("voidage-last-tick");
         _producedWaterLastTick = reader.ReadDouble("produced-water-last-tick");
+        _cargoActiveDays = reader.ReadDouble("cargo-active-days");
 
         var materials = (int)reader.ReadInt64("delivered-count");
         var delivered = new double[materials];
@@ -1292,19 +1306,22 @@ internal sealed class ProductionLoop : IStateOwner
     /// adds, not a change to when revenue is recognised (§7a.3 corrects
     /// §7a.2 on exactly that point).</para>
     ///
-    /// <para>NO STATE OF ITS OWN. The gate is <c>tank.Held</c>, which the tank
-    /// already owns and already persists — a cargo in progress is oil still
-    /// sitting in the tank, not a second store of how much has left it, so
-    /// there is nothing here for a save to launder (law L5).</para>
+    /// <para>THE GATE ITSELF NEEDS NO STATE OF ITS OWN. It reads
+    /// <c>tank.Held</c>, which the tank already owns and already persists —
+    /// a cargo in progress is oil still sitting in the tank, not a second
+    /// store of how much has left it (law L5). What laytime needs is
+    /// different: how many ACTIVE DAYS a loading episode has taken, which
+    /// the tank's own mass cannot answer, so that alone is tracked
+    /// (SDD-006 §7a.4's finding-269 amendment).</para>
     /// </summary>
-    public void StoreAndExport(Duration tick)
+    public void StoreAndExport(Tick tick, Duration duration)
     {
-        _tank.Receive(_stored, _tankProvenance, tick);
+        _tank.Receive(_stored, _tankProvenance, duration);
 
         // Boil-off first, because oil that evaporated was never available to
         // lift. It is a conservation term, not a rounding: the tank reports it
         // and stage 9 will account it as fugitive emissions.
-        _tank.VapourLossOver(tick);
+        _tank.VapourLossOver(duration);
 
         // ONE CARGO AT A TIME: nothing draws until the tank holds a full
         // cargo's worth, then the berth clears it — at its own rate, so a
@@ -1315,10 +1332,58 @@ internal sealed class ProductionLoop : IStateOwner
         bool cargoReady = _tank.Held.Total.Kilograms >= Defaults.CargoSize.Kilograms;
 
         MaterialInventory lifted = cargoReady
-            ? _tank.Draw(new Mass(_terminal.Berth.LoadingRate.KgPerSecond * tick.Seconds))
+            ? _tank.Draw(new Mass(_terminal.Berth.LoadingRate.KgPerSecond * duration.Seconds))
             : MaterialInventory.Empty(_materialCount);
 
         Exported = lifted.Total;
+
+        // LAYTIME (SDD-006 §7a.4's finding-269 amendment). Active days accrue
+        // for every tick a cargo occupies the berth, whether or not this is
+        // its first — a cargo that spans several ticks accrues DAYS across
+        // all of them, not one tick's worth of some other unit.
+        if (cargoReady) _cargoActiveDays += duration.Days;
+
+        // DEPARTED. The tank just dropped back under a full cargo, so the
+        // loading episode that started when it first crossed the line is
+        // over — charged ONCE here, against the whole episode, never per
+        // tick while still loading (which would double-count one overrun).
+        bool stillLoading = _tank.Held.Total.Kilograms >= Defaults.CargoSize.Kilograms;
+
+        if (cargoReady && !stillLoading)
+        {
+            ChargeDemurrageIfLate(tick);
+            _cargoActiveDays = 0.0;
+        }
+    }
+
+    /// <summary>
+    /// SDD-006 §7a.4's finding-269 amendment: <c>max(0, actualDays −
+    /// laytime) · rate</c>, §7's own formula, against numbers this
+    /// composition already prices rather than a figure invented at the call
+    /// site — <see cref="Defaults.CargoLaytimeDays"/> and
+    /// <see cref="Defaults.DemurrageRateFraction"/> name where both come from.
+    /// </summary>
+    private void ChargeDemurrageIfLate(Tick tick)
+    {
+        double overrunDays = _cargoActiveDays - Defaults.CargoLaytimeDays;
+        if (overrunDays <= 0.0) return;
+
+        Money cargoValue = Scale(_market.OilPrice, Defaults.CargoSize.Kilograms / KilogramsPerTonne);
+        Money demurrage = Scale(cargoValue, Defaults.DemurrageRateFraction * overrunDays);
+
+        if (demurrage <= Money.Zero) return;
+
+        _company.Ledger.Post(new Movement(
+            tick, Account.Opex, Account.Cash, demurrage,
+            MovementCategory.Production, Asset: null,
+            Cause: _audit.Record(
+                AuditCategory.Financial, subject: null, cause: null,
+                new Dictionary<string, AuditValue>(StringComparer.Ordinal)
+                {
+                    ["accrual"] = new("demurrage"),
+                    ["overrun-days"] = new(overrunDays.ToString(
+                        "F1", System.Globalization.CultureInfo.InvariantCulture)),
+                })));
     }
 
     /// <summary>
@@ -2588,7 +2653,7 @@ internal sealed class CustodyStage(ProductionLoop loop) : ITickStage
         // Store, lift, then record. Custody is metered on the way INTO storage,
         // so what is recorded is what the meter passed — and the lifting is what
         // makes room for next month rather than a second transfer.
-        loop.StoreAndExport(Duration.FromTicks(1.0));
+        loop.StoreAndExport(context.Tick, Duration.FromTicks(1.0));
         loop.RecordCustody();
     }
 }

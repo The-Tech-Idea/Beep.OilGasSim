@@ -1056,6 +1056,72 @@ a played field needed re-stating this time, because 70,000 t of headroom above
 one cargo is enough that the ullage constraint essentially never has to reach
 the reservoir over a normal run.
 
+### 7a.4 Step 3, built (finding 269) — laytime and demurrage, pinned rather than invented
+
+§7's own formula (top of this section) names the shape —
+`laytime = contracted days; demurrage = max(0, actualDays − laytime) · rate` —
+and pins neither number. Both were genuinely open, in the same way R16.5's
+inspection cadence and R17.4's ongoing technology costs are: a number with no
+derivation behind it is F-2's own violation, not a detail to fill in on the
+way past. **Confirmed with Fahad before landing** (an explicit decision this
+document alone could not make), grounded in what this composition already
+prices rather than invented at the call site:
+
+```text
+Laytime: 60 days (two ticks). NOT the real-world charter-party convention —
+  a real crude laytime (commonly ~72 hours SHINC) assumes a shore tank farm
+  and a port pumping far faster than one field's own export line, and
+  transplanting it would make demurrage an unavoidable tax on every cargo
+  regardless of what a player built (172/177's "cost with no response" shape,
+  found before it shipped rather than after). Measured against THIS engine's
+  own numbers instead: a full 80,000 t cargo takes 46.3 days to clear at the
+  base E1 tier's rate (23.1 at E2, 11.6 at E3, §7a.3's own table) — so 60
+  days gives the base tier real headroom under normal production, and
+  demurrage bites only once a field's OWN production has outgrown what the
+  fitted export tier can clear inside that window. That is the incentive
+  §7a's four-step order was always building toward: the export ladder is a
+  decision because underbuilding it now has a second cost beside a fuller
+  tank.
+Demurrage: 0.05% of the cargo's value per day beyond laytime — cargo value
+  = CargoSize × the CURRENT market oil price (MarketState.OilPrice, moving
+  with the game's own price cycle rather than a number frozen at the tier a
+  field shipped on). At the shipped opening price (~$443.53/t, ~$60.5/bbl)
+  that is ~$17,700/day — inside the range real Aframax demurrage typically
+  runs (roughly $15,000–$40,000/day, itself market-set and never a single
+  fixed figure, which is why the RATE is expressed as a fraction of the
+  cargo's own value rather than a flat dollar constant that would go stale
+  the first time the price moved).
+Accrual: tracked while a cargo is loading (`tank.Held` at or above
+  CargoSize, §7a.3's own gate) as active days, DAYS not ticks — a cargo that
+  spans two ticks accrues 60 days of active time across them, not two
+  ticks' worth of some other unit. Charged ONCE, the tick the tank finally
+  drops back under CargoSize (the cargo departs), against the total active
+  time that one loading episode took — never per-tick while still loading,
+  which would double-count an episode already measured whole.
+Persisted: active days so far, in ProductionLoop's own state block
+  ("field.flood", the same key §7a.3 reasoned about) — a save mid-overrun
+  that came back at zero would let a player launder demurrage by saving and
+  loading, the same class of exploit SDD-013 §4's covenant-clock carve-out
+  exists to close (finding 210).
+```
+
+**Where it posts.** `Account.Opex` debited, `Account.Cash` credited,
+`MovementCategory.Production` — the same shape the field's other variable
+costs already use (`FieldEconomics.LiftingCostPerTonne`), because demurrage
+is an operating cost the field incurred, not a financing or fiscal line.
+`AuditCategory.Financial`, itemised with the overrun in days, the same
+category the standing charge and lifting cost already post under (§8's
+"three lines a player can act on").
+
+**What this does not touch.** §7a.1's own list — cumulative sold oil, the
+tank's rhythm, the ullage constraint — is unmoved: demurrage is a cost
+computed AFTER a cargo has already cleared, never a second gate on the flow.
+Step 4 (`ConstraintKind.BerthOccupancy`, `LogisticsView`) stays open and
+turned out to need more than wiring once looked at directly: `LogisticsView.
+Nominations` names a `ContentId Grade`, and this engine has no crude-grade
+concept anywhere to fill it with, honestly or otherwise — a materially larger
+gap than this task's own scope, left named rather than guessed at.
+
 ## 7b. Export capacity — a socket, not a constant
 
 > **R20d.8 amendment (finding 165). The offtake rate was a constant and the

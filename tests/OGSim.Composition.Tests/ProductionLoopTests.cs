@@ -358,6 +358,72 @@ public sealed class ProductionLoopTests
             $"a full cargo did not lift: before={before.Kilograms} after={after.Kilograms}");
     }
 
+    private static IReadOnlyList<AuditEntry> DemurrageEntries(Engine engine) =>
+        [.. engine.Audit.Query(new AuditQuery(null, AuditCategory.Financial, null, null))
+            .Where(entry => entry.Data.TryGetValue("accrual", out AuditValue accrual)
+                             && accrual.Value == "demurrage")];
+
+    /// <summary>SDD-006 §7a.4's finding-269 amendment: a cargo that clears
+    /// inside the 60-day laytime costs nothing extra — demurrage is an
+    /// OVERRUN charge, not a tax on every lifting.</summary>
+    [Fact]
+    public void A_cargo_that_clears_within_laytime_is_not_charged_demurrage()
+    {
+        (Engine engine, _) = Field();
+        var tank = engine.Provided.Resolve<SurfaceChain>().Tank;
+
+        // Just over the line: at the shipped E1 rate (20 kg/s, 51.84e6
+        // kg/tick) this clears inside the first tick, nowhere near 60 days.
+        var kilograms = new double[Defaults.MaterialCount];
+        kilograms[Defaults.OilOrdinal.Ordinal] = Defaults.CargoSize.Kilograms + 1_000_000.0;
+
+        tank.RestoreTo(
+            MaterialInventory.Of(kilograms),
+            Allocation.FromSingle(new EntityRef(EntityKind.Compartment, 1)));
+
+        engine.Pipeline.AdvanceTick();
+
+        Assert.Empty(DemurrageEntries(engine));
+    }
+
+    /// <summary>SDD-006 §7a.4's finding-269 amendment: a cargo that takes
+    /// long enough to clear — the shipped E1 rate against a tank sized well
+    /// past one cargo — overruns the 60-day laytime and is charged for it,
+    /// once, the tick it finally departs.</summary>
+    [Fact]
+    public void An_overrunning_cargo_is_charged_demurrage()
+    {
+        (Engine engine, _) = Field();
+        var tank = engine.Provided.Resolve<SurfaceChain>().Tank;
+
+        // Sized so the E1 berth (51.84e6 kg/tick) needs several ticks —
+        // 180+ days — to clear it, comfortably past the 60-day laytime.
+        var kilograms = new double[Defaults.MaterialCount];
+        kilograms[Defaults.OilOrdinal.Ordinal] = 300_000_000.0;
+
+        tank.RestoreTo(
+            MaterialInventory.Of(kilograms),
+            Allocation.FromSingle(new EntityRef(EntityKind.Compartment, 1)));
+
+        var ticks = 0;
+        while (engine.ReadModel is null
+               || engine.ReadModel.Storage.Held.Kilograms >= Defaults.CargoSize.Kilograms)
+        {
+            engine.Pipeline.AdvanceTick();
+            ticks++;
+            Assert.True(ticks < 20, "the seeded cargo never departed");
+        }
+
+        IReadOnlyList<AuditEntry> demurrage = DemurrageEntries(engine);
+
+        Assert.Single(demurrage);
+        Assert.True(
+            double.Parse(
+                demurrage[0].Data["overrun-days"].Value,
+                System.Globalization.CultureInfo.InvariantCulture) > 0.0,
+            "the charged entry names no positive overrun");
+    }
+
     /// <summary>
     /// R23-V16, the reachability half. SDD-012 §4b's R23.1 amendment, and
     /// <b>a company can clean up.</b> A

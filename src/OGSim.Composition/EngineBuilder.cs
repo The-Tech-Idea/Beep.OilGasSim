@@ -1516,6 +1516,30 @@ internal static class Defaults
     /// </summary>
     public static Mass CargoSize { get; } = new(80_000_000.0);
 
+    /// <summary>
+    /// SDD-006 §7a.4's finding-269 amendment. NOT the real-world charter-party
+    /// convention (~72 hours SHINC) — that assumes a shore tank farm and a
+    /// port pumping far faster than one field's own export line, and
+    /// transplanting it would make demurrage an unavoidable tax on every
+    /// cargo. Measured against this engine's own numbers instead: a full
+    /// cargo takes 46.3 days to clear at the base E1 tier (23.1 at E2, 11.6
+    /// at E3), so 60 days gives the base tier real headroom and demurrage
+    /// bites only once a field's own production has outgrown what the
+    /// fitted export tier can clear inside it.
+    /// </summary>
+    public const double CargoLaytimeDays = 60.0;
+
+    /// <summary>
+    /// SDD-006 §7a.4's finding-269 amendment. A fraction of the cargo's own
+    /// value per day rather than a flat dollar figure, because real
+    /// demurrage rates are market-set against whatever vessel is chartered
+    /// and have no fixed convention the way a tanker's deadweight class
+    /// does (<see cref="CargoSize"/>'s own reasoning). At the shipped
+    /// opening oil price this lands around $17,700/day — inside the range
+    /// real Aframax demurrage typically runs (roughly $15,000–$40,000/day).
+    /// </summary>
+    public const double DemurrageRateFraction = 0.0005;
+
     public const double ProcedureCompliance = 0.9;
 
     /// <summary>
