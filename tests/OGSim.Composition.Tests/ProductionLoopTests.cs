@@ -726,4 +726,219 @@ public sealed class ProductionLoopTests
             $"a year of solving spanned {warmest - coldest:F2} K, so the field is " +
             "running at a constant rather than at its own weather");
     }
+
+    // ------------------------------------------------ working-interest sale
+    // SDD-011 §4's finding-275 amendment — R13.10's second restructuring lever.
+
+    /// <summary>The tick's own <c>Account.PartnerPayable</c> credit — the
+    /// partner's share of revenue, the same LAST-movement selector
+    /// <see cref="OilRevenueThisTick"/> already uses.</summary>
+    private static Money PartnerPayableCreditThisTick(CompanyState company)
+    {
+        Movement? credit = null;
+        foreach (Movement movement in company.Ledger.Movements)
+            if (movement.Credit == Account.PartnerPayable) credit = movement;
+
+        Assert.NotNull(credit);
+        return credit!.Amount;
+    }
+
+    /// <summary>
+    /// Seeds a real belief about oil in place for the fixture's one
+    /// compartment, the same door <c>DrillWellCommand</c>'s applier
+    /// delivers through (<c>Defaults.OilInPlaceKind</c> is log-space) — a
+    /// plausible in-place figure off this fixture's own declared rock
+    /// (pore volume x porosity x oil saturation), not an arbitrary one.
+    /// </summary>
+    private static void SeedOilInPlaceBelief(Engine engine)
+    {
+        WorldState world = engine.Provided.Resolve<WorldState>();
+        EntityId<IReservoirCompartmentEntity> compartment = world.Beneath(world.Prospects[0])!.Value;
+
+        double trueOilInPlace = 100.0e6 * 0.22 * 0.7;
+
+        engine.Provided.Resolve<IBeliefStore>().Apply(new Observation(
+            new EntityRef(EntityKind.Compartment, compartment.Value),
+            Defaults.OilInPlaceKind,
+            Math.Log(trueOilInPlace),
+            Sigma: 0.3,
+            BeliefSpace.Log,
+            Provenance.WellTest));
+    }
+
+    /// <summary>Pushes cash below zero directly, the same way
+    /// <c>GameplayTests</c>' insolvency fixture does — a restructuring lever
+    /// is gated on distress, and this is the fastest honest way to produce
+    /// it without a multi-decade covenant-breach run.</summary>
+    private static void ForceCashNegative(Engine engine, CompanyState company)
+    {
+        Money overdraw = company.Ledger.Cash + Money.FromMillions(1.0);
+
+        company.Ledger.Post(new Movement(
+            new Tick(0), Account.Opex, Account.Cash, overdraw,
+            MovementCategory.Operating, Asset: null,
+            Cause: engine.Audit.Record(
+                AuditCategory.Financial, subject: null, cause: null,
+                new Dictionary<string, AuditValue>(StringComparer.Ordinal))));
+
+        Assert.True(company.Ledger.Cash < Money.Zero, "the fixture failed to force distress");
+    }
+
+    /// <summary>
+    /// SDD-011 §4's finding-275 amendment: the sale prices at
+    /// <c>Bank.Terms.ReserveValue x fraction x (1 - discount)</c> — the SAME
+    /// DCF walk the borrowing base already runs, read at the tick the sale
+    /// APPLIES (stage 2, before stage 8 recomputes it that same tick), not a
+    /// value the test hands the command directly.
+    /// </summary>
+    [Fact]
+    public void A_sale_prices_at_the_reserve_value_times_fraction_at_the_discount()
+    {
+        (Engine engine, CompanyState company) = Field();
+
+        // Field()'s own FieldControl.Drill is a direct test shortcut around
+        // DrillWellCommand's applier, which is the one place a discovery
+        // delivers an oil-in-place OBSERVATION (SDD-008 §3) — so a
+        // hand-declared field carries no belief of its own, and
+        // ReservesBook (which reads beliefs, not truth) prices it at zero
+        // without one.
+        SeedOilInPlaceBelief(engine);
+
+        engine.Pipeline.AdvanceTick();
+
+        Bank bank = Find<Bank>(engine);
+        Money reserveValue = bank.Terms.ReserveValue;
+        Assert.True(reserveValue > Money.Zero, "the fixture has no reserves to price a sale off");
+
+        ForceCashNegative(engine, company);
+
+        Assert.IsType<Accepted>(engine.Commands.Submit(new SellWorkingInterestCommand(0.2)));
+
+        engine.Pipeline.AdvanceTick();
+
+        Money price = LastEquityCreditThisTick(company);
+        Assert.Equal(Money.RoundHalfEven(reserveValue.Cents * 0.2 * 0.75), price);
+    }
+
+    private static Money LastEquityCreditThisTick(CompanyState company)
+    {
+        Movement? credit = null;
+        foreach (Movement movement in company.Ledger.Movements)
+            if (movement.Credit == Account.Equity) credit = movement;
+
+        Assert.NotNull(credit);
+        return credit!.Amount;
+    }
+
+    /// <summary>A healthy company — Clear covenant, positive cash — cannot
+    /// use a restructuring lever: it is not a routine financing tool.</summary>
+    [Fact]
+    public void A_sale_while_financially_healthy_refuses()
+    {
+        (Engine engine, _) = Field();
+
+        engine.Pipeline.AdvanceTick();
+
+        var result = Assert.IsType<Rejected>(
+            engine.Commands.Submit(new SellWorkingInterestCommand(0.1)));
+
+        Assert.Contains(result.Reasons, r => r.LocId == "$loc:reject.not-distressed");
+    }
+
+    /// <summary>Selling past the 50% cumulative cap refuses and names the
+    /// ceiling rather than silently clamping.</summary>
+    [Fact]
+    public void A_sale_above_the_sellable_cap_refuses_naming_the_ceiling()
+    {
+        (Engine engine, CompanyState company) = Field();
+
+        engine.Pipeline.AdvanceTick();
+        ForceCashNegative(engine, company);
+
+        var result = Assert.IsType<Rejected>(
+            engine.Commands.Submit(new SellWorkingInterestCommand(0.6)));
+
+        Assert.Contains(result.Reasons, r =>
+            r.LocId == "$loc:reject.beyond-sellable-cap" && r.Detail.Contains("0.5"));
+    }
+
+    /// <summary>Two sales accumulate rather than replace, and the cap is
+    /// read against the CUMULATIVE share, not each sale in isolation.</summary>
+    [Fact]
+    public void Two_sequential_sales_accumulate_and_the_second_still_respects_the_cap()
+    {
+        (Engine engine, CompanyState company) = Field();
+
+        engine.Pipeline.AdvanceTick();
+        ForceCashNegative(engine, company);
+
+        Assert.IsType<Accepted>(engine.Commands.Submit(new SellWorkingInterestCommand(0.3)));
+        engine.Pipeline.AdvanceTick();
+
+        WorkingInterest stake = Find<WorkingInterest>(engine);
+        Assert.Equal(0.3, stake.PartnerShare, 9);
+
+        // The first sale's proceeds can have carried cash back above zero
+        // this same tick — re-forced rather than assumed, so what is being
+        // tested here is the CAP, not whether distress persisted on its own.
+        ForceCashNegative(engine, company);
+
+        // 0.3 + 0.3 = 0.6, past the 0.5 cap.
+        var overCap = Assert.IsType<Rejected>(
+            engine.Commands.Submit(new SellWorkingInterestCommand(0.3)));
+        Assert.Contains(overCap.Reasons, r => r.LocId == "$loc:reject.beyond-sellable-cap");
+
+        // 0.3 + 0.2 = 0.5, exactly at the cap — still sellable.
+        Assert.IsType<Accepted>(engine.Commands.Submit(new SellWorkingInterestCommand(0.2)));
+        engine.Pipeline.AdvanceTick();
+
+        Assert.Equal(0.5, stake.PartnerShare, 9);
+    }
+
+    /// <summary>
+    /// Once a stake is sold, the field's OWN production splits every tick
+    /// (`ProductionLoop.PostRevenueSplit`/`PostCostSplit`): the partner's
+    /// share of that same tick's oil-sale revenue lands in
+    /// `Account.PartnerPayable` rather than `Account.Revenue`, in
+    /// proportion to `PartnerShare` — set directly here (bypassing the
+    /// distress gate) because this test is about the SPLIT, not about
+    /// reaching it.
+    /// </summary>
+    [Fact]
+    public void Production_after_a_sale_splits_revenue_with_the_partner()
+    {
+        (Engine engine, CompanyState company) = Field();
+
+        Find<WorkingInterest>(engine).Sell(0.4);
+
+        engine.Pipeline.AdvanceTick();
+
+        Money companyRevenue = OilRevenueThisTick(company);
+        Money partnerRevenue = PartnerPayableCreditThisTick(company);
+
+        Assert.True(companyRevenue > Money.Zero);
+        Assert.True(partnerRevenue > Money.Zero);
+
+        double revenueShare = partnerRevenue.Cents / (double)(companyRevenue.Cents + partnerRevenue.Cents);
+        Assert.Equal(0.4, revenueShare, 3);
+
+        Money companyOpex = LastMovementWhere(company, m => m.Debit == Account.Opex).Amount;
+        Money partnerOpex = LastMovementWhere(company, m => m.Debit == Account.PartnerPayable).Amount;
+
+        Assert.True(companyOpex > Money.Zero);
+        Assert.True(partnerOpex > Money.Zero);
+
+        double opexShare = partnerOpex.Cents / (double)(companyOpex.Cents + partnerOpex.Cents);
+        Assert.Equal(0.4, opexShare, 3);
+    }
+
+    private static Movement LastMovementWhere(CompanyState company, Func<Movement, bool> match)
+    {
+        Movement? found = null;
+        foreach (Movement movement in company.Ledger.Movements)
+            if (match(movement)) found = movement;
+
+        Assert.NotNull(found);
+        return found!;
+    }
 }

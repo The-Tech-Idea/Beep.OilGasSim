@@ -249,6 +249,85 @@ costs. One field, one rule; the classic "free well" is carry == the well's AFE.
 rival.assetOffer: D-severity, deadline, EM7 default = decline.
 ```
 
+> **Amendment (finding 275) — the PLAYER as the distressed party, the second
+> of R13.10's three restructuring findings.** The block above is the
+> RIVAL-SIDE asset market — a player buying a distressed rival's assets —
+> and it stays exactly as blocked as finding 274's own amendment (SDD-009
+> §5) found it: `Rival` is a complete, real design (`OGSim.Company/Rivals.cs`)
+> never instantiated anywhere in the composed engine, and the data room's own
+> "replay a seller's audit entries" claim does not hold up independently
+> either — `IBeliefStore` has no bulk-import path by design, and an audit
+> entry does not record enough of an observation to replay one (no subject
+> id, no observed value). Named again rather than solved here.
+>
+> **What IS built is the mirror transaction: the player selling a working
+> interest to an abstract partner, design 08 §7's "asset sales"/"forced
+> farm-outs" merged from the seller's own side** — the same decision either
+> name describes: give up a share of the field's future economics for cash
+> now. `WorkingInterest` (`OGSim.Company`) is the SAME row this section's
+> own text already named for the rival-side "minority stake" case — one
+> type, read from whichever side of the transaction is real. `PartnerPayable`
+> gets its first real producer, the same account this section's own text
+> already named for the carried-interest case.
+>
+> **Priced off the SAME DCF walk `Bank`'s own borrowing base already runs**
+> (SDD-009 §5): `Bank.Terms.ReserveValue` — the reserves' present value
+> BEFORE the advance-rate haircut, `ReserveBasedLending.PresentValueCents`
+> exposed uncut since finding 262 — times the fraction sold, at a 25%
+> distress discount. **A stated simplification of this section's own "P50
+> NPV" wording**: the walk prices 1P/Proved, not a second P50 reserves class
+> this composition has never built (SDD-009 §4's own reserves booking is
+> 1P/2P/3P by class, and a genuine P50 figure is a materially larger further
+> task, named rather than invented here) — the same simplification finding
+> 274 used for the covenant's own borrowing base, now reused a second time
+> rather than diverging from it.
+>
+> **`SellWorkingInterestCommand(double Fraction)`** (`OGSim.Composition`):
+> refused above a cumulative 50% cap (past it the company has given up
+> operatorship in substance, which is R13.10's third finding — a takeover —
+> rather than a sale), and refused unless the company is already financially
+> distressed — the covenant reading `Curing`/`Amortising`, or cash below
+> zero (read the same way `ObjectiveStage.Insolvent` derives it, without
+> depending on that stage's own persisted latch, which exists for the
+> scenario's verdict and not for gating a command). Both numbers — the 50%
+> cap and the 25% discount — were confirmed with Fahad before landing, the
+> same gate every other invented number this session has gone through; the
+> discount sits inside the real 20-40% range distressed oil and gas asset
+> sales commonly trade at.
+>
+> **The sale proceeds are booked as a capital transaction, not revenue**:
+> `Account.Cash` against `Account.Equity`, the same distinction this
+> engine's own opening balance draws — the company is not selling a barrel,
+> it is selling a share of itself. **Ongoing production is then split every
+> tick** (`ProductionLoop.PostEconomics`): every revenue account this stage
+> posts — oil sale gross AND gas sale, since a partner's interest is in the
+> field and not in one hydrocarbon stream — and the field's own operating
+> cost both scale by `(1 − PartnerShare)` for the company's own books; the
+> partner's share posts to `Account.PartnerPayable` instead, credited by
+> their revenue share and debited by their cost share, so the balance
+> tracks what the company owes them net rather than two running totals.
+> Royalty and tax stay on the FULL gross, unaffected by any private
+> split — a licence's fiscal terms are assessed against the whole field, not
+> the company's ownership structure, and the licence holder pays them in
+> full. Demurrage stays out of scope, named rather than split — a logistics
+> penalty, not the field's own operating cost this amendment prices.
+>
+> **`WorkingInterest` is the first of R13.10's three levers that needs its
+> own persisted state**: unlike the hedge or insurance (finding 272/273,
+> stateless — nothing about one tick's settlement depends on another's), a
+> sold stake is permanent, so `PartnerShare` is an `IStateOwner`
+> (`company.working-interest`) rather than recomputed. `PartnerShare` only
+> grows — there is no mechanism to buy a share back, named as a further task
+> rather than built, and carried interest's `remainingCarry` deferred-cost
+> mechanic this section's own text describes for the rival-side case stays
+> unbuilt on the player-side too: this amendment ships a straight
+> proportional split, not a carry.
+>
+> **With no sale ever made, `PartnerShare` is zero and every changed line
+> reduces to exactly the single movement it replaces** — proven by the
+> entire existing suite staying green unchanged, the same proof finding
+> 271's quality differential used for its own "unchanged default" claim.
+
 ## 5. Regulator
 
 Inspection scheduling per `hse-regime` cadence ± jitter from `operations`

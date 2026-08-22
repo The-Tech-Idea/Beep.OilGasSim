@@ -303,6 +303,11 @@ internal sealed class ProductionLoop : IStateOwner
     private readonly IReadOnlyList<int> _liquidOrdinals;
     private readonly Func<bool> _isAbandoned;
 
+    // SDD-011 §4's finding-275 amendment — R13.10's second restructuring
+    // lever. Read for its own PartnerShare only; the loop never mutates it
+    // (SellWorkingInterestApplier is the one place a sale happens).
+    private readonly OGSim.Company.WorkingInterest _stake;
+
     public ProductionLoop(
         SubsurfaceState subsurface,
         WellsState wells,
@@ -346,7 +351,11 @@ internal sealed class ProductionLoop : IStateOwner
         // content declared, by id, so a compartment's own drawn grade can be
         // priced without this loop needing to know how a `BlackOilModel`
         // stores it.
-        IReadOnlyList<FluidSystemDefinition> fluidSystems)
+        IReadOnlyList<FluidSystemDefinition> fluidSystems,
+
+        // SDD-011 §4's finding-275 amendment — read every tick to split
+        // revenue and opex with a partner, never written here.
+        OGSim.Company.WorkingInterest stake)
     {
         ArgumentNullException.ThrowIfNull(subsurface);
         ArgumentNullException.ThrowIfNull(wells);
@@ -367,6 +376,7 @@ internal sealed class ProductionLoop : IStateOwner
         ArgumentNullException.ThrowIfNull(isAbandoned);
         ArgumentNullException.ThrowIfNull(economics);
         ArgumentNullException.ThrowIfNull(fluidSystems);
+        ArgumentNullException.ThrowIfNull(stake);
 
         _subsurface = subsurface;
         _wells = wells;
@@ -399,6 +409,7 @@ internal sealed class ProductionLoop : IStateOwner
         _weather = weather;
         _surfaceDensity = surfaceDensity;
         _materialCount = materialCount;
+        _stake = stake;
 
         var apiGravityByFluidSystem = new Dictionary<ContentId, double>();
         for (int i = 0; i < fluidSystems.Count; i++)
@@ -1737,16 +1748,13 @@ internal sealed class ProductionLoop : IStateOwner
             Money gas = Scale(_gasPrice, gasSold / KilogramsPerTonne);
 
             if (gas > Money.Zero)
-                _company.Ledger.Post(new Movement(
-                    tick, Account.Cash, Account.Revenue, gas,
-                    MovementCategory.Production, Asset: null,
-                    Cause: _audit.Record(
-                        AuditCategory.CustodyTransfer, subject: null, cause: null,
-                        new Dictionary<string, AuditValue>(StringComparer.Ordinal)
-                        {
-                            ["sales-gas-kg"] = new(gasSold.ToString(
-                                System.Globalization.CultureInfo.InvariantCulture)),
-                        })));
+                PostRevenueSplit(tick, gas, MovementCategory.Production, _audit.Record(
+                    AuditCategory.CustodyTransfer, subject: null, cause: null,
+                    new Dictionary<string, AuditValue>(StringComparer.Ordinal)
+                    {
+                        ["sales-gas-kg"] = new(gasSold.ToString(
+                            System.Globalization.CultureInfo.InvariantCulture)),
+                    }));
         }
 
         if (_sale is AuditId sale)
@@ -1765,14 +1773,19 @@ internal sealed class ProductionLoop : IStateOwner
             Money gross = Scale(
                 _market.OilPrice, Delivered.Total.KgPerSecond / KilogramsPerTonne * qualityFactor);
 
-            _company.Ledger.Post(new Movement(
-                tick, Account.Cash, Account.Revenue, gross,
-                MovementCategory.Production, Asset: null, Cause: sale));
+            PostRevenueSplit(tick, gross, MovementCategory.Production, sale);
 
             // THE STATE TAKES ITS SHARE (SDD-009 §3). A royalty on gross and a
             // tax on what is left after costs — the regime was composed at R16
             // and called by nobody, so a company kept every barrel's full price
             // and the fiscal terms of a licence meant nothing.
+            //
+            // ON THE FULL GROSS, NOT THE POST-SPLIT SHARE (SDD-011 §4's
+            // finding-275 amendment): royalty and tax are the LICENCE's own
+            // fiscal terms, assessed against the whole field regardless of any
+            // private working-interest split — the state taxes the ground, not
+            // the company's ownership structure, and the company (the licence
+            // holder) pays them in full.
             FiscalResult assessed = _regime.Assess(new FiscalInput(
                 GrossRevenue: gross,
                 RecoverableOpex: opex,
@@ -1810,9 +1823,63 @@ internal sealed class ProductionLoop : IStateOwner
                 ["injection-water"] = new(Format(costs.InjectionWater.Cents)),
             });
 
-        _company.Ledger.Post(new Movement(
-            tick, Account.Opex, Account.Cash, opex,
-            MovementCategory.Operating, Asset: null, Cause: operating));
+        PostCostSplit(tick, opex, MovementCategory.Operating, operating);
+    }
+
+    /// <summary>
+    /// SDD-011 §4's finding-275 amendment — a partner's share of revenue is
+    /// not the company's own, so only its net share posts as
+    /// <see cref="Account.Revenue"/>; the rest is cash collected on the
+    /// partner's behalf, a liability rather than income (law L5 — the
+    /// partner's economics are not this company's to report).
+    ///
+    /// <para>Applies to every revenue flow this stage posts, gas sales
+    /// included, not only the oil sale — a partner's interest is in the
+    /// field, not in one hydrocarbon stream. With no sale ever made,
+    /// <c>PartnerShare</c> is zero and this reduces to exactly the single
+    /// movement it replaces.</para>
+    /// </summary>
+    private void PostRevenueSplit(Tick tick, Money total, MovementCategory category, AuditId cause)
+    {
+        if (total <= Money.Zero) return;
+
+        double share = _stake.PartnerShare;
+        Money partnerCut = share > 0.0 ? Money.RoundHalfEven(total.Cents * share) : Money.Zero;
+        Money companyCut = total - partnerCut;
+
+        if (companyCut > Money.Zero)
+            _company.Ledger.Post(new Movement(
+                tick, Account.Cash, Account.Revenue, companyCut, category, Asset: null, Cause: cause));
+
+        if (partnerCut > Money.Zero)
+            _company.Ledger.Post(new Movement(
+                tick, Account.Cash, Account.PartnerPayable, partnerCut, category, Asset: null,
+                Cause: cause));
+    }
+
+    /// <summary>
+    /// The opex mirror of <see cref="PostRevenueSplit"/>: the partner's
+    /// share of the SAME cost bill reduces what the company owes them
+    /// (debiting <see cref="Account.PartnerPayable"/>) rather than being the
+    /// company's own expense. Demurrage stays out of scope — a logistics
+    /// penalty, not the field's own operating cost this amendment names.
+    /// </summary>
+    private void PostCostSplit(Tick tick, Money total, MovementCategory category, AuditId cause)
+    {
+        if (total <= Money.Zero) return;
+
+        double share = _stake.PartnerShare;
+        Money partnerCut = share > 0.0 ? Money.RoundHalfEven(total.Cents * share) : Money.Zero;
+        Money companyCut = total - partnerCut;
+
+        if (companyCut > Money.Zero)
+            _company.Ledger.Post(new Movement(
+                tick, Account.Opex, Account.Cash, companyCut, category, Asset: null, Cause: cause));
+
+        if (partnerCut > Money.Zero)
+            _company.Ledger.Post(new Movement(
+                tick, Account.PartnerPayable, Account.Cash, partnerCut, category, Asset: null,
+                Cause: cause));
     }
 
     /// <summary>

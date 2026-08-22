@@ -1551,6 +1551,20 @@ internal static class Defaults
         Deductible: Money.FromMillions(0.5),
         Limit: TopEventLossUnmitigated);
 
+    /// <summary>
+    /// SDD-011 §4's finding-275 amendment — R13.10's second restructuring
+    /// lever. A cumulative cap of 50%: past it the company has given up
+    /// operatorship in substance, which is a takeover by another name rather
+    /// than a sale (R13.10's third lever, its own finding). A 25% distress
+    /// discount off the DCF-priced fair value, inside the real 20-40% range
+    /// distressed oil and gas asset sales commonly trade at — confirmed with
+    /// Fahad before landing, the same gate every other invented number this
+    /// session has gone through.
+    /// </summary>
+    public static OGSim.Company.WorkingInterestTerms WorkingInterest { get; } = new(
+        MaxSellableFraction: 0.5,
+        DistressDiscount: 0.25);
+
     /// <summary>An untrained crew's strength on the barrier's own [0, 1]
     /// scale (SDD-007 §4.1's finding-265 amendment) — noticeably below the
     /// flat 0.9 this composition charged every crew before there was a lever

@@ -890,6 +890,11 @@ internal sealed class FieldModule(
         typeof(FieldControl), typeof(CloseStage), typeof(IObligationRegistry),
         typeof(Bank), typeof(ReserveHistory),
 
+        // SDD-011 §4's finding-275 amendment — R13.10's second restructuring
+        // lever, provided so a test can resolve and assess it directly, the
+        // same reason Bank is.
+        typeof(OGSim.Company.WorkingInterest),
+
         // SDD-014 §5a's finding-266 amendment — SaveGame.Load resolves this to
         // rebuild the read model immediately after a restore, the same reason
         // CloseStage above is provided.
@@ -967,7 +972,7 @@ internal sealed class FieldModule(
     ownsState: [
         "field.activities", "company.obligations", "field.flood", "field.export",
         "company.facility", "company.reserve-history", "field.abandoned",
-        "company.take-or-pay",
+        "company.take-or-pay", "company.working-interest",
 
         // SDD-014 §5a's finding-266 amendment — a run's verdict and what has
         // already been told to the trail about it are both history across
@@ -1041,6 +1046,7 @@ internal sealed class FieldModule(
         typeof(InstallLiquidPumpStationCommand),
         typeof(BorrowCommand),
         typeof(RepayCommand),
+        typeof(SellWorkingInterestCommand),
         typeof(SetWellChokeCommand),
         typeof(SetVoidageReplacementCommand),
         typeof(AbandonWellCommand),
@@ -1107,6 +1113,15 @@ internal sealed class FieldModule(
         var terminal = new OGSim.Facilities.ExportTerminal(
             new EntityRef(EntityKind.Facility, 1), ladders.Export[0]);
 
+        // WHAT THE COMPANY HAS ALREADY SOLD (SDD-011 §4's finding-275
+        // amendment) — R13.10's second restructuring lever, and PERMANENT
+        // unlike the hedge or insurance, so it is saved rather than
+        // recomputed.
+        OGSim.Company.WorkingInterest.Validate(Defaults.WorkingInterest);
+        var stake = new OGSim.Company.WorkingInterest();
+        composition.Own(stake);
+        composition.Provide(stake);
+
         loop = new ProductionLoop(
             composition.Require<OGSim.Subsurface.SubsurfaceState>(),
             composition.Require<OGSim.Wells.WellsState>(),
@@ -1143,7 +1158,8 @@ internal sealed class FieldModule(
             composition.Require<OGSim.Environment.WeatherState>(),
             Defaults.SurfaceOilDensity,
             Defaults.MaterialCount,
-            fluidSystems);
+            fluidSystems,
+            stake);
 
         // Stage 4 before stage 5 before stage 7: the plan, the solve, the meter.
         // Three slots in design 03 §6's order rather than one function, so a
@@ -1502,6 +1518,14 @@ internal sealed class FieldModule(
 
         composition.HandleCommand(
             new RepayValidator(borrower), new RepayApplier(borrower, audit));
+
+        // NOR IS SELLING WORKING INTEREST (SDD-011 §4's finding-275
+        // amendment) — R13.10's second restructuring lever, a decision
+        // rather than a project, the same reason a drawdown is not on the
+        // scheduled-activity engine either.
+        composition.HandleCommand(
+            new SellWorkingInterestValidator(borrower, bank, stake, Defaults.WorkingInterest),
+            new SellWorkingInterestApplier(borrower, bank, stake, Defaults.WorkingInterest, audit));
 
         // NOR IS TRAINING THE CREW (SDD-007 §4.1's finding-265 amendment) —
         // a one-time decision a company makes on a Tuesday afternoon, the
