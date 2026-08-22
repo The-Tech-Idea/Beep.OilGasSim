@@ -543,6 +543,14 @@ internal sealed class SubsurfaceState : IStateOwner
     internal double TruePorosityOf(EntityId<IReservoirCompartmentEntity> compartment) =>
         Find(compartment).Rock.Porosity;
 
+    /// <summary>Which fluid system this compartment's oil is (SDD-003 §3.0b's
+    /// finding-270 amendment) — read by a pricing computation, not sampled
+    /// into a belief, the same standing <see cref="TrueVoidageRoomOf"/> and
+    /// <see cref="TrueWorstSourFraction"/> already have (SDD-009 §6's
+    /// finding-271 amendment).</summary>
+    internal ContentId TrueFluidSystemOf(EntityId<IReservoirCompartmentEntity> compartment) =>
+        Find(compartment).FluidSystem;
+
     /// <summary>
     /// Net pay and drainage area — the other two thirds of what a well's inflow
     /// is made of (SDD-008 §2c).

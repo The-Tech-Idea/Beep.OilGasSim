@@ -41,6 +41,24 @@ internal static class Defaults
         new Pressure(500.0), new Pressure(60e6),
         Temperature.FromCelsius(10.0), Temperature.FromCelsius(180.0));
 
+    /// <summary>
+    /// SDD-009 §6's finding-271 amendment — design 08 §3.1's quality
+    /// differential, priced: <c>Realised = Benchmark × (1 + rate × (API −
+    /// reference))</c>. ~0.007 of benchmark price per °API, from ESMAP/World
+    /// Bank's statistical study of crude price differentials ("Crude Oil
+    /// Price Differentials and Differences in Oil Qualities").
+    ///
+    /// <para>Sulphur is NOT included — its per-unit effect in the same study
+    /// (~0.056 per percentage point, roughly eight times API's own) would
+    /// need a sulphur content this engine does not carry (finding 270's
+    /// `fluid-system` content deliberately ships API gravity alone), and a
+    /// guessed sulphur figure folded into one number would be a worse
+    /// mistake than the gap it papered over. Real heavy-sour differentials
+    /// run wider than API alone predicts for exactly this reason — this
+    /// price is a genuine but partial model, not a claim of completeness.</para>
+    /// </summary>
+    public const double QualityDifferentialPerApiDegree = 0.007;
+
     public static Wells.InflowConditions Inflow { get; } = new(
         new Permeability(1.0e-13), new Length(20.0), new Area(2.0e5),
         new Length(0.108), new Viscosity(2.0e-3), new Pressure(10.0e6));
@@ -2138,7 +2156,7 @@ public static class EngineBuilder
         new HseModule(),
         new ObjectivesModule(),
         new MaterialsModule(profile, fluidSystems),
-        new FieldModule(ladders, takeOrPay, liftTiers),
+        new FieldModule(ladders, takeOrPay, liftTiers, fluidSystems),
         new DiagnosticsModule(audit, clock, random),
     ];
 

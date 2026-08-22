@@ -217,6 +217,11 @@ internal sealed class ProductionLoop : IStateOwner
     // a tick that produced nothing cannot commit last month's volumes.
     private readonly Dictionary<EntityId<IReservoirCompartmentEntity>, double> _byCompartment = [];
 
+    // The quality-differential pricing term's reference table (SDD-009 §6's
+    // finding-271 amendment) — every fluid system this build's content
+    // declared, by id, resolved once at construction and never mutated.
+    private readonly IReadOnlyDictionary<ContentId, double> _apiGravityByFluidSystem;
+
     // THE LAST SEGMENT'S CONVERGED STATE PER COMPLETION (SDD-017 §2's R21.6
     // amendment) — what a read model reconstructs an operating point from.
     // Overwritten every segment, so by the tick's own close this holds the
@@ -334,7 +339,14 @@ internal sealed class ProductionLoop : IStateOwner
         Temperature reservoirTemperature,
         OGSim.Environment.WeatherState weather,
         Density surfaceDensity,
-        int materialCount)
+        int materialCount,
+
+        // The quality-differential pricing term's reference table (SDD-009
+        // §6's finding-271 amendment) — every fluid system this build's
+        // content declared, by id, so a compartment's own drawn grade can be
+        // priced without this loop needing to know how a `BlackOilModel`
+        // stores it.
+        IReadOnlyList<FluidSystemDefinition> fluidSystems)
     {
         ArgumentNullException.ThrowIfNull(subsurface);
         ArgumentNullException.ThrowIfNull(wells);
@@ -354,6 +366,7 @@ internal sealed class ProductionLoop : IStateOwner
         ArgumentNullException.ThrowIfNull(liquidOrdinals);
         ArgumentNullException.ThrowIfNull(isAbandoned);
         ArgumentNullException.ThrowIfNull(economics);
+        ArgumentNullException.ThrowIfNull(fluidSystems);
 
         _subsurface = subsurface;
         _wells = wells;
@@ -386,6 +399,11 @@ internal sealed class ProductionLoop : IStateOwner
         _weather = weather;
         _surfaceDensity = surfaceDensity;
         _materialCount = materialCount;
+
+        var apiGravityByFluidSystem = new Dictionary<ContentId, double>();
+        for (int i = 0; i < fluidSystems.Count; i++)
+            apiGravityByFluidSystem.Add(fluidSystems[i].Id, fluidSystems[i].ApiGravityDegrees);
+        _apiGravityByFluidSystem = apiGravityByFluidSystem;
 
         for (int i = 0; i < meteredPoints.Count; i++) _meters.Add(meteredPoints[i]);
 
@@ -1637,6 +1655,55 @@ internal sealed class ProductionLoop : IStateOwner
                 })));
     }
 
+    /// <summary>
+    /// The grade this tick's sale is priced against (SDD-009 §6's finding-271
+    /// amendment) — every producing compartment's own fluid system, weighted
+    /// by the same reservoir volume the material balance commit itself
+    /// charges each compartment (<c>_byCompartment</c>), so a field split
+    /// across two grades is not priced as though it were the bigger half
+    /// alone.
+    ///
+    /// <para>Walked over the COMPLETIONS in their own order, never over the
+    /// dictionary (rule D-5) — the same discipline <see
+    /// cref="PublishWithdrawals"/> already holds for the same reason: a hash
+    /// walk here would make one tick's realised price depend on hashing.</para>
+    /// </summary>
+    private double ProductionWeightedApiGravity()
+    {
+        IReadOnlyList<Completion> completions = _wells.Completions;
+        var seen = new HashSet<EntityId<IReservoirCompartmentEntity>>();
+
+        double weightedSum = 0.0;
+        double totalWeight = 0.0;
+
+        for (int i = 0; i < completions.Count; i++)
+        {
+            EntityId<IReservoirCompartmentEntity> compartment =
+                _wells.CompartmentOf(completions[i].CompletionId);
+
+            if (!seen.Add(compartment)) continue;
+            if (!_byCompartment.TryGetValue(compartment, out double reservoirVolume)) continue;
+            if (reservoirVolume <= 0.0) continue;
+
+            ContentId fluidSystem = _subsurface.TrueFluidSystemOf(compartment);
+
+            if (!_apiGravityByFluidSystem.TryGetValue(fluidSystem, out double apiGravity))
+                throw new ContentFault("SDD-009 §6", null,
+                    $"compartment {compartment.Value} names fluid system " +
+                    $"'{fluidSystem.Value}', which this build's content does not contain");
+
+            weightedSum += reservoirVolume * apiGravity;
+            totalWeight += reservoirVolume;
+        }
+
+        if (totalWeight <= 0.0)
+            throw new InvariantFault("SDD-009 §6", null,
+                "a sale is being priced this tick but no producing compartment contributed " +
+                "any withdrawal — there is nothing to weight a grade against");
+
+        return weightedSum / totalWeight;
+    }
+
     public void PostEconomics(Tick tick)
     {
         // PRICED OFF THE METER (SDD-009 §1) — not off what the wells produced.
@@ -1684,8 +1751,19 @@ internal sealed class ProductionLoop : IStateOwner
 
         if (_sale is AuditId sale)
         {
+            // DESIGN 08 §3.1's QUALITY DIFFERENTIAL, PRICED (SDD-009 §6's
+            // finding-271 amendment): Realised = Benchmark × (1 + rate ×
+            // (API − reference)). The reference is `Defaults.Fluid`'s own
+            // 35° API — the SAME grade the shipped benchmark price was
+            // already calibrated against (`Defaults.Economics`'s own "$377/m³
+            // ÷ 0.85 t/m³" comment), so a field that only ever produces the
+            // shipped default grade prices at exactly the bare benchmark,
+            // unchanged from before this amendment.
+            double qualityFactor = 1.0 + Defaults.QualityDifferentialPerApiDegree
+                * (ProductionWeightedApiGravity() - Defaults.Fluid.OilGravity.Degrees);
+
             Money gross = Scale(
-                _market.OilPrice, Delivered.Total.KgPerSecond / KilogramsPerTonne);
+                _market.OilPrice, Delivered.Total.KgPerSecond / KilogramsPerTonne * qualityFactor);
 
             _company.Ledger.Post(new Movement(
                 tick, Account.Cash, Account.Revenue, gross,

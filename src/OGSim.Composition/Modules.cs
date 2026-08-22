@@ -820,7 +820,13 @@ internal sealed class TakeOrPayStage(
 /// </summary>
 internal sealed class FieldModule(
     FacilityLadders ladders, OGSim.Company.TakeOrPayTerms takeOrPay,
-    OGSim.Wells.LiftTiers liftTiers) : EngineModule(Declare(
+    OGSim.Wells.LiftTiers liftTiers,
+
+    // The quality-differential pricing term's own reference table (SDD-009
+    // §6's finding-271 amendment) — threaded the same way ladders/takeOrPay/
+    // liftTiers already are: content-derived, resolved before any module
+    // composes.
+    IReadOnlyList<FluidSystemDefinition> fluidSystems) : EngineModule(Declare(
     "field",
     provides:
     [
@@ -1075,7 +1081,8 @@ internal sealed class FieldModule(
             Defaults.ReservoirTemperature,
             composition.Require<OGSim.Environment.WeatherState>(),
             Defaults.SurfaceOilDensity,
-            Defaults.MaterialCount);
+            Defaults.MaterialCount,
+            fluidSystems);
 
         // Stage 4 before stage 5 before stage 7: the plan, the solve, the meter.
         // Three slots in design 03 §6's order rather than one function, so a

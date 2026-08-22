@@ -208,6 +208,19 @@ layer or the read model — the R15-V10 leak test covers both.
 > separate modelling question (real petroleum engineering answers it with a
 > volume-weighted average, itself a design decision this document does not
 > make casually) and is not this amendment's to invent an answer to.
+>
+> **Amendment (finding 271): a new truth-door member, and the blending
+> question above turned out not to block pricing.** `TrueFluidSystemOf`
+> joins `TrueVoidageRoomOf`/`TrueWorstSourFraction` — read directly by
+> `ProductionLoop` for design 08 §3.1's quality-differential pricing term
+> (SDD-009 §6's own amendment), not routed through `ObservationSampler`.
+> Pricing needed a per-tick, production-weighted GRADE for the sale, not the
+> commingled surface stream's own effective properties — `ProductionLoop`
+> already tracks each compartment's reservoir-volume withdrawal for the
+> tick, from BEFORE the network solve commingles anything, so a weighted
+> average of the grade NUMBER (not the fluid) answers the pricing question
+> without touching `Pipeline`/`Separator` or resolving how they would blend
+> two streams' PVT properties. The carve-out above stands unchanged.
 
 ### 3.1 Material balance solve
 

@@ -18,7 +18,8 @@ namespace OGSim.Composition.Tests;
 public sealed class ProductionLoopTests
 {
     /// <summary>A composed engine with one compartment and one well on it.</summary>
-    private static (Engine Engine, CompanyState Company) Field(ulong? seed = null)
+    private static (Engine Engine, CompanyState Company) Field(
+        ulong? seed = null, ContentId? fluidSystem = null)
     {
         Built built = Assert.IsType<Built>(EngineBuilder.Build(
             seed is ulong s ? Fixture.Settings() with { WorldSeed = s } : Fixture.Settings()));
@@ -38,7 +39,7 @@ public sealed class ProductionLoopTests
                 InitialPressure: new Pressure(30.0e6),
                 Temperature: Temperature.FromCelsius(93.3),
                 Depth: new Length(2000.0),
-                FluidSystem: new ContentId("medium-crude")),
+                FluidSystem: fluidSystem ?? new ContentId("medium-crude")),
             // GOOD ROCK, kept. This fixture is the one that always built its
             // own well to match — 2e-13 and 30 m in both places — so it is the
             // one place finding 170 never bit, and the facility-limited test
@@ -282,6 +283,78 @@ public sealed class ProductionLoopTests
             new AuditQuery(null, AuditCategory.CustodyTransfer, null, null));
 
         Assert.Contains(transfers, entry => entry.Id == revenue!.Cause);
+    }
+
+    /// <summary>The tick's oil sale, however many <c>Account.Revenue</c>
+    /// credits post this tick (sales gas posts one too) — the LAST one, the
+    /// same selector <see cref="Revenue_is_caused_by_a_custody_transfer"/>
+    /// already relies on, since the oil sale is posted after the gas
+    /// sale within <c>ProductionLoop.PostEconomics</c>.</summary>
+    private static Money OilRevenueThisTick(CompanyState company)
+    {
+        Movement? revenue = null;
+        foreach (Movement movement in company.Ledger.Movements)
+            if (movement.Credit == Account.Revenue) revenue = movement;
+
+        Assert.NotNull(revenue);
+        return revenue!.Amount;
+    }
+
+    /// <summary>
+    /// SDD-009 §6's finding-271 amendment: the shipped default grade IS the
+    /// benchmark's own reference (`Defaults.Fluid`'s 35° API — the same
+    /// grade `Defaults.Economics`'s "$377/m³ ÷ 0.85 t/m³" comment already
+    /// assumed), and this amendment must not have moved a single cent of it.
+    /// Checked against the reference itself: two fields built the same way,
+    /// differing only in which `Field()` overload names the grade, still
+    /// price identically. The sibling test below is where the amendment's
+    /// real claim — a DIFFERENT grade prices differently, by the pinned
+    /// amount — is actually proven; the full fast gate and slow suite (both
+    /// clean, unchanged, on the shipped default grade throughout) are the
+    /// broader evidence for this one.
+    /// </summary>
+    [Fact]
+    public void A_field_on_the_shipped_default_grade_prices_identically_however_named()
+    {
+        (Engine implicitGrade, CompanyState implicitCompany) = Field();
+        (Engine explicitGrade, CompanyState explicitCompany) =
+            Field(fluidSystem: new ContentId("medium-crude"));
+
+        implicitGrade.Pipeline.AdvanceTick();
+        explicitGrade.Pipeline.AdvanceTick();
+
+        Assert.Equal(
+            OilRevenueThisTick(implicitCompany).Cents,
+            OilRevenueThisTick(explicitCompany).Cents);
+    }
+
+    /// <summary>
+    /// SDD-009 §6's finding-271 amendment: a heavier grade sells at a real
+    /// discount, not a cosmetic one. Two otherwise-identical fields — same
+    /// rock, same well, same month's production — differing only in fluid
+    /// system, so the ratio of realised revenue IS the quality factor:
+    /// 1 + 0.007 × (22 − 35) = 0.909 for heavy-sour-crude against the 35°
+    /// API reference.
+    /// </summary>
+    [Fact]
+    public void A_heavier_grade_sells_at_the_priced_discount()
+    {
+        (Engine medium, CompanyState mediumCompany) = Field();
+        (Engine heavy, CompanyState heavyCompany) =
+            Field(fluidSystem: new ContentId("heavy-sour-crude"));
+
+        medium.Pipeline.AdvanceTick();
+        heavy.Pipeline.AdvanceTick();
+
+        Money mediumRevenue = OilRevenueThisTick(mediumCompany);
+        Money heavyRevenue = OilRevenueThisTick(heavyCompany);
+
+        Assert.True(mediumRevenue > Money.Zero);
+        Assert.True(heavyRevenue < mediumRevenue,
+            "a heavier, sourer grade priced no lower than the reference grade");
+
+        double ratio = heavyRevenue.Cents / (double)mediumRevenue.Cents;
+        Assert.Equal(0.909d, ratio, 3);
     }
 
     /// <summary>

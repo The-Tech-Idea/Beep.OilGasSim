@@ -452,6 +452,82 @@ Insurance (ED6): premium(class) = exposure(class) · rate(record) per year;
 > already proven end to end by the bond forfeit, so this needed no new
 > ledger vocabulary, only a second poster of the existing kind.
 
+> **Amendment (finding 271): §6's quality differential, priced — the second
+> of design 08 §3.1's three terms to leave the formula and become a real
+> number.** `ProductionLoop.PostEconomics` priced every oil sale off the bare
+> benchmark, `_market.OilPrice`, with no differential term anywhere in the
+> code — a company holding a heavy-sour field and one holding a light-sweet
+> field earned identically, and finding 270's whole point (a compartment's
+> API gravity is now a real, drawn, per-field fact) had nothing downstream to
+> change because of it.
+>
+> ```text
+> Realised  =  Benchmark × (1 + rate × (API − reference))
+> rate       =  0.007                    // fraction of benchmark, per °API
+> reference  =  35.0°                    // Defaults.Fluid's own grade
+> ```
+>
+> **`rate` is not invented.** It comes from ESMAP/World Bank's statistical
+> study of crude price differentials ("Crude Oil Price Differentials and
+> Differences in Oil Qualities"), which finds each degree of API gravity
+> moves relative price by roughly 0.007 of the benchmark. The same study puts
+> sulphur's per-unit effect at roughly 0.056 per percentage point — about
+> eight times API's own — and **sulphur is deliberately not priced**: finding
+> 270's `fluid-system` content carries API gravity alone, and folding a
+> guessed sulphur figure into this term would invent a bigger number than the
+> one this amendment is careful to ground. Real heavy-sour differentials run
+> wider than API alone predicts for exactly this reason — this is a genuine
+> but partial model of design 08 §3.1's quality term, not a claim that
+> sulphur's premium/discount is covered.
+>
+> **`reference` is not a second number either.** `Defaults.Economics`'s own
+> shipped benchmark price is already derived "$377/m³ ÷ 0.85 t/m³" — and
+> 0.85 specific gravity is, to three significant figures, `Defaults.Fluid`'s
+> own 35° API. The benchmark was always implicitly priced against medium
+> crude; this amendment is the first place that assumption is written down
+> and used, rather than left as an unstated fact behind a dollar figure. One
+> consequence worth stating plainly: **a field that only ever produces the
+> shipped default grade prices at exactly the bare benchmark, unchanged from
+> before this amendment** — the full fast gate and slow suite both confirm
+> this by staying green with no test re-stated.
+>
+> **The differential is priced against a PRODUCTION-WEIGHTED grade, not a
+> single compartment's.** `ProductionLoop` already tracks each producing
+> compartment's own reservoir-volume withdrawal for the tick, in
+> `_byCompartment` — the same figure `SubsurfaceState.CommitTick` charges
+> each compartment against — so a field split across two fluid systems is
+> weighted by how much each one actually contributed this tick, not averaged
+> flat or priced off whichever compartment happens to be first. Walked over
+> the completions in their own declared order, never the dictionary (rule
+> D-5), the same discipline `PublishWithdrawals` already holds for the
+> identical reason.
+>
+> **`SubsurfaceState.TrueFluidSystemOf`** joins `TrueVoidageRoomOf` and
+> `TrueWorstSourFraction` as a truth-door member read by a composition
+> mechanic directly rather than through `ObservationSampler` — SDD-003 §3.0b
+> carries the citation; SDD-008 §3's table is unchanged, because none of
+> these three route through a belief.
+>
+> **Gas is untouched.** Sales gas prices off its own separate `_gasPrice`
+> (§6's own "separate benchmarks" line) and this engine tracks no gas
+> quality fact to differentiate against — the differential applies to the
+> oil sale alone.
+>
+> **A tick that reaches this term with no producing compartment to weight is
+> a refusal, not a default of zero.** A sale (`_sale is AuditId`) only exists
+> when `Delivered.Total.KgPerSecond > 0.0`, which requires real production
+> this tick — an `InvariantFault` names the gap rather than silently pricing
+> at the reference grade if that invariant is ever wrong. An unknown fluid
+> system id (a save or a generated world naming one this build's content
+> does not contain) is a `ContentFault`, the same shape `SubsurfaceState`'s
+> own `FluidFor` already refuses with.
+>
+> **Location differential stays open** — design 08 §3.1's third term, and
+> this amendment's own stated boundary: this engine has no per-field
+> distance-to-market fact to price against yet, and inventing one alongside
+> a grounded quality term would be exactly the kind of number this session's
+> standing discipline forbids.
+
 ## 8. Error surface
 
 | Situation | Response |
