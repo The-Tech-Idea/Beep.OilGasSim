@@ -1430,7 +1430,8 @@ internal sealed class FieldModule(
             bank,
             composition.Require<ReserveHistory>(),
             composition.Require<OGSim.Environment.WeatherState>(),
-            composition.Require<EsgAssessment>());
+            composition.Require<EsgAssessment>(),
+            composition.Require<OGSim.Company.Licence>());
 
         // The scenario is CONTENT (design 03 §3.3): the win condition is an
         // objective over a read-model path, not a comparison compiled into a

@@ -243,6 +243,20 @@ public sealed record WaterFloodView(
 /// </summary>
 public readonly record struct StorageView(Mass Held, Mass Ullage);
 
+/// <summary>
+/// SDD-017 §2's `ExplorationView.Licences` row (finding 278) — a single
+/// field rather than a list, since this composition holds exactly one
+/// licence, always (SDD-011 §1's R20d.9 amendment). `IsLive`/`LossReason`
+/// are not in SDD-017's own tuple, added because a licence already lost is
+/// the single most important thing this view exists to show.
+/// </summary>
+public sealed record LicenceView(
+    EntityRef Licence,
+    Tick Expiry,
+    int CommitmentItemsOutstanding,
+    bool IsLive,
+    OGSim.Company.LicenceLossReason? LossReason);
+
 public sealed record FieldReadModel(
     Tick Tick,
     GameDate Date,
@@ -477,7 +491,12 @@ public sealed record FieldReadModel(
 
     /// <summary>The same latch <see cref="FieldPosition.TakenOver"/> is,
     /// republished (SDD-014 §5a's finding-276 amendment).</summary>
-    bool TakenOver)
+    bool TakenOver,
+
+    /// <summary>SDD-017 §2's `ExplorationView.Licences` row (finding 278) —
+    /// the player's own licence clock and work commitment, invisible to a
+    /// host until now.</summary>
+    LicenceView Licence)
 {
     /// <summary>Where the chain is jammed, if anywhere — the elements that
     /// refused production this tick.</summary>
@@ -539,7 +558,11 @@ internal sealed class FieldProjection(
     Bank bank,
     ReserveHistory history,
     OGSim.Environment.WeatherState weather,
-    EsgAssessment esg)
+    EsgAssessment esg,
+
+    // SDD-017 §2's finding-278 amendment — read only, the same Licence
+    // instance LicenceStage/DrillWellCommand already own and mutate.
+    OGSim.Company.Licence licence)
 {
     /// <summary>The one region this world has (SDD-016 §1).</summary>
     private const int FieldRegion = 0;
@@ -589,7 +612,23 @@ internal sealed class FieldProjection(
             company.Ledger.CashByCause(position.Tick),
             activities.Operations(),
             world.View,
-            position.TakenOver);
+            position.TakenOver,
+            LicenceOf());
+
+    /// <summary>SDD-017 §2's finding-278 amendment — the read model's one
+    /// window onto the licence `LicenceStage`/`DrillWellCommand` already own.
+    /// </summary>
+    private LicenceView LicenceOf()
+    {
+        int outstanding = 0;
+
+        for (int i = 0; i < licence.Progress.Count; i++)
+            if (!licence.Progress[i].Met) outstanding++;
+
+        return new LicenceView(
+            new EntityRef(EntityKind.Licence, licence.Id.Value),
+            licence.Expiry, outstanding, licence.IsLive, licence.LossReason);
+    }
 
     /// <summary>
     /// What this company is worth (SDD-014 §2's finding-267 amendment): the same

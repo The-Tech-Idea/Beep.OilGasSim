@@ -1507,7 +1507,9 @@ public sealed class LicenceTests
     /// <summary>
     /// <b>A well that stands satisfies the commitment</b> — drilled well inside
     /// the month-60 deadline, the licence stays live past it, and no bond is
-    /// ever forfeited.
+    /// ever forfeited. Also (finding 278) the read model's own
+    /// <c>LicenceView</c> agrees with the real <c>Licence</c> it is a window
+    /// onto — the same <c>Expiry</c>, zero items outstanding, and live.
     /// </summary>
     [Fact]
     [Trait("Speed", "Slow")]
@@ -1527,6 +1529,13 @@ public sealed class LicenceTests
             engine.Audit.Query(new AuditQuery(null, AuditCategory.Financial, null, null)),
             entry => entry.Data.TryGetValue("spend", out AuditValue spend)
                      && spend.Value == "licence-bond-forfeit");
+
+        LicenceView view = engine.ReadModel!.Licence;
+        Assert.Equal(new EntityRef(EntityKind.Licence, licence.Id.Value), view.Licence);
+        Assert.Equal(licence.Expiry, view.Expiry);
+        Assert.Equal(0, view.CommitmentItemsOutstanding);
+        Assert.True(view.IsLive);
+        Assert.Null(view.LossReason);
     }
 
     /// <summary>
@@ -1590,6 +1599,18 @@ public sealed class LicenceTests
                      && spend.Value == "licence-bond-forfeit");
 
         Assert.True(forfeit.Data.ContainsKey("unmet-count"));
+
+        // AND THE READ MODEL AGREES (finding 278): a player watching only
+        // `LicenceView`, never the unit-tested `Licence` class directly,
+        // sees the exact same loss — live flips false, the reason names
+        // which of the two SDD-011 §1 transitions this was, and the one
+        // commitment item this fixture's terms declare (due tick 60,
+        // never delivered against by an undrilled field) shows outstanding.
+        LicenceView lostView = engine.ReadModel!.Licence;
+        Assert.False(lostView.IsLive);
+        Assert.Equal(OGSim.Company.LicenceLossReason.CommitmentUnmet, lostView.LossReason);
+        Assert.Equal(1, lostView.CommitmentItemsOutstanding);
+        Assert.Equal(licence.Expiry, lostView.Expiry);
 
         // NEVER TWICE (the repeated-forfeit bug this join found and fixed):
         // another sixty months costs nothing further FROM THE LICENCE — but

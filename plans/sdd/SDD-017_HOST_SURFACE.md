@@ -401,6 +401,56 @@ public sealed record ObjectiveView(
 > created has no map, and an empty one would be a lie about a world never
 > drawn.
 
+> **Amendment (finding 278) — `ExplorationView.Licences`, the first piece
+> of a multi-phase roadmap closing this document's remaining gap, and the
+> ONE item of it worth landing on its own merits rather than as a rename.**
+> This session researched all fourteen SDD-017 views against what
+> `FieldReadModel` actually ships (`plans/MASTER_TRACKER.md`'s own R21.6
+> row already tracks the same Served/Partial/Absent split) and found most
+> of `CompanyView`/`FinanceView`/`MarketView`/`ObjectiveView`'s members
+> ALREADY real and ALREADY reachable through `FieldReadModel`, just under
+> flatter names than SDD-017's nested shape — reshaping working, already-
+> consumed fields to match a naming convention would be a pure-cosmetic,
+> breaking change with no functional gap behind it, and risks the SECOND
+> shape law L5 forbids. That work is not landed here, and is not planned
+> to be: `FieldReadModel`'s current flat names stay the read model's one
+> owner of those facts.
+>
+> **`Licence` was different: a real, wired, already-enforced mechanic
+> (`OGSim.Company/Licence.cs`, SDD-011 §1) that a player could not see AT
+> ALL through the read model** — not a naming gap, a genuine blind spot. A
+> licence's work commitment can be missed and its bond forfeited
+> (`LicenceStage`, already real, already tested) with nothing on
+> `FieldReadModel` a host could have shown the player coming.
+>
+> **A single field, not a list.** SDD-017's own shape is a LIST of
+> `(Licence, Area, Expiry, CommitmentItemsOutstanding)` tuples, for a
+> company that may hold several — but SDD-011 §1's own R20d.9 amendment
+> already settled that this composition has exactly ONE licence, always,
+> the same reason `Bank`/the one `Tank` are singular facts rather than
+> lists of one. `Area: Polygon` is named rather than solved: no licence/
+> block geometry exists anywhere in this composition (confirmed again by
+> finding 277's own research into `Rival`/`Block` — SDD-011 §1 states
+> plainly that a multi-block company is R20's content).
+>
+> ```csharp
+> public sealed record LicenceView(
+>     EntityRef Licence, Tick Expiry, int CommitmentItemsOutstanding,
+>     bool IsLive, LicenceLossReason? LossReason);
+> ```
+>
+> **`IsLive`/`LossReason` are not in SDD-017's own tuple** — added because
+> a licence that has ALREADY been lost is the single most important thing
+> this view exists to show, and `LossReason` reuses `LicenceStage`'s own
+> "one transition, two named reasons" shape rather than a bare boolean
+> that cannot say which.
+>
+> Published from the SAME `Licence` instance `LicenceStage`/
+> `DrillWellCommand` already read and mutate (`FieldProjection` gains a
+> constructor dependency on it, `composition.Require<OGSim.Company.
+> Licence>()` at the same call site `bank`/`history` are already threaded
+> from) — one owner, no second copy.
+
 ## 3. The path registry (SDD-014 §2's source)
 
 Generated **from these records by reflection at build time**: every public
