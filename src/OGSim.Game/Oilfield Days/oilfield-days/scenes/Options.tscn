@@ -9,3 +9,190 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("1_script")
+
+[node name="Ground" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.01, 0.014, 0.021, 1)
+
+[node name="OptionsPanel" type="PanelContainer" parent="."]
+custom_minimum_size = Vector2(760, 620)
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -380.0
+offset_top = -310.0
+offset_right = 380.0
+offset_bottom = 310.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Page" type="VBoxContainer" parent="OptionsPanel"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="Title" type="Label" parent="OptionsPanel/Page"]
+layout_mode = 2
+text = "OPTIONS"
+horizontal_alignment = 1
+
+[node name="DisplayGroup" type="PanelContainer" parent="OptionsPanel/Page"]
+custom_minimum_size = Vector2(700, 0)
+layout_mode = 2
+
+[node name="Content" type="VBoxContainer" parent="OptionsPanel/Page/DisplayGroup"]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="Header" type="Label" parent="OptionsPanel/Page/DisplayGroup/Content"]
+layout_mode = 2
+text = "DISPLAY"
+
+[node name="WindowCaption" type="Label" parent="OptionsPanel/Page/DisplayGroup/Content"]
+layout_mode = 2
+text = "Window size"
+
+[node name="WindowSize" type="OptionButton" parent="OptionsPanel/Page/DisplayGroup/Content"]
+custom_minimum_size = Vector2(640, 46)
+layout_mode = 2
+selected = 1
+item_count = 3
+popup/item_0/text = "1280 x 720"
+popup/item_0/id = 0
+popup/item_1/text = "1600 x 900"
+popup/item_1/id = 1
+popup/item_2/text = "1920 x 1080"
+popup/item_2/id = 2
+
+[node name="Fullscreen" type="CheckBox" parent="OptionsPanel/Page/DisplayGroup/Content"]
+layout_mode = 2
+text = "Full screen"
+
+[node name="AudioGroup" type="PanelContainer" parent="OptionsPanel/Page"]
+custom_minimum_size = Vector2(700, 0)
+layout_mode = 2
+
+[node name="Content" type="VBoxContainer" parent="OptionsPanel/Page/AudioGroup"]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="Header" type="Label" parent="OptionsPanel/Page/AudioGroup/Content"]
+layout_mode = 2
+text = "AUDIO"
+
+[node name="MasterCaption" type="Label" parent="OptionsPanel/Page/AudioGroup/Content"]
+layout_mode = 2
+text = "Master"
+
+[node name="MasterVolume" type="HSlider" parent="OptionsPanel/Page/AudioGroup/Content"]
+custom_minimum_size = Vector2(640, 24)
+layout_mode = 2
+min_value = -40.0
+max_value = 0.0
+step = 1.0
+
+[node name="MissingAudioBus" type="Label" parent="OptionsPanel/Page/AudioGroup/Content"]
+visible = false
+layout_mode = 2
+text = "no audio bus by that name is configured yet"
+
+[node name="ControlsGroup" type="PanelContainer" parent="OptionsPanel/Page"]
+custom_minimum_size = Vector2(700, 0)
+layout_mode = 2
+
+[node name="Content" type="VBoxContainer" parent="OptionsPanel/Page/ControlsGroup"]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="Header" type="Label" parent="OptionsPanel/Page/ControlsGroup/Content"]
+layout_mode = 2
+text = "CONTROLS"
+
+[node name="DriveRow" type="HBoxContainer" parent="OptionsPanel/Page/ControlsGroup/Content"]
+custom_minimum_size = Vector2(0, 26)
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Name" type="Label" parent="OptionsPanel/Page/ControlsGroup/Content/DriveRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Drive"
+text_overrun_behavior = 3
+clip_text = true
+vertical_alignment = 1
+
+[node name="Value" type="Label" parent="OptionsPanel/Page/ControlsGroup/Content/DriveRow"]
+layout_mode = 2
+text = "W A S D"
+horizontal_alignment = 2
+vertical_alignment = 1
+
+[node name="AdvanceRow" type="HBoxContainer" parent="OptionsPanel/Page/ControlsGroup/Content"]
+custom_minimum_size = Vector2(0, 26)
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Name" type="Label" parent="OptionsPanel/Page/ControlsGroup/Content/AdvanceRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Advance one month"
+text_overrun_behavior = 3
+clip_text = true
+vertical_alignment = 1
+
+[node name="Value" type="Label" parent="OptionsPanel/Page/ControlsGroup/Content/AdvanceRow"]
+layout_mode = 2
+text = "Space"
+horizontal_alignment = 2
+vertical_alignment = 1
+
+[node name="PauseRow" type="HBoxContainer" parent="OptionsPanel/Page/ControlsGroup/Content"]
+custom_minimum_size = Vector2(0, 26)
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Name" type="Label" parent="OptionsPanel/Page/ControlsGroup/Content/PauseRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Pause"
+text_overrun_behavior = 3
+clip_text = true
+vertical_alignment = 1
+
+[node name="Value" type="Label" parent="OptionsPanel/Page/ControlsGroup/Content/PauseRow"]
+layout_mode = 2
+text = "P"
+horizontal_alignment = 2
+vertical_alignment = 1
+
+[node name="CloseRow" type="HBoxContainer" parent="OptionsPanel/Page/ControlsGroup/Content"]
+custom_minimum_size = Vector2(0, 26)
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Name" type="Label" parent="OptionsPanel/Page/ControlsGroup/Content/CloseRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Close a board"
+text_overrun_behavior = 3
+clip_text = true
+vertical_alignment = 1
+
+[node name="Value" type="Label" parent="OptionsPanel/Page/ControlsGroup/Content/CloseRow"]
+layout_mode = 2
+text = "Esc"
+horizontal_alignment = 2
+vertical_alignment = 1
+
+[node name="BackButton" type="Button" parent="OptionsPanel/Page"]
+custom_minimum_size = Vector2(220, 50)
+layout_mode = 2
+size_flags_horizontal = 4
+text = "BACK"

@@ -142,7 +142,7 @@ public partial class BeepGameBuilderDock : VBoxContainer
             new Label { Text = " × " },
             SpinBox(240, 2160, 720, 80, out _resH)));
         b.AddChild(Row("Target FPS", SpinBox(30, 240, 60, 80, out _targetFps)));
-        _pixelArt = new CheckBox { Text = "Pixel art (texture filter off)", ButtonPressed = true };
+        _pixelArt = new CheckBox { Text = "Pixel art (nearest texture filter)", ButtonPressed = false };
         b.AddChild(_pixelArt);
         // Regenerating a project SKIPS scenes that already exist, so template fixes never reach an
         // existing project (a stale main_menu.tscn kept the Load button dead, for one). Tick this to

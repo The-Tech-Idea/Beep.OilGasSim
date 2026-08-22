@@ -1,0 +1,7 @@
+{
+  "kind": "take-or-pay",
+  "id": "oil-take-or-pay",
+  "committedVolumeCubicMetres": 10000.0,
+  "windowMonths": 12,
+  "penaltyRateDollarsPerCubicMetre": 50.0
+}

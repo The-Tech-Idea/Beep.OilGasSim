@@ -7,10 +7,10 @@ namespace OilfieldDays.World;
 /// <summary>The ground a tile is made of, low to high.</summary>
 public enum Ground
 {
-    Water = 0,
-    Sand = 1,
-    Grass = 2,
-    Rock = 3,
+	Water = 0,
+	Sand = 1,
+	Grass = 2,
+	Rock = 3,
 }
 
 /// <summary>

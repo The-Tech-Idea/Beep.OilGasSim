@@ -1,6 +1,17 @@
-[gd_scene load_steps=2 format=3]
+[gd_scene load_steps=13 format=3]
 
 [ext_resource type="Script" path="res://game/Screens/NewGameSetup.cs" id="1_script"]
+[ext_resource type="Texture2D" path="res://assets/brand/logo.png" id="2_logo"]
+[ext_resource type="Script" path="res://addons/beep_game_builder_cs/ecs/ui/kit/KitSlider.cs" id="3_slider"]
+[ext_resource type="Script" path="res://addons/beep_game_builder_cs/ecs/ui/kit/KitStarRating.cs" id="4_rating"]
+[ext_resource type="Script" path="res://game/Screens/WorldPreview.cs" id="5_preview"]
+[ext_resource type="Texture2D" path="res://assets/icons/main-operations-building.png" id="6_company"]
+[ext_resource type="Texture2D" path="res://assets/icons/control-room-cabin.png" id="7_mode"]
+[ext_resource type="Texture2D" path="res://assets/icons/helipad-platform.png" id="8_size"]
+[ext_resource type="Texture2D" path="res://assets/icons/cooling-tower.png" id="9_climate"]
+[ext_resource type="Texture2D" path="res://assets/icons/worker-accommodation-cabin.png" id="10_rivals"]
+[ext_resource type="Texture2D" path="res://assets/icons/communications-tower.png" id="11_era"]
+[ext_resource type="Texture2D" path="res://assets/icons/pumpjack.png" id="12_pump"]
 
 [node name="NewGame" type="Control"]
 anchors_preset = 15
@@ -9,3 +20,760 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("1_script")
+
+[node name="Ground" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.01, 0.014, 0.021, 1)
+
+[node name="Page" type="VBoxContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 20.0
+offset_top = 14.0
+offset_right = -20.0
+offset_bottom = -14.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/separation = 10
+
+[node name="Header" type="HBoxContainer" parent="Page"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="Mark" type="TextureRect" parent="Page/Header"]
+custom_minimum_size = Vector2(54, 54)
+layout_mode = 2
+texture = ExtResource("2_logo")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="Title" type="Label" parent="Page/Header"]
+layout_mode = 2
+text = "NEW GAME"
+vertical_alignment = 1
+
+[node name="Spacer" type="Control" parent="Page/Header"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="Step1" type="PanelContainer" parent="Page/Header"]
+custom_minimum_size = Vector2(0, 42)
+layout_mode = 2
+
+[node name="Label" type="Label" parent="Page/Header/Step1"]
+layout_mode = 2
+text = "1  Mode  ✓"
+
+[node name="Step2" type="PanelContainer" parent="Page/Header"]
+custom_minimum_size = Vector2(0, 42)
+layout_mode = 2
+
+[node name="Label" type="Label" parent="Page/Header/Step2"]
+layout_mode = 2
+text = "2  World Setup  ✓"
+
+[node name="Step3" type="PanelContainer" parent="Page/Header"]
+custom_minimum_size = Vector2(0, 42)
+layout_mode = 2
+
+[node name="Label" type="Label" parent="Page/Header/Step3"]
+layout_mode = 2
+text = "3  Company"
+
+[node name="Step4" type="PanelContainer" parent="Page/Header"]
+custom_minimum_size = Vector2(0, 42)
+layout_mode = 2
+
+[node name="Label" type="Label" parent="Page/Header/Step4"]
+layout_mode = 2
+text = "4  Review"
+
+[node name="Step5" type="PanelContainer" parent="Page/Header"]
+custom_minimum_size = Vector2(0, 42)
+layout_mode = 2
+
+[node name="Label" type="Label" parent="Page/Header/Step5"]
+layout_mode = 2
+text = "5  Generate"
+
+[node name="Body" type="HBoxContainer" parent="Page"]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/separation = 14
+
+[node name="SettingsScroll" type="ScrollContainer" parent="Page/Body"]
+custom_minimum_size = Vector2(452, 0)
+layout_mode = 2
+horizontal_scroll_mode = 0
+
+[node name="SettingsColumn" type="VBoxContainer" parent="Page/Body/SettingsScroll"]
+custom_minimum_size = Vector2(430, 0)
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="CompanyGroup" type="PanelContainer" parent="Page/Body/SettingsScroll/SettingsColumn"]
+custom_minimum_size = Vector2(430, 0)
+layout_mode = 2
+
+[node name="Content" type="VBoxContainer" parent="Page/Body/SettingsScroll/SettingsColumn/CompanyGroup"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Header" type="Label" parent="Page/Body/SettingsScroll/SettingsColumn/CompanyGroup/Content"]
+layout_mode = 2
+text = "COMPANY"
+horizontal_alignment = 1
+
+[node name="CompanyNameField" type="HBoxContainer" parent="Page/Body/SettingsScroll/SettingsColumn/CompanyGroup/Content"]
+custom_minimum_size = Vector2(0, 22)
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Icon" type="TextureRect" parent="Page/Body/SettingsScroll/SettingsColumn/CompanyGroup/Content/CompanyNameField"]
+custom_minimum_size = Vector2(20, 20)
+layout_mode = 2
+texture = ExtResource("6_company")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="Caption" type="Label" parent="Page/Body/SettingsScroll/SettingsColumn/CompanyGroup/Content/CompanyNameField"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Company name"
+vertical_alignment = 1
+
+[node name="CompanyName" type="LineEdit" parent="Page/Body/SettingsScroll/SettingsColumn/CompanyGroup/Content"]
+custom_minimum_size = Vector2(370, 46)
+layout_mode = 2
+text = "Beep Energy Co."
+
+[node name="ModeField" type="HBoxContainer" parent="Page/Body/SettingsScroll/SettingsColumn/CompanyGroup/Content"]
+custom_minimum_size = Vector2(0, 22)
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Icon" type="TextureRect" parent="Page/Body/SettingsScroll/SettingsColumn/CompanyGroup/Content/ModeField"]
+custom_minimum_size = Vector2(20, 20)
+layout_mode = 2
+texture = ExtResource("7_mode")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="Caption" type="Label" parent="Page/Body/SettingsScroll/SettingsColumn/CompanyGroup/Content/ModeField"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Game mode"
+vertical_alignment = 1
+
+[node name="ModeChoice" type="OptionButton" parent="Page/Body/SettingsScroll/SettingsColumn/CompanyGroup/Content"]
+custom_minimum_size = Vector2(370, 46)
+layout_mode = 2
+selected = 0
+item_count = 4
+popup/item_0/text = "Campaign"
+popup/item_0/id = 0
+popup/item_1/text = "Scenario   (not yet)"
+popup/item_1/id = 1
+popup/item_2/text = "Sandbox   (not yet)"
+popup/item_2/id = 2
+popup/item_3/text = "Challenge   (not yet)"
+popup/item_3/id = 3
+
+[node name="ModeNote" type="Label" parent="Page/Body/SettingsScroll/SettingsColumn/CompanyGroup/Content"]
+custom_minimum_size = Vector2(180, 0)
+layout_mode = 2
+size_flags_horizontal = 3
+autowrap_mode = 3
+
+[node name="StartingCapital" type="HBoxContainer" parent="Page/Body/SettingsScroll/SettingsColumn/CompanyGroup/Content"]
+custom_minimum_size = Vector2(0, 26)
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Name" type="Label" parent="Page/Body/SettingsScroll/SettingsColumn/CompanyGroup/Content/StartingCapital"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Starting capital"
+
+[node name="Value" type="Label" parent="Page/Body/SettingsScroll/SettingsColumn/CompanyGroup/Content/StartingCapital"]
+layout_mode = 2
+text = "the opening position"
+horizontal_alignment = 2
+
+[node name="StartingReputation" type="HBoxContainer" parent="Page/Body/SettingsScroll/SettingsColumn/CompanyGroup/Content"]
+custom_minimum_size = Vector2(0, 26)
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Name" type="Label" parent="Page/Body/SettingsScroll/SettingsColumn/CompanyGroup/Content/StartingReputation"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Starting reputation"
+
+[node name="Value" type="Label" parent="Page/Body/SettingsScroll/SettingsColumn/CompanyGroup/Content/StartingReputation"]
+layout_mode = 2
+text = "no engine owner"
+horizontal_alignment = 2
+
+[node name="WorldGroup" type="PanelContainer" parent="Page/Body/SettingsScroll/SettingsColumn"]
+custom_minimum_size = Vector2(430, 0)
+layout_mode = 2
+
+[node name="Content" type="VBoxContainer" parent="Page/Body/SettingsScroll/SettingsColumn/WorldGroup"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Header" type="Label" parent="Page/Body/SettingsScroll/SettingsColumn/WorldGroup/Content"]
+layout_mode = 2
+text = "WORLD SETTINGS"
+horizontal_alignment = 1
+
+[node name="SizeField" type="HBoxContainer" parent="Page/Body/SettingsScroll/SettingsColumn/WorldGroup/Content"]
+custom_minimum_size = Vector2(0, 22)
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Icon" type="TextureRect" parent="Page/Body/SettingsScroll/SettingsColumn/WorldGroup/Content/SizeField"]
+custom_minimum_size = Vector2(20, 20)
+layout_mode = 2
+texture = ExtResource("8_size")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="Caption" type="Label" parent="Page/Body/SettingsScroll/SettingsColumn/WorldGroup/Content/SizeField"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "World size"
+vertical_alignment = 1
+
+[node name="SizeChoice" type="OptionButton" parent="Page/Body/SettingsScroll/SettingsColumn/WorldGroup/Content"]
+custom_minimum_size = Vector2(370, 46)
+layout_mode = 2
+
+[node name="ClimateField" type="HBoxContainer" parent="Page/Body/SettingsScroll/SettingsColumn/WorldGroup/Content"]
+custom_minimum_size = Vector2(0, 22)
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Icon" type="TextureRect" parent="Page/Body/SettingsScroll/SettingsColumn/WorldGroup/Content/ClimateField"]
+custom_minimum_size = Vector2(20, 20)
+layout_mode = 2
+texture = ExtResource("9_climate")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="Caption" type="Label" parent="Page/Body/SettingsScroll/SettingsColumn/WorldGroup/Content/ClimateField"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Climate profile"
+vertical_alignment = 1
+
+[node name="ClimateChoice" type="OptionButton" parent="Page/Body/SettingsScroll/SettingsColumn/WorldGroup/Content"]
+custom_minimum_size = Vector2(370, 46)
+layout_mode = 2
+
+[node name="LandWord" type="Label" parent="Page/Body/SettingsScroll/SettingsColumn/WorldGroup/Content"]
+layout_mode = 2
+text = "Land / water ratio"
+
+[node name="LandSlider" type="HSlider" parent="Page/Body/SettingsScroll/SettingsColumn/WorldGroup/Content"]
+custom_minimum_size = Vector2(366, 26)
+layout_mode = 2
+script = ExtResource("3_slider")
+min_value = 0.3
+max_value = 0.95
+step = 0.01
+value = 0.72
+
+[node name="RichnessWord" type="Label" parent="Page/Body/SettingsScroll/SettingsColumn/WorldGroup/Content"]
+layout_mode = 2
+text = "Oil & gas richness"
+
+[node name="RichnessRating" type="HSlider" parent="Page/Body/SettingsScroll/SettingsColumn/WorldGroup/Content"]
+custom_minimum_size = Vector2(190, 28)
+layout_mode = 2
+script = ExtResource("4_rating")
+max_value = 5.0
+step = 1.0
+value = 3.0
+
+[node name="MaturityWord" type="Label" parent="Page/Body/SettingsScroll/SettingsColumn/WorldGroup/Content"]
+layout_mode = 2
+text = "Basin maturity"
+
+[node name="MaturitySlider" type="HSlider" parent="Page/Body/SettingsScroll/SettingsColumn/WorldGroup/Content"]
+custom_minimum_size = Vector2(366, 26)
+layout_mode = 2
+script = ExtResource("3_slider")
+max_value = 1.0
+step = 0.05
+value = 0.5
+
+[node name="RivalsField" type="HBoxContainer" parent="Page/Body/SettingsScroll/SettingsColumn/WorldGroup/Content"]
+custom_minimum_size = Vector2(0, 22)
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Icon" type="TextureRect" parent="Page/Body/SettingsScroll/SettingsColumn/WorldGroup/Content/RivalsField"]
+custom_minimum_size = Vector2(20, 20)
+layout_mode = 2
+texture = ExtResource("10_rivals")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="Caption" type="Label" parent="Page/Body/SettingsScroll/SettingsColumn/WorldGroup/Content/RivalsField"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Third-party industry"
+vertical_alignment = 1
+
+[node name="RivalsChoice" type="OptionButton" parent="Page/Body/SettingsScroll/SettingsColumn/WorldGroup/Content"]
+custom_minimum_size = Vector2(370, 46)
+layout_mode = 2
+
+[node name="EraField" type="HBoxContainer" parent="Page/Body/SettingsScroll/SettingsColumn/WorldGroup/Content"]
+custom_minimum_size = Vector2(0, 22)
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Icon" type="TextureRect" parent="Page/Body/SettingsScroll/SettingsColumn/WorldGroup/Content/EraField"]
+custom_minimum_size = Vector2(20, 20)
+layout_mode = 2
+texture = ExtResource("11_era")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="Caption" type="Label" parent="Page/Body/SettingsScroll/SettingsColumn/WorldGroup/Content/EraField"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Starting era"
+vertical_alignment = 1
+
+[node name="EraChoice" type="OptionButton" parent="Page/Body/SettingsScroll/SettingsColumn/WorldGroup/Content"]
+custom_minimum_size = Vector2(370, 46)
+layout_mode = 2
+
+[node name="SeedGroup" type="PanelContainer" parent="Page/Body/SettingsScroll/SettingsColumn"]
+custom_minimum_size = Vector2(430, 0)
+layout_mode = 2
+
+[node name="Content" type="VBoxContainer" parent="Page/Body/SettingsScroll/SettingsColumn/SeedGroup"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Header" type="Label" parent="Page/Body/SettingsScroll/SettingsColumn/SeedGroup/Content"]
+layout_mode = 2
+text = "WORLD SEED"
+horizontal_alignment = 1
+
+[node name="SeedRow" type="HBoxContainer" parent="Page/Body/SettingsScroll/SettingsColumn/SeedGroup/Content"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="SeedEntry" type="LineEdit" parent="Page/Body/SettingsScroll/SettingsColumn/SeedGroup/Content/SeedRow"]
+custom_minimum_size = Vector2(260, 46)
+layout_mode = 2
+
+[node name="RollButton" type="Button" parent="Page/Body/SettingsScroll/SettingsColumn/SeedGroup/Content/SeedRow"]
+custom_minimum_size = Vector2(100, 40)
+layout_mode = 2
+tooltip_text = "Draw a new seed"
+text = "ROLL"
+
+[node name="SeedButtons" type="HBoxContainer" parent="Page/Body/SettingsScroll/SettingsColumn/SeedGroup/Content"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="CopyButton" type="Button" parent="Page/Body/SettingsScroll/SettingsColumn/SeedGroup/Content/SeedButtons"]
+custom_minimum_size = Vector2(120, 38)
+layout_mode = 2
+text = "COPY"
+
+[node name="ShowSeed" type="CheckBox" parent="Page/Body/SettingsScroll/SettingsColumn/SeedGroup/Content/SeedButtons"]
+layout_mode = 2
+button_pressed = true
+text = "Show seed on map"
+
+[node name="SeedNote" type="Label" parent="Page/Body/SettingsScroll/SettingsColumn/SeedGroup/Content"]
+custom_minimum_size = Vector2(180, 0)
+layout_mode = 2
+size_flags_horizontal = 3
+text = "The same seed always builds the same world. Share it to play the one someone else played."
+autowrap_mode = 3
+
+[node name="Problem" type="Label" parent="Page/Body/SettingsScroll/SettingsColumn"]
+custom_minimum_size = Vector2(180, 0)
+layout_mode = 2
+size_flags_horizontal = 3
+autowrap_mode = 3
+
+[node name="PreviewColumn" type="VBoxContainer" parent="Page/Body"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 10
+
+[node name="PreviewPanel" type="PanelContainer" parent="Page/Body/PreviewColumn"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+
+[node name="Content" type="VBoxContainer" parent="Page/Body/PreviewColumn/PreviewPanel"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Header" type="Label" parent="Page/Body/PreviewColumn/PreviewPanel/Content"]
+layout_mode = 2
+text = "WORLD PREVIEW"
+horizontal_alignment = 1
+
+[node name="PreviewStack" type="Control" parent="Page/Body/PreviewColumn/PreviewPanel/Content"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="WorldPreview" type="Control" parent="Page/Body/PreviewColumn/PreviewPanel/Content/PreviewStack"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("5_preview")
+
+[node name="Viewport" type="SubViewport" parent="Page/Body/PreviewColumn/PreviewPanel/Content/PreviewStack/WorldPreview"]
+size = Vector2i(960, 720)
+render_target_update_mode = 4
+
+[node name="Sea" type="CanvasLayer" parent="Page/Body/PreviewColumn/PreviewPanel/Content/PreviewStack/WorldPreview/Viewport"]
+layer = -100
+
+[node name="Fill" type="ColorRect" parent="Page/Body/PreviewColumn/PreviewPanel/Content/PreviewStack/WorldPreview/Viewport/Sea"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.13, 0.3, 0.45, 1)
+
+[node name="Camera" type="Camera2D" parent="Page/Body/PreviewColumn/PreviewPanel/Content/PreviewStack/WorldPreview/Viewport"]
+enabled = true
+
+[node name="Screen" type="TextureRect" parent="Page/Body/PreviewColumn/PreviewPanel/Content/PreviewStack/WorldPreview"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+expand_mode = 1
+stretch_mode = 1
+
+[node name="SeedStamp" type="Label" parent="Page/Body/PreviewColumn/PreviewPanel/Content/PreviewStack"]
+layout_mode = 0
+offset_left = 12.0
+offset_top = 8.0
+offset_right = 260.0
+offset_bottom = 34.0
+
+[node name="LegendPanel" type="PanelContainer" parent="Page/Body/PreviewColumn/PreviewPanel/Content/PreviewStack"]
+custom_minimum_size = Vector2(180, 0)
+layout_mode = 1
+anchors_preset = 3
+anchor_left = 1.0
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -192.0
+offset_top = -150.0
+offset_right = -12.0
+offset_bottom = -12.0
+grow_horizontal = 0
+grow_vertical = 0
+
+[node name="LegendItems" type="VBoxContainer" parent="Page/Body/PreviewColumn/PreviewPanel/Content/PreviewStack/LegendPanel"]
+layout_mode = 2
+theme_override_constants/separation = 2
+
+[node name="WaterKey" type="HBoxContainer" parent="Page/Body/PreviewColumn/PreviewPanel/Content/PreviewStack/LegendPanel/LegendItems"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Swatch" type="ColorRect" parent="Page/Body/PreviewColumn/PreviewPanel/Content/PreviewStack/LegendPanel/LegendItems/WaterKey"]
+custom_minimum_size = Vector2(18, 14)
+layout_mode = 2
+color = Color(0.22, 0.44, 0.63, 1)
+
+[node name="Label" type="Label" parent="Page/Body/PreviewColumn/PreviewPanel/Content/PreviewStack/LegendPanel/LegendItems/WaterKey"]
+layout_mode = 2
+text = "Water"
+
+[node name="ShoreKey" type="HBoxContainer" parent="Page/Body/PreviewColumn/PreviewPanel/Content/PreviewStack/LegendPanel/LegendItems"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Swatch" type="ColorRect" parent="Page/Body/PreviewColumn/PreviewPanel/Content/PreviewStack/LegendPanel/LegendItems/ShoreKey"]
+custom_minimum_size = Vector2(18, 14)
+layout_mode = 2
+color = Color(0.76, 0.66, 0.45, 1)
+
+[node name="Label" type="Label" parent="Page/Body/PreviewColumn/PreviewPanel/Content/PreviewStack/LegendPanel/LegendItems/ShoreKey"]
+layout_mode = 2
+text = "Shore"
+
+[node name="GrassKey" type="HBoxContainer" parent="Page/Body/PreviewColumn/PreviewPanel/Content/PreviewStack/LegendPanel/LegendItems"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Swatch" type="ColorRect" parent="Page/Body/PreviewColumn/PreviewPanel/Content/PreviewStack/LegendPanel/LegendItems/GrassKey"]
+custom_minimum_size = Vector2(18, 14)
+layout_mode = 2
+color = Color(0.31, 0.55, 0.26, 1)
+
+[node name="Label" type="Label" parent="Page/Body/PreviewColumn/PreviewPanel/Content/PreviewStack/LegendPanel/LegendItems/GrassKey"]
+layout_mode = 2
+text = "Grass"
+
+[node name="ScrubKey" type="HBoxContainer" parent="Page/Body/PreviewColumn/PreviewPanel/Content/PreviewStack/LegendPanel/LegendItems"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Swatch" type="ColorRect" parent="Page/Body/PreviewColumn/PreviewPanel/Content/PreviewStack/LegendPanel/LegendItems/ScrubKey"]
+custom_minimum_size = Vector2(18, 14)
+layout_mode = 2
+color = Color(0.52, 0.51, 0.28, 1)
+
+[node name="Label" type="Label" parent="Page/Body/PreviewColumn/PreviewPanel/Content/PreviewStack/LegendPanel/LegendItems/ScrubKey"]
+layout_mode = 2
+text = "Scrub"
+
+[node name="RockKey" type="HBoxContainer" parent="Page/Body/PreviewColumn/PreviewPanel/Content/PreviewStack/LegendPanel/LegendItems"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Swatch" type="ColorRect" parent="Page/Body/PreviewColumn/PreviewPanel/Content/PreviewStack/LegendPanel/LegendItems/RockKey"]
+custom_minimum_size = Vector2(18, 14)
+layout_mode = 2
+color = Color(0.47, 0.47, 0.49, 1)
+
+[node name="Label" type="Label" parent="Page/Body/PreviewColumn/PreviewPanel/Content/PreviewStack/LegendPanel/LegendItems/RockKey"]
+layout_mode = 2
+text = "Rock"
+
+[node name="YardKey" type="HBoxContainer" parent="Page/Body/PreviewColumn/PreviewPanel/Content/PreviewStack/LegendPanel/LegendItems"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Swatch" type="ColorRect" parent="Page/Body/PreviewColumn/PreviewPanel/Content/PreviewStack/LegendPanel/LegendItems/YardKey"]
+custom_minimum_size = Vector2(18, 14)
+layout_mode = 2
+color = Color(0.62, 0.45, 0.28, 1)
+
+[node name="Label" type="Label" parent="Page/Body/PreviewColumn/PreviewPanel/Content/PreviewStack/LegendPanel/LegendItems/YardKey"]
+layout_mode = 2
+text = "Yard"
+
+[node name="InfoStrip" type="HBoxContainer" parent="Page/Body/PreviewColumn"]
+custom_minimum_size = Vector2(0, 200)
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="StatsGroup" type="PanelContainer" parent="Page/Body/PreviewColumn/InfoStrip"]
+custom_minimum_size = Vector2(300, 0)
+layout_mode = 2
+
+[node name="Content" type="VBoxContainer" parent="Page/Body/PreviewColumn/InfoStrip/StatsGroup"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Header" type="Label" parent="Page/Body/PreviewColumn/InfoStrip/StatsGroup/Content"]
+layout_mode = 2
+text = "WORLD INFO"
+horizontal_alignment = 1
+
+[node name="Items" type="VBoxContainer" parent="Page/Body/PreviewColumn/InfoStrip/StatsGroup/Content"]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="SummaryRowTemplate" type="PanelContainer" parent="Page/Body/PreviewColumn/InfoStrip/StatsGroup/Content/Items"]
+layout_mode = 2
+
+[node name="Line" type="HBoxContainer" parent="Page/Body/PreviewColumn/InfoStrip/StatsGroup/Content/Items/SummaryRowTemplate"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Icon" type="TextureRect" parent="Page/Body/PreviewColumn/InfoStrip/StatsGroup/Content/Items/SummaryRowTemplate/Line"]
+custom_minimum_size = Vector2(24, 24)
+layout_mode = 2
+texture = ExtResource("8_size")
+expand_mode = 5
+stretch_mode = 5
+
+[node name="Label" type="Label" parent="Page/Body/PreviewColumn/InfoStrip/StatsGroup/Content/Items/SummaryRowTemplate/Line"]
+layout_mode = 2
+text = "Basin"
+
+[node name="Value" type="Label" parent="Page/Body/PreviewColumn/InfoStrip/StatsGroup/Content/Items/SummaryRowTemplate/Line"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "32 x 32 km"
+horizontal_alignment = 2
+
+[node name="PotentialGroup" type="PanelContainer" parent="Page/Body/PreviewColumn/InfoStrip"]
+custom_minimum_size = Vector2(340, 0)
+layout_mode = 2
+
+[node name="Content" type="VBoxContainer" parent="Page/Body/PreviewColumn/InfoStrip/PotentialGroup"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Header" type="Label" parent="Page/Body/PreviewColumn/InfoStrip/PotentialGroup/Content"]
+layout_mode = 2
+text = "RESOURCE POTENTIAL"
+horizontal_alignment = 1
+
+[node name="Items" type="VBoxContainer" parent="Page/Body/PreviewColumn/InfoStrip/PotentialGroup/Content"]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="PipsTemplate" type="PanelContainer" parent="Page/Body/PreviewColumn/InfoStrip/PotentialGroup/Content/Items"]
+layout_mode = 2
+
+[node name="Line" type="HBoxContainer" parent="Page/Body/PreviewColumn/InfoStrip/PotentialGroup/Content/Items/PipsTemplate"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Label" type="Label" parent="Page/Body/PreviewColumn/InfoStrip/PotentialGroup/Content/Items/PipsTemplate/Line"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Richness asked for"
+
+[node name="Pips" type="HBoxContainer" parent="Page/Body/PreviewColumn/InfoStrip/PotentialGroup/Content/Items/PipsTemplate/Line"]
+layout_mode = 2
+theme_override_constants/separation = 2
+
+[node name="Pip1" type="Label" parent="Page/Body/PreviewColumn/InfoStrip/PotentialGroup/Content/Items/PipsTemplate/Line/Pips"]
+layout_mode = 2
+text = "●"
+
+[node name="Pip2" type="Label" parent="Page/Body/PreviewColumn/InfoStrip/PotentialGroup/Content/Items/PipsTemplate/Line/Pips"]
+layout_mode = 2
+text = "●"
+
+[node name="Pip3" type="Label" parent="Page/Body/PreviewColumn/InfoStrip/PotentialGroup/Content/Items/PipsTemplate/Line/Pips"]
+layout_mode = 2
+text = "●"
+
+[node name="Pip4" type="Label" parent="Page/Body/PreviewColumn/InfoStrip/PotentialGroup/Content/Items/PipsTemplate/Line/Pips"]
+layout_mode = 2
+text = "○"
+
+[node name="Pip5" type="Label" parent="Page/Body/PreviewColumn/InfoStrip/PotentialGroup/Content/Items/PipsTemplate/Line/Pips"]
+layout_mode = 2
+text = "○"
+
+[node name="SummaryRowTemplate" type="PanelContainer" parent="Page/Body/PreviewColumn/InfoStrip/PotentialGroup/Content/Items"]
+layout_mode = 2
+
+[node name="Line" type="HBoxContainer" parent="Page/Body/PreviewColumn/InfoStrip/PotentialGroup/Content/Items/SummaryRowTemplate"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Icon" type="TextureRect" parent="Page/Body/PreviewColumn/InfoStrip/PotentialGroup/Content/Items/SummaryRowTemplate/Line"]
+custom_minimum_size = Vector2(24, 24)
+layout_mode = 2
+texture = ExtResource("12_pump")
+expand_mode = 5
+stretch_mode = 5
+
+[node name="Label" type="Label" parent="Page/Body/PreviewColumn/InfoStrip/PotentialGroup/Content/Items/SummaryRowTemplate/Line"]
+layout_mode = 2
+text = "World generation"
+
+[node name="Value" type="Label" parent="Page/Body/PreviewColumn/InfoStrip/PotentialGroup/Content/Items/SummaryRowTemplate/Line"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Normal"
+horizontal_alignment = 2
+
+[node name="SummaryTextTemplate" type="Label" parent="Page/Body/PreviewColumn/InfoStrip/PotentialGroup/Content/Items"]
+custom_minimum_size = Vector2(180, 0)
+layout_mode = 2
+text = "This is the setting, not a survey."
+autowrap_mode = 3
+
+[node name="ClimateGroup" type="PanelContainer" parent="Page/Body/PreviewColumn/InfoStrip"]
+custom_minimum_size = Vector2(320, 0)
+layout_mode = 2
+
+[node name="Content" type="VBoxContainer" parent="Page/Body/PreviewColumn/InfoStrip/ClimateGroup"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Header" type="Label" parent="Page/Body/PreviewColumn/InfoStrip/ClimateGroup/Content"]
+layout_mode = 2
+text = "CLIMATE SUMMARY"
+horizontal_alignment = 1
+
+[node name="Items" type="VBoxContainer" parent="Page/Body/PreviewColumn/InfoStrip/ClimateGroup/Content"]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="SummaryRowTemplate" type="PanelContainer" parent="Page/Body/PreviewColumn/InfoStrip/ClimateGroup/Content/Items"]
+layout_mode = 2
+
+[node name="Line" type="HBoxContainer" parent="Page/Body/PreviewColumn/InfoStrip/ClimateGroup/Content/Items/SummaryRowTemplate"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Icon" type="TextureRect" parent="Page/Body/PreviewColumn/InfoStrip/ClimateGroup/Content/Items/SummaryRowTemplate/Line"]
+custom_minimum_size = Vector2(24, 24)
+layout_mode = 2
+texture = ExtResource("9_climate")
+expand_mode = 5
+stretch_mode = 5
+
+[node name="Label" type="Label" parent="Page/Body/PreviewColumn/InfoStrip/ClimateGroup/Content/Items/SummaryRowTemplate/Line"]
+layout_mode = 2
+text = "Profile"
+
+[node name="Value" type="Label" parent="Page/Body/PreviewColumn/InfoStrip/ClimateGroup/Content/Items/SummaryRowTemplate/Line"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Temperate"
+horizontal_alignment = 2
+
+[node name="SummaryTextTemplate" type="Label" parent="Page/Body/PreviewColumn/InfoStrip/ClimateGroup/Content/Items"]
+custom_minimum_size = Vector2(180, 0)
+layout_mode = 2
+text = "Green country and steady weather."
+autowrap_mode = 3
+
+[node name="Footer" type="HBoxContainer" parent="Page"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="BackButton" type="Button" parent="Page/Footer"]
+custom_minimum_size = Vector2(180, 50)
+layout_mode = 2
+text = "BACK"
+
+[node name="RandomizeButton" type="Button" parent="Page/Footer"]
+custom_minimum_size = Vector2(210, 50)
+layout_mode = 2
+text = "RANDOMIZE"
+
+[node name="FooterSpacer" type="Control" parent="Page/Footer"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="GenerateButton" type="Button" parent="Page/Footer"]
+custom_minimum_size = Vector2(320, 50)
+layout_mode = 2
+text = "GENERATE WORLD"

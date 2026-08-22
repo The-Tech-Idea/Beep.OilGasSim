@@ -1,6 +1,9 @@
-[gd_scene load_steps=2 format=3]
+[gd_scene load_steps=5 format=3]
 
 [ext_resource type="Script" path="res://game/Screens/DispatchBoard.cs" id="1_script"]
+[ext_resource type="Texture2D" path="res://assets/icons/well-testing-skid.png" id="2_test"]
+[ext_resource type="Texture2D" path="res://assets/icons/drilling-rig-derrick.png" id="3_rig"]
+[ext_resource type="Texture2D" path="res://assets/icons/mobile-crane-truck.png" id="4_crane"]
 
 [node name="Dispatch" type="Control"]
 anchors_preset = 15
@@ -9,3 +12,377 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("1_script")
+
+[node name="Ground" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.032, 0.045, 0.063, 0.96)
+
+[node name="TopBar" type="PanelContainer" parent="."]
+custom_minimum_size = Vector2(1500, 54)
+layout_mode = 1
+anchors_preset = 5
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -750.0
+offset_top = 12.0
+offset_right = 750.0
+offset_bottom = 66.0
+grow_horizontal = 2
+
+[node name="Inset" type="MarginContainer" parent="TopBar"]
+layout_mode = 2
+theme_override_constants/margin_left = 26
+theme_override_constants/margin_top = 12
+theme_override_constants/margin_right = 26
+theme_override_constants/margin_bottom = 12
+
+[node name="TopRow" type="HBoxContainer" parent="TopBar/Inset"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="Company" type="Label" parent="TopBar/Inset/TopRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "THE COMPANY"
+
+[node name="Date" type="Label" parent="TopBar/Inset/TopRow"]
+custom_minimum_size = Vector2(170, 0)
+layout_mode = 2
+text = "2026-08"
+horizontal_alignment = 1
+
+[node name="Cash" type="Label" parent="TopBar/Inset/TopRow"]
+custom_minimum_size = Vector2(170, 0)
+layout_mode = 2
+text = "$60.0M"
+horizontal_alignment = 1
+
+[node name="Wells" type="Label" parent="TopBar/Inset/TopRow"]
+custom_minimum_size = Vector2(150, 0)
+layout_mode = 2
+text = "0 wells"
+horizontal_alignment = 1
+
+[node name="Activity" type="Label" parent="TopBar/Inset/TopRow"]
+custom_minimum_size = Vector2(150, 0)
+layout_mode = 2
+text = "idle"
+horizontal_alignment = 1
+
+[node name="BoardPanel" type="PanelContainer" parent="."]
+custom_minimum_size = Vector2(680, 640)
+layout_mode = 1
+anchors_preset = 4
+anchor_top = 0.5
+anchor_bottom = 0.5
+offset_left = 40.0
+offset_top = -300.0
+offset_right = 720.0
+offset_bottom = 340.0
+grow_vertical = 2
+
+[node name="Inset" type="MarginContainer" parent="BoardPanel"]
+layout_mode = 2
+theme_override_constants/margin_left = 26
+theme_override_constants/margin_top = 20
+theme_override_constants/margin_right = 26
+theme_override_constants/margin_bottom = 24
+
+[node name="Stack" type="VBoxContainer" parent="BoardPanel/Inset"]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="Header" type="Label" parent="BoardPanel/Inset/Stack"]
+layout_mode = 2
+text = "AVAILABLE WORK"
+
+[node name="Rule" type="ColorRect" parent="BoardPanel/Inset/Stack"]
+custom_minimum_size = Vector2(0, 1)
+layout_mode = 2
+color = Color(1, 1, 1, 0.09)
+
+[node name="Body" type="MarginContainer" parent="BoardPanel/Inset/Stack"]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/margin_top = 2
+
+[node name="Scroll" type="ScrollContainer" parent="BoardPanel/Inset/Stack/Body"]
+layout_mode = 2
+horizontal_scroll_mode = 0
+
+[node name="Cards" type="VBoxContainer" parent="BoardPanel/Inset/Stack/Body/Scroll"]
+custom_minimum_size = Vector2(600, 0)
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="OrderCardTemplate" type="Button" parent="BoardPanel/Inset/Stack/Body/Scroll/Cards"]
+custom_minimum_size = Vector2(596, 74)
+layout_mode = 2
+text = ""
+alignment = 0
+
+[node name="Row" type="HBoxContainer" parent="BoardPanel/Inset/Stack/Body/Scroll/Cards/OrderCardTemplate"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 8.0
+offset_top = 8.0
+offset_right = -8.0
+offset_bottom = -8.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/separation = 12
+
+[node name="Icon" type="TextureRect" parent="BoardPanel/Inset/Stack/Body/Scroll/Cards/OrderCardTemplate/Row"]
+custom_minimum_size = Vector2(42, 42)
+layout_mode = 2
+texture = ExtResource("2_test")
+expand_mode = 5
+stretch_mode = 5
+
+[node name="Lines" type="VBoxContainer" parent="BoardPanel/Inset/Stack/Body/Scroll/Cards/OrderCardTemplate/Row"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 1
+
+[node name="Title" type="Label" parent="BoardPanel/Inset/Stack/Body/Scroll/Cards/OrderCardTemplate/Row/Lines"]
+custom_minimum_size = Vector2(150, 0)
+layout_mode = 2
+text = "Shoot seismic"
+clip_text = true
+text_overrun_behavior = 3
+
+[node name="Equipment" type="Label" parent="BoardPanel/Inset/Stack/Body/Scroll/Cards/OrderCardTemplate/Row/Lines"]
+custom_minimum_size = Vector2(150, 0)
+layout_mode = 2
+text = "Survey crew"
+clip_text = true
+text_overrun_behavior = 3
+
+[node name="DifficultyStamp" type="PanelContainer" parent="BoardPanel/Inset/Stack/Body/Scroll/Cards/OrderCardTemplate/Row"]
+custom_minimum_size = Vector2(94, 28)
+layout_mode = 2
+size_flags_vertical = 4
+
+[node name="Label" type="Label" parent="BoardPanel/Inset/Stack/Body/Scroll/Cards/OrderCardTemplate/Row/DifficultyStamp"]
+layout_mode = 2
+text = "FAIR"
+horizontal_alignment = 1
+
+[node name="StateStamp" type="PanelContainer" parent="BoardPanel/Inset/Stack/Body/Scroll/Cards/OrderCardTemplate/Row"]
+custom_minimum_size = Vector2(94, 28)
+layout_mode = 2
+size_flags_vertical = 4
+
+[node name="Label" type="Label" parent="BoardPanel/Inset/Stack/Body/Scroll/Cards/OrderCardTemplate/Row/StateStamp"]
+layout_mode = 2
+text = "AVAILABLE"
+horizontal_alignment = 1
+
+[node name="DetailPanel" type="PanelContainer" parent="."]
+custom_minimum_size = Vector2(620, 640)
+layout_mode = 1
+anchors_preset = 6
+anchor_left = 1.0
+anchor_top = 0.5
+anchor_right = 1.0
+anchor_bottom = 0.5
+offset_left = -660.0
+offset_top = -300.0
+offset_right = -40.0
+offset_bottom = 340.0
+grow_horizontal = 0
+grow_vertical = 2
+
+[node name="Inset" type="MarginContainer" parent="DetailPanel"]
+layout_mode = 2
+theme_override_constants/margin_left = 26
+theme_override_constants/margin_top = 20
+theme_override_constants/margin_right = 26
+theme_override_constants/margin_bottom = 24
+
+[node name="Stack" type="VBoxContainer" parent="DetailPanel/Inset"]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="Header" type="Label" parent="DetailPanel/Inset/Stack"]
+layout_mode = 2
+text = "ORDER DETAILS"
+
+[node name="Rule" type="ColorRect" parent="DetailPanel/Inset/Stack"]
+custom_minimum_size = Vector2(0, 1)
+layout_mode = 2
+color = Color(1, 1, 1, 0.09)
+
+[node name="Body" type="MarginContainer" parent="DetailPanel/Inset/Stack"]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/margin_top = 2
+
+[node name="Content" type="VBoxContainer" parent="DetailPanel/Inset/Stack/Body"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="DetailScroll" type="ScrollContainer" parent="DetailPanel/Inset/Stack/Body/Content"]
+custom_minimum_size = Vector2(580, 420)
+layout_mode = 2
+horizontal_scroll_mode = 0
+
+[node name="Detail" type="VBoxContainer" parent="DetailPanel/Inset/Stack/Body/Content/DetailScroll"]
+custom_minimum_size = Vector2(566, 0)
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="DetailHeaderTemplate" type="HBoxContainer" parent="DetailPanel/Inset/Stack/Body/Content/DetailScroll/Detail"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="Icon" type="TextureRect" parent="DetailPanel/Inset/Stack/Body/Content/DetailScroll/Detail/DetailHeaderTemplate"]
+custom_minimum_size = Vector2(42, 42)
+layout_mode = 2
+texture = ExtResource("3_rig")
+expand_mode = 5
+stretch_mode = 5
+
+[node name="Title" type="Label" parent="DetailPanel/Inset/Stack/Body/Content/DetailScroll/Detail/DetailHeaderTemplate"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "DRILL A WELL"
+clip_text = true
+text_overrun_behavior = 3
+
+[node name="DetailRuleTemplate" type="ColorRect" parent="DetailPanel/Inset/Stack/Body/Content/DetailScroll/Detail"]
+custom_minimum_size = Vector2(0, 1)
+layout_mode = 2
+color = Color(1, 1, 1, 0.09)
+
+[node name="SectionTemplate" type="VBoxContainer" parent="DetailPanel/Inset/Stack/Body/Content/DetailScroll/Detail"]
+layout_mode = 2
+theme_override_constants/separation = 2
+
+[node name="Heading" type="Label" parent="DetailPanel/Inset/Stack/Body/Content/DetailScroll/Detail/SectionTemplate"]
+layout_mode = 2
+text = "Objective"
+
+[node name="Body" type="Label" parent="DetailPanel/Inset/Stack/Body/Content/DetailScroll/Detail/SectionTemplate"]
+custom_minimum_size = Vector2(556, 0)
+layout_mode = 2
+text = "Put a 2,000 m hole into the best structure the company has. Months of rig time, and it may come back dry."
+autowrap_mode = 3
+
+[node name="DetailRowTemplate" type="HBoxContainer" parent="DetailPanel/Inset/Stack/Body/Content/DetailScroll/Detail"]
+custom_minimum_size = Vector2(0, 54)
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="Icon" type="TextureRect" parent="DetailPanel/Inset/Stack/Body/Content/DetailScroll/Detail/DetailRowTemplate"]
+custom_minimum_size = Vector2(34, 34)
+layout_mode = 2
+texture = ExtResource("2_test")
+expand_mode = 5
+stretch_mode = 5
+
+[node name="Lines" type="VBoxContainer" parent="DetailPanel/Inset/Stack/Body/Content/DetailScroll/Detail/DetailRowTemplate"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 1
+
+[node name="Heading" type="Label" parent="DetailPanel/Inset/Stack/Body/Content/DetailScroll/Detail/DetailRowTemplate/Lines"]
+layout_mode = 2
+text = "EQUIPMENT"
+
+[node name="Body" type="Label" parent="DetailPanel/Inset/Stack/Body/Content/DetailScroll/Detail/DetailRowTemplate/Lines"]
+layout_mode = 2
+text = "Survey crew"
+autowrap_mode = 3
+
+[node name="Buttons" type="HBoxContainer" parent="DetailPanel/Inset/Stack/Body/Content"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="DispatchButton" type="Button" parent="DetailPanel/Inset/Stack/Body/Content/Buttons"]
+custom_minimum_size = Vector2(380, 50)
+layout_mode = 2
+text = "DISPATCH"
+
+[node name="BackButton" type="Button" parent="DetailPanel/Inset/Stack/Body/Content/Buttons"]
+custom_minimum_size = Vector2(170, 50)
+layout_mode = 2
+text = "BACK"
+
+[node name="Status" type="Label" parent="DetailPanel/Inset/Stack/Body/Content"]
+custom_minimum_size = Vector2(566, 0)
+layout_mode = 2
+autowrap_mode = 3
+
+[node name="FleetPanel" type="PanelContainer" parent="."]
+custom_minimum_size = Vector2(600, 140)
+layout_mode = 1
+anchors_preset = 7
+anchor_left = 0.5
+anchor_top = 1.0
+anchor_right = 0.5
+anchor_bottom = 1.0
+offset_left = -300.0
+offset_top = -156.0
+offset_right = 300.0
+offset_bottom = -16.0
+grow_horizontal = 2
+grow_vertical = 0
+
+[node name="Inset" type="MarginContainer" parent="FleetPanel"]
+layout_mode = 2
+theme_override_constants/margin_left = 26
+theme_override_constants/margin_top = 20
+theme_override_constants/margin_right = 26
+theme_override_constants/margin_bottom = 24
+
+[node name="Stack" type="VBoxContainer" parent="FleetPanel/Inset"]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="Header" type="Label" parent="FleetPanel/Inset/Stack"]
+layout_mode = 2
+text = "EQUIPMENT"
+
+[node name="Rule" type="ColorRect" parent="FleetPanel/Inset/Stack"]
+custom_minimum_size = Vector2(0, 1)
+layout_mode = 2
+color = Color(1, 1, 1, 0.09)
+
+[node name="Fleet" type="HBoxContainer" parent="FleetPanel/Inset/Stack"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="FleetChipTemplate" type="PanelContainer" parent="FleetPanel/Inset/Stack/Fleet"]
+custom_minimum_size = Vector2(106, 94)
+layout_mode = 2
+
+[node name="Column" type="VBoxContainer" parent="FleetPanel/Inset/Stack/Fleet/FleetChipTemplate"]
+layout_mode = 2
+alignment = 1
+theme_override_constants/separation = 2
+
+[node name="Icon" type="TextureRect" parent="FleetPanel/Inset/Stack/Fleet/FleetChipTemplate/Column"]
+custom_minimum_size = Vector2(34, 34)
+layout_mode = 2
+size_flags_horizontal = 4
+texture = ExtResource("4_crane")
+expand_mode = 5
+stretch_mode = 5
+
+[node name="Name" type="Label" parent="FleetPanel/Inset/Stack/Fleet/FleetChipTemplate/Column"]
+layout_mode = 2
+text = "Crane"
+horizontal_alignment = 1
+
+[node name="State" type="Label" parent="FleetPanel/Inset/Stack/Fleet/FleetChipTemplate/Column"]
+layout_mode = 2
+text = "ready"
+horizontal_alignment = 1

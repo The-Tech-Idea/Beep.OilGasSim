@@ -29,7 +29,9 @@ public static class DevScreenshot
                 path = argument[Flag.Length..];
         }
 
-        if (path is null)
+        bool audit = DevLayoutAudit.Requested();
+
+        if (path is null && !audit)
             return;
 
         // A caller that has already navigated away is no longer in the tree, and
@@ -55,18 +57,36 @@ public static class DevScreenshot
 
             // Measured on the same settled frame the picture is taken from, so
             // what the audit reports is what the screenshot shows.
-            if (DevLayoutAudit.Requested())
+            if (audit)
             {
                 DevLayoutAudit.Run(
                     host.GetTree().Root, host.GetViewport().GetVisibleRect().Size);
             }
 
-            Image image = host.GetViewport().GetTexture().GetImage();
-            Error error = image.SavePng(path);
+            if (path is not null)
+            {
+                if (DisplayServer.GetName() == "headless")
+                {
+                    GD.PushWarning($"[dev] could not write {path}: screenshots need a rendered display server");
+                    host.GetTree().Quit();
+                    return;
+                }
 
-            GD.Print(error == Error.Ok
-                ? $"[dev] wrote {path}"
-                : $"[dev] could not write {path}: {error}");
+                Image? image = host.GetViewport().GetTexture().GetImage();
+
+                if (image is null)
+                {
+                    GD.PushWarning($"[dev] could not write {path}: the viewport image is not available");
+                    host.GetTree().Quit();
+                    return;
+                }
+
+                Error error = image.SavePng(path);
+
+                GD.Print(error == Error.Ok
+                    ? $"[dev] wrote {path}"
+                    : $"[dev] could not write {path}: {error}");
+            }
 
             host.GetTree().Quit();
         }

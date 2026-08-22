@@ -16,6 +16,7 @@ namespace OilfieldDays.Ui;
 /// the read model. Drawn rather than rendered off a camera, because a 24 km
 /// basin at one pixel per tile is cheaper to draw than to photograph.</para>
 /// </summary>
+[Tool]
 public sealed partial class Minimap : Control
 {
     private TerrainMap? _terrain;

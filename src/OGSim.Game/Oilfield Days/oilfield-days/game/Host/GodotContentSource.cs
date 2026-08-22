@@ -65,7 +65,15 @@ public sealed class GodotContentSource : IContentSource
     }
 
     /// <summary>The folders whose kinds the engine registers today.</summary>
-    private static readonly string[] Loadable = { "facilities", "technologies", "fluid-systems" };
+    private static readonly string[] Loadable =
+    {
+        "facilities",
+        "technologies",
+        "terrain-classes",
+        "contracts",
+        "wells",
+        "fluid-systems",
+    };
 
     /// <summary>How many files were found. Zero means the engine will refuse to start.</summary>
     public int Count => _files.Count;

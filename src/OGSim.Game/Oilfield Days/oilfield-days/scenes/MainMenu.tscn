@@ -1,6 +1,8 @@
-[gd_scene load_steps=2 format=3]
+[gd_scene load_steps=4 format=3]
 
 [ext_resource type="Script" path="res://game/Screens/MainMenu.cs" id="1_script"]
+[ext_resource type="Texture2D" path="res://assets/brand/splash.png" id="2_splash"]
+[ext_resource type="Texture2D" path="res://assets/brand/logo.png" id="3_logo"]
 
 [node name="MainMenu" type="Control"]
 anchors_preset = 15
@@ -9,3 +11,193 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("1_script")
+
+[node name="Ground" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.01, 0.014, 0.021, 1)
+
+[node name="Art" type="TextureRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+texture = ExtResource("2_splash")
+expand_mode = 1
+stretch_mode = 6
+
+[node name="Shade" type="TextureRect" parent="."]
+layout_mode = 1
+anchors_preset = 13
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_right = 620.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+expand_mode = 1
+stretch_mode = 1
+
+[node name="Mark" type="TextureRect" parent="."]
+layout_mode = 0
+offset_left = 44.0
+offset_top = 12.0
+offset_right = 294.0
+offset_bottom = 262.0
+mouse_filter = 2
+texture = ExtResource("3_logo")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="Entries" type="VBoxContainer" parent="."]
+layout_mode = 0
+offset_left = 64.0
+offset_top = 268.0
+offset_right = 464.0
+offset_bottom = 616.0
+theme_override_constants/separation = 8
+
+[node name="NewGameButton" type="Button" parent="Entries"]
+custom_minimum_size = Vector2(400, 50)
+layout_mode = 2
+text = "   ▶    NEW GAME"
+alignment = 0
+
+[node name="ContinueButton" type="Button" parent="Entries"]
+custom_minimum_size = Vector2(400, 50)
+layout_mode = 2
+tooltip_text = "nothing saved yet"
+disabled = true
+text = "   ⏵    CONTINUE"
+alignment = 0
+
+[node name="LoadButton" type="Button" parent="Entries"]
+custom_minimum_size = Vector2(400, 50)
+layout_mode = 2
+tooltip_text = "nothing saved yet"
+disabled = true
+text = "   ⭯    LOAD GAME"
+alignment = 0
+
+[node name="ChallengesButton" type="Button" parent="Entries"]
+custom_minimum_size = Vector2(400, 50)
+layout_mode = 2
+tooltip_text = "one scenario is composed, and New Game starts it"
+disabled = true
+text = "   ★    CHALLENGES"
+alignment = 0
+
+[node name="OptionsButton" type="Button" parent="Entries"]
+custom_minimum_size = Vector2(400, 50)
+layout_mode = 2
+text = "   ⚙    OPTIONS"
+alignment = 0
+
+[node name="ExitButton" type="Button" parent="Entries"]
+custom_minimum_size = Vector2(400, 50)
+layout_mode = 2
+text = "   ⏻    EXIT GAME"
+alignment = 0
+
+[node name="NotesPanel" type="PanelContainer" parent="."]
+custom_minimum_size = Vector2(400, 250)
+layout_mode = 0
+offset_left = 64.0
+offset_top = 632.0
+offset_right = 464.0
+offset_bottom = 882.0
+
+[node name="Content" type="VBoxContainer" parent="NotesPanel"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Header" type="Label" parent="NotesPanel/Content"]
+layout_mode = 2
+text = "FIELD NOTES"
+horizontal_alignment = 1
+
+[node name="Notes" type="VBoxContainer" parent="NotesPanel/Content"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="NoteRun" type="HBoxContainer" parent="NotesPanel/Content/Notes"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Tag" type="Label" parent="NotesPanel/Content/Notes/NoteRun"]
+custom_minimum_size = Vector2(96, 0)
+layout_mode = 2
+text = "The run:"
+
+[node name="Body" type="Label" parent="NotesPanel/Content/Notes/NoteRun"]
+custom_minimum_size = Vector2(250, 0)
+layout_mode = 2
+size_flags_horizontal = 3
+text = "One basin. Ten years. $600M, or broke."
+autowrap_mode = 3
+
+[node name="NoteEngine" type="HBoxContainer" parent="NotesPanel/Content/Notes"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Tag" type="Label" parent="NotesPanel/Content/Notes/NoteEngine"]
+custom_minimum_size = Vector2(96, 0)
+layout_mode = 2
+text = "The engine:"
+
+[node name="Body" type="Label" parent="NotesPanel/Content/Notes/NoteEngine"]
+custom_minimum_size = Vector2(250, 0)
+layout_mode = 2
+size_flags_horizontal = 3
+text = "OGSim decides it all. A tick is a month; a month is thirty days."
+autowrap_mode = 3
+
+[node name="NoteRock" type="HBoxContainer" parent="NotesPanel/Content/Notes"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Tag" type="Label" parent="NotesPanel/Content/Notes/NoteRock"]
+custom_minimum_size = Vector2(96, 0)
+layout_mode = 2
+text = "The rock:"
+
+[node name="Body" type="Label" parent="NotesPanel/Content/Notes/NoteRock"]
+custom_minimum_size = Vector2(250, 0)
+layout_mode = 2
+size_flags_horizontal = 3
+text = "You know nothing until you measure. Survey, log, core, or drill."
+autowrap_mode = 3
+
+[node name="Stamp" type="VBoxContainer" parent="."]
+layout_mode = 1
+anchors_preset = 3
+anchor_left = 1.0
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -300.0
+offset_top = -70.0
+offset_right = -20.0
+offset_bottom = -20.0
+grow_horizontal = 0
+grow_vertical = 0
+alignment = 2
+
+[node name="StampTitle" type="Label" parent="Stamp"]
+custom_minimum_size = Vector2(280, 0)
+layout_mode = 2
+text = "OILFIELD DAYS"
+horizontal_alignment = 2
+
+[node name="StampSub" type="Label" parent="Stamp"]
+custom_minimum_size = Vector2(280, 0)
+layout_mode = 2
+text = "powered by OGSim"
+horizontal_alignment = 2

@@ -55,7 +55,7 @@ public sealed partial class BasinWorld : Node2D
 
     private const int PlantPadWide = 16;
     private const int PlantPadTall = 9;
-    private const int RoadWidth = 2;
+    private const int RoadWidth = 1;
 
     private readonly Dictionary<ulong, Node2D> _prospectMarkers = new();
     private readonly Dictionary<ulong, Node2D> _wellMarkers = new();
@@ -65,13 +65,14 @@ public sealed partial class BasinWorld : Node2D
 
     private WorldMap _ground = null!;
     private TerrainMap _terrain = null!;
+    private PainterlyTerrainLayer _backdrop = null!;
     private EdgeMaskTerrain _water = null!;
-    private EdgeMaskTerrain _sand = null!;
-    private EdgeMaskTerrain _grass = null!;
-    private EdgeMaskTerrain _dryGrass = null!;
-    private EdgeMaskTerrain _rock = null!;
-    private EdgeMaskTerrain _gravel = null!;
-    private EdgeMaskTerrain _road = null!;
+    private DualGridTerrain _sand = null!;
+    private DualGridTerrain _grass = null!;
+    private DualGridTerrain _dryGrass = null!;
+    private DualGridTerrain _rock = null!;
+    private DualGridTerrain _gravel = null!;
+    private DualGridTerrain _road = null!;
     private Node2D _sceneryLayer = null!;
     private Node2D _markerLayer = null!;
     private Node2D _plantLayer = null!;
@@ -121,16 +122,20 @@ public sealed partial class BasinWorld : Node2D
         // reach every structure without crossing the whole field.
         PlantSite = TileCentre(PlantTile());
 
-        // The project's own 17-piece sheets (assets/tilesets), keyed off their
-        // checkerboard into flat17/. One layer per material, stacked low to
-        // high, so every transition is drawn by the sheets' own edge pieces.
+        _backdrop = new PainterlyTerrainLayer { Name = "PainterlyTerrain", ZIndex = -90 };
+        AddChild(_backdrop);
+
+        // These atlas layers are still built as diagnostic/source layers, but
+        // the player-facing base terrain comes from PainterlyTerrainLayer so
+        // the map reads as a painted region rather than a repeated tile sheet.
         _water = AddTerrain("Water", "res://assets/tilesets/flat17/water.png", -70);
-        _sand = AddTerrain("Shore", "res://assets/tilesets/flat17/dirt.png", -60);
-        _grass = AddTerrain("Grass", "res://assets/tilesets/flat17/grass.png", -50);
-        _dryGrass = AddTerrain("DryGrass", "res://assets/tilesets/flat17/olive-grass.png", -45);
-        _rock = AddTerrain("Rock", "res://assets/tilesets/flat17/stone.png", -40);
-        _gravel = AddTerrain("Gravel", "res://assets/tilesets/flat17/cracked-dirt.png", -20);
-        _road = AddTerrain("Roads", "res://assets/tilesets/flat17/dirt.png", -10);
+        _sand = AddDualTerrain("Shore", "res://assets/tilesets/oilfield-days/desert_15p_64.png", -60);
+        _grass = AddDualTerrain("Grass", "res://assets/tilesets/oilfield-days/grass_15p_64.png", -50);
+        _dryGrass = AddDualTerrain("DryGrass", "res://assets/tilesets/oilfield-days/grass_15p_64.png", -45);
+        _rock = AddDualTerrain("Rock", "res://assets/tilesets/oilfield-days/gravel-pad_15p_64.png", -40);
+        _gravel = AddDualTerrain("Gravel", "res://assets/tilesets/oilfield-days/gravel-pad_15p_64.png", -20);
+        _road = AddDualTerrain("Roads", "res://assets/tilesets/oilfield-days/dirt-road_15p_64.png", -10);
+        HideTileTerrain();
 
         _sceneryLayer = new Node2D { Name = "Scenery", YSortEnabled = true };
         _plantLayer = new Node2D { Name = "Plant", YSortEnabled = true };
@@ -388,7 +393,11 @@ public sealed partial class BasinWorld : Node2D
                     plot.Size.Y);
 
                 _terrain.Level(onGround.Grow(1));
-                _ground.Fill(onGround, TerrainKind.GravelPad);
+                Rect2I pad = onGround.Size.X > 4 && onGround.Size.Y > 4
+                    ? onGround.Grow(-1)
+                    : onGround;
+
+                _ground.Fill(pad, TerrainKind.GravelPad);
             }
         }
 
@@ -411,8 +420,20 @@ public sealed partial class BasinWorld : Node2D
         _rock.Repaint(_ground, cell => _terrain.At(cell) == Ground.Rock);
         _gravel.Repaint(_ground, cell => _ground.At(cell) == TerrainKind.GravelPad);
         _road.Repaint(_ground, cell => _ground.At(cell) == TerrainKind.DirtRoad);
+        _backdrop.Repaint(_ground, _terrain, TileSize);
 
         PaintScenery();
+    }
+
+    private void HideTileTerrain()
+    {
+        _water.Visible = false;
+        _sand.Visible = false;
+        _grass.Visible = false;
+        _dryGrass.Visible = false;
+        _rock.Visible = false;
+        _gravel.Visible = false;
+        _road.Visible = false;
     }
 
     /// <summary>
@@ -859,6 +880,20 @@ public sealed partial class BasinWorld : Node2D
         return layer;
     }
 
+    private DualGridTerrain AddDualTerrain(string name, string texturePath, int zIndex)
+    {
+        var texture = GD.Load<Texture2D>(texturePath);
+
+        if (texture is null)
+            throw new InvalidOperationException($"terrain atlas missing: {texturePath}");
+
+        var layer = new DualGridTerrain { Name = name, ZIndex = zIndex };
+        AddChild(layer);
+        layer.UseAtlas(texture, TileSize);
+
+        return layer;
+    }
+
     private static string ProspectCaption(ProspectView prospect) =>
         $"{prospect.Play}\nPOS {prospect.ProbabilityOfSuccess * 100.0:F0}%";
 
@@ -875,7 +910,7 @@ public sealed partial class BasinWorld : Node2D
     {
         WellStatus.Producing => "res://assets/props/pumpjack.png",
         WellStatus.Injecting => "res://assets/props/water-injection-pump.png",
-        WellStatus.Drilling or WellStatus.Completing => "res://assets/props/workover-rig.png",
+        WellStatus.Drilling or WellStatus.Completing => "res://assets/props/drilling-rig-derrick.png",
         WellStatus.Workover => "res://assets/props/workover-rig.png",
         WellStatus.Abandoned => "res://assets/props/wellhead-tree.png",
         _ => "res://assets/props/wellhead-tree.png",
@@ -925,7 +960,7 @@ public sealed partial class BasinWorld : Node2D
         return displayId switch
         {
             "separator" => "res://assets/props/three-phase-separator.png",
-            "tank" => "res://assets/props/oil-storage-tank.png",
+            "tank" => "res://assets/props/crude-oil-storage-tank.png",
             "flare" => "res://assets/props/flare-stack.png",
             "water-disposal" => "res://assets/props/water-injection-pump.png",
             "custody-meter" => "res://assets/props/metering-station.png",
@@ -980,7 +1015,7 @@ public sealed partial class BasinWorld : Node2D
             Texture = texture,
             Hframes = animate ? kind.WorkingFrames : 1,
             Running = animate,
-            TextureFilter = CanvasItem.TextureFilterEnum.Nearest,
+            TextureFilter = CanvasItem.TextureFilterEnum.LinearWithMipmaps,
         };
 
         // Scaled off the FRAME rather than the sheet, or an eight-frame strip

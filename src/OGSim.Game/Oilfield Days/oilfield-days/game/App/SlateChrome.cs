@@ -66,6 +66,7 @@ public static class SlateChrome
 
     /// <summary>Cut pieces are shared: one texture, however many controls use it.</summary>
     private static readonly Dictionary<string, StyleBoxTexture> Cut = new();
+    private static readonly Dictionary<string, StyleBoxFlat> Flats = new();
 
     /// <summary>
     /// The empty stylebox, shared.
@@ -160,14 +161,51 @@ public static class SlateChrome
     /// from a ninety-pixel plate — leaves the middle band too thin to stretch and
     /// squashes the whole thing.
     /// </remarks>
-    public static StyleBoxTexture PanelPlate(int pad = 26) =>
-        Patch("panel", 24, 24, pad, pad, LiftOf("panel"));
+    public static StyleBox PanelPlate(int pad = 22) =>
+        FlatPlate($"panel|{pad}", Color.FromHtml("11191B"), Color.FromHtml("465251"), 4, 1, pad, pad);
 
-    public static StyleBoxTexture FieldPlate(int padX = 18, int padY = 10) =>
-        Patch("field", 18, 12, padX, padY, LiftOf("field"));
+    public static StyleBox FieldPlate(int padX = 14, int padY = 8) =>
+        FlatPlate($"field|{padX}|{padY}", Color.FromHtml("121D21"), Color.FromHtml("334044"), 4, 1, padX, padY);
 
-    public static StyleBoxTexture RolePlate(UiSurface.Role role, int padX = 22, int padY = 10) =>
-        Patch(PlateFor(role), 34, 20, padX, padY, LiftOf(PlateFor(role)));
+    public static StyleBox RolePlate(UiSurface.Role role, int padX = 22, int padY = 10) =>
+        FlatPlate($"role|{role}|{padX}|{padY}", RoleColour(role), RoleBorder(role), 4, 1, padX, padY);
+
+    private static StyleBoxFlat FlatPlate(
+        string key, Color background, Color border, int radius, int borderWidth, int padX, int padY)
+    {
+        if (Flats.TryGetValue(key, out StyleBoxFlat? kept))
+            return kept;
+
+        var box = new StyleBoxFlat
+        {
+            BgColor = background,
+            BorderColor = border,
+            ContentMarginLeft = padX,
+            ContentMarginRight = padX,
+            ContentMarginTop = padY,
+            ContentMarginBottom = padY,
+            ShadowColor = new Color(0f, 0f, 0f, 0.35f),
+            ShadowSize = 3,
+            ShadowOffset = new Vector2(0, 1),
+        };
+        box.SetBorderWidthAll(borderWidth);
+        box.SetCornerRadiusAll(radius);
+        Flats[key] = box;
+
+        return box;
+    }
+
+    private static Color RoleColour(UiSurface.Role role) => role switch
+    {
+        UiSurface.Role.Success => Color.FromHtml("1F7F22"),
+        UiSurface.Role.Danger => Color.FromHtml("A63723"),
+        UiSurface.Role.Warning or UiSurface.Role.Accent => Color.FromHtml("D79519"),
+        UiSurface.Role.Info or UiSurface.Role.Accent2 => Color.FromHtml("12648D"),
+        _ => Color.FromHtml("1A272C"),
+    };
+
+    private static Color RoleBorder(UiSurface.Role role) =>
+        RoleColour(role).Lightened(role is UiSurface.Role.Warning or UiSurface.Role.Accent ? 0.18f : 0.12f);
 
     /// <summary>
     /// How deep the drawn frame is on each cut piece, measured off the art.
@@ -330,12 +368,7 @@ public static class SlateChrome
         column.AddThemeConstantOverride("separation", 4);
         inset.AddChild(column);
 
-        // A gold uppercase title over a hairline — which is how the supplied
-        // setup and summary panels are headed. The solid coloured bar is the
-        // CARD treatment and belongs to Card; putting it on every panel painted
-        // the screen in blocks the reference sheets do not have.
-        column.AddChild(Line(title.ToUpperInvariant(), 15, InkFor(header) == KitTheme.Ink ? Title : Title));
-        column.AddChild(Rule());
+        column.AddChild(TitleBar(title, header));
 
         // The heading and its rule take what they need; the body takes the rest,
         // which is what lets a panel hold something that fills — a map, a list —
@@ -452,47 +485,64 @@ public static class SlateChrome
     /// </summary>
     public static Button Chunk(string text, UiSurface.Role accent, Vector2 size, int fontSize = 18)
     {
+        var button = new Button { Text = text, CustomMinimumSize = size };
+
+        ApplyChunk(button, text, accent, size, fontSize);
+
+        return button;
+    }
+
+    /// <summary>
+    /// Apply the atlas button treatment to a button that already exists in a scene.
+    /// </summary>
+    public static void ApplyChunk(
+        Button button, string text, UiSurface.Role accent, Vector2 size, int fontSize = 18)
+    {
         string plate = PlateFor(accent);
         Color ink = InkFor(accent);
 
-        var button = new Button { Text = text, CustomMinimumSize = size };
-
+        button.Text = text;
+        button.CustomMinimumSize = size;
         button.AddThemeFontSizeOverride("font_size", fontSize);
         button.AddThemeColorOverride("font_color", ink);
         button.AddThemeColorOverride("font_hover_color", ink);
         button.AddThemeColorOverride("font_pressed_color", ink);
         button.AddThemeColorOverride("font_disabled_color", new Color(ink, 0.35f));
 
-        StyleBoxTexture face = RolePlate(accent);
+        StyleBox face = RolePlate(accent);
 
         button.AddThemeStyleboxOverride("normal", face);
         button.AddThemeStyleboxOverride("hover", Lit(plate, 1.14f));
         button.AddThemeStyleboxOverride("pressed", Lit(plate, 0.86f));
         button.AddThemeStyleboxOverride("disabled", Lit(plate, 0.55f));
         button.AddThemeStyleboxOverride("focus", Nothing);
-
-        return button;
     }
 
     /// <summary>The same plate, lifted or dimmed — hover and press without a second cut.</summary>
-    private static StyleBoxTexture Lit(string plate, float by)
+    private static StyleBox Lit(string plate, float by)
     {
         string key = $"{plate}|lit|{by}";
 
-        if (Cut.TryGetValue(key, out StyleBoxTexture? kept))
+        if (Flats.TryGetValue(key, out StyleBoxFlat? kept))
             return kept;
 
-        // The field plate is a recessed panel and the coloured plates are
-        // buttons; they are cut with different edges, so a lifted copy has to
-        // start from the same geometry the flat one uses or the rim jumps.
-        StyleBoxTexture box = plate == "field"
-            ? (StyleBoxTexture)FieldPlate().Duplicate()
-            : (StyleBoxTexture)Patch(plate, 34, 20, 22, 10, LiftOf(plate)).Duplicate();
-        box.ModulateColor = new Color(by, by, by);
-        Cut[key] = box;
+        StyleBoxFlat box = plate == "field"
+            ? (StyleBoxFlat)FieldPlate().Duplicate()
+            : (StyleBoxFlat)FlatPlate(plate, RoleColour(RoleForPlate(plate)), RoleBorder(RoleForPlate(plate)), 4, 1, 22, 10).Duplicate();
+        box.BgColor = by >= 1.0f ? box.BgColor.Lightened(by - 1.0f) : box.BgColor.Darkened(1.0f - by);
+        Flats[key] = box;
 
         return box;
     }
+
+    private static UiSurface.Role RoleForPlate(string plate) => plate switch
+    {
+        "plate-green" => UiSurface.Role.Success,
+        "plate-red" => UiSurface.Role.Danger,
+        "plate-amber" => UiSurface.Role.Warning,
+        "plate-blue" => UiSurface.Role.Info,
+        _ => UiSurface.Role.Neutral,
+    };
 
     /// <summary>
     /// A settings or summary row: icon, label, then the value hard right.
@@ -567,8 +617,14 @@ public static class SlateChrome
     /// </remarks>
     public static VBoxContainer Collapsible(
         string title, Container parent, float width, UiSurface.Role header = UiSurface.Role.Neutral,
-        bool startFolded = false)
+        bool startFolded = false, string bodyName = "")
     {
+        if (bodyName.Length > 0 && FindNamed<VBoxContainer>(parent, bodyName) is { } existing)
+        {
+            StyleAuthoredCollapsible(title, header, startFolded, existing);
+            return existing;
+        }
+
         Container inset = Frame(new Vector2(width, 0));
         parent.AddChild(PanelOf(inset));
 
@@ -576,7 +632,7 @@ public static class SlateChrome
         stack.AddThemeConstantOverride("separation", 4);
         inset.AddChild(stack);
 
-        var body = new VBoxContainer { Visible = !startFolded };
+        var body = new VBoxContainer { Name = bodyName.Length > 0 ? bodyName : "Body", Visible = !startFolded };
         body.AddThemeConstantOverride("separation", 4);
 
         var handle = new Button
@@ -619,6 +675,149 @@ public static class SlateChrome
         stack.AddChild(body);
 
         return body;
+    }
+
+    /// <summary>
+    /// The atlas title plate used by the mockup panels.
+    /// </summary>
+    public static PanelContainer TitleBar(
+        string title, UiSurface.Role role = UiSurface.Role.Warning, string icon = "", int height = 42)
+    {
+        var bar = new PanelContainer
+        {
+            Name = "TitlePlate",
+            CustomMinimumSize = new Vector2(0, height),
+            MouseFilter = Control.MouseFilterEnum.Ignore,
+        };
+
+        bar.AddThemeStyleboxOverride("panel", RolePlate(role, 16, 8));
+
+        var row = new HBoxContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
+        row.AddThemeConstantOverride("separation", 8);
+
+        if (icon.Length > 0)
+            row.AddChild(Icon(icon, Mathf.Max(20.0f, height - 12.0f)));
+
+        Label label = Line(title.ToUpperInvariant(), 15, InkFor(role));
+        label.Name = "Title";
+        label.VerticalAlignment = VerticalAlignment.Center;
+        label.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+        row.AddChild(label);
+
+        bar.AddChild(row);
+
+        return bar;
+    }
+
+    /// <summary>
+    /// Turn a design-time label header into the atlas-backed title plate.
+    /// </summary>
+    public static void PromoteHeader(
+        Label label, UiSurface.Role role = UiSurface.Role.Warning, bool centered = false)
+    {
+        if (label.GetParent() is PanelContainer)
+            return;
+
+        Node? parent = label.GetParent();
+
+        if (parent is null)
+            return;
+
+        int index = label.GetIndex();
+        parent.RemoveChild(label);
+
+        var bar = new PanelContainer
+        {
+            Name = $"{label.Name}Plate",
+            CustomMinimumSize = new Vector2(0, 42),
+            MouseFilter = Control.MouseFilterEnum.Ignore,
+        };
+
+        bar.AddThemeStyleboxOverride("panel", RolePlate(role, 16, 8));
+
+        label.Text = label.Text.ToUpperInvariant();
+        label.HorizontalAlignment = centered ? HorizontalAlignment.Center : HorizontalAlignment.Left;
+        label.VerticalAlignment = VerticalAlignment.Center;
+        label.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+        label.AddThemeFontSizeOverride("font_size", 15);
+        label.AddThemeColorOverride("font_color", InkFor(role));
+
+        bar.AddChild(label);
+        parent.AddChild(bar);
+        parent.MoveChild(bar, index);
+    }
+
+    private static void StyleAuthoredCollapsible(
+        string title, UiSurface.Role header, bool startFolded, VBoxContainer body)
+    {
+        body.Visible = !startFolded;
+        body.AddThemeConstantOverride("separation", 4);
+
+        if (PanelOf(body) is PanelContainer panel)
+            panel.AddThemeStyleboxOverride("panel", PanelPlate(0));
+
+        if (body.GetParent() is not VBoxContainer stack)
+            return;
+
+        stack.AddThemeConstantOverride("separation", 4);
+
+        Button? handle = FindNamed<Button>(stack, "Handle");
+        HBoxContainer? headerRow = handle is null ? null : FindNamed<HBoxContainer>(handle, "HeaderRow");
+        Label? chevron = handle is null ? null : FindNamed<Label>(handle, "Chevron");
+        Label? caption = handle is null ? null : FindNamed<Label>(handle, "Caption");
+
+        if (handle is not null)
+        {
+            handle.ToggleMode = true;
+            handle.ButtonPressed = !startFolded;
+            handle.CustomMinimumSize = new Vector2(0, 42);
+            handle.Flat = false;
+            handle.FocusMode = Control.FocusModeEnum.None;
+            handle.AddThemeStyleboxOverride("normal", RolePlate(header, 16, 8));
+            handle.AddThemeStyleboxOverride("hover", Lit(PlateFor(header), 1.2f));
+            handle.AddThemeStyleboxOverride("pressed", Lit(PlateFor(header), 0.95f));
+            handle.AddThemeStyleboxOverride("focus", Nothing);
+
+            handle.Toggled += open =>
+            {
+                body.Visible = open;
+
+                if (chevron is not null)
+                    chevron.Text = open ? "v" : ">";
+            };
+        }
+
+        if (headerRow is not null)
+        {
+            headerRow.MouseFilter = Control.MouseFilterEnum.Ignore;
+            headerRow.AddThemeConstantOverride("separation", 8);
+            LayAcross(headerRow, PlateFor(header), extra: 0.0f);
+        }
+
+        if (chevron is not null)
+        {
+            chevron.Text = startFolded ? ">" : "v";
+            chevron.VerticalAlignment = VerticalAlignment.Center;
+            chevron.AddThemeFontSizeOverride("font_size", 13);
+            chevron.AddThemeColorOverride("font_color", InkFor(header));
+        }
+
+        if (caption is not null)
+        {
+            caption.Text = title.ToUpperInvariant();
+            caption.VerticalAlignment = VerticalAlignment.Center;
+            caption.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+            caption.AddThemeFontSizeOverride("font_size", 15);
+            caption.AddThemeColorOverride("font_color", InkFor(header));
+        }
+
+        if (FindNamed<ColorRect>(stack, "Rule") is { } rule)
+        {
+            rule.Visible = false;
+            rule.Color = new Color(1.0f, 1.0f, 1.0f, 0.09f);
+            rule.CustomMinimumSize = new Vector2(0, 1);
+            rule.MouseFilter = Control.MouseFilterEnum.Ignore;
+        }
     }
 
     /// <summary>A titled panel — the atlas's card, header and all.</summary>
@@ -705,6 +904,22 @@ public static class SlateChrome
 
             if (child.GetChildCount() > 0 && Find(child) is VBoxContainer deeper)
                 return deeper;
+        }
+
+        return null;
+    }
+
+    private static T? FindNamed<T>(Node at, string name) where T : Node
+    {
+        if (at is T typed && at.Name == name)
+            return typed;
+
+        foreach (Node child in at.GetChildren())
+        {
+            T? found = FindNamed<T>(child, name);
+
+            if (found is not null)
+                return found;
         }
 
         return null;
@@ -892,7 +1107,7 @@ public static class SlateChrome
     public static StyleBoxFlat Fill(Color colour) => Solid(colour);
 
     /// <summary>A list row's plate: flat, or lifted when it is the current one.</summary>
-    public static StyleBoxTexture Row(bool selected) =>
+    public static StyleBox Row(bool selected) =>
         selected ? Lit("field", 1.45f) : FieldPlate();
 
     /// <summary>A word on a small plate, at the end of a row.</summary>

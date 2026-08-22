@@ -1,0 +1,12 @@
+{
+  "kind": "terrain-class",
+  "id": "mountain",
+  "formation": { "heightBand": ["low", "mid", "high"], "slopeBand": ["steep"], "climateBands": ["any"] },
+  "constructionCostFactor": 3.5,
+  "transportCostFactor": 6.0,
+  "buildable": "yes",
+  "rigAccess": "heli-supported",
+  "seismicOps": "mountain crew",
+  "settlementWeight": 0.2,
+  "arableWeight": 0.0
+}

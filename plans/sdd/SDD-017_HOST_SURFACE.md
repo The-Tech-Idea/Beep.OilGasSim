@@ -269,6 +269,34 @@ public sealed record ObjectiveView(
 > The rows fold into `FieldView.DeferredByElement` and
 > `FacilityView.UnitUtilisation` when those views have something to hang from.
 
+> **Amendment (finding 282) — `IFacility`/`FacilityUnit` removed as dead
+> scaffolding, and what that means for the future of `FacilityView`.**
+> Phase 4's research (this session) found the literal thing `FacilityView`
+> presupposes — a real `IFacility`(container)/`FacilityUnit`(member)
+> parent-child hierarchy — had already been declared once
+> (`OGSim.Contracts/FacilityContracts.cs`) and never implemented: zero
+> callers, zero references anywhere, and sitting directly beneath that same
+> file's own header comment stating *"there is no facility-type hierarchy in
+> code at all (02 §4.1)"* — the interface contradicted the law recorded two
+> lines above it. `MASTER_TRACKER.md`'s finding 159 records a separate,
+> earlier rejection of a second element-type interface for the identical
+> reason. Both `IFacility` and the unused `EntityKind.FacilityUnit` are gone
+> (`EntityKind`'s remaining values pinned explicitly first, since the enum
+> is cast to `long` and persisted in save files — an implicit renumbering on
+> removal would have corrupted an existing save's kind tags for every member
+> after the one removed).
+>
+> **This settles how `FacilityView`/`UnitUtilisation` get built, whenever
+> that work resumes**: as a read-model-only projection over the flat
+> `SurfaceChain`, the exact pattern `ChainElementView` above already uses —
+> never by resurrecting `IFacility`/`FacilityUnit` as real domain types. The
+> "one Facility, one Site" framing (this composition has exactly one surface
+> chain, always) needs no container type of its own; `UnitUtilisation`
+> itself still waits on the §8 amendment this document already names two
+> paragraphs up — exposing `ConstraintEvaluation` out of `SolveReport` — a
+> genuine `OGSim.Flow` contract change, unaffected by this cleanup either
+> way.
+
 > **R21.5 amendment — the wells, as a subset read model can show them.** §2's
 > `WellView` carries a site, an operating point and sampled IPR/VLP curves,
 > none of which the current loop has a source for — and the subset read model

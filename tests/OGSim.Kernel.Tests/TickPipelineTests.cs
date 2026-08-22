@@ -161,7 +161,7 @@ public class TickPipelineTests
         return (new SegmentPlanner(trail), trail, clock);
     }
 
-    private static EntityRef Unit(ulong id) => new(EntityKind.FacilityUnit, id);
+    private static EntityRef Unit(ulong id) => new(EntityKind.FlowElement, id);
 
     [Fact] // R1-V16: a mid-tick change produces the exact duration-weighted split
     public void R1V16_a_mid_tick_change_segments_exactly()

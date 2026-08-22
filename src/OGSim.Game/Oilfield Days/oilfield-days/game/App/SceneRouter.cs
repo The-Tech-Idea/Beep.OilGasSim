@@ -126,7 +126,18 @@ public sealed partial class SceneRouter : Node
         }
 
         _open = packed.Instantiate<Control>();
+        FitOverlayToViewport(_open);
         _overlays.AddChild(_open);
+    }
+
+    private void FitOverlayToViewport(Control overlay)
+    {
+        Rect2 visible = GetViewport().GetVisibleRect();
+
+        overlay.SetAnchorsPreset(Control.LayoutPreset.TopLeft);
+        overlay.Position = Vector2.Zero;
+        overlay.Size = visible.Size;
+        overlay.CustomMinimumSize = visible.Size;
     }
 
     public void CloseOverlay()

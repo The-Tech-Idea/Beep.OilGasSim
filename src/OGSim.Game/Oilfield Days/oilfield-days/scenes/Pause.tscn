@@ -9,3 +9,79 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("1_script")
+
+[node name="Backdrop" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.1, 0.07, 0.04, 0.72)
+
+[node name="PausePanel" type="PanelContainer" parent="."]
+custom_minimum_size = Vector2(420, 500)
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -210.0
+offset_top = -250.0
+offset_right = 210.0
+offset_bottom = 250.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Content" type="VBoxContainer" parent="PausePanel"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="TitlePlate" type="PanelContainer" parent="PausePanel/Content"]
+custom_minimum_size = Vector2(0, 34)
+layout_mode = 2
+
+[node name="Title" type="Label" parent="PausePanel/Content/TitlePlate"]
+layout_mode = 2
+text = "PAUSED"
+horizontal_alignment = 1
+
+[node name="Actions" type="VBoxContainer" parent="PausePanel/Content"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="ResumeButton" type="Button" parent="PausePanel/Content/Actions"]
+custom_minimum_size = Vector2(372, 48)
+layout_mode = 2
+text = "Resume"
+
+[node name="SaveButton" type="Button" parent="PausePanel/Content/Actions"]
+custom_minimum_size = Vector2(372, 48)
+layout_mode = 2
+text = "Save the run"
+
+[node name="SaveStatus" type="Label" parent="PausePanel/Content/Actions"]
+custom_minimum_size = Vector2(372, 0)
+layout_mode = 2
+autowrap_mode = 3
+
+[node name="DispatchButton" type="Button" parent="PausePanel/Content/Actions"]
+custom_minimum_size = Vector2(372, 48)
+layout_mode = 2
+text = "The dispatch board"
+
+[node name="FleetButton" type="Button" parent="PausePanel/Content/Actions"]
+custom_minimum_size = Vector2(372, 48)
+layout_mode = 2
+text = "The yard"
+
+[node name="ResultButton" type="Button" parent="PausePanel/Content/Actions"]
+custom_minimum_size = Vector2(372, 48)
+layout_mode = 2
+text = "Give up and score the run"
+
+[node name="MenuButton" type="Button" parent="PausePanel/Content/Actions"]
+custom_minimum_size = Vector2(372, 48)
+layout_mode = 2
+text = "Main menu"

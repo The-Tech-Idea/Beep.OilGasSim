@@ -1,6 +1,1192 @@
-[gd_scene load_steps=2 format=3]
+[gd_scene load_steps=29 format=3]
 
 [ext_resource type="Script" path="res://game/Screens/Gameplay.cs" id="1_script"]
+[ext_resource type="Script" path="res://game/Ui/GameHud.cs" id="2_hud"]
+[ext_resource type="Script" path="res://game/Ui/StatusBar.cs" id="3_status"]
+[ext_resource type="Script" path="res://game/Ui/IconRail.cs" id="4_rail"]
+[ext_resource type="Script" path="res://game/Ui/SelectionCard.cs" id="5_selection"]
+[ext_resource type="Script" path="res://game/Ui/SidePanels.cs" id="6_side"]
+[ext_resource type="Script" path="res://game/Ui/CommandBar.cs" id="7_command"]
+[ext_resource type="Script" path="res://game/Ui/Trend.cs" id="8_trend"]
+[ext_resource type="Texture2D" path="res://assets/brand/logo.png" id="8_logo"]
+[ext_resource type="Texture2D" path="res://assets/icons/communications-tower.png" id="9_date_icon"]
+[ext_resource type="Texture2D" path="res://assets/icons/crude-oil-storage-tank.png" id="10_cash_icon"]
+[ext_resource type="Texture2D" path="res://assets/icons/security-checkpoint.png" id="11_debt_icon"]
+[ext_resource type="Texture2D" path="res://assets/icons/metering-station.png" id="12_price_icon"]
+[ext_resource type="Texture2D" path="res://assets/icons/pumpjack.png" id="13_rate_icon"]
+[ext_resource type="Texture2D" path="res://assets/icons/drilling-rig-derrick.png" id="14_wells_icon"]
+[ext_resource type="Texture2D" path="res://assets/icons/cooling-tower.png" id="15_weather_icon"]
+[ext_resource type="Texture2D" path="res://assets/icons/helipad-platform.png" id="16_map_icon"]
+[ext_resource type="Texture2D" path="res://assets/icons/control-room-cabin.png" id="17_jobs_icon"]
+[ext_resource type="Texture2D" path="res://assets/icons/mobile-crane-truck.png" id="18_fleet_icon"]
+[ext_resource type="Texture2D" path="res://assets/icons/pipeline-construction-excavator.png" id="19_build_icon"]
+[ext_resource type="Texture2D" path="res://assets/icons/well-testing-skid.png" id="20_research_icon"]
+[ext_resource type="Script" path="res://game/Ui/Minimap.cs" id="21_minimap"]
+[ext_resource type="Script" path="res://game/World/BasinWorld.cs" id="22_basin"]
+[ext_resource type="Script" path="res://game/World/ServiceTruck.cs" id="23_truck"]
+[ext_resource type="Script" path="res://game/World/Dispatcher.cs" id="24_dispatcher"]
+[ext_resource type="Script" path="res://game/World/StandingOrders.cs" id="25_orders"]
+[ext_resource type="Script" path="res://game/World/CameraRig.cs" id="26_camera"]
+[ext_resource type="Script" uid="uid://iaoe0symtria" path="res://addons/beep_game_builder_cs/ecs/ui/kit/KitCheckBox.cs" id="27_checkbox"]
 
 [node name="Gameplay" type="Node2D"]
 script = ExtResource("1_script")
+
+[node name="Basin" type="Node2D" parent="."]
+script = ExtResource("22_basin")
+
+[node name="ServiceTruck" type="CharacterBody2D" parent="."]
+script = ExtResource("23_truck")
+
+[node name="Yard" type="Node2D" parent="."]
+script = ExtResource("24_dispatcher")
+
+[node name="StandingOrders" type="Node" parent="."]
+script = ExtResource("25_orders")
+
+[node name="Camera" type="Camera2D" parent="."]
+enabled = true
+script = ExtResource("26_camera")
+
+[node name="Hud" type="CanvasLayer" parent="."]
+layer = 10
+script = ExtResource("2_hud")
+
+[node name="HudRoot" type="Control" parent="Hud"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="PromptPanel" type="PanelContainer" parent="Hud/HudRoot"]
+visible = false
+anchors_preset = 7
+anchor_left = 0.5
+anchor_top = 1.0
+anchor_right = 0.5
+anchor_bottom = 1.0
+offset_left = -230.0
+offset_top = -142.0
+offset_right = 230.0
+grow_horizontal = 2
+grow_vertical = 0
+
+[node name="Prompt" type="Label" parent="Hud/HudRoot/PromptPanel"]
+layout_mode = 2
+text = "\"Select a structure or facility\""
+horizontal_alignment = 1
+
+[node name="ToastHolder" type="Control" parent="Hud/HudRoot"]
+custom_minimum_size = Vector2(500, 0)
+anchors_preset = 5
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -250.0
+offset_top = 88.0
+offset_right = 250.0
+offset_bottom = 88.0
+grow_horizontal = 2
+mouse_filter = 2
+
+[node name="Toasts" type="VBoxContainer" parent="Hud/HudRoot/ToastHolder"]
+custom_minimum_size = Vector2(500, 0)
+layout_mode = 0
+theme_override_constants/separation = 8
+
+[node name="ToastTemplate" type="PanelContainer" parent="Hud/HudRoot/ToastHolder/Toasts"]
+visible = false
+layout_mode = 2
+
+[node name="ToastText" type="Label" parent="Hud/HudRoot/ToastHolder/Toasts/ToastTemplate"]
+custom_minimum_size = Vector2(460, 0)
+layout_mode = 2
+text = "A basin, and nothing drilled."
+autowrap_mode = 3
+
+[node name="Shell" type="CanvasLayer" parent="."]
+layer = 20
+
+[node name="StatusBar" type="PanelContainer" parent="Shell"]
+anchors_preset = 10
+anchor_right = 1.0
+offset_left = 8.0
+offset_top = 6.0
+offset_right = -8.0
+offset_bottom = 66.0
+grow_horizontal = 2
+script = ExtResource("3_status")
+
+[node name="Inset" type="MarginContainer" parent="Shell/StatusBar"]
+layout_mode = 2
+theme_override_constants/margin_left = 14
+theme_override_constants/margin_top = 8
+theme_override_constants/margin_right = 14
+theme_override_constants/margin_bottom = 8
+
+[node name="StatusRow" type="HBoxContainer" parent="Shell/StatusBar/Inset"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="Logo" type="TextureRect" parent="Shell/StatusBar/Inset/StatusRow"]
+custom_minimum_size = Vector2(42, 42)
+layout_mode = 2
+texture = ExtResource("8_logo")
+expand_mode = 5
+stretch_mode = 5
+
+[node name="DateCapsule" type="PanelContainer" parent="Shell/StatusBar/Inset/StatusRow"]
+custom_minimum_size = Vector2(132, 42)
+layout_mode = 2
+
+[node name="Row" type="HBoxContainer" parent="Shell/StatusBar/Inset/StatusRow/DateCapsule"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="Icon" type="TextureRect" parent="Shell/StatusBar/Inset/StatusRow/DateCapsule/Row"]
+custom_minimum_size = Vector2(22, 22)
+layout_mode = 2
+texture = ExtResource("9_date_icon")
+expand_mode = 5
+stretch_mode = 5
+
+[node name="Date" type="Label" parent="Shell/StatusBar/Inset/StatusRow/DateCapsule/Row"]
+layout_mode = 2
+text = "Spring Y1"
+vertical_alignment = 1
+
+[node name="SpeedGroup" type="HBoxContainer" parent="Shell/StatusBar/Inset/StatusRow"]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="PauseButton" type="Button" parent="Shell/StatusBar/Inset/StatusRow/SpeedGroup"]
+custom_minimum_size = Vector2(38, 42)
+layout_mode = 2
+text = "II"
+
+[node name="SlowButton" type="Button" parent="Shell/StatusBar/Inset/StatusRow/SpeedGroup"]
+custom_minimum_size = Vector2(38, 42)
+layout_mode = 2
+text = ">"
+
+[node name="NormalButton" type="Button" parent="Shell/StatusBar/Inset/StatusRow/SpeedGroup"]
+custom_minimum_size = Vector2(38, 42)
+layout_mode = 2
+text = ">>"
+
+[node name="FastButton" type="Button" parent="Shell/StatusBar/Inset/StatusRow/SpeedGroup"]
+custom_minimum_size = Vector2(38, 42)
+layout_mode = 2
+text = ">>>"
+
+[node name="Speed" type="Label" parent="Shell/StatusBar/Inset/StatusRow/SpeedGroup"]
+custom_minimum_size = Vector2(38, 0)
+layout_mode = 2
+text = "x1"
+vertical_alignment = 1
+
+[node name="CashCapsule" type="PanelContainer" parent="Shell/StatusBar/Inset/StatusRow"]
+custom_minimum_size = Vector2(132, 42)
+layout_mode = 2
+
+[node name="Row" type="HBoxContainer" parent="Shell/StatusBar/Inset/StatusRow/CashCapsule"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="Icon" type="TextureRect" parent="Shell/StatusBar/Inset/StatusRow/CashCapsule/Row"]
+custom_minimum_size = Vector2(22, 22)
+layout_mode = 2
+texture = ExtResource("10_cash_icon")
+expand_mode = 5
+stretch_mode = 5
+
+[node name="Cash" type="Label" parent="Shell/StatusBar/Inset/StatusRow/CashCapsule/Row"]
+layout_mode = 2
+text = "$600.0M"
+vertical_alignment = 1
+
+[node name="DebtCapsule" type="PanelContainer" parent="Shell/StatusBar/Inset/StatusRow"]
+custom_minimum_size = Vector2(118, 42)
+layout_mode = 2
+
+[node name="Row" type="HBoxContainer" parent="Shell/StatusBar/Inset/StatusRow/DebtCapsule"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="Icon" type="TextureRect" parent="Shell/StatusBar/Inset/StatusRow/DebtCapsule/Row"]
+custom_minimum_size = Vector2(22, 22)
+layout_mode = 2
+texture = ExtResource("11_debt_icon")
+expand_mode = 5
+stretch_mode = 5
+
+[node name="Debt" type="Label" parent="Shell/StatusBar/Inset/StatusRow/DebtCapsule/Row"]
+layout_mode = 2
+text = "no debt"
+vertical_alignment = 1
+
+[node name="PriceCapsule" type="PanelContainer" parent="Shell/StatusBar/Inset/StatusRow"]
+custom_minimum_size = Vector2(118, 42)
+layout_mode = 2
+
+[node name="Row" type="HBoxContainer" parent="Shell/StatusBar/Inset/StatusRow/PriceCapsule"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="Icon" type="TextureRect" parent="Shell/StatusBar/Inset/StatusRow/PriceCapsule/Row"]
+custom_minimum_size = Vector2(22, 22)
+layout_mode = 2
+texture = ExtResource("12_price_icon")
+expand_mode = 5
+stretch_mode = 5
+
+[node name="Price" type="Label" parent="Shell/StatusBar/Inset/StatusRow/PriceCapsule/Row"]
+layout_mode = 2
+text = "$0/t"
+vertical_alignment = 1
+
+[node name="RateCapsule" type="PanelContainer" parent="Shell/StatusBar/Inset/StatusRow"]
+custom_minimum_size = Vector2(142, 42)
+layout_mode = 2
+
+[node name="Row" type="HBoxContainer" parent="Shell/StatusBar/Inset/StatusRow/RateCapsule"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="Icon" type="TextureRect" parent="Shell/StatusBar/Inset/StatusRow/RateCapsule/Row"]
+custom_minimum_size = Vector2(22, 22)
+layout_mode = 2
+texture = ExtResource("13_rate_icon")
+expand_mode = 5
+stretch_mode = 5
+
+[node name="Rate" type="Label" parent="Shell/StatusBar/Inset/StatusRow/RateCapsule/Row"]
+layout_mode = 2
+text = "0 m3/d"
+vertical_alignment = 1
+
+[node name="WellsCapsule" type="PanelContainer" parent="Shell/StatusBar/Inset/StatusRow"]
+custom_minimum_size = Vector2(126, 42)
+layout_mode = 2
+
+[node name="Row" type="HBoxContainer" parent="Shell/StatusBar/Inset/StatusRow/WellsCapsule"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="Icon" type="TextureRect" parent="Shell/StatusBar/Inset/StatusRow/WellsCapsule/Row"]
+custom_minimum_size = Vector2(22, 22)
+layout_mode = 2
+texture = ExtResource("14_wells_icon")
+expand_mode = 5
+stretch_mode = 5
+
+[node name="Wells" type="Label" parent="Shell/StatusBar/Inset/StatusRow/WellsCapsule/Row"]
+layout_mode = 2
+text = "0 wells"
+vertical_alignment = 1
+
+[node name="WeatherCapsule" type="PanelContainer" parent="Shell/StatusBar/Inset/StatusRow"]
+custom_minimum_size = Vector2(126, 42)
+layout_mode = 2
+
+[node name="Row" type="HBoxContainer" parent="Shell/StatusBar/Inset/StatusRow/WeatherCapsule"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="Icon" type="TextureRect" parent="Shell/StatusBar/Inset/StatusRow/WeatherCapsule/Row"]
+custom_minimum_size = Vector2(22, 22)
+layout_mode = 2
+texture = ExtResource("15_weather_icon")
+expand_mode = 5
+stretch_mode = 5
+
+[node name="Weather" type="Label" parent="Shell/StatusBar/Inset/StatusRow/WeatherCapsule/Row"]
+layout_mode = 2
+text = "20C fair"
+vertical_alignment = 1
+
+[node name="Spacer" type="Control" parent="Shell/StatusBar/Inset/StatusRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="DispatchButton" type="Button" parent="Shell/StatusBar/Inset/StatusRow"]
+custom_minimum_size = Vector2(92, 42)
+layout_mode = 2
+text = "JOBS"
+
+[node name="MenuButton" type="Button" parent="Shell/StatusBar/Inset/StatusRow"]
+custom_minimum_size = Vector2(96, 42)
+layout_mode = 2
+text = "MENU"
+
+[node name="Rail" type="PanelContainer" parent="Shell"]
+anchors_preset = 0
+offset_left = 8.0
+offset_top = 76.0
+offset_right = 102.0
+offset_bottom = 704.0
+script = ExtResource("4_rail")
+
+[node name="RailInset" type="MarginContainer" parent="Shell/Rail"]
+layout_mode = 2
+theme_override_constants/margin_left = 8
+theme_override_constants/margin_top = 10
+theme_override_constants/margin_right = 8
+theme_override_constants/margin_bottom = 10
+
+[node name="RailColumn" type="VBoxContainer" parent="Shell/Rail/RailInset"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="MapButton" type="Button" parent="Shell/Rail/RailInset/RailColumn"]
+custom_minimum_size = Vector2(78, 66)
+layout_mode = 2
+
+[node name="Content" type="VBoxContainer" parent="Shell/Rail/RailInset/RailColumn/MapButton"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 16.0
+offset_top = 16.0
+offset_right = -16.0
+offset_bottom = -16.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/separation = 2
+alignment = 1
+
+[node name="Icon" type="TextureRect" parent="Shell/Rail/RailInset/RailColumn/MapButton/Content"]
+custom_minimum_size = Vector2(30, 30)
+layout_mode = 2
+texture = ExtResource("16_map_icon")
+expand_mode = 5
+stretch_mode = 5
+
+[node name="Label" type="Label" parent="Shell/Rail/RailInset/RailColumn/MapButton/Content"]
+layout_mode = 2
+text = "Map"
+horizontal_alignment = 1
+
+[node name="JobsButton" type="Button" parent="Shell/Rail/RailInset/RailColumn"]
+custom_minimum_size = Vector2(78, 66)
+layout_mode = 2
+
+[node name="Content" type="VBoxContainer" parent="Shell/Rail/RailInset/RailColumn/JobsButton"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 16.0
+offset_top = 16.0
+offset_right = -16.0
+offset_bottom = -16.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/separation = 2
+alignment = 1
+
+[node name="Icon" type="TextureRect" parent="Shell/Rail/RailInset/RailColumn/JobsButton/Content"]
+custom_minimum_size = Vector2(30, 30)
+layout_mode = 2
+texture = ExtResource("17_jobs_icon")
+expand_mode = 5
+stretch_mode = 5
+
+[node name="Label" type="Label" parent="Shell/Rail/RailInset/RailColumn/JobsButton/Content"]
+layout_mode = 2
+text = "Jobs"
+horizontal_alignment = 1
+
+[node name="LeasesButton" type="Button" parent="Shell/Rail/RailInset/RailColumn"]
+custom_minimum_size = Vector2(78, 66)
+layout_mode = 2
+
+[node name="Content" type="VBoxContainer" parent="Shell/Rail/RailInset/RailColumn/LeasesButton"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 16.0
+offset_top = 16.0
+offset_right = -16.0
+offset_bottom = -16.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/separation = 2
+alignment = 1
+
+[node name="Icon" type="TextureRect" parent="Shell/Rail/RailInset/RailColumn/LeasesButton/Content"]
+custom_minimum_size = Vector2(30, 30)
+layout_mode = 2
+texture = ExtResource("11_debt_icon")
+expand_mode = 5
+stretch_mode = 5
+
+[node name="Label" type="Label" parent="Shell/Rail/RailInset/RailColumn/LeasesButton/Content"]
+layout_mode = 2
+text = "Leases"
+horizontal_alignment = 1
+
+[node name="FleetButton" type="Button" parent="Shell/Rail/RailInset/RailColumn"]
+custom_minimum_size = Vector2(78, 66)
+layout_mode = 2
+
+[node name="Content" type="VBoxContainer" parent="Shell/Rail/RailInset/RailColumn/FleetButton"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 16.0
+offset_top = 16.0
+offset_right = -16.0
+offset_bottom = -16.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/separation = 2
+alignment = 1
+
+[node name="Icon" type="TextureRect" parent="Shell/Rail/RailInset/RailColumn/FleetButton/Content"]
+custom_minimum_size = Vector2(30, 30)
+layout_mode = 2
+texture = ExtResource("18_fleet_icon")
+expand_mode = 5
+stretch_mode = 5
+
+[node name="Label" type="Label" parent="Shell/Rail/RailInset/RailColumn/FleetButton/Content"]
+layout_mode = 2
+text = "Fleet"
+horizontal_alignment = 1
+
+[node name="BuildButton" type="Button" parent="Shell/Rail/RailInset/RailColumn"]
+custom_minimum_size = Vector2(78, 66)
+layout_mode = 2
+
+[node name="Content" type="VBoxContainer" parent="Shell/Rail/RailInset/RailColumn/BuildButton"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 16.0
+offset_top = 16.0
+offset_right = -16.0
+offset_bottom = -16.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/separation = 2
+alignment = 1
+
+[node name="Icon" type="TextureRect" parent="Shell/Rail/RailInset/RailColumn/BuildButton/Content"]
+custom_minimum_size = Vector2(30, 30)
+layout_mode = 2
+texture = ExtResource("19_build_icon")
+expand_mode = 5
+stretch_mode = 5
+modulate = Color(1, 1, 1, 0.32)
+
+[node name="Label" type="Label" parent="Shell/Rail/RailInset/RailColumn/BuildButton/Content"]
+layout_mode = 2
+text = "Build"
+horizontal_alignment = 1
+
+[node name="ProductionButton" type="Button" parent="Shell/Rail/RailInset/RailColumn"]
+custom_minimum_size = Vector2(78, 66)
+layout_mode = 2
+
+[node name="Content" type="VBoxContainer" parent="Shell/Rail/RailInset/RailColumn/ProductionButton"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 16.0
+offset_top = 16.0
+offset_right = -16.0
+offset_bottom = -16.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/separation = 2
+alignment = 1
+
+[node name="Icon" type="TextureRect" parent="Shell/Rail/RailInset/RailColumn/ProductionButton/Content"]
+custom_minimum_size = Vector2(30, 30)
+layout_mode = 2
+texture = ExtResource("13_rate_icon")
+expand_mode = 5
+stretch_mode = 5
+modulate = Color(1, 1, 1, 0.32)
+
+[node name="Label" type="Label" parent="Shell/Rail/RailInset/RailColumn/ProductionButton/Content"]
+layout_mode = 2
+text = "Production"
+horizontal_alignment = 1
+
+[node name="FinanceButton" type="Button" parent="Shell/Rail/RailInset/RailColumn"]
+custom_minimum_size = Vector2(78, 66)
+layout_mode = 2
+
+[node name="Content" type="VBoxContainer" parent="Shell/Rail/RailInset/RailColumn/FinanceButton"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 16.0
+offset_top = 16.0
+offset_right = -16.0
+offset_bottom = -16.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/separation = 2
+alignment = 1
+
+[node name="Icon" type="TextureRect" parent="Shell/Rail/RailInset/RailColumn/FinanceButton/Content"]
+custom_minimum_size = Vector2(30, 30)
+layout_mode = 2
+texture = ExtResource("10_cash_icon")
+expand_mode = 5
+stretch_mode = 5
+modulate = Color(1, 1, 1, 0.32)
+
+[node name="Label" type="Label" parent="Shell/Rail/RailInset/RailColumn/FinanceButton/Content"]
+layout_mode = 2
+text = "Finance"
+horizontal_alignment = 1
+
+[node name="ResearchButton" type="Button" parent="Shell/Rail/RailInset/RailColumn"]
+custom_minimum_size = Vector2(78, 66)
+layout_mode = 2
+
+[node name="Content" type="VBoxContainer" parent="Shell/Rail/RailInset/RailColumn/ResearchButton"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 16.0
+offset_top = 16.0
+offset_right = -16.0
+offset_bottom = -16.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/separation = 2
+alignment = 1
+
+[node name="Icon" type="TextureRect" parent="Shell/Rail/RailInset/RailColumn/ResearchButton/Content"]
+custom_minimum_size = Vector2(30, 30)
+layout_mode = 2
+texture = ExtResource("20_research_icon")
+expand_mode = 5
+stretch_mode = 5
+modulate = Color(1, 1, 1, 0.32)
+
+[node name="Label" type="Label" parent="Shell/Rail/RailInset/RailColumn/ResearchButton/Content"]
+layout_mode = 2
+text = "Research"
+horizontal_alignment = 1
+
+[node name="Selection" type="Control" parent="Shell"]
+anchors_preset = 3
+anchor_left = 1.0
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -740.0
+offset_top = -340.0
+offset_right = -376.0
+offset_bottom = -8.0
+grow_horizontal = 0
+grow_vertical = 0
+script = ExtResource("5_selection")
+
+[node name="SelectionCardPanel" type="PanelContainer" parent="Shell/Selection"]
+custom_minimum_size = Vector2(340, 0)
+anchors_preset = 3
+anchor_left = 1.0
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -340.0
+offset_top = -210.0
+grow_horizontal = 0
+grow_vertical = 0
+
+[node name="Stack" type="VBoxContainer" parent="Shell/Selection/SelectionCardPanel"]
+layout_mode = 2
+theme_override_constants/separation = 0
+
+[node name="HeaderMargin" type="MarginContainer" parent="Shell/Selection/SelectionCardPanel/Stack"]
+layout_mode = 2
+theme_override_constants/margin_left = 7
+theme_override_constants/margin_top = 7
+theme_override_constants/margin_right = 7
+
+[node name="PreviewHeader" type="PanelContainer" parent="Shell/Selection/SelectionCardPanel/Stack/HeaderMargin"]
+custom_minimum_size = Vector2(0, 44)
+layout_mode = 2
+
+[node name="HeaderContent" type="HBoxContainer" parent="Shell/Selection/SelectionCardPanel/Stack/HeaderMargin/PreviewHeader"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="PreviewIcon" type="TextureRect" parent="Shell/Selection/SelectionCardPanel/Stack/HeaderMargin/PreviewHeader/HeaderContent"]
+custom_minimum_size = Vector2(26, 26)
+layout_mode = 2
+texture = ExtResource("13_rate_icon")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="PreviewTitle" type="Label" parent="Shell/Selection/SelectionCardPanel/Stack/HeaderMargin/PreviewHeader/HeaderContent"]
+layout_mode = 2
+text = "SELECTED WELL"
+vertical_alignment = 1
+
+[node name="Body" type="MarginContainer" parent="Shell/Selection/SelectionCardPanel/Stack"]
+layout_mode = 2
+theme_override_constants/margin_left = 16
+theme_override_constants/margin_top = 10
+theme_override_constants/margin_right = 16
+theme_override_constants/margin_bottom = 18
+
+[node name="Rows" type="VBoxContainer" parent="Shell/Selection/SelectionCardPanel/Stack/Body"]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="InfoRowTemplate" type="PanelContainer" parent="Shell/Selection/SelectionCardPanel/Stack/Body/Rows"]
+layout_mode = 2
+
+[node name="Line" type="HBoxContainer" parent="Shell/Selection/SelectionCardPanel/Stack/Body/Rows/InfoRowTemplate"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Label" type="Label" parent="Shell/Selection/SelectionCardPanel/Stack/Body/Rows/InfoRowTemplate/Line"]
+layout_mode = 2
+text = "Status"
+
+[node name="Value" type="Label" parent="Shell/Selection/SelectionCardPanel/Stack/Body/Rows/InfoRowTemplate/Line"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "producing"
+horizontal_alignment = 2
+autowrap_mode = 3
+
+[node name="CaptionTemplate" type="Label" parent="Shell/Selection/SelectionCardPanel/Stack/Body/Rows"]
+layout_mode = 2
+text = "What the company believes"
+autowrap_mode = 3
+
+[node name="FactorTemplate" type="HBoxContainer" parent="Shell/Selection/SelectionCardPanel/Stack/Body/Rows"]
+custom_minimum_size = Vector2(0, 22)
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Name" type="Label" parent="Shell/Selection/SelectionCardPanel/Stack/Body/Rows/FactorTemplate"]
+custom_minimum_size = Vector2(92, 0)
+layout_mode = 2
+text = "Reservoir"
+vertical_alignment = 1
+
+[node name="Bar" type="ProgressBar" parent="Shell/Selection/SelectionCardPanel/Stack/Body/Rows/FactorTemplate"]
+custom_minimum_size = Vector2(150, 12)
+layout_mode = 2
+size_flags_vertical = 4
+value = 0.62
+show_percentage = false
+
+[node name="Value" type="Label" parent="Shell/Selection/SelectionCardPanel/Stack/Body/Rows/FactorTemplate"]
+custom_minimum_size = Vector2(46, 0)
+layout_mode = 2
+text = "62%"
+horizontal_alignment = 2
+vertical_alignment = 1
+
+[node name="Side" type="PanelContainer" parent="Shell"]
+anchors_preset = 13
+anchor_left = 1.0
+anchor_top = 0.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -364.0
+offset_top = 76.0
+offset_right = -8.0
+offset_bottom = -8.0
+grow_horizontal = 0
+grow_vertical = 2
+script = ExtResource("6_side")
+
+[node name="SideScroll" type="ScrollContainer" parent="Shell/Side"]
+layout_mode = 2
+horizontal_scroll_mode = 0
+
+[node name="SideColumn" type="VBoxContainer" parent="Shell/Side/SideScroll"]
+custom_minimum_size = Vector2(340, 0)
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="ObjectivesPanel" type="PanelContainer" parent="Shell/Side/SideScroll/SideColumn"]
+custom_minimum_size = Vector2(340, 0)
+layout_mode = 2
+
+[node name="Inset" type="MarginContainer" parent="Shell/Side/SideScroll/SideColumn/ObjectivesPanel"]
+layout_mode = 2
+theme_override_constants/margin_left = 26
+theme_override_constants/margin_top = 20
+theme_override_constants/margin_right = 26
+theme_override_constants/margin_bottom = 24
+
+[node name="CollapsibleStack" type="VBoxContainer" parent="Shell/Side/SideScroll/SideColumn/ObjectivesPanel/Inset"]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="Handle" type="Button" parent="Shell/Side/SideScroll/SideColumn/ObjectivesPanel/Inset/CollapsibleStack"]
+custom_minimum_size = Vector2(0, 26)
+layout_mode = 2
+toggle_mode = true
+button_pressed = true
+flat = true
+
+[node name="HeaderRow" type="HBoxContainer" parent="Shell/Side/SideScroll/SideColumn/ObjectivesPanel/Inset/CollapsibleStack/Handle"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+theme_override_constants/separation = 6
+
+[node name="Chevron" type="Label" parent="Shell/Side/SideScroll/SideColumn/ObjectivesPanel/Inset/CollapsibleStack/Handle/HeaderRow"]
+layout_mode = 2
+text = "v"
+
+[node name="Caption" type="Label" parent="Shell/Side/SideScroll/SideColumn/ObjectivesPanel/Inset/CollapsibleStack/Handle/HeaderRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "OBJECTIVES"
+
+[node name="Rule" type="ColorRect" parent="Shell/Side/SideScroll/SideColumn/ObjectivesPanel/Inset/CollapsibleStack"]
+custom_minimum_size = Vector2(0, 1)
+layout_mode = 2
+color = Color(1, 1, 1, 0.09)
+
+[node name="ObjectivesBody" type="VBoxContainer" parent="Shell/Side/SideScroll/SideColumn/ObjectivesPanel/Inset/CollapsibleStack"]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="ObjectiveRowTemplate" type="PanelContainer" parent="Shell/Side/SideScroll/SideColumn/ObjectivesPanel/Inset/CollapsibleStack/ObjectivesBody"]
+layout_mode = 2
+
+[node name="Line" type="HBoxContainer" parent="Shell/Side/SideScroll/SideColumn/ObjectivesPanel/Inset/CollapsibleStack/ObjectivesBody/ObjectiveRowTemplate"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Label" type="Label" parent="Shell/Side/SideScroll/SideColumn/ObjectivesPanel/Inset/CollapsibleStack/ObjectivesBody/ObjectiveRowTemplate/Line"]
+layout_mode = 2
+text = "Time left"
+
+[node name="Value" type="Label" parent="Shell/Side/SideScroll/SideColumn/ObjectivesPanel/Inset/CollapsibleStack/ObjectivesBody/ObjectiveRowTemplate/Line"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "9y 11m"
+horizontal_alignment = 2
+autowrap_mode = 3
+
+[node name="ObjectiveCaptionTemplate" type="Label" parent="Shell/Side/SideScroll/SideColumn/ObjectivesPanel/Inset/CollapsibleStack/ObjectivesBody"]
+layout_mode = 2
+text = "the scenario sets no objectives"
+autowrap_mode = 3
+
+[node name="AlertsPanel" type="PanelContainer" parent="Shell/Side/SideScroll/SideColumn"]
+custom_minimum_size = Vector2(340, 0)
+layout_mode = 2
+
+[node name="Inset" type="MarginContainer" parent="Shell/Side/SideScroll/SideColumn/AlertsPanel"]
+layout_mode = 2
+theme_override_constants/margin_left = 26
+theme_override_constants/margin_top = 20
+theme_override_constants/margin_right = 26
+theme_override_constants/margin_bottom = 24
+
+[node name="CollapsibleStack" type="VBoxContainer" parent="Shell/Side/SideScroll/SideColumn/AlertsPanel/Inset"]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="Handle" type="Button" parent="Shell/Side/SideScroll/SideColumn/AlertsPanel/Inset/CollapsibleStack"]
+custom_minimum_size = Vector2(0, 26)
+layout_mode = 2
+toggle_mode = true
+button_pressed = true
+flat = true
+
+[node name="HeaderRow" type="HBoxContainer" parent="Shell/Side/SideScroll/SideColumn/AlertsPanel/Inset/CollapsibleStack/Handle"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+theme_override_constants/separation = 6
+
+[node name="Chevron" type="Label" parent="Shell/Side/SideScroll/SideColumn/AlertsPanel/Inset/CollapsibleStack/Handle/HeaderRow"]
+layout_mode = 2
+text = "v"
+
+[node name="Caption" type="Label" parent="Shell/Side/SideScroll/SideColumn/AlertsPanel/Inset/CollapsibleStack/Handle/HeaderRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "ALERTS"
+
+[node name="Rule" type="ColorRect" parent="Shell/Side/SideScroll/SideColumn/AlertsPanel/Inset/CollapsibleStack"]
+custom_minimum_size = Vector2(0, 1)
+layout_mode = 2
+color = Color(1, 1, 1, 0.09)
+
+[node name="AlertsBody" type="VBoxContainer" parent="Shell/Side/SideScroll/SideColumn/AlertsPanel/Inset/CollapsibleStack"]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="AlertButtonTemplate" type="Button" parent="Shell/Side/SideScroll/SideColumn/AlertsPanel/Inset/CollapsibleStack/AlertsBody"]
+custom_minimum_size = Vector2(300, 34)
+layout_mode = 2
+text = "  separator - out of service"
+alignment = 0
+
+[node name="AlertCaptionTemplate" type="Label" parent="Shell/Side/SideScroll/SideColumn/AlertsPanel/Inset/CollapsibleStack/AlertsBody"]
+layout_mode = 2
+text = "nothing the engine called a warning"
+autowrap_mode = 3
+
+[node name="ProductionPanel" type="PanelContainer" parent="Shell/Side/SideScroll/SideColumn"]
+custom_minimum_size = Vector2(340, 0)
+layout_mode = 2
+
+[node name="Inset" type="MarginContainer" parent="Shell/Side/SideScroll/SideColumn/ProductionPanel"]
+layout_mode = 2
+theme_override_constants/margin_left = 26
+theme_override_constants/margin_top = 20
+theme_override_constants/margin_right = 26
+theme_override_constants/margin_bottom = 24
+
+[node name="CollapsibleStack" type="VBoxContainer" parent="Shell/Side/SideScroll/SideColumn/ProductionPanel/Inset"]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="Handle" type="Button" parent="Shell/Side/SideScroll/SideColumn/ProductionPanel/Inset/CollapsibleStack"]
+custom_minimum_size = Vector2(0, 26)
+layout_mode = 2
+toggle_mode = true
+button_pressed = true
+flat = true
+
+[node name="HeaderRow" type="HBoxContainer" parent="Shell/Side/SideScroll/SideColumn/ProductionPanel/Inset/CollapsibleStack/Handle"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+theme_override_constants/separation = 6
+
+[node name="Chevron" type="Label" parent="Shell/Side/SideScroll/SideColumn/ProductionPanel/Inset/CollapsibleStack/Handle/HeaderRow"]
+layout_mode = 2
+text = "v"
+
+[node name="Caption" type="Label" parent="Shell/Side/SideScroll/SideColumn/ProductionPanel/Inset/CollapsibleStack/Handle/HeaderRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "PRODUCTION"
+
+[node name="Rule" type="ColorRect" parent="Shell/Side/SideScroll/SideColumn/ProductionPanel/Inset/CollapsibleStack"]
+custom_minimum_size = Vector2(0, 1)
+layout_mode = 2
+color = Color(1, 1, 1, 0.09)
+
+[node name="ProductionBody" type="VBoxContainer" parent="Shell/Side/SideScroll/SideColumn/ProductionPanel/Inset/CollapsibleStack"]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="ProductionTrend" type="Control" parent="Shell/Side/SideScroll/SideColumn/ProductionPanel/Inset/CollapsibleStack/ProductionBody"]
+custom_minimum_size = Vector2(300, 56)
+layout_mode = 2
+script = ExtResource("8_trend")
+
+[node name="TrendNote" type="Label" parent="Shell/Side/SideScroll/SideColumn/ProductionPanel/Inset/CollapsibleStack/ProductionBody"]
+layout_mode = 2
+text = "no production yet"
+
+[node name="Bottleneck" type="Label" parent="Shell/Side/SideScroll/SideColumn/ProductionPanel/Inset/CollapsibleStack/ProductionBody"]
+custom_minimum_size = Vector2(290, 0)
+layout_mode = 2
+autowrap_mode = 3
+
+[node name="OrdersPanel" type="PanelContainer" parent="Shell/Side/SideScroll/SideColumn"]
+custom_minimum_size = Vector2(340, 0)
+layout_mode = 2
+
+[node name="Inset" type="MarginContainer" parent="Shell/Side/SideScroll/SideColumn/OrdersPanel"]
+layout_mode = 2
+theme_override_constants/margin_left = 26
+theme_override_constants/margin_top = 20
+theme_override_constants/margin_right = 26
+theme_override_constants/margin_bottom = 24
+
+[node name="CollapsibleStack" type="VBoxContainer" parent="Shell/Side/SideScroll/SideColumn/OrdersPanel/Inset"]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="Handle" type="Button" parent="Shell/Side/SideScroll/SideColumn/OrdersPanel/Inset/CollapsibleStack"]
+custom_minimum_size = Vector2(0, 26)
+layout_mode = 2
+toggle_mode = true
+flat = true
+
+[node name="HeaderRow" type="HBoxContainer" parent="Shell/Side/SideScroll/SideColumn/OrdersPanel/Inset/CollapsibleStack/Handle"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+theme_override_constants/separation = 6
+
+[node name="Chevron" type="Label" parent="Shell/Side/SideScroll/SideColumn/OrdersPanel/Inset/CollapsibleStack/Handle/HeaderRow"]
+layout_mode = 2
+text = ">"
+
+[node name="Caption" type="Label" parent="Shell/Side/SideScroll/SideColumn/OrdersPanel/Inset/CollapsibleStack/Handle/HeaderRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "STANDING ORDERS"
+
+[node name="Rule" type="ColorRect" parent="Shell/Side/SideScroll/SideColumn/OrdersPanel/Inset/CollapsibleStack"]
+custom_minimum_size = Vector2(0, 1)
+layout_mode = 2
+color = Color(1, 1, 1, 0.09)
+
+[node name="OrdersBody" type="VBoxContainer" parent="Shell/Side/SideScroll/SideColumn/OrdersPanel/Inset/CollapsibleStack"]
+visible = false
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="KeepPlantOrder" type="CheckBox" parent="Shell/Side/SideScroll/SideColumn/OrdersPanel/Inset/CollapsibleStack/OrdersBody"]
+layout_mode = 2
+script = ExtResource("27_checkbox")
+text = "Keep the plant running"
+
+[node name="KeepPlantOrderCaption" type="Label" parent="Shell/Side/SideScroll/SideColumn/OrdersPanel/Inset/CollapsibleStack/OrdersBody"]
+layout_mode = 2
+text = "   send a crew the moment something stops"
+autowrap_mode = 3
+
+[node name="AnswerBottlenecksOrder" type="CheckBox" parent="Shell/Side/SideScroll/SideColumn/OrdersPanel/Inset/CollapsibleStack/OrdersBody"]
+layout_mode = 2
+script = ExtResource("27_checkbox")
+text = "Answer bottlenecks"
+
+[node name="AnswerBottlenecksOrderCaption" type="Label" parent="Shell/Side/SideScroll/SideColumn/OrdersPanel/Inset/CollapsibleStack/OrdersBody"]
+layout_mode = 2
+text = "   build what a lasting jam needs"
+autowrap_mode = 3
+
+[node name="KeepRigBusyOrder" type="CheckBox" parent="Shell/Side/SideScroll/SideColumn/OrdersPanel/Inset/CollapsibleStack/OrdersBody"]
+layout_mode = 2
+script = ExtResource("27_checkbox")
+text = "Keep the rig busy"
+
+[node name="KeepRigBusyOrderCaption" type="Label" parent="Shell/Side/SideScroll/SideColumn/OrdersPanel/Inset/CollapsibleStack/OrdersBody"]
+layout_mode = 2
+text = "   drill the best undrilled structure"
+autowrap_mode = 3
+
+[node name="ReservesPanel" type="PanelContainer" parent="Shell/Side/SideScroll/SideColumn"]
+custom_minimum_size = Vector2(340, 0)
+layout_mode = 2
+
+[node name="Inset" type="MarginContainer" parent="Shell/Side/SideScroll/SideColumn/ReservesPanel"]
+layout_mode = 2
+theme_override_constants/margin_left = 26
+theme_override_constants/margin_top = 20
+theme_override_constants/margin_right = 26
+theme_override_constants/margin_bottom = 24
+
+[node name="CollapsibleStack" type="VBoxContainer" parent="Shell/Side/SideScroll/SideColumn/ReservesPanel/Inset"]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="Handle" type="Button" parent="Shell/Side/SideScroll/SideColumn/ReservesPanel/Inset/CollapsibleStack"]
+custom_minimum_size = Vector2(0, 26)
+layout_mode = 2
+toggle_mode = true
+flat = true
+
+[node name="HeaderRow" type="HBoxContainer" parent="Shell/Side/SideScroll/SideColumn/ReservesPanel/Inset/CollapsibleStack/Handle"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+theme_override_constants/separation = 6
+
+[node name="Chevron" type="Label" parent="Shell/Side/SideScroll/SideColumn/ReservesPanel/Inset/CollapsibleStack/Handle/HeaderRow"]
+layout_mode = 2
+text = ">"
+
+[node name="Caption" type="Label" parent="Shell/Side/SideScroll/SideColumn/ReservesPanel/Inset/CollapsibleStack/Handle/HeaderRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "RESERVES"
+
+[node name="Rule" type="ColorRect" parent="Shell/Side/SideScroll/SideColumn/ReservesPanel/Inset/CollapsibleStack"]
+custom_minimum_size = Vector2(0, 1)
+layout_mode = 2
+color = Color(1, 1, 1, 0.09)
+
+[node name="ReservesBody" type="VBoxContainer" parent="Shell/Side/SideScroll/SideColumn/ReservesPanel/Inset/CollapsibleStack"]
+visible = false
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="ReserveRowTemplate" type="PanelContainer" parent="Shell/Side/SideScroll/SideColumn/ReservesPanel/Inset/CollapsibleStack/ReservesBody"]
+layout_mode = 2
+
+[node name="Line" type="HBoxContainer" parent="Shell/Side/SideScroll/SideColumn/ReservesPanel/Inset/CollapsibleStack/ReservesBody/ReserveRowTemplate"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Label" type="Label" parent="Shell/Side/SideScroll/SideColumn/ReservesPanel/Inset/CollapsibleStack/ReservesBody/ReserveRowTemplate/Line"]
+layout_mode = 2
+text = "Proved"
+
+[node name="Value" type="Label" parent="Shell/Side/SideScroll/SideColumn/ReservesPanel/Inset/CollapsibleStack/ReservesBody/ReserveRowTemplate/Line"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "0 m3"
+horizontal_alignment = 2
+autowrap_mode = 3
+
+[node name="BasinPanel" type="PanelContainer" parent="Shell/Side/SideScroll/SideColumn"]
+custom_minimum_size = Vector2(340, 0)
+layout_mode = 2
+
+[node name="Inset" type="MarginContainer" parent="Shell/Side/SideScroll/SideColumn/BasinPanel"]
+layout_mode = 2
+theme_override_constants/margin_left = 26
+theme_override_constants/margin_top = 20
+theme_override_constants/margin_right = 26
+theme_override_constants/margin_bottom = 24
+
+[node name="CollapsibleStack" type="VBoxContainer" parent="Shell/Side/SideScroll/SideColumn/BasinPanel/Inset"]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="Handle" type="Button" parent="Shell/Side/SideScroll/SideColumn/BasinPanel/Inset/CollapsibleStack"]
+custom_minimum_size = Vector2(0, 26)
+layout_mode = 2
+toggle_mode = true
+button_pressed = true
+flat = true
+
+[node name="HeaderRow" type="HBoxContainer" parent="Shell/Side/SideScroll/SideColumn/BasinPanel/Inset/CollapsibleStack/Handle"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+theme_override_constants/separation = 6
+
+[node name="Chevron" type="Label" parent="Shell/Side/SideScroll/SideColumn/BasinPanel/Inset/CollapsibleStack/Handle/HeaderRow"]
+layout_mode = 2
+text = "v"
+
+[node name="Caption" type="Label" parent="Shell/Side/SideScroll/SideColumn/BasinPanel/Inset/CollapsibleStack/Handle/HeaderRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "THE BASIN"
+
+[node name="Rule" type="ColorRect" parent="Shell/Side/SideScroll/SideColumn/BasinPanel/Inset/CollapsibleStack"]
+custom_minimum_size = Vector2(0, 1)
+layout_mode = 2
+color = Color(1, 1, 1, 0.09)
+
+[node name="BasinBody" type="VBoxContainer" parent="Shell/Side/SideScroll/SideColumn/BasinPanel/Inset/CollapsibleStack"]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="Minimap" type="Control" parent="Shell/Side/SideScroll/SideColumn/BasinPanel/Inset/CollapsibleStack/BasinBody"]
+custom_minimum_size = Vector2(300, 190)
+layout_mode = 2
+script = ExtResource("21_minimap")
+
+[node name="CommandBar" type="CanvasLayer" parent="."]
+layer = 11
+script = ExtResource("7_command")
+
+[node name="CommandRoot" type="Control" parent="CommandBar"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="ActionPanel" type="PanelContainer" parent="CommandBar/CommandRoot"]
+custom_minimum_size = Vector2(400, 0)
+anchors_preset = 1
+anchor_top = 1.0
+anchor_bottom = 1.0
+offset_left = 122.0
+offset_top = -128.0
+offset_right = 522.0
+grow_vertical = 0
+
+[node name="Inset" type="MarginContainer" parent="CommandBar/CommandRoot/ActionPanel"]
+layout_mode = 2
+theme_override_constants/margin_left = 26
+theme_override_constants/margin_top = 20
+theme_override_constants/margin_right = 26
+theme_override_constants/margin_bottom = 24
+
+[node name="FrameColumn" type="VBoxContainer" parent="CommandBar/CommandRoot/ActionPanel/Inset"]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="Header" type="Label" parent="CommandBar/CommandRoot/ActionPanel/Inset/FrameColumn"]
+layout_mode = 2
+text = "ACTIONS"
+
+[node name="Rule" type="ColorRect" parent="CommandBar/CommandRoot/ActionPanel/Inset/FrameColumn"]
+custom_minimum_size = Vector2(0, 1)
+layout_mode = 2
+color = Color(1, 1, 1, 0.09)
+
+[node name="Body" type="MarginContainer" parent="CommandBar/CommandRoot/ActionPanel/Inset/FrameColumn"]
+layout_mode = 2
+theme_override_constants/margin_top = 2
+
+[node name="Content" type="VBoxContainer" parent="CommandBar/CommandRoot/ActionPanel/Inset/FrameColumn/Body"]
+custom_minimum_size = Vector2(364, 0)
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="Target" type="Label" parent="CommandBar/CommandRoot/ActionPanel/Inset/FrameColumn/Body/Content"]
+custom_minimum_size = Vector2(364, 0)
+layout_mode = 2
+text = "Click a structure, a well, or the plant to see what can be done to it."
+autowrap_mode = 3
+
+[node name="ActionList" type="VBoxContainer" parent="CommandBar/CommandRoot/ActionPanel/Inset/FrameColumn/Body/Content"]
+custom_minimum_size = Vector2(364, 0)
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="ActionButtonTemplate" type="Button" parent="CommandBar/CommandRoot/ActionPanel/Inset/FrameColumn/Body/Content/ActionList"]
+custom_minimum_size = Vector2(364, 42)
+layout_mode = 2
+text = "1.  Drill a well (2,000 m)"
