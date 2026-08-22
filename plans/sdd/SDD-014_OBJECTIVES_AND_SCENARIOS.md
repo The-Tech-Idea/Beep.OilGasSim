@@ -98,6 +98,68 @@ content loudly at load, not silently at runtime.
 > now be authored against `company.value` — not the berth/cargo mechanic
 > itself, which stays its own task exactly as SDD-017 said.
 
+> **Amendment (finding 276) — `company.taken-over` joins the registry,
+> R13.10's third and last restructuring finding.** Findings 274 and 275 gave
+> a distressed company two levers — a forced cash sweep, a working-interest
+> sale — and both run out of road: a sweep needs cash the company may not
+> have, and a sale is capped at 50% before the company has given up
+> operatorship in substance. This is what happens when both are exhausted.
+>
+> **The plan this amendment implements originally described the mechanism as
+> "the scenario's `Overall` verdict becomes `Failed`", and that turned out
+> not to be how `Overall` works** (F-4 — implementation showing a design
+> wrong is corrected here, not worked around in code). `ScenarioRunner.Overall`
+> (§5a) is PURELY a function of the scenario's own DECLARED `Objectives`/
+> `Failures` predicates, evaluated against read-model paths — the same
+> "content, not code" shape §3.3 pins for the win condition itself. Nothing
+> in the engine may reach in and set a verdict directly; `company.insolvent`
+> does not either, which is why an idle company today can run cash-negative
+> forever without the shipped scenario ending — `Defaults.ProjectedPaths`
+> registers the path and no content currently declares a Failure objective
+> against it. **`company.taken-over` is built the identical way, for
+> consistency with that precedent rather than in spite of it**: a computed,
+> latched, audited fact a scenario's content CAN reference, not a verdict
+> forced from outside the predicate system. Wiring either fact into the
+> SHIPPED scenario's own Failure objectives is unchanged, pre-existing,
+> content-authoring work this amendment does not newly create or attempt to
+> close.
+>
+> **The trigger: the covenant has read `Amortising` for 12 straight ticks —
+> 18 months of covenant distress once the 6-tick cure window is counted —
+> with `WorkingInterest.PartnerShare` already at finding 275's own 50% cap.**
+> 12 ticks, confirmed with Fahad before landing the same gate every other
+> invented number this session has gone through. The clock (`ObjectiveStage`'s
+> own `_ticksAmortising`) resets to zero on anything OTHER than `Amortising`
+> — a company that cures its covenant genuinely clears the risk rather than
+> merely pausing a clock that resumes where it left off, the same shape
+> `Curing`'s own cure window already has in `Lending.cs`. `PartnerShare` only
+> grows (finding 275), so once the cap is reached it never becomes false
+> again — the only thing that can still change is the clock.
+>
+> **Once true, always true — the SAME latch `Insolvent` already is, on the
+> SAME owner.** `ObjectiveStage.TakenOver`, computed and audited
+> (`AuditCategory.StateTransition`, `["kind"] = "company.taken-over"` — the
+> SAME "one transition, a `kind`-keyed reason" shape `licence.expired`/
+> `licence.commitment-unmet` already established for a licence's own loss,
+> SDD-011 §1's R20d.9 amendment) right beside where `Insolvent` is computed,
+> since both are company-level terminal facts and `ObjectiveStage` is
+> already their one owner (law L5). `ObjectiveStage` gains two new read-only
+> dependencies to make the check — `Bank` (the covenant) and
+> `WorkingInterest` (the share) — neither of which it may mutate.
+>
+> **Persisted, the same reason `Insolvent` itself needed to be (finding
+> 266)**: `objectives.reporting`'s schema moves 1 → 2, carrying `TakenOver`
+> and the ticks-Amortising clock alongside it, so a reload cannot silently
+> reset either — a save mid-clock that came back at zero would let a player
+> launder ten of the twelve ticks by saving and loading, the same exploit
+> class the covenant clock's own carve-out closed at finding 210 and laytime/
+> demurrage's own persistence closed at finding 269.
+>
+> **Published on `FieldPosition`/`FieldReadModel` as `bool TakenOver`,
+> appended after `CompanyValue`/`World` respectively rather than inserted —
+> every existing positional construction of either record keeps its
+> meaning.** A host can show it the same way it already shows `Insolvent`.
+
 ## 3. Evaluation
 
 Stage 12, pure over the sealed snapshot + sealed event list (SDD-001 §6):

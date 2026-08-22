@@ -45,7 +45,7 @@ public sealed class ScenarioTests
     private static FieldPosition Position(long cents, int wells = 0) =>
         new(new Tick(1), new GameDate(1970, 1), new Money(cents), wells,
             ActivitiesRunning: 0, new SurfaceVolume(0.0), Insolvent: false,
-            CompanyValue: new Money(cents));
+            CompanyValue: new Money(cents), TakenOver: false);
 
     private static ObjectiveState Ask(ScenarioRunner runner, FieldPosition position, int tick) =>
         runner.Evaluate(Paths.SnapshotOf(position), new Tick(tick)).Overall;
@@ -273,7 +273,7 @@ public sealed class ScenarioTests
         var position = new FieldPosition(
             new Tick(1), new GameDate(1970, 1), Cash: new Money(1),
             Wells: 0, ActivitiesRunning: 0, new SurfaceVolume(0.0), Insolvent: false,
-            CompanyValue: new Money(123_456_00));
+            CompanyValue: new Money(123_456_00), TakenOver: false);
 
         Assert.Equal(123_456_00.0, path!.Read(position), precision: 6);
 

@@ -416,7 +416,13 @@ internal sealed class ObjectiveStage(
     IScenarioRunner runner,
     ReadModelPaths paths,
     FieldProjection projection,
-    IAuditTrail audit) : ITickStage, IStateOwner
+    IAuditTrail audit,
+
+    // SDD-014 §5a's finding-276 amendment — R13.10's third and last
+    // restructuring finding. Read only: neither the covenant clock nor the
+    // sold share is this stage's to change.
+    Bank bank,
+    OGSim.Company.WorkingInterest stake) : ITickStage, IStateOwner
 {
     private ObjectiveState _reported = ObjectiveState.Pending;
 
@@ -432,6 +438,26 @@ internal sealed class ObjectiveStage(
     /// whether running out ends the run.</para>
     /// </summary>
     public bool Insolvent { get; private set; }
+
+    /// <summary>
+    /// R13.10's last resort (SDD-014 §5a's finding-276 amendment): the
+    /// covenant has read <c>Amortising</c> for <see cref="TakeoverThresholdTicks"/>
+    /// straight ticks with no more working interest left to sell — the two
+    /// other levers (finding 274's cash sweep, finding 275's working-interest
+    /// sale) have both run out of road. Latches the same way
+    /// <see cref="Insolvent"/> does, for the same reason.
+    /// </summary>
+    public bool TakenOver { get; private set; }
+
+    /// <summary>How many STRAIGHT ticks the covenant has read <c>Amortising</c>
+    /// — reset the moment it does not, so curing genuinely clears the risk
+    /// rather than merely pausing a clock that resumes where it left off.</summary>
+    private int _ticksAmortising;
+
+    /// <summary>12 further ticks past the 6-tick cure window — 18 months of
+    /// covenant distress in total — grounded the same way finding 274's own
+    /// sweep rate was: confirmed with Fahad before landing.</summary>
+    private const int TakeoverThresholdTicks = 12;
 
     /// <summary>
     /// The month's facts, taken at stage 12 and published at stage 13.
@@ -470,7 +496,29 @@ internal sealed class ObjectiveStage(
 
         if (company.Ledger.Cash.Cents < 0) Insolvent = true;
 
-        Position = projection.Take(context.Tick, context.Date, Insolvent);
+        // R13.10's last resort (SDD-014 §5a's finding-276 amendment). Reset
+        // on anything OTHER than Amortising — a company that cures genuinely
+        // clears the risk, the same "back inside, clock forgotten" shape
+        // Curing itself already has (Lending.cs's own Assess).
+        if (bank.Covenant.State == CovenantState.Amortising) _ticksAmortising++;
+        else _ticksAmortising = 0;
+
+        if (!TakenOver && _ticksAmortising >= TakeoverThresholdTicks
+            && stake.PartnerShare >= Defaults.WorkingInterest.MaxSellableFraction)
+        {
+            TakenOver = true;
+
+            audit.Record(
+                AuditCategory.StateTransition, subject: null, cause: null,
+                new Dictionary<string, AuditValue>(StringComparer.Ordinal)
+                {
+                    ["kind"] = new("company.taken-over"),
+                    ["tick"] = new(context.Tick.Value.ToString(
+                        System.Globalization.CultureInfo.InvariantCulture)),
+                });
+        }
+
+        Position = projection.Take(context.Tick, context.Date, Insolvent, TakenOver);
         Progress = runner.Evaluate(paths.SnapshotOf(Position), context.Tick);
 
         // SDD-014 §3: "emit objective.* events on state change" — PER
@@ -539,7 +587,10 @@ internal sealed class ObjectiveStage(
 
     public StateKey Key { get; } = new("objectives.reporting");
 
-    public int SchemaVersion => 1;
+    /// <summary>2 (SDD-014 §5a's finding-276 amendment): the takeover latch
+    /// and its ticks-Amortising clock joined the block, the same reason
+    /// Insolvent is here rather than left a second gap beside this one.</summary>
+    public int SchemaVersion => 2;
 
     public IReadOnlyList<StateKey> RestoreAfter => [];
 
@@ -548,6 +599,8 @@ internal sealed class ObjectiveStage(
         ArgumentNullException.ThrowIfNull(writer);
 
         writer.WriteInt64("insolvent", Insolvent ? 1L : 0L);
+        writer.WriteInt64("taken-over", TakenOver ? 1L : 0L);
+        writer.WriteInt64("ticks-amortising", _ticksAmortising);
         writer.WriteInt64("overall-reported", (long)_reported);
 
         writer.WriteInt64("count", _reportedOrder.Count);
@@ -567,6 +620,8 @@ internal sealed class ObjectiveStage(
         ArgumentNullException.ThrowIfNull(reader);
 
         Insolvent = reader.ReadInt64("insolvent") != 0;
+        TakenOver = reader.ReadInt64("taken-over") != 0;
+        _ticksAmortising = (int)reader.ReadInt64("ticks-amortising");
         _reported = (ObjectiveState)reader.ReadInt64("overall-reported");
 
         _reportedByObjective.Clear();

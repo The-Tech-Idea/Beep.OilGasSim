@@ -150,7 +150,17 @@ public sealed record FieldPosition(
     /// so an objective can be measured against it — R11.6's own prerequisite,
     /// unreachable from stage 12 until this field existed this early.
     /// </summary>
-    Money CompanyValue);
+    Money CompanyValue,
+
+    /// <summary>
+    /// R13.10's last-resort restructuring finding (SDD-014 §5a's finding-276
+    /// amendment): the covenant has read <c>Amortising</c> for 12 straight
+    /// ticks — 18 months past the original breach, once the 6-tick cure
+    /// window is counted — with no more working interest left to sell. Once
+    /// TRUE, always true, the same latch <see cref="Insolvent"/> already is:
+    /// a company does not get its field back.
+    /// </summary>
+    bool TakenOver);
 
 /// <summary>
 /// What the player can see, rebuilt at the close of every tick.
@@ -463,7 +473,11 @@ public sealed record FieldReadModel(
     /// splitting one field out of it for a reason no consumer here asked for
     /// would be a second shape competing with the one that already works.</para>
     /// </summary>
-    WorldView? World)
+    WorldView? World,
+
+    /// <summary>The same latch <see cref="FieldPosition.TakenOver"/> is,
+    /// republished (SDD-014 §5a's finding-276 amendment).</summary>
+    bool TakenOver)
 {
     /// <summary>Where the chain is jammed, if anywhere — the elements that
     /// refused production this tick.</summary>
@@ -538,12 +552,12 @@ internal sealed class FieldProjection(
     /// a job, short enough that ρ^h has not collapsed to the seasonal mean.</summary>
     private const int ForecastHorizonDays = 7;
 
-    public FieldPosition Take(Tick tick, GameDate date, bool insolvent)
+    public FieldPosition Take(Tick tick, GameDate date, bool insolvent, bool takenOver)
     {
         Money cash = company.Ledger.Cash;
 
         return new(tick, date, cash, field.WellCount, activities.InProgress,
-            loop.ProducedThisTick, insolvent, CompanyValueOf(cash));
+            loop.ProducedThisTick, insolvent, CompanyValueOf(cash), takenOver);
     }
 
     public FieldReadModel Publish(FieldPosition position, ScenarioProgress progress) =>
@@ -574,7 +588,8 @@ internal sealed class FieldProjection(
             loop.Storage,
             company.Ledger.CashByCause(position.Tick),
             activities.Operations(),
-            world.View);
+            world.View,
+            position.TakenOver);
 
     /// <summary>
     /// What this company is worth (SDD-014 §2's finding-267 amendment): the same

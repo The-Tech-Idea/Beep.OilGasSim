@@ -1441,7 +1441,7 @@ internal sealed class FieldModule(
         var runner = new ScenarioRunner(Defaults.FirstField, paths.Schema);
         composition.Own(runner);
 
-        var objectives = new ObjectiveStage(company, runner, paths, projection, audit);
+        var objectives = new ObjectiveStage(company, runner, paths, projection, audit, bank, stake);
         composition.Contribute(order: 0, objectives);
         composition.Own(objectives);
 

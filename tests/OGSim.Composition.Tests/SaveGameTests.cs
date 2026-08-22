@@ -1068,6 +1068,51 @@ public sealed class SaveGameTests
     }
 
     /// <summary>
+    /// SDD-014 §5a's finding-276 amendment: the takeover clock is persisted,
+    /// not merely the latch it feeds — a save mid-clock that came back at
+    /// zero would let a player launder most of the twelve ticks by saving
+    /// and loading, the same exploit class the covenant clock's own
+    /// carve-out closed at finding 210.
+    ///
+    /// <para>Proven by CONTINUING the clock past the reload rather than by
+    /// reading a raw field: 8 ticks in, saved and reloaded, then advanced
+    /// EXACTLY 4 further ticks — enough to complete a correctly-restored
+    /// clock (8 + 4 = 12) and nowhere near enough for one that reloaded at
+    /// zero.</para>
+    /// </summary>
+    [Fact]
+    public void A_reload_keeps_the_takeover_clock_where_it_left_off()
+    {
+        Built built = Assert.IsType<Built>(EngineBuilder.Build(Fixture.Settings()));
+        Engine engine = built.Engine;
+
+        CompanyState company = engine.Provided.Resolve<CompanyState>();
+
+        // A real, unambiguous breach: no compartment, so no reserves, so
+        // ANY debt exceeds the borrowing base — the same technique
+        // ProductionLoopTests' own takeover fixture uses.
+        company.Ledger.Post(new Movement(
+            engine.Pipeline.CurrentTick, Account.Capex_PPE, Account.Debt,
+            Money.FromMillions(100.0), MovementCategory.Development, Asset: null,
+            Cause: new AuditId(1)));
+
+        engine.Provided.Resolve<WorkingInterest>().Sell(0.5);
+
+        for (var month = 0; month < 14; month++) engine.Pipeline.AdvanceTick();   // 8 ticks Amortising
+
+        Assert.False(engine.ReadModel!.TakenOver,
+            "the fixture must not already have tripped, or the clock proves nothing");
+
+        Engine reloaded = Assert.IsType<Built>(
+            SaveGame.Load(Saved(engine), Fixture.Settings())).Engine;
+
+        for (var month = 0; month < 4; month++) reloaded.Pipeline.AdvanceTick();
+
+        Assert.True(reloaded.ReadModel!.TakenOver,
+            "the takeover clock reset on reload instead of resuming at 8");
+    }
+
+    /// <summary>
     /// A verdict already on the trail is not re-announced on a reload — the
     /// duplicate-audit-entry defect finding 266's own amendment exists to close.
     /// Before the fix, an empty `objectives.evaluation`/`objectives.reporting`

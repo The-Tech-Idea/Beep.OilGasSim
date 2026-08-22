@@ -696,6 +696,12 @@ internal static class Defaults
         // that defers revenue.
         new("company.value", position => position.CompanyValue.Cents),
 
+        // SDD-014 §5a's finding-276 amendment — R13.10's last resort, the same
+        // "a fact a scenario CAN reference" shape company.insolvent above
+        // already has; the shipped scenario does not currently declare a
+        // Failure objective against either.
+        new("company.taken-over", position => position.TakenOver ? 1.0 : 0.0),
+
         new("field.wells", position => position.Wells),
         new("field.activitiesRunning", position => position.ActivitiesRunning),
         new("field.producedThisTick", position => position.ProducedThisTick.CubicMetres),

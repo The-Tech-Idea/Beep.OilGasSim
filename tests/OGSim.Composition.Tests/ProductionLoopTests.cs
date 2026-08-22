@@ -941,4 +941,108 @@ public sealed class ProductionLoopTests
         Assert.NotNull(found);
         return found!;
     }
+
+    // -------------------------------------------------------------- takeover
+    // SDD-014 §5a's finding-276 amendment — R13.10's third and last
+    // restructuring finding.
+
+    /// <summary>Drives a real, unambiguous covenant breach directly — debited
+    /// against Capex_PPE like <see cref="Fixture"/>'s own drawn-debt setup,
+    /// so <see cref="Bank"/>'s own DCF walk (which prices this fixture's
+    /// reserves at zero) makes ANY debt exceed the borrowing base.</summary>
+    private static void ForceDrawnDebt(Engine engine, CompanyState company, Money amount)
+    {
+        company.Ledger.Post(new Movement(
+            new Tick(0), Account.Capex_PPE, Account.Debt, amount,
+            MovementCategory.Development, Asset: null,
+            Cause: engine.Audit.Record(
+                AuditCategory.Financial, subject: null, cause: null,
+                new Dictionary<string, AuditValue>(StringComparer.Ordinal))));
+    }
+
+    /// <summary>
+    /// A company with $0 reserves and any real debt breaches on tick 1
+    /// (Clear → Curing), the 6-tick cure window elapses on tick 7
+    /// (Curing → Amortising), and 12 further ticks Amortising — tick 18 —
+    /// is the takeover threshold. $100M against a fixture that can sweep at
+    /// most a few million a month never comes close to curing on its own.
+    /// </summary>
+    [Fact]
+    public void A_company_stuck_amortising_with_no_more_room_to_sell_is_taken_over()
+    {
+        (Engine engine, CompanyState company) = Field();
+
+        ForceDrawnDebt(engine, company, Money.FromMillions(100.0));
+        Find<WorkingInterest>(engine).Sell(0.5);   // at the sellable cap
+
+        for (var month = 0; month < 18; month++) engine.Pipeline.AdvanceTick();
+
+        Assert.True(engine.ReadModel!.TakenOver);
+
+        IReadOnlyList<AuditEntry> entries = engine.Audit.Query(
+            new AuditQuery(null, AuditCategory.StateTransition, null, null));
+
+        Assert.Contains(entries, e =>
+            e.Data.TryGetValue("kind", out AuditValue kind) && kind.Value == "company.taken-over");
+    }
+
+    /// <summary>Stuck in Amortising exactly as long, but with sellable room
+    /// left — the OTHER lever is still available, so this is not yet a
+    /// last resort.</summary>
+    [Fact]
+    public void A_company_that_can_still_sell_more_working_interest_is_not_taken_over()
+    {
+        (Engine engine, CompanyState company) = Field();
+
+        ForceDrawnDebt(engine, company, Money.FromMillions(100.0));
+        Find<WorkingInterest>(engine).Sell(0.3);   // under the 0.5 cap
+
+        for (var month = 0; month < 20; month++) engine.Pipeline.AdvanceTick();
+
+        Assert.False(engine.ReadModel!.TakenOver);
+    }
+
+    /// <summary>
+    /// A covenant cured before the threshold resets the clock rather than
+    /// pausing it — proven with a SECOND breach, not merely a cured one left
+    /// alone: 8 ticks into the first Amortising spell, the debt is cleared,
+    /// then re-drawn. A clock that only paused would need just 4 more
+    /// Amortising ticks (8 + 4 = 12) to trigger; a clock that genuinely
+    /// reset needs a full fresh 12 — so 10 ticks after the second breach is
+    /// enough to prove one from the other (short of the reset clock's own
+    /// 18-tick requirement, past what a merely-paused one would have taken).
+    /// </summary>
+    [Fact]
+    public void A_company_that_cures_its_covenant_before_the_threshold_is_never_at_risk()
+    {
+        (Engine engine, CompanyState company) = Field();
+
+        ForceDrawnDebt(engine, company, Money.FromMillions(100.0));
+        Find<WorkingInterest>(engine).Sell(0.5);
+
+        for (var month = 0; month < 14; month++) engine.Pipeline.AdvanceTick();   // 8 ticks Amortising
+
+        Bank bank = Find<Bank>(engine);
+        ClearDrawnDebt(engine, company, bank);
+
+        for (var month = 0; month < 3; month++) engine.Pipeline.AdvanceTick();    // confirm cured, Clear
+
+        ForceDrawnDebt(engine, company, Money.FromMillions(100.0));               // breach again
+
+        for (var month = 0; month < 10; month++) engine.Pipeline.AdvanceTick();
+
+        Assert.False(engine.ReadModel!.TakenOver);
+    }
+
+    private static void ClearDrawnDebt(Engine engine, CompanyState company, Bank bank)
+    {
+        if (bank.Drawn <= Money.Zero) return;
+
+        company.Ledger.Post(new Movement(
+            new Tick(0), Account.Debt, Account.Capex_PPE, bank.Drawn,
+            MovementCategory.Development, Asset: null,
+            Cause: engine.Audit.Record(
+                AuditCategory.Financial, subject: null, cause: null,
+                new Dictionary<string, AuditValue>(StringComparer.Ordinal))));
+    }
 }
