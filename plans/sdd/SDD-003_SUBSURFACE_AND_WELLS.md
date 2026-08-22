@@ -167,6 +167,48 @@ nothing. `AccessRequirements` are consumed **only** by the gating validator on
 development commands (SDD-005 §3). Neither is ever readable from the belief
 layer or the read model — the R15-V10 leak test covers both.
 
+> **Amendment (finding 270): a compartment now names WHICH fluid system it
+> is, not just what state it is in.** Every compartment shared one engine-wide
+> `IFluidPropertyModel` (`Defaults.Fluid`, one `°API`, one gas gravity) since
+> the fluid model plugin slot was declared — a design 06 §2.3 truth attribute
+> ("fluid type · quality") this document never carried, because SDD-004 had
+> nothing to draw it from (SDD-004's own finding-270 amendment closes that
+> half).
+>
+> **`GeneratedCompartment` gains `ContentId FluidSystem`** — which
+> `fluid-system` content entry (SDD-004's finding-270 amendment) this
+> compartment's fluid correlations run against, drawn by world generation
+> (SDD-010's own finding-270 amendment) the same way `Temperature`/`Porosity`
+> already are and persisted the same way.
+>
+> **Resolution is per-compartment, not per-engine, for the consumers already
+> shaped that way.** `IDriveMechanism`, `MaterialBalance`/`GasMaterialBalance`
+> and `ReservoirCompartment` already take `IFluidPropertyModel` as a plain
+> per-call parameter (§4.2's own `SolveEndPressure` signature above) — nothing
+> in THEIR signatures changes. What changes is which instance
+> `SubsurfaceState` passes: a `Dictionary<ContentId, IFluidPropertyModel>`
+> composition builds from every loaded `fluid-system` entry (SDD-004's
+> amendment), looked up by the compartment's own `FluidSystem` id through a
+> private `FluidFor` helper. Naming a fluid system a save or a generated
+> world does not have — a schema drift between the content that generated a
+> world and the content a build ships — is a `ContentFault` refusing by
+> name, the SAME shape `DriveNamed` already refuses an unknown drive id with
+> in this same file, substituting crude quality for drive mechanism; never a
+> silent fall-back to the engine's old single default. (`Rung<TTier>` in
+> `OGSim.Composition/FacilitiesState.cs` is the same pattern's restore-only
+> cousin; `DriveNamed` is the closer precedent here because a fluid system
+> is named at CREATE time too, not only on restore.)
+>
+> **Out of scope, named rather than solved.** Surface-side consumers that
+> operate on COMMINGLED streams from multiple compartments —
+> `OGSim.Facilities.Pipeline`/`Separator`, and `ProductionLoop`'s bulk
+> per-tick `WellsState.RefreshFromReservoir` refresh — keep reading the one
+> shipped default fluid system. Blending several compartments' distinct fluid
+> properties into one surface stream's effective properties is a genuine,
+> separate modelling question (real petroleum engineering answers it with a
+> volume-weighted average, itself a design decision this document does not
+> make casually) and is not this amendment's to invent an answer to.
+
 ### 3.1 Material balance solve
 
 The black-oil material balance in Havlena-Odeh grouping, solved for end-of-tick

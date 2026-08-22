@@ -31,6 +31,7 @@ internal sealed class ReservoirCompartment : IReservoirCompartment
         ContactSet contacts,
         RockTruth rock,
         IDriveMechanism drive,
+        ContentId fluidSystem,
         IReadOnlyList<CompartmentLink> links)
     {
         ArgumentNullException.ThrowIfNull(initial);
@@ -42,6 +43,7 @@ internal sealed class ReservoirCompartment : IReservoirCompartment
         Contacts = contacts;
         Rock = rock;
         Drive = drive;
+        FluidSystem = fluidSystem;
         _links = [.. links];
 
         // A compartment opens AT its initial pressure holding its initial mass:
@@ -61,6 +63,11 @@ internal sealed class ReservoirCompartment : IReservoirCompartment
     public RockTruth Rock { get; }
 
     public IDriveMechanism Drive { get; }
+
+    /// <summary>Which fluid system this compartment's oil is (SDD-003 §3.0b's
+    /// finding-270 amendment) — a truth attribute world generation draws, the
+    /// same standing <see cref="Drive"/> has.</summary>
+    public ContentId FluidSystem { get; }
 
     public IReadOnlyList<CompartmentLink> Links => _links;
 

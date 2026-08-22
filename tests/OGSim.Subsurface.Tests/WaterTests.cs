@@ -243,13 +243,16 @@ public class BreakthroughTests
     private static SubsurfaceState WaterDriven()
     {
         var state = new SubsurfaceState(
-            new BlackOilModel(
-                new BlackOilInputs(
-                    new ApiGravity(35.0), 0.75, Temperature.FromCelsius(93.3), 100.0,
-                    FluidForm.BlackOil),
-                new ValidityRange(
-                    new Pressure(500.0), new Pressure(60e6),
-                    Temperature.FromCelsius(10.0), Temperature.FromCelsius(180.0))),
+            new Dictionary<ContentId, IFluidPropertyModel>
+            {
+                [new ContentId("medium-crude")] = new BlackOilModel(
+                    new BlackOilInputs(
+                        new ApiGravity(35.0), 0.75, Temperature.FromCelsius(93.3), 100.0,
+                        FluidForm.BlackOil),
+                    new ValidityRange(
+                        new Pressure(500.0), new Pressure(60e6),
+                        Temperature.FromCelsius(10.0), Temperature.FromCelsius(180.0))),
+            },
             new WaterDrive(),
             Souring.SweetRock, Souring.TheRock, Souring.SouringReference,
             maxTickPressureDropFraction: 0.4);
@@ -265,7 +268,8 @@ public class BreakthroughTests
                 OilSaturation: 0.7,
                 InitialPressure: new Pressure(30.0e6),
                 Temperature: Temperature.FromCelsius(93.3),
-                Depth: new Length(2000.0)),
+                Depth: new Length(2000.0),
+                FluidSystem: new ContentId("medium-crude")),
             permeability: new Permeability(1.0e-13),
             netThickness: new Length(20.0),
             drainageArea: new Area(2.0e5),

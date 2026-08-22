@@ -89,7 +89,10 @@ internal sealed class SubsurfaceModule() : EngineModule(Declare(
         typeof(IDriveMechanism),
         typeof(OGSim.Subsurface.SubsurfaceState),
     ],
-    requires: [typeof(IFluidPropertyModel), typeof(TickProduction)],
+    // FluidSystems, not the single IFluidPropertyModel (finding 270): a
+    // compartment names its OWN fluid system and this is where that name is
+    // resolved to a model, per compartment rather than once for the field.
+    requires: [typeof(FluidSystems), typeof(TickProduction)],
 
     // The FIRST module to own a fact and act on it. Both arrive together on
     // purpose: a stage with nothing to act on is law L3's declaration with no
@@ -115,7 +118,7 @@ internal sealed class SubsurfaceModule() : EngineModule(Declare(
         // (SDD-003 §3.3a).
 
         var state = new OGSim.Subsurface.SubsurfaceState(
-            composition.Require<IFluidPropertyModel>(), drive,
+            composition.Require<FluidSystems>().ByContentId, drive,
 
             // THE LONG ARC (SDD-012 §5). Sea water bought for a flood sours the
             // rock over decades, and the H2S eats the plant — which is why the
@@ -1520,7 +1523,14 @@ internal sealed class InformationModule() : EngineModule(Declare(
 
 internal sealed class WorldModule(
     IReadOnlyList<OGSim.World.TerrainClassDefinition> terrainClasses,
-    ContentId climateId) : EngineModule(Declare(
+    ContentId climateId,
+
+    // The fluid systems a generated compartment draws among, Step 7
+    // (SDD-010 §2's finding-270 amendment) — threaded the same way
+    // terrainClasses already is: content-derived, resolved before any module
+    // composes, and handed to the generator directly rather than through
+    // Require<T>, because the generator is not a DI consumer.
+    IReadOnlyList<FluidSystemDefinition> fluidSystems) : EngineModule(Declare(
     "world",
     provides: [typeof(IWorldGenerator), typeof(WorldState)],
     requires: [],
@@ -1532,7 +1542,7 @@ internal sealed class WorldModule(
         ArgumentNullException.ThrowIfNull(composition);
 
         composition.Provide<IWorldGenerator>(
-            new OGSim.World.BasinWorldGenerator(terrainClasses, climateId));
+            new OGSim.World.BasinWorldGenerator(terrainClasses, climateId, fluidSystems));
 
         // EMPTY, and filled once by generation before the first tick. Composed
         // rather than created by `CreateNew` because the FIELD reads it — a well
@@ -2009,9 +2019,26 @@ internal sealed class ObjectivesModule() : EngineModule(Declare(
 /// dependency graph — five modules require `IFluidPropertyModel` and nothing it
 /// requires is provided by any of them.
 /// </summary>
-internal sealed class MaterialsModule(RealityProfile profile) : EngineModule(Declare(
+/// <summary>
+/// Every fluid system this build's content declared, its own model
+/// (SDD-004 §6's finding-270 amendment) — alongside, not instead of, the one
+/// shared <see cref="IFluidPropertyModel"/> the surface-side consumers that
+/// still commingle streams (Pipeline, Separator, <c>WellsState</c>'s bulk
+/// refresh) deliberately keep using.
+/// </summary>
+internal sealed record FluidSystems(IReadOnlyDictionary<ContentId, IFluidPropertyModel> ByContentId)
+{
+    // Finding 131 — a record carrying a collection compares it by reference.
+    public bool Equals(FluidSystems? other) =>
+        other is not null && Structural.Equal(ByContentId, other.ByContentId);
+
+    public override int GetHashCode() => Structural.HashOf(ByContentId);
+}
+
+internal sealed class MaterialsModule(RealityProfile profile, IReadOnlyList<FluidSystemDefinition> fluidSystems)
+    : EngineModule(Declare(
     "materials",
-    provides: [typeof(IFluidPropertyModel), typeof(IMaterialCatalog)],
+    provides: [typeof(IFluidPropertyModel), typeof(IMaterialCatalog), typeof(FluidSystems)],
     requires: [],
     ownsState: NothingOwnedYet,
     stages: NoStagesYet))
@@ -2043,7 +2070,34 @@ internal sealed class MaterialsModule(RealityProfile profile) : EngineModule(Dec
 
         composition.Provide(fluid);
         composition.Provide<IMaterialCatalog>(catalogue);
+
+        // A per-build dictionary, never Defaults: a second build in the same
+        // process must not leak one build's content into another's — the
+        // exact static-leak trap finding 261 named as the reason materials
+        // could not be closed the same way.
+        var systems = new Dictionary<ContentId, IFluidPropertyModel>();
+        for (int i = 0; i < fluidSystems.Count; i++)
+        {
+            FluidSystemDefinition definition = fluidSystems[i];
+            systems.Add(definition.Id,
+                Bound(new BlackOilModel(InputsOf(definition), Defaults.Validity), catalogue));
+        }
+
+        composition.Provide(new FluidSystems(systems));
     }
+
+    /// <summary>
+    /// <c>Form</c> is not read from content (SDD-004 §6's finding-270
+    /// amendment): every declared fluid system is black-oil, because
+    /// <c>OGSim.Kernel</c> — where the content kind lives — may not depend on
+    /// <c>OGSim.Contracts</c>, where <see cref="FluidForm"/> is declared.
+    /// </summary>
+    private static BlackOilInputs InputsOf(FluidSystemDefinition definition) => new(
+        OilGravity: new ApiGravity(definition.ApiGravityDegrees),
+        GasSpecificGravity: definition.GasSpecificGravity,
+        ReservoirTemperature: new Temperature(definition.ReservoirTemperatureKelvin),
+        SolutionGorAtBubblePoint: definition.SolutionGorAtBubblePoint,
+        Form: FluidForm.BlackOil);
 
     /// <summary>
     /// THE SECOND HALF OF A TWO-PHASE CONSTRUCTION, and it was missing.

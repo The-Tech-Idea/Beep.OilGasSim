@@ -37,7 +37,8 @@ public sealed class ProductionLoopTests
                 OilSaturation: 0.7,
                 InitialPressure: new Pressure(30.0e6),
                 Temperature: Temperature.FromCelsius(93.3),
-                Depth: new Length(2000.0)),
+                Depth: new Length(2000.0),
+                FluidSystem: new ContentId("medium-crude")),
             // GOOD ROCK, kept. This fixture is the one that always built its
             // own well to match — 2e-13 and 30 m in both places — so it is the
             // one place finding 170 never bit, and the facility-limited test

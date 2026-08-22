@@ -146,6 +146,15 @@ internal static class Fixture
             files.Add(new ContentFile("wells/" + Path.GetFileName(path),
                                       File.ReadAllText(path)));
 
+        // AND THE FLUID SYSTEMS (SDD-004 §6's finding-270 amendment) — the
+        // same door.
+        string fluidSystems = Path.Combine(here.Parent!.Parent!.FullName, "content", "fluid-systems");
+
+        foreach (string path in Directory.EnumerateFiles(fluidSystems, "*.json")
+                                         .OrderBy(p => p, StringComparer.Ordinal))
+            files.Add(new ContentFile("fluid-systems/" + Path.GetFileName(path),
+                                      File.ReadAllText(path)));
+
         return new DirectorySource(files);
     }
 
@@ -169,6 +178,7 @@ internal static class Fixture
                 new DisplacementPumpContentKind("pcp"),
                 new EspContentKind(),
                 new GasLiftContentKind(),
+                new FluidSystemContentKind(),
             ],
             new PluginRegistry());
 
@@ -208,6 +218,11 @@ internal static class Fixture
     /// module list themselves.</summary>
     public static IReadOnlyList<OGSim.World.TerrainClassDefinition> TerrainClasses() =>
         Loaded().Of<OGSim.World.TerrainClassDefinition>().All;
+
+    /// <summary>The shipped fluid systems (finding 270), for the tests that
+    /// build the module list themselves.</summary>
+    public static IReadOnlyList<FluidSystemDefinition> FluidSystems() =>
+        Loaded().Of<FluidSystemDefinition>().All;
 
     /// <summary>The shipped take-or-pay contract (SDD-009 §7's R13.3
     /// amendment), for the tests that build the module list themselves.</summary>
@@ -322,7 +337,7 @@ public sealed class ShippedSetTests
         IReadOnlyList<IModule> modules = EngineBuilder.ShippedModules(
             audit, new SimulationClock(new GameDate(1965, 1)), new RandomSource(1UL),
             Defaults.Simulation, Fixture.Ladders(), Fixture.Registry(), Fixture.TerrainClasses(),
-            Fixture.TakeOrPay(), Fixture.LiftTiers());
+            Fixture.TakeOrPay(), Fixture.LiftTiers(), Fixture.FluidSystems());
 
         var provided = new HashSet<Type>();
         foreach (IModule module in modules)
@@ -350,7 +365,7 @@ public sealed class ShippedSetTests
         var reversed = new List<IModule>(EngineBuilder.ShippedModules(
             audit, new SimulationClock(new GameDate(1965, 1)), new RandomSource(1UL),
             Defaults.Simulation, Fixture.Ladders(), Fixture.Registry(), Fixture.TerrainClasses(),
-            Fixture.TakeOrPay(), Fixture.LiftTiers()));
+            Fixture.TakeOrPay(), Fixture.LiftTiers(), Fixture.FluidSystems()));
         reversed.Reverse();
 
         Built forward = Assert.IsType<Built>(EngineBuilder.Build(Fixture.Settings()));
@@ -527,7 +542,8 @@ public sealed class MaterialCatalogueTests
                 OilSaturation: 0.7,
                 InitialPressure: new Pressure(30.0e6),
                 Temperature: Temperature.FromCelsius(93.3),
-                Depth: new Length(2000.0)),
+                Depth: new Length(2000.0),
+                FluidSystem: new ContentId("medium-crude")),
             permeability: new Permeability(1.0e-13),
             netThickness: new Length(20.0),
             drainageArea: new Area(2.0e5),
@@ -934,6 +950,25 @@ public sealed class FacilityContentTests
     }
 
     /// <summary>
+    /// A fluid system outside the correlations' own validity range (SDD-004
+    /// §6's finding-270 amendment) is refused the same way — a consistency
+    /// failure at load, naming the file, not a value the engine tries to
+    /// solve with.
+    /// </summary>
+    [Fact]
+    public void A_fluid_system_with_an_impossible_api_gravity_refuses_the_engine()
+    {
+        BuildResult result = EngineBuilder.Build(Fixture.Settings(
+            content: [Edited("medium-crude", "\"apiGravityDegrees\": 35.0",
+                                             "\"apiGravityDegrees\": 5.0")]));
+
+        LoadFailure failure = Assert.Single(
+            Assert.IsType<BuildRefusedByContent>(result).Failures);
+
+        Assert.Contains("medium-crude", failure.File, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// And a ladder with a hole is refused too — this one at COMPOSITION rather
     /// than at load, because a gap is a statement about a set and the loader's
     /// consistency pass sees one definition at a time.
@@ -979,7 +1014,7 @@ public sealed class AccessWindowTests
         var modules = new List<IModule>(EngineBuilder.ShippedModules(
             audit, clock, new RandomSource(20260806UL), Defaults.Simulation,
             Fixture.Ladders(), Fixture.Registry(), Fixture.TerrainClasses(), Fixture.TakeOrPay(),
-            Fixture.LiftTiers()));
+            Fixture.LiftTiers(), Fixture.FluidSystems()));
 
         for (int i = 0; i < modules.Count; i++)
             if (modules[i] is EnvironmentModule)
@@ -1000,7 +1035,8 @@ public sealed class AccessWindowTests
                 OilSaturation: 0.7,
                 InitialPressure: new Pressure(30.0e6),
                 Temperature: Temperature.FromCelsius(93.3),
-                Depth: new Length(2000.0)),
+                Depth: new Length(2000.0),
+                FluidSystem: new ContentId("medium-crude")),
             permeability: new Permeability(1.0e-13),
             netThickness: new Length(20.0),
             drainageArea: new Area(2.0e5),
@@ -1267,7 +1303,8 @@ public sealed class EquipmentEraTests
                 OilSaturation: 0.7,
                 InitialPressure: new Pressure(30.0e6),
                 Temperature: Temperature.FromCelsius(93.3),
-                Depth: new Length(2000.0)),
+                Depth: new Length(2000.0),
+                FluidSystem: new ContentId("medium-crude")),
             permeability: new Permeability(1.0e-13),
             netThickness: new Length(20.0),
             drainageArea: new Area(2.0e5),
@@ -1414,7 +1451,8 @@ public sealed class LicenceTests
                     OilSaturation: 0.7,
                     InitialPressure: new Pressure(30.0e6),
                     Temperature: Temperature.FromCelsius(93.3),
-                    Depth: new Length(2000.0)),
+                    Depth: new Length(2000.0),
+                    FluidSystem: new ContentId("medium-crude")),
                 permeability: new Permeability(1.0e-13),
                 netThickness: new Length(20.0),
                 drainageArea: new Area(2.0e5),

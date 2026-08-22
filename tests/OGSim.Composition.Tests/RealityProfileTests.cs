@@ -27,7 +27,8 @@ public sealed class RealityProfileTests
                 OilSaturation: 0.7,
                 InitialPressure: new Pressure(30.0e6),
                 Temperature: Temperature.FromCelsius(93.3),
-                Depth: new Length(2000.0)),
+                Depth: new Length(2000.0),
+                FluidSystem: new ContentId("medium-crude")),
                 // Rock the shipped plant is sized for. It said 2e-13 and 30 m
                 // while every well was built from Defaults.Inflow's 1e-13 and
                 // 20 m — a compartment stating rock nobody read (finding 170).

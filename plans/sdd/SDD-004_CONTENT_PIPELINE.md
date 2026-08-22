@@ -406,6 +406,86 @@ public interface ICatalogSet
 > that separate step before it can compose meaningfully — finding 260's own
 > "a different blocker" is this amendment closing half of it, not all of it.
 
+> **Amendment (finding 270): a seventh content kind, `fluid-system` — API
+> gravity joins the pipeline as real, per-accumulation content instead of one
+> engine-wide constant.** `BlackOilInputs` (`OGSim.Contracts/BlackOilModel.cs`)
+> has been documented since it was written as "what a `fluid-system` content
+> entry carries" and no `FluidSystemContentKind` has ever existed — the
+> gap this amendment closes. Design 06's own accumulation-truth diagram
+> already lists "fluid type · quality" as a per-accumulation fact; design 08
+> §3.1 already prices a quality differential off API gravity and sulfur.
+> Neither had anything to point at, because every compartment in every game
+> shared one `Defaults.Fluid` (`OGSim.Composition/EngineBuilder.cs`,
+> `OilGravity: new ApiGravity(35.0)`).
+>
+> **`FluidSystemDefinition`, an UNGATED content definition** (no
+> `RequiresTech`/`Era`/`Rung` — a reservoir's own fluid is a truth fact
+> world generation draws, not equipment a company buys, so it does not
+> derive from `FacilityUnitDefinition`; it derives from `ContentDefinition`
+> directly, the same shape `MaterialDefinition` already uses for the same
+> reason):
+>
+> ```csharp
+> public sealed record FluidSystemDefinition(
+>     ContentId Id,
+>     double ApiGravityDegrees,
+>     double GasSpecificGravity,       // γg, air = 1
+>     double ReservoirTemperatureKelvin,
+>     double SolutionGorAtBubblePoint  // Rsb, sm³/sm³
+>     ) : ContentDefinition(Id);
+> ```
+>
+> **None of the four fields goes through the unit-string grammar (§4).**
+> `ApiGravity` is read as a bare number in DEGREES — its own native unit
+> (`ApiGravity(double Degrees)`, `OGSim.Kernel/Quantities.cs`) — because
+> °API relates to specific gravity by `141.5/SG − 131.5`, a NONLINEAR
+> transform the grammar's factor-plus-offset token table cannot represent;
+> writing `"35 api"` through `UnitGrammar` would either silently apply a
+> linear conversion to a value that has none, or need a special-cased token
+> that pretends the grammar's own contract still holds. `GasSpecificGravity`
+> and `SolutionGorAtBubblePoint` are dimensionless ratios read the same bare
+> way — for consistency with `ApiGravity` on the same record, not because
+> the grammar could not carry them (§6's separator fractions already prove
+> it can, via `Dimension.Dimensionless`). `ReservoirTemperature` DOES go
+> through the grammar (`Dimension.Temperature`) — it is a real, linear
+> quantity with no such obstruction.
+>
+> **`FluidForm` (`OGSim.Contracts`) is not read from content in this
+> amendment.** Every `fluid-system` entry constructs as `FluidForm.BlackOil`
+> at the point composition builds a `BlackOilInputs` from a loaded
+> `FluidSystemDefinition` — `OGSim.Kernel` (where every other content kind
+> lives, `FacilityKinds.cs`/`ContentKinds.cs`) may not depend on
+> `OGSim.Contracts` (design 03's downward-only layering), and nothing this
+> amendment declares is a gas-condensate system. A modified-black-oil
+> `fluid-system` entry is a real future case and is named rather than
+> guessed at here — it would need `FluidForm` itself moved down to
+> `OGSim.Kernel` (matching where `Era`/`PhaseAtStandardConditions` already
+> live for exactly this reason) before content could name it.
+>
+> **Registered exactly like the six facility kinds and the ninth thing
+> registered nowhere yet (materials, this same section, finding 261):
+> appended to `EngineBuilder.FacilityContent`'s content-kind array and to
+> `GodotContentSource.Loadable`.** Unlike materials, this one does NOT go
+> through `Defaults` — `MaterialsModule` keeps every loaded
+> `FluidSystemDefinition` as its own `BlackOilModel` instance in a
+> `Dictionary<ContentId, IFluidPropertyModel>`, avoiding the exact
+> static-leaks-across-builds trap finding 261's own amendment named as the
+> reason materials could not be closed the same way — this dictionary is
+> built fresh every `EngineBuilder.Build` call, owned by composition, never
+> a static field.
+>
+> **Validation** (`ConsistencyProblems`, §5's stage 5): API gravity outside
+> roughly 10–70° is refused by name (below ~10° is denser than water and
+> not a producible liquid hydrocarbon by this engine's own black-oil
+> correlations' validity range; above ~70° is condensate territory this
+> amendment's `FluidForm.BlackOil` constant cannot honestly represent) —
+> `BlackOilModel`'s own `ValidityRange` is the authority SDD-003 §4.1
+> already cites for correlation applicability; this is a load-time guard
+> against declaring a fluid system the correlations were never fitted to,
+> not a second copy of that range. Gas specific gravity and Rsb refused at
+> or below zero, matching `BlackOilModel`'s own constructor guards
+> (`BlackOilModel.cs`).
+
 ## 7. Mods
 
 ```csharp

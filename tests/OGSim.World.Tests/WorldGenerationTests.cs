@@ -56,6 +56,52 @@ internal static class TerrainContent
     }
 }
 
+/// <summary>The shipped fluid systems, through the real loader from the real
+/// directory (finding 270) — the same route the engine takes, mirroring
+/// <see cref="TerrainContent"/>.</summary>
+internal static class FluidSystemContent
+{
+    private sealed class NoPlugins : IModuleRegistry
+    {
+        public bool CanBind(ContentId plugin, Type contract) => true;
+        public T Bind<T>(ContentId plugin) where T : class =>
+            throw new InvariantFault("test", null, "no plugins in fluid-system content");
+    }
+
+    private static string ContentRoot([CallerFilePath] string thisFile = "")
+    {
+        DirectoryInfo directory = new FileInfo(thisFile).Directory!;   // tests/OGSim.World.Tests
+        return Path.Combine(directory.Parent!.Parent!.FullName, "content", "fluid-systems");
+    }
+
+    public static IReadOnlyList<FluidSystemDefinition> Shipped()
+    {
+        string root = ContentRoot();
+
+        var files = new List<ContentFile>();
+        foreach (string path in Directory.EnumerateFiles(root, "*.json")
+                                         .OrderBy(p => p, StringComparer.Ordinal))
+            files.Add(new ContentFile(Path.GetFileName(path), File.ReadAllText(path)));
+
+        var loader = new ContentLoader([new FluidSystemContentKind()], new NoPlugins());
+        ContentLoadResult result = loader.LoadAll([new DirectorySource(files)]);
+
+        if (result is ContentFailures failed)
+            throw new InvalidOperationException(
+                "the shipped fluid-system content does not load: " + string.Join(
+                    "; ", failed.Failures.Select(f => $"{f.File} {f.JsonPath} {f.Message}")));
+
+        return ((ContentLoaded)result).Catalogues.Of<FluidSystemDefinition>().All;
+    }
+
+    private sealed class DirectorySource(IReadOnlyList<ContentFile> files) : IContentSource
+    {
+        public string Name => "base";
+        public int DeclaredOrder => 0;
+        public IReadOnlyList<ContentFile> Files => files;
+    }
+}
+
 /// <summary>Records everything the generator emits, so a test can inspect the
 /// whole handoff rather than a projection of it.</summary>
 internal sealed class RecordingSink : IWorldSink
@@ -91,7 +137,9 @@ public class WorldGenerationTests
     {
         var sink = new RecordingSink();
 
-        new BasinWorldGenerator(TerrainContent.Shipped(), new ContentId("temperate-offshore")).Generate(
+        new BasinWorldGenerator(
+            TerrainContent.Shipped(), new ContentId("temperate-offshore"),
+            FluidSystemContent.Shipped()).Generate(
             parameters ?? Parameters(), sink,
             new RandomSource(seed).Stream(StreamId.WorldGen));
 
@@ -484,7 +532,8 @@ public class WorldGenerationTests
         var parameters = Parameters(width: 32, height: 48);
         var sink = new RecordingSink();
 
-        new BasinWorldGenerator(TerrainContent.Shipped(), climateId).Generate(
+        new BasinWorldGenerator(
+            TerrainContent.Shipped(), climateId, FluidSystemContent.Shipped()).Generate(
             parameters, sink, new RandomSource(7UL).Stream(StreamId.WorldGen));
 
         ClimateRegion region = Assert.Single(sink.ClimateRegions);
@@ -661,6 +710,32 @@ public class WorldGenerationTests
         Assert.True(offshore > 0,
             "eight basins generated with half their cells under water produced no " +
             "offshore accumulation at all; water depth is not being read from the terrain");
+    }
+
+    /// <summary>
+    /// SDD-010 §2's finding-270 amendment — Step 7 draws a fluid system per
+    /// compartment, the same step as porosity and oil saturation. Across
+    /// several basins this build's two shipped fluid systems (finding 270)
+    /// both have to show up somewhere, or the draw is not really happening —
+    /// every compartment would be quietly inheriting one default.
+    /// </summary>
+    [Fact]
+    public void R20d9V270_compartments_draw_different_fluid_systems()
+    {
+        var seen = new HashSet<ContentId>();
+
+        foreach (ulong seed in new ulong[] { 1UL, 2UL, 3UL, 4UL, 5UL, 6UL, 7UL, 8UL })
+        {
+            IReadOnlyList<GeneratedAccumulation> found = Charged(Generate(seed));
+
+            for (int i = 0; i < found.Count; i++)
+                for (int c = 0; c < found[i].Compartments.Count; c++)
+                    seen.Add(found[i].Compartments[c].FluidSystem);
+        }
+
+        Assert.True(seen.Count > 1,
+            "eight basins' worth of compartments drew only one fluid system between them; " +
+            "the Step 7 draw is not choosing among the shipped content");
     }
 
     // ------------------------------------- the structure decides (R20d.8.6)

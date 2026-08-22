@@ -121,15 +121,20 @@ public class VolumetricGasDriveTests
 /// </summary>
 public class GasReservoirTests
 {
+    private static readonly ContentId FluidSystemId = new("medium-crude");
+
     private static SubsurfaceState Gas() =>
         new(
-            new BlackOilModel(
-                new BlackOilInputs(
-                    new ApiGravity(35.0), 0.75, Temperature.FromCelsius(93.3), 100.0,
-                    FluidForm.BlackOil),
-                new ValidityRange(
-                    new Pressure(500.0), new Pressure(60e6),
-                    Temperature.FromCelsius(10.0), Temperature.FromCelsius(180.0))),
+            new Dictionary<ContentId, IFluidPropertyModel>
+            {
+                [FluidSystemId] = new BlackOilModel(
+                    new BlackOilInputs(
+                        new ApiGravity(35.0), 0.75, Temperature.FromCelsius(93.3), 100.0,
+                        FluidForm.BlackOil),
+                    new ValidityRange(
+                        new Pressure(500.0), new Pressure(60e6),
+                        Temperature.FromCelsius(10.0), Temperature.FromCelsius(180.0))),
+            },
             new VolumetricGasDrive(),
             Souring.SweetRock, Souring.TheRock, Souring.SouringReference,
             maxTickPressureDropFraction: 0.4);
@@ -149,8 +154,9 @@ public class GasReservoirTests
             RelativePermeabilityCurve.Validated(
                 swc: 0.25, sor: 0.0, krwMax: 0.35, kroMax: 0.90, nw: 3.0, no: 2.0),
             new ContentId("volumetric-gas-drive"),
+            fluidSystem: FluidSystemId,
             aquiferStrength: 0.0,
-            Duration.FromTicks(1.0));
+            aquiferResponseTime: Duration.FromTicks(1.0));
 
     /// <summary>
     /// THE REAL DISPATCH, not the isolated formula: cumulative production is

@@ -16,13 +16,18 @@ namespace OGSim.Contracts;
 // ------------------------------------------------------------ geology handoff
 
 /// <summary>One truth compartment of an accumulation (SDD-010 §2.7 draws).</summary>
+/// <param name="FluidSystem">Which fluid system (crude quality) this
+/// compartment drew, Step 7, same stream as porosity/saturation (SDD-010 §2's
+/// finding-270 amendment). Appended, not inserted — no existing positional
+/// construction reorders.</param>
 public sealed record GeneratedCompartment(
     ReservoirVolume PoreVolume,
     double Porosity,
     double OilSaturation,
     Pressure InitialPressure,
     Temperature Temperature,
-    Length Depth);
+    Length Depth,
+    ContentId FluidSystem);
 
 /// <summary>
 /// ONE CLOSED STRUCTURE (SDD-010 §2.5–2.7, §4b) — charged or not.

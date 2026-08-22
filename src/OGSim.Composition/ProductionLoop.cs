@@ -1968,12 +1968,13 @@ public sealed class FieldControl : IStateOwner
         Length gasWaterContact,
         RelativePermeabilityCurve wettability,
         ContentId drive,
+        ContentId fluidSystem,
         double aquiferStrength,
         Duration aquiferResponseTime) =>
         _subsurface.CreateGas(
             poreVolume, porosity, gasSaturation, initialPressure, reservoirTemperature,
             permeability, netThickness, drainageArea, rockCompressibility, gasWaterContact,
-            wettability, drive, aquiferStrength, aquiferResponseTime);
+            wettability, drive, fluidSystem, aquiferStrength, aquiferResponseTime);
 
     /// <summary>
     /// Brings a completion online against a compartment and ties it into the

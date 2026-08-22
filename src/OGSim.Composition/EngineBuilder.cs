@@ -1970,7 +1970,8 @@ public static class EngineBuilder
                     IReadOnlyList<OGSim.Capabilities.TechnologyNode> Registry,
                     IReadOnlyList<OGSim.World.TerrainClassDefinition> TerrainClasses,
                     OGSim.Company.TakeOrPayTerms TakeOrPay,
-                    OGSim.Wells.LiftTiers LiftTiers)? Ladders(
+                    OGSim.Wells.LiftTiers LiftTiers,
+                    IReadOnlyList<FluidSystemDefinition> FluidSystems)? Ladders(
         EngineSettings settings)
     {
         ContentLoadResult result = FacilityContent(settings);
@@ -1979,7 +1980,8 @@ public static class EngineBuilder
             ? (FacilityLadders.From(loaded.Catalogues), Registry(loaded.Catalogues),
                loaded.Catalogues.Of<OGSim.World.TerrainClassDefinition>().All,
                TakeOrPayFrom(loaded.Catalogues),
-               LiftTiersFrom(loaded.Catalogues))
+               LiftTiersFrom(loaded.Catalogues),
+               loaded.Catalogues.Of<FluidSystemDefinition>().All)
             : null;
     }
 
@@ -2108,6 +2110,7 @@ public static class EngineBuilder
                 new DisplacementPumpContentKind("pcp"),
                 new EspContentKind(),
                 new GasLiftContentKind(),
+                new FluidSystemContentKind(),
             ],
             new PluginRegistry())
             .LoadAll(settings.Content);
@@ -2118,7 +2121,8 @@ public static class EngineBuilder
         IReadOnlyList<OGSim.Capabilities.TechnologyNode> registry,
         IReadOnlyList<OGSim.World.TerrainClassDefinition> terrainClasses,
         OGSim.Company.TakeOrPayTerms takeOrPay,
-        OGSim.Wells.LiftTiers liftTiers) =>
+        OGSim.Wells.LiftTiers liftTiers,
+        IReadOnlyList<FluidSystemDefinition> fluidSystems) =>
     [
         new SubsurfaceModule(),
         new WellsModule(),
@@ -2127,13 +2131,13 @@ public static class EngineBuilder
         new OperationsModule(),
         new CompanyModule(),
         new InformationModule(),
-        new WorldModule(terrainClasses, Defaults.Climate.Id),
+        new WorldModule(terrainClasses, Defaults.Climate.Id, fluidSystems),
         new CapabilitiesModule(registry, Defaults.Eras, clock),
         new IntegrityModule(),
         new EnvironmentModule(Defaults.Climate),
         new HseModule(),
         new ObjectivesModule(),
-        new MaterialsModule(profile),
+        new MaterialsModule(profile, fluidSystems),
         new FieldModule(ladders, takeOrPay, liftTiers),
         new DiagnosticsModule(audit, clock, random),
     ];
@@ -2210,7 +2214,8 @@ public static class EngineBuilder
     {
         ArgumentNullException.ThrowIfNull(settings);
 
-        if (Ladders(settings) is not var (ladders, registry, terrainClasses, takeOrPay, liftTiers))
+        if (Ladders(settings) is not var (ladders, registry, terrainClasses, takeOrPay, liftTiers,
+                                           fluidSystems))
             return new BuildRefusedByContent(Failures(settings));
 
         var clock = new SimulationClock(settings.Epoch);
@@ -2220,7 +2225,7 @@ public static class EngineBuilder
             settings,
             ShippedModules(audit, clock, new RandomSource(settings.WorldSeed),
                            Defaults.ProfileNamed(settings.RealityProfile), ladders, registry,
-                           terrainClasses, takeOrPay, liftTiers),
+                           terrainClasses, takeOrPay, liftTiers, fluidSystems),
             clock, audit);
     }
 
@@ -2242,7 +2247,8 @@ public static class EngineBuilder
     {
         ArgumentNullException.ThrowIfNull(settings);
 
-        if (Ladders(settings) is not var (ladders, registry, terrainClasses, takeOrPay, liftTiers))
+        if (Ladders(settings) is not var (ladders, registry, terrainClasses, takeOrPay, liftTiers,
+                                           fluidSystems))
             return new BuildRefusedByContent(Failures(settings));
 
         var clock = new SimulationClock(settings.Epoch);
@@ -2254,7 +2260,7 @@ public static class EngineBuilder
             settings,
             ShippedModules(audit, clock, new RandomSource(settings.WorldSeed),
                            Defaults.ProfileNamed(settings.RealityProfile), ladders, registry,
-                           terrainClasses, takeOrPay, liftTiers),
+                           terrainClasses, takeOrPay, liftTiers, fluidSystems),
             clock, audit);
     }
 

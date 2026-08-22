@@ -204,7 +204,8 @@ public class ContractSmokeTests
             new ReservoirVolume(3.0e7),
             [new GeneratedCompartment(
                 new ReservoirVolume(2.0e7), 0.22, 0.75,
-                new Pressure(3.2e7), new Temperature(370), Length.FromFeet(9500))]));
+                new Pressure(3.2e7), new Temperature(370), Length.FromFeet(9500),
+                new ContentId("medium-crude"))]));
         sink.DeliverRegionalObservation(new Observation(
             new EntityRef(EntityKind.Play, 1), new ContentId("source-maturity"),
             0.6, 0.3, BeliefSpace.Linear, Provenance.Analogue));

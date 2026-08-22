@@ -33,7 +33,7 @@ internal sealed class SubsurfaceState : IStateOwner
     private readonly List<ReservoirCompartment> _compartments = [];
     private readonly Dictionary<EntityId<IReservoirCompartmentEntity>, ReservoirCompartment> _byId = [];
 
-    private readonly IFluidPropertyModel _fluid;
+    private readonly IReadOnlyDictionary<ContentId, IFluidPropertyModel> _fluidSystems;
     private readonly IDriveMechanism _defaultDrive;
     private readonly double _maxTickPressureDropFraction;
 
@@ -44,7 +44,14 @@ internal sealed class SubsurfaceState : IStateOwner
     private readonly double _souringReferencePpm;
 
     public SubsurfaceState(
-        IFluidPropertyModel fluid,
+        /// <summary>
+        /// Every fluid system this build's content declared, by id (SDD-003
+        /// §3.0b's finding-270 amendment). A compartment names WHICH one it
+        /// is; this is where that name resolves to a model. No engine-wide
+        /// default — law L2 forbids a dependency this cannot supply falling
+        /// back to one it was never told to use.
+        /// </summary>
+        IReadOnlyDictionary<ContentId, IFluidPropertyModel> fluidSystems,
         IDriveMechanism drive,
 
         /// <summary>SDD-012 §5's curve. Required rather than optional: a
@@ -70,9 +77,14 @@ internal sealed class SubsurfaceState : IStateOwner
         double souringReferencePpm,
         double maxTickPressureDropFraction)
     {
-        ArgumentNullException.ThrowIfNull(fluid);
+        ArgumentNullException.ThrowIfNull(fluidSystems);
         ArgumentNullException.ThrowIfNull(drive);
         ArgumentNullException.ThrowIfNull(souring);
+
+        if (fluidSystems.Count == 0)
+            throw new ModelFault("SDD-003 §3.0b", null,
+                "no fluid system was declared; a compartment cannot be created with nothing " +
+                "to name");
 
         if (souringReferencePpm <= 0.0 || !double.IsFinite(souringReferencePpm))
             throw new ContentFault("SDD-012 §5", null,
@@ -85,7 +97,7 @@ internal sealed class SubsurfaceState : IStateOwner
                 "would forbid production and a limit of 1 would permit a reservoir to " +
                 "reach zero pressure in a single month");
 
-        _fluid = fluid;
+        _fluidSystems = fluidSystems;
         _defaultDrive = drive;
         _souring = souring;
         _rockType = rockType;
@@ -104,7 +116,12 @@ internal sealed class SubsurfaceState : IStateOwner
     // amendment) — the dry-gas balance's own N and the one fluid call in this
     // document that takes temperature as an argument. Both were previously
     // hardcoded to zero on restore because nothing had ever populated them.
-    public int SchemaVersion => 4;
+    //
+    // 5: the compartment's own fluid system (SDD-003 §3.0b's finding-270
+    // amendment) — the same standing "drive" already has, and for the same
+    // reason: restoring every compartment onto whichever fluid system this
+    // build happens to try first would silently regrade a field's crude.
+    public int SchemaVersion => 5;
 
     /// <summary>Nothing has to be back before this is (SDD-013 §2b).</summary>
     public IReadOnlyList<StateKey> RestoreAfter => [];
@@ -145,6 +162,22 @@ internal sealed class SubsurfaceState : IStateOwner
             $"no drive mechanism '{drive.Value}' exists; a compartment cannot be created " +
             "with a drive nobody implements"),
     };
+
+    /// <summary>
+    /// The model a compartment's own drawn fluid system resolves to (SDD-003
+    /// §3.0b's finding-270 amendment) — the same "name it, look it up, refuse
+    /// by name if unknown" shape <see cref="DriveNamed"/> already uses for a
+    /// compartment's drive.
+    /// </summary>
+    private IFluidPropertyModel FluidFor(ContentId fluidSystem)
+    {
+        if (_fluidSystems.TryGetValue(fluidSystem, out IFluidPropertyModel? fluid))
+            return fluid;
+
+        throw new ContentFault("SDD-003 §3.0b", null,
+            $"no fluid system '{fluidSystem.Value}' exists; a compartment cannot use a fluid " +
+            "system nobody registered");
+    }
 
     public EntityId<IReservoirCompartmentEntity> Create(
         GeneratedCompartment generated,
@@ -208,7 +241,8 @@ internal sealed class SubsurfaceState : IStateOwner
 
         // Shrink, not a division: the FVF owns the conversion, which is what
         // stops a reservoir volume and a stock-tank volume from being added.
-        SurfaceVolume stockTankOil = _fluid.Bo(generated.InitialPressure).Shrink(reservoirOil);
+        SurfaceVolume stockTankOil =
+            FluidFor(generated.FluidSystem).Bo(generated.InitialPressure).Shrink(reservoirOil);
 
         var initial = new InitialConditions(
             Pressure: generated.InitialPressure,
@@ -221,7 +255,7 @@ internal sealed class SubsurfaceState : IStateOwner
             ReservoirTemperature: generated.Temperature);
 
         var compartment = new ReservoirCompartment(
-            id, initial, contacts, rock, DriveNamed(drive), []);
+            id, initial, contacts, rock, DriveNamed(drive), generated.FluidSystem, []);
 
         _compartments.Add(compartment);
         _byId.Add(id, compartment);
@@ -268,6 +302,7 @@ internal sealed class SubsurfaceState : IStateOwner
         Length gasWaterContact,
         RelativePermeabilityCurve wettability,
         ContentId drive,
+        ContentId fluidSystem,
         double aquiferStrength,
         Duration aquiferResponseTime)
     {
@@ -307,7 +342,7 @@ internal sealed class SubsurfaceState : IStateOwner
         // N (SDD-003 §3.1b). Shrink, not a division inline, for the same
         // reason Create's oil case uses it: the FVF owns the conversion.
         var freeGas = new ReservoirVolume(poreVolume.CubicMetres * gasSaturation);
-        StandardGasVolume gasInPlace = _fluid.Bg(initialPressure).Shrink(freeGas);
+        StandardGasVolume gasInPlace = FluidFor(fluidSystem).Bg(initialPressure).Shrink(freeGas);
 
         var initial = new InitialConditions(
             Pressure: initialPressure,
@@ -320,7 +355,7 @@ internal sealed class SubsurfaceState : IStateOwner
             ReservoirTemperature: reservoirTemperature);
 
         var compartment = new ReservoirCompartment(
-            id, initial, contacts, rock, DriveNamed(drive), []);
+            id, initial, contacts, rock, DriveNamed(drive), fluidSystem, []);
 
         _compartments.Add(compartment);
         _byId.Add(id, compartment);
@@ -380,8 +415,11 @@ internal sealed class SubsurfaceState : IStateOwner
     /// — and that is the right answer rather than a special case: the water is
     /// already arriving and nobody has to pay for it.</para>
     /// </summary>
-    internal ReservoirVolume TrueVoidageRoomOf(EntityId<IReservoirCompartmentEntity> compartment) =>
-        Find(compartment).VoidageRoom(_fluid);
+    internal ReservoirVolume TrueVoidageRoomOf(EntityId<IReservoirCompartmentEntity> compartment)
+    {
+        ReservoirCompartment found = Find(compartment);
+        return found.VoidageRoom(FluidFor(found.FluidSystem));
+    }
 
     /// <summary>
     /// How sour this compartment's fluid is, 0..1 (SDD-012 §5's R20d.25
@@ -479,7 +517,7 @@ internal sealed class SubsurfaceState : IStateOwner
                 withdrawal.Oil, withdrawal.Gas, withdrawal.Water,
                 withdrawal.Influx, withdrawal.Injected, withdrawal.Imported,
                 withdrawal.ReservoirVolume,
-                _fluid, _maxTickPressureDropFraction);
+                FluidFor(compartment.FluidSystem), _maxTickPressureDropFraction);
         }
     }
 
@@ -628,6 +666,12 @@ internal sealed class SubsurfaceState : IStateOwner
             // travel with it.
             writer.WriteString(at + "drive", compartment.Drive.Id.Value);
 
+            // AND ITS OWN FLUID SYSTEM (SDD-003 §3.0b's finding-270
+            // amendment) — the same reasoning as the drive line above:
+            // world generation draws it per compartment, so it is a property
+            // of the compartment and has to travel with it.
+            writer.WriteString(at + "fluid-system", compartment.FluidSystem.Value);
+
             // AND THE WATER BEHIND IT. `_aquifers` was filled by Create and by
             // nothing else, so a restored compartment had no aquifer at all and
             // the first tick asking for its influx faulted. Its three terms and
@@ -708,9 +752,15 @@ internal sealed class SubsurfaceState : IStateOwner
             // came back as solution-gas, and the only reason it was not silent
             // is that §4.2b's coherence check refuses a compartment carrying an
             // influx term its drive does not admit (finding 192).
+            // ITS OWN FLUID SYSTEM, resolved by name through the same door
+            // that created it (SDD-003 §3.0b's finding-270 amendment) — the
+            // exact reasoning §4.2b already states for the drive read above,
+            // substituting crude quality for drive mechanism.
+            var fluidSystem = new ContentId(reader.ReadString(at + "fluid-system"));
+
             var compartment = new ReservoirCompartment(
                 id, initial, contacts, rock,
-                DriveNamed(new ContentId(reader.ReadString(at + "drive"))), []);
+                DriveNamed(new ContentId(reader.ReadString(at + "drive"))), fluidSystem, []);
 
             compartment.RestoreTo(
                 new CumulativeProduction(
@@ -721,7 +771,7 @@ internal sealed class SubsurfaceState : IStateOwner
                     new ReservoirVolume(reader.ReadDouble(at + "vinj")),
                     new ReservoirVolume(reader.ReadDouble(at + "vimp"))),
                 contacts,
-                _fluid);
+                FluidFor(fluidSystem));
 
             _compartments.Add(compartment);
             _byId.Add(id, compartment);

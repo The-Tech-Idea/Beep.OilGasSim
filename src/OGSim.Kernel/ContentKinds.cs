@@ -214,3 +214,76 @@ public sealed class RockTypeContentKind : IContentKind
 
     public IReadOnlyList<PluginBinding> PluginsOf(ContentDefinition definition) => [];
 }
+
+// ---------------------------------------------------------------- fluid-system
+
+/// <summary>
+/// One reservoir fluid's declared crude quality (SDD-004 §6's finding-270
+/// amendment; SDD-003 §3.0b). Ungated — a reservoir's fluid is a truth fact
+/// world generation draws, not equipment a company buys.
+/// </summary>
+public sealed record FluidSystemDefinition(
+    ContentId Id,
+    double ApiGravityDegrees,
+    double GasSpecificGravity,          // γg, air = 1
+    double ReservoirTemperatureKelvin,
+    double SolutionGorAtBubblePoint     // Rsb, sm³/sm³
+    ) : ContentDefinition(Id);
+
+/// <summary>
+/// Reads a fluid system as the four bare numbers <c>BlackOilInputs</c> needs
+/// (SDD-004 §6's finding-270 amendment). Only <c>reservoirTemperature</c>
+/// crosses the unit-string grammar — API gravity relates to specific gravity
+/// by a NONLINEAR transform the grammar's factor-plus-offset tokens cannot
+/// represent, and the other two fields are read the same bare way for
+/// consistency on the one record rather than because the grammar could not
+/// carry them.
+/// </summary>
+public sealed class FluidSystemContentKind : IContentKind
+{
+    public string Name => "fluid-system";
+
+    public ContentDefinition Read(JsonElement element)
+    {
+        var id = new ContentId(PropertyKindContentKind.Required(element, "id").GetString()!);
+
+        double apiGravity = PropertyKindContentKind.Required(element, "apiGravityDegrees").GetDouble();
+        double gasSpecificGravity =
+            PropertyKindContentKind.Required(element, "gasSpecificGravity").GetDouble();
+        double reservoirTemperature = UnitGrammar.ParseToSi(
+            PropertyKindContentKind.Required(element, "reservoirTemperature").GetString()!,
+            Dimension.Temperature);
+        double solutionGor =
+            PropertyKindContentKind.Required(element, "solutionGorAtBubblePoint").GetDouble();
+
+        return new FluidSystemDefinition(
+            id, apiGravity, gasSpecificGravity, reservoirTemperature, solutionGor);
+    }
+
+    public IReadOnlyList<ContentReference> ReferencesOf(ContentDefinition definition) => [];
+
+    /// <summary>
+    /// The range <c>BlackOilModel</c>'s own correlations were fitted to
+    /// (SDD-003 §4.1) — a load-time guard against declaring a fluid system
+    /// they were never validated for, not a second copy of that range.
+    /// </summary>
+    public IReadOnlyList<string> ConsistencyProblems(ContentDefinition definition)
+    {
+        var problems = new List<string>();
+        if (definition is not FluidSystemDefinition fluid) return problems;
+
+        if (fluid.ApiGravityDegrees is < 10.0 or > 70.0)
+            problems.Add($"apiGravityDegrees {fluid.ApiGravityDegrees} must be in [10, 70] — " +
+                         "below is denser than water and not a producible liquid hydrocarbon by " +
+                         "this engine's black-oil correlations, above is condensate territory " +
+                         "this content kind cannot represent");
+        if (fluid.GasSpecificGravity <= 0.0)
+            problems.Add("gasSpecificGravity must be positive");
+        if (fluid.SolutionGorAtBubblePoint <= 0.0)
+            problems.Add("solutionGorAtBubblePoint must be positive");
+
+        return problems;
+    }
+
+    public IReadOnlyList<PluginBinding> PluginsOf(ContentDefinition definition) => [];
+}

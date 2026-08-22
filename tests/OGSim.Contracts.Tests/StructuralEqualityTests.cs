@@ -104,7 +104,8 @@ public sealed class StructuralEqualityTests
             new ReservoirVolume(2e6),
             [new GeneratedCompartment(
                 new ReservoirVolume(1e6), 0.2, 0.7,
-                new Pressure(30e6), Temperature.FromCelsius(90.0), new Length(2000.0))]);
+                new Pressure(30e6), Temperature.FromCelsius(90.0), new Length(2000.0),
+                new ContentId("medium-crude"))]);
 
         Assert.Equal(Build(), Build());
     }

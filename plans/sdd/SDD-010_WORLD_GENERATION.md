@@ -28,8 +28,41 @@ principle applied INSIDE world-gen. PV7 (regeneration identity) follows.
 | 4 Structure | Elevation of each horizon = regional trend + **value noise from hashed integer coordinates** (no external noise lib; octaves and amplitudes content). Faults: line segments seeded per archetype density, throw ~ LogNormal |
 | 5 Traps | Local maxima of the reservoir horizon with closure height ≥ content minimum; closure polygon by contour walk. Trap type from context (fault-bounded vs fold) → **subtlety class** (D0–D3) from type + depth + a noise-floor table |
 | 6 Charge | **Fill-spill**: mature source polygons emit charge volume; migrate up-dip along the carrier horizon; traps fill in spill-point elevation order; overflow continues up-dip. The classic algorithm — produces charged-and-empty traps naturally (R15-V7) |
-| 7 Accumulations | Volume = min(charge reaching trap, closure pore volume × draws of φ, So); fluid from source maturity (oil/gas window); compartments: fault-crossing closures split with content probability; **AccessRequirements** derived from generated depth/water depth/temperature/k/H₂S |
+| 7 Accumulations | Volume = min(charge reaching trap, closure pore volume × draws of φ, So); fluid from source maturity (oil/gas window); compartments: fault-crossing closures split with content probability; **AccessRequirements** derived from generated depth/water depth/temperature/k/H₂S; **each compartment draws a fluid-system (crude quality) choice from content, same step (finding 270)** |
 | 8 Plays & classes | Group by (source unit, reservoir unit, trap type). **Era-layering enforcement**: per basin, per class-quota band (content) — if a class falls outside its band, deterministically resample step 5–7 noise offsets with an incrementing counter (bounded retries → world-gen fault, a content-tuning error, R15-V8/V11) |
+
+> **Amendment (finding 270): a compartment's crude quality is drawn here,
+> not assumed.** Step 7 already fixes `FluidForm` (oil vs gas, an
+> *accumulation*-level fact, from source maturity) and per-compartment
+> `Porosity`/`OilSaturation` (both drawn from the `sizing` stream,
+> `WorldGenerator.cs:190,241`). It never fixed *which* oil — every
+> compartment in every generated field used the one engine-wide
+> `Defaults.Fluid` (35° API), because nothing else existed to choose
+> between. SDD-004's finding-270 amendment adds a `fluid-system` content
+> kind so more than one can exist; this amendment is where a generated
+> compartment picks one.
+>
+> The draw sits immediately after the existing oil-saturation draw, same
+> step, same stream: `sizing.NextInt(0, systems.Count)` indexes into the
+> list of `FluidSystemDefinition` ids the current build's content loaded —
+> the same "index into a content-declared list with the stream already in
+> use at this step" shape the porosity/saturation draws already use, not a
+> new stream and not a new RNG law. A world generated from a content set
+> with exactly one fluid system draws that one every time — determinism is
+> unaffected by content authored to offer no choice.
+>
+> `GeneratedCompartment` (§4) gains the drawn `ContentId FluidSystem`,
+> appended after `Depth` so no existing positional construction reorders.
+> The field travels with the compartment through `IWorldSink` exactly like
+> `Temperature`/`Porosity` do; `SubsurfaceState` is where it is resolved to
+> an actual `IFluidPropertyModel` (SDD-003's finding-270 amendment).
+>
+> **Out of scope here, named not solved:** which fluid system a THIRD-PARTY
+> legacy field (§3, "Third-party industry") draws is the same mechanism —
+> no separate rule is needed, since those compartments are generated
+> through the same Step 7 — but nothing in this pass changes how their
+> depletion is modelled. Sulfur/sourness as a second drawn axis is not
+> introduced; the content kind and this draw carry API gravity only.
 
 ## 3. Surface steps (9.1–9.8)
 
@@ -69,9 +102,12 @@ existence.
 
 ```csharp
 // ---- geology
+// FluidSystem (finding 270): the content id of the drawn fluid system —
+// appended, not inserted, so no existing positional construction reorders.
 public sealed record GeneratedCompartment(
     ReservoirVolume PoreVolume, double Porosity, double OilSaturation,
-    Pressure InitialPressure, Temperature Temperature, Length Depth);
+    Pressure InitialPressure, Temperature Temperature, Length Depth,
+    ContentId FluidSystem);
 
 // Subtlety and Access are TRUTH attributes here — below-tier surveys spawn
 // nothing because screening reads these, not the other way round (§2.5–2.7).
