@@ -280,4 +280,25 @@ public sealed class GameStyleTests
 
         return built.Engine.Provided.Resolve<FieldControl>();
     }
+
+    /// <summary>
+    /// <c>Style</c> joined <see cref="EngineSettings"/> in the two-products
+    /// update and missed the hand-written <c>Equals</c>/<c>GetHashCode</c> —
+    /// the finding-131 defect class, in the same sweep finding 284 caught it
+    /// for <c>ScenarioProgress.Deadline</c>. Two settings differing only in
+    /// WHICH PRODUCT they compose compared EQUAL, which is exactly the
+    /// comparison a host uses to notice a save reloading as the wrong game.
+    /// </summary>
+    [Fact]
+    public void GS9_two_settings_differing_only_in_style_are_not_equal()
+    {
+        EngineSettings baseline = Fixture.Settings();
+
+        ContentId other = baseline.Style == GameStyles.Days.Id
+            ? GameStyles.Engineer.Id
+            : GameStyles.Days.Id;
+
+        Assert.NotEqual(baseline, baseline with { Style = other });
+        Assert.Equal(baseline, baseline with { });
+    }
 }

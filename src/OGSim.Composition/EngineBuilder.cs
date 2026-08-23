@@ -2030,12 +2030,13 @@ public sealed record EngineSettings(
         && RealityProfile == other.RealityProfile
         && StartingState == other.StartingState
         && Rules == other.Rules
+        && Style == other.Style
         && Structural.Equal(Content, other.Content);
 
     public override int GetHashCode() =>
         HashCode.Combine(
             Epoch, WorldSeed, Retention, MinimumLogLevel, FaultHandling, RealityProfile,
-            StartingState, HashCode.Combine(Rules, Structural.HashOf(Content)));
+            StartingState, HashCode.Combine(Rules, Style, Structural.HashOf(Content)));
 }
 
 /// <summary>
