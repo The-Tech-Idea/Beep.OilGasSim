@@ -348,3 +348,49 @@ because condemnation cannot make four holes affordable on a $72M purse.
 The two REMAINING problems are exactly the two the previous section
 named, now with clean numbers under them; the third is closed. The
 design call on the levers stays with Fahad.
+
+### The purse (2026-08-23, finding 287) — the game standard, measured and shipped
+
+Fahad's call arrived as a directive rather than a number: **"game
+standard for days"** — the opening of a Settlers/Factorio-shaped game
+does not dead-end on ordinary luck. The post-286 sweep gives that
+standard a measured value:
+
+| Opening | 1 | 2 | 3 | 4 | 5 | 11 |
+|---|---|---|---|---|---|---|
+| $90M post-286 | dead 48 | dead 93 ($-0.0M, 1.03M m³) | dead 40 | dead 60 | dead 61 | dead 38 |
+| $110M post-286 | dead 75 | **+$37.6M, 2.09M m³** | dead 92 (3 wells) | **+$271.3M, 4.46M m³** | dead 72 | dead 56 |
+
+**$110M is the threshold, and it is sharp**: every basin with a
+reachable field (seeds 2 and 4) closes the decade solvent from $110M;
+at $90M seed 2 falls two producing months short — twice measured — and
+above $110M the extra purse converts roughly one-to-one into closing
+cash (seed 4: +$271.3M at $110M, +$311.3M at $150M), so more would be
+padding rather than game.
+
+Shipped as `content/styles/days/starting-states/bare-ground.json` —
+the days overlay, not the base entry, because the wildcatter's purse is
+a per-product decision: the base `bare-ground` keeps its $72M neutral
+derivation ($50M + the $22M plant), and its stale "no balance survives"
+clause is withdrawn (it was findings 285/286's defects speaking). The
+number lives in content and nothing pins it in a test; what IS pinned is
+the MECHANISM — `EN5` composes Days the way the product does and asserts
+the purse differs from a base-only composition by exactly what the two
+JSON entries declare, values read off the content itself, proven failing
+with the overlay stacking reverted.
+
+The same pass found and closed **the overlay never reaching either
+product's composed engine where it mattered most**: the Godot host's
+`EngineHost` composed `Content: [content]` — base tree only — on both
+the new-game and the load path, with `GodotContentSource.StyleOverrides`
+shipped and never called (GC-7 in the client tracker), and the Engineer
+suite's own `Compose` had the same gap. Both now stack the overlay
+exactly as `Program.cs` always did.
+
+What the purse deliberately does NOT fix: seeds 1 and 5 die at every
+balance up to $150M because their boards are structure-poor (one charged
+accumulation found late, and none at all). A Factorio map guarantees the
+starter patch; this generator does not yet — that is world generation's
+question (SDD-010), the one open Settlers-standard item, and no purse
+answers it. The auto-player's late-game overspend (seed 3, dying at
+$-0.0M as a five-well producing field) remains an instrument bound.

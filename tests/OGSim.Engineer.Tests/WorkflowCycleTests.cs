@@ -210,6 +210,98 @@ public sealed class WorkflowCycleTests
             MinimumLogLevel: LogLevel.Error,
             FaultHandling: FaultHandling.Resilient,
             RealityProfile: mode.RealityProfile,
+
+            // The overlay too, exactly as Program.cs stacks it — this method's
+            // whole reason to exist is composing what the product composes, and
+            // it silently stopped doing that the day the days overlay started
+            // carrying more than export prices (finding 287: the purse).
+            Content: RepositoryContent.StyleOverrides(mode.Id) is { } overlay
+                ? [RepositoryContent.Read(), overlay]
+                : [RepositoryContent.Read()],
+            StartingState: mode.StartingState,
+            Rules: mode.Rules,
+            Style: mode.Id));
+
+        var world = new WorldParameters(
+            new ContentId("world-template-basin"),
+            WidthCells: 32,
+            HeightCells: 32,
+            LandFraction: 0.72,
+            ResourceRichness: 1.0,
+            BasinMaturity: 0.5,
+            ClimateSeverity: 0.28,
+            RivalCount: 4,
+            StartEra: Era.E1);
+
+        return Assert.IsType<Built>(EngineBuilder.CreateNew(settings, world)).Engine;
+    }
+
+    /// <summary>
+    /// THE PRODUCT PLAYS ITS OWN OVERLAY (finding 287; the Godot client's GC-7).
+    ///
+    /// <para>`StyleOverrides` existed on both clients and, for a while, neither
+    /// product actually composed with it — the days game played the base game's
+    /// numbers, and nothing could fail. This pins the mechanism from outside:
+    /// composing Days the way the product does opens with a purse that differs
+    /// from a base-only composition by exactly what the two content entries
+    /// declare. The VALUES are read off the JSON itself, so a rebalance is
+    /// still a content edit and this stays green; only the wiring can fail it.</para>
+    /// </summary>
+    [Fact]
+    public void EN5_the_days_product_composes_with_its_own_overlay()
+    {
+        IContentSource overlay = Assert.IsAssignableFrom<IContentSource>(
+            RepositoryContent.StyleOverrides(GameStyles.Days.Id));
+
+        double declared = OpeningMillions(overlay) - OpeningMillions(RepositoryContent.Read());
+
+        Assert.True(declared != 0.0,
+            "the days overlay no longer departs from the base purse, so this test can " +
+            "no longer see the mechanism through it; pin a different overlay entry");
+
+        Engine product = Compose(GameStyles.Days);
+        Engine baseOnly = ComposeBaseOnly(GameStyles.Days);
+
+        product.Pipeline.AdvanceTick();
+        baseOnly.Pipeline.AdvanceTick();
+
+        // Same seed, same world, same (empty) orders: after one identical month
+        // the two runs differ by the purse alone.
+        double opened = (product.ReadModel!.Cash - baseOnly.ReadModel!.Cash).Cents / 100.0 / 1.0e6;
+
+        Assert.Equal(declared, opened, precision: 6);
+    }
+
+    /// <summary>What a source's bare-ground entry opens with, off the JSON itself.</summary>
+    private static double OpeningMillions(IContentSource source)
+    {
+        for (int i = 0; i < source.Files.Count; i++)
+        {
+            if (source.Files[i].RelativePath != "starting-states/bare-ground.json") continue;
+
+            using var parsed = System.Text.Json.JsonDocument.Parse(source.Files[i].Json);
+
+            return parsed.RootElement.GetProperty("openingCashMillions").GetDouble();
+        }
+
+        throw new InvalidOperationException(
+            "no starting-states/bare-ground.json in " + source.Name);
+    }
+
+    /// <summary>
+    /// The same composition with the base tree alone — the defect's own shape,
+    /// kept deliberately so <c>EN4</c> can measure the overlay from outside.
+    /// </summary>
+    private static Engine ComposeBaseOnly(IGameStyle mode)
+    {
+        var settings = mode.Compose(new EngineSettings(
+            Epoch: new GameDate(1965, 1),
+            WorldSeed: 20260806UL,
+            Retention: new AuditRetention(DetailWindowTicks: 12),
+            LogSink: new SilentSink(),
+            MinimumLogLevel: LogLevel.Error,
+            FaultHandling: FaultHandling.Resilient,
+            RealityProfile: mode.RealityProfile,
             Content: [RepositoryContent.Read()],
             StartingState: mode.StartingState,
             Rules: mode.Rules,

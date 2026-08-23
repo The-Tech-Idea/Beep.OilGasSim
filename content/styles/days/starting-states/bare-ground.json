@@ -1,0 +1,7 @@
+{
+  "kind": "starting-state",
+  "id": "bare-ground",
+  "openingCashMillions": 110.0,
+  "holdsPlant": false,
+  "note": "The measured survival threshold, not a derivation (plans 26 §6, finding 287; Fahad's 'game standard for days'). Under the shipped auto-player every basin with a reachable field closes the decade solvent from $110M (seed 2 +$37.6M, seed 4 +$271.3M) and dies at $90M (seed 2 fell two producing months short, twice measured); above $110M the extra purse converts roughly one-to-one into closing cash, so more would be padding rather than game. Structure-poor basins (seeds 1 and 5) die at every purse up to $150M — that is world generation's starter-patch question, and no purse answers it."
+}
