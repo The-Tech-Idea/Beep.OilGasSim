@@ -1,0 +1,13 @@
+{
+  "kind": "world-template",
+  "id": "world-template-basin",
+  "widthCells": { "minimum": 24, "maximum": 40 },
+  "heightCells": { "minimum": 24, "maximum": 40 },
+  "landFraction": { "minimum": 0.30, "maximum": 0.95 },
+  "resourceRichness": { "minimum": 0.50, "maximum": 1.90 },
+  "basinMaturity": { "minimum": 0.0, "maximum": 1.0 },
+  "climateSeverity": { "minimum": 0.0, "maximum": 3.0 },
+  "rivalCount": { "minimum": 0, "maximum": 7 },
+  "viability": { "minimumChargedAccumulations": 0, "resampleBound": 8 },
+  "note": "The one shipped basin archetype (SDD-010 §1, finding 288). Ranges are the envelope the generator is exercised over, not an aspiration: grid 24-40 and rivals 0-7 are the new-game screen's own offer, land 0.30-0.95 is its slider, richness 0.50-1.90 is its five stars, and climate 0.0-3.0 is the span the weather suite drives (calm through three-times-reference storms) of which the screen offers 0.28-0.90. Viability 0: a barren basin is a real outcome of the realistic game and the largest way to be wrong there is (design 06 §5) — the days style overlay overrides this entry with a real floor, which is the Factorio starter-patch rule arriving as content."
+}

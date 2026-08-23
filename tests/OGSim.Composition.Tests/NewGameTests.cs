@@ -733,6 +733,102 @@ public sealed class NewGameTests
             Fixture.Settings(profile: "no-such-fidelity"), Basin()));
     }
 
+    /// <summary>
+    /// AN UNKNOWN WORLD TEMPLATE IS REFUSED BY NAME (SDD-010 §1, finding 288)
+    /// — through the real loaded catalogue, the same door an unknown starting
+    /// state or reality profile already refuses through. Guessing would draw a
+    /// basin nobody asked for and call it the one that was named.
+    /// </summary>
+    [Fact]
+    public void R15V8_an_unknown_world_template_is_refused_by_name()
+    {
+        SaveDataFault fault = Assert.Throws<SaveDataFault>(() => EngineBuilder.CreateNew(
+            Fixture.Settings(), Basin() with { Template = new ContentId("no-such-basin") }));
+
+        Assert.Contains("no-such-basin", fault.Fault.Detail, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// THE STARTER PATCH IS GUARANTEED IN THE PRODUCT (SDD-010 §2 step 8,
+    /// finding 288; plans 22): a Days map always holds at least the charged
+    /// accumulations its overlay's viability band demands, the way a Factorio
+    /// map always spawns its starter resources — and the guarantee arrives
+    /// through CONTENT, because the same seed composed without the overlay
+    /// still draws the sub-floor board.
+    /// </summary>
+    /// <remarks>
+    /// The floor is read off the overlay's own JSON, so a rebalance stays a
+    /// content edit and only the wiring can fail this. Walked across seeds for
+    /// a board the base game draws BELOW the floor — the whole point is that
+    /// such boards exist and a Days player never meets one.
+    /// </remarks>
+    [Fact]
+    public void R15V8_a_days_map_always_holds_its_starter_accumulations()
+    {
+        IContentSource overlay = Fixture.ShippedStyleOverlay("days");
+
+        var floor = 0;
+
+        foreach (ContentFile file in overlay.Files)
+        {
+            if (file.RelativePath != "world-templates/world-template-basin.json") continue;
+
+            using var parsed = System.Text.Json.JsonDocument.Parse(file.Json);
+
+            floor = parsed.RootElement.GetProperty("viability")
+                .GetProperty("minimumChargedAccumulations").GetInt32();
+        }
+
+        Assert.True(floor > 0,
+            "the days overlay no longer declares a starter floor, so this test can no " +
+            "longer see the guarantee through it; pin whatever replaced it");
+
+        int Charged(Engine engine)
+        {
+            WorldState world = WorldOf(engine);
+
+            var charged = 0;
+
+            for (int i = 0; i < world.Prospects.Count; i++)
+                if (world.Beneath(world.Prospects[i]) is not null) charged++;
+
+            return charged;
+        }
+
+        for (ulong seed = 1UL; seed < 40UL; seed++)
+        {
+            // The board the BASE game would deal on this seed.
+            Engine bare = Assert.IsType<Built>(EngineBuilder.CreateNew(
+                Fixture.Settings(seed: seed,
+                    startingState: StartingStates.BareGround,
+                    rules: RuleSets.Frontier.Id,
+                    style: GameStyles.Days.Id), Basin())).Engine;
+
+            int dealt = Charged(bare);
+
+            if (dealt >= floor) continue;       // a rich board proves nothing here
+
+            // The SAME seed, composed the way the product composes.
+            Engine product = Assert.IsType<Built>(EngineBuilder.CreateNew(
+                Fixture.Settings(seed: seed,
+                    content: [Fixture.ShippedContent(), overlay],
+                    startingState: StartingStates.BareGround,
+                    rules: RuleSets.Frontier.Id,
+                    style: GameStyles.Days.Id), Basin())).Engine;
+
+            Assert.True(Charged(product) >= floor,
+                $"seed {seed} deals {dealt} charged structures below the floor of {floor}, " +
+                "and the days composition still handed the player that board: the overlay's " +
+                "viability band is not reaching the generator");
+
+            return;
+        }
+
+        Assert.Fail("forty seeds never dealt a board below the days floor, so the " +
+            "guarantee was never exercised; either the floor is now trivial or the " +
+            "generator stopped producing sparse basins");
+    }
+
     // -------------------------------------------------- geography costs something
 
     /// <summary>

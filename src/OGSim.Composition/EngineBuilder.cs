@@ -2144,7 +2144,8 @@ public static class EngineBuilder
                     OGSim.Wells.LiftTiers LiftTiers,
                     IReadOnlyList<FluidSystemDefinition> FluidSystems,
                     ICatalog<ActivityDefinition> Activities,
-                    StartingStateDefinition StartingState)? Ladders(
+                    StartingStateDefinition StartingState,
+                    ICatalog<WorldTemplateDefinition> WorldTemplates)? Ladders(
         EngineSettings settings)
     {
         ContentLoadResult result = FacilityContent(settings);
@@ -2159,7 +2160,13 @@ public static class EngineBuilder
 
                // Resolved BY the load: an unknown starting state is a content
                // refusal naming the id, where every other unknown id already is.
-               loaded.Catalogues.Of<StartingStateDefinition>()[settings.StartingState])
+               loaded.Catalogues.Of<StartingStateDefinition>()[settings.StartingState],
+
+               // The WHOLE catalogue rather than one resolved entry, because
+               // which template a world is drawn from arrives with
+               // `WorldParameters` at CreateNew — after composition — and the
+               // generator resolves it then (SDD-010 §1, finding 288).
+               loaded.Catalogues.Of<WorldTemplateDefinition>())
             : null;
     }
 
@@ -2298,6 +2305,7 @@ public static class EngineBuilder
                 new RelationContentKind(),
                 new GameStyleContentKind(),
                 new StartingStateContentKind(),
+                new WorldTemplateContentKind(),
             ],
             new PluginRegistry())
             .LoadAll(settings.Content);
@@ -2311,7 +2319,8 @@ public static class EngineBuilder
         OGSim.Wells.LiftTiers liftTiers,
         IReadOnlyList<FluidSystemDefinition> fluidSystems,
         ICatalog<ActivityDefinition> stated,
-        StartingStateDefinition startingState, RuleSet rules, StyleTerms terms)
+        StartingStateDefinition startingState, RuleSet rules, StyleTerms terms,
+        ICatalog<WorldTemplateDefinition> worldTemplates)
     {
         // WHICH MECHANICS THIS BUILD CARRIES AND AT WHAT VALUES (plans 27 §2).
         // Built once, from the style's terms, the starting state and the
@@ -2328,7 +2337,7 @@ public static class EngineBuilder
             new OperationsModule(),
             new CompanyModule(dependencies, terms),
             new InformationModule(),
-            new WorldModule(terrainClasses, Defaults.Climate.Id, fluidSystems),
+            new WorldModule(terrainClasses, Defaults.Climate.Id, fluidSystems, worldTemplates),
             new CapabilitiesModule(registry, Defaults.Eras, clock),
             new IntegrityModule(dependencies),
             new EnvironmentModule(Defaults.Climate),
@@ -2475,7 +2484,7 @@ public static class EngineBuilder
         ArgumentNullException.ThrowIfNull(settings);
 
         if (Ladders(settings) is not var (ladders, registry, terrainClasses, takeOrPay, liftTiers,
-                                           fluidSystems, stated, startingState))
+                                           fluidSystems, stated, startingState, worldTemplates))
             return new BuildRefusedByContent(Failures(settings));
 
         var clock = new SimulationClock(settings.Epoch);
@@ -2487,7 +2496,7 @@ public static class EngineBuilder
                            Defaults.ProfileNamed(settings.RealityProfile), ladders, registry,
                            terrainClasses, takeOrPay, liftTiers, fluidSystems, stated,
                            startingState, RuleSets.Named(settings.Rules),
-                           GameStyles.Named(settings.Style).Terms),
+                           GameStyles.Named(settings.Style).Terms, worldTemplates),
             clock, audit);
     }
 
@@ -2510,7 +2519,7 @@ public static class EngineBuilder
         ArgumentNullException.ThrowIfNull(settings);
 
         if (Ladders(settings) is not var (ladders, registry, terrainClasses, takeOrPay, liftTiers,
-                                           fluidSystems, stated, startingState))
+                                           fluidSystems, stated, startingState, worldTemplates))
             return new BuildRefusedByContent(Failures(settings));
 
         var clock = new SimulationClock(settings.Epoch);
@@ -2524,7 +2533,7 @@ public static class EngineBuilder
                            Defaults.ProfileNamed(settings.RealityProfile), ladders, registry,
                            terrainClasses, takeOrPay, liftTiers, fluidSystems, stated,
                            startingState, RuleSets.Named(settings.Rules),
-                           GameStyles.Named(settings.Style).Terms),
+                           GameStyles.Named(settings.Style).Terms, worldTemplates),
             clock, audit);
     }
 

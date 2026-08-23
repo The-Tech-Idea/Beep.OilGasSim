@@ -209,7 +209,53 @@ internal static class Fixture
             files.Add(new ContentFile("starting-states/" + Path.GetFileName(path),
                                       File.ReadAllText(path)));
 
+        // AND THE WORLD TEMPLATES (SDD-010 §1, finding 288) — the same door.
+        string worldTemplates = Path.Combine(here.Parent!.Parent!.FullName, "content", "world-templates");
+
+        foreach (string path in Directory.EnumerateFiles(worldTemplates, "*.json")
+                                         .OrderBy(p => p, StringComparer.Ordinal))
+            files.Add(new ContentFile("world-templates/" + Path.GetFileName(path),
+                                      File.ReadAllText(path)));
+
         return new DirectorySource(files);
+    }
+
+    /// <summary>
+    /// A style's shipped departures — `content/styles/{id}/`, order 1, the way
+    /// both clients stack them (finding 287/288). For the tests that ask what a
+    /// PRODUCT composes rather than what the base engine does.
+    /// </summary>
+    public static IContentSource ShippedStyleOverlay(
+        string style,
+        [System.Runtime.CompilerServices.CallerFilePath] string thisFile = "")
+    {
+        DirectoryInfo here = new FileInfo(thisFile).Directory!;
+        string root = Path.Combine(here.Parent!.Parent!.FullName, "content", "styles", style);
+
+        var files = new List<ContentFile>();
+
+        foreach (string directory in Directory.EnumerateDirectories(root)
+                                              .OrderBy(p => p, StringComparer.Ordinal))
+        {
+            string kind = Path.GetFileName(directory);
+
+            foreach (string path in Directory.EnumerateFiles(directory, "*.json")
+                                             .OrderBy(p => p, StringComparer.Ordinal))
+                files.Add(new ContentFile(kind + "/" + Path.GetFileName(path),
+                                          File.ReadAllText(path)));
+        }
+
+        return new OverlaySource(files, "style:" + style);
+    }
+
+    private sealed class OverlaySource(IReadOnlyList<ContentFile> files, string name) : IContentSource
+    {
+        public string Name => name;
+
+        /// <summary>A style overlay declares 1 (SDD-004 §7): whole-entry override.</summary>
+        public int DeclaredOrder => 1;
+
+        public IReadOnlyList<ContentFile> Files => files;
     }
 
     /// <summary>The shipped ladders, for the two tests that build the module
@@ -224,6 +270,12 @@ internal static class Fixture
     /// owner (`content/starting-states/`).</summary>
     public static StartingStateDefinition OpeningPosition() =>
         Loaded().Of<StartingStateDefinition>()[Defaults.OpeningPosition];
+
+    /// <summary>The shipped world templates (SDD-010 §1, finding 288), whole —
+    /// which one a world is drawn from arrives with `WorldParameters` at
+    /// CreateNew, so the generator holds the catalogue.</summary>
+    public static ICatalog<WorldTemplateDefinition> WorldTemplates() =>
+        Loaded().Of<WorldTemplateDefinition>();
 
     /// <summary>The shipped content, through the real loader.</summary>
     private static ICatalogSet Loaded()
@@ -244,6 +296,7 @@ internal static class Fixture
                 new FluidSystemContentKind(),
                 new ActivityContentKind(),
                 new StartingStateContentKind(),
+                new WorldTemplateContentKind(),
             ],
             new PluginRegistry());
 
@@ -404,7 +457,8 @@ public sealed class ShippedSetTests
             Defaults.Simulation, Fixture.Ladders(), Fixture.Registry(), Fixture.TerrainClasses(),
             Fixture.TakeOrPay(), Fixture.LiftTiers(), Fixture.FluidSystems(),
             Fixture.Activities(),
-            Fixture.OpeningPosition(), RuleSets.Realistic, GameStyles.Engineer.Terms);
+            Fixture.OpeningPosition(), RuleSets.Realistic, GameStyles.Engineer.Terms,
+            Fixture.WorldTemplates());
 
         var provided = new HashSet<Type>();
         foreach (IModule module in modules)
@@ -434,7 +488,8 @@ public sealed class ShippedSetTests
             Defaults.Simulation, Fixture.Ladders(), Fixture.Registry(), Fixture.TerrainClasses(),
             Fixture.TakeOrPay(), Fixture.LiftTiers(), Fixture.FluidSystems(),
             Fixture.Activities(),
-            Fixture.OpeningPosition(), RuleSets.Realistic, GameStyles.Engineer.Terms));
+            Fixture.OpeningPosition(), RuleSets.Realistic, GameStyles.Engineer.Terms,
+            Fixture.WorldTemplates()));
         reversed.Reverse();
 
         Built forward = Assert.IsType<Built>(EngineBuilder.Build(Fixture.Settings()));
@@ -1101,7 +1156,8 @@ public sealed class AccessWindowTests
             audit, clock, new RandomSource(20260806UL), Defaults.Simulation,
             Fixture.Ladders(), Fixture.Registry(), Fixture.TerrainClasses(), Fixture.TakeOrPay(),
             Fixture.LiftTiers(), Fixture.FluidSystems(), Fixture.Activities(),
-            Fixture.OpeningPosition(), RuleSets.Realistic, GameStyles.Engineer.Terms));
+            Fixture.OpeningPosition(), RuleSets.Realistic, GameStyles.Engineer.Terms,
+            Fixture.WorldTemplates()));
 
         for (int i = 0; i < modules.Count; i++)
             if (modules[i] is EnvironmentModule)

@@ -133,13 +133,51 @@ public class WorldGenerationTests
         new(new ContentId("north-sea-analogue"), width, height, land,
             richness, maturity, ClimateSeverity: 1.0, RivalCount: 4, StartEra: Era.E2);
 
+    /// <summary>
+    /// The template these tests generate under (SDD-010 §1, finding 288).
+    /// WIDE-OPEN ranges, deliberately: this suite exercises the GENERATOR, and
+    /// clamping it to the shipped envelope would make every test here also a
+    /// test of the shipped content's ranges. Viability off unless a test asks —
+    /// the resample tests are the ones that turn it on.
+    /// </summary>
+    private static ICatalog<WorldTemplateDefinition> Templates(
+        int minimumCharged = 0, int resampleBound = 8) =>
+        new OneTemplate(new WorldTemplateDefinition(
+            new ContentId("north-sea-analogue"),
+            MinimumWidthCells: 1, MaximumWidthCells: 512,
+            MinimumHeightCells: 1, MaximumHeightCells: 512,
+            MinimumLandFraction: 0.0, MaximumLandFraction: 1.0,
+            MinimumResourceRichness: 0.01, MaximumResourceRichness: 100.0,
+            MinimumBasinMaturity: 0.0, MaximumBasinMaturity: 1.0,
+            MinimumClimateSeverity: 0.0, MaximumClimateSeverity: 100.0,
+            MinimumRivalCount: 0, MaximumRivalCount: 100,
+            minimumCharged, resampleBound));
+
+    private sealed class OneTemplate(WorldTemplateDefinition entry)
+        : ICatalog<WorldTemplateDefinition>
+    {
+        public WorldTemplateDefinition this[ContentId id] =>
+            id == entry.Id
+                ? entry
+                : throw new InvalidOperationException(
+                    $"this test declares one template, '{entry.Id.Value}', not '{id.Value}'");
+
+        public IReadOnlyList<WorldTemplateDefinition> All => [entry];
+
+        public bool TryGet(ContentId id, out WorldTemplateDefinition def)
+        {
+            def = entry;
+            return id == entry.Id;
+        }
+    }
+
     private static RecordingSink Generate(ulong seed, WorldParameters? parameters = null)
     {
         var sink = new RecordingSink();
 
         new BasinWorldGenerator(
             TerrainContent.Shipped(), new ContentId("temperate-offshore"),
-            FluidSystemContent.Shipped()).Generate(
+            FluidSystemContent.Shipped(), Templates()).Generate(
             parameters ?? Parameters(), sink,
             new RandomSource(seed).Stream(StreamId.WorldGen));
 
@@ -417,8 +455,11 @@ public class WorldGenerationTests
     [Fact] // SDD-010 §4: out-of-range names EVERY violation and never clamps
     public void R15V1_out_of_range_parameters_are_refused_with_all_reasons()
     {
+        // The TEMPLATE resolves first (finding 288) and this test is about the
+        // VALUES, so it names the template the fixture declares — an unknown
+        // template id is its own refusal with its own test.
         var fault = Assert.Throws<ModelFault>(() => Generate(1UL, new WorldParameters(
-            new ContentId("bad"), WidthCells: 0, HeightCells: 0,
+            new ContentId("north-sea-analogue"), WidthCells: 0, HeightCells: 0,
             LandFraction: 1.5, ResourceRichness: 0.0, BasinMaturity: 2.0,
             ClimateSeverity: -1.0, RivalCount: -3, StartEra: Era.E1)));
 
@@ -533,7 +574,8 @@ public class WorldGenerationTests
         var sink = new RecordingSink();
 
         new BasinWorldGenerator(
-            TerrainContent.Shipped(), climateId, FluidSystemContent.Shipped()).Generate(
+            TerrainContent.Shipped(), climateId,
+            FluidSystemContent.Shipped(), Templates()).Generate(
             parameters, sink, new RandomSource(7UL).Stream(StreamId.WorldGen));
 
         ClimateRegion region = Assert.Single(sink.ClimateRegions);
@@ -544,6 +586,91 @@ public class WorldGenerationTests
         Assert.NotNull(sink.Surface);
         double cellSize = sink.Surface.Terrain.Elevation.CellSize.Metres;
         Assert.Equal(32 * cellSize * 48 * cellSize, region.Area.Area.SquareMetres, 3);
+    }
+
+    // ------------------------------------ viability (R15-V8, finding 288)
+
+    /// <summary>How many structures fill-spill left charged.</summary>
+    private static int ChargedCount(RecordingSink sink)
+    {
+        var charged = 0;
+
+        for (int i = 0; i < sink.Accumulations.Count; i++)
+            if (sink.Accumulations[i].Compartments.Count > 0) charged++;
+
+        return charged;
+    }
+
+    private static RecordingSink GenerateFloored(ulong seed, int floor, int bound = 8)
+    {
+        var sink = new RecordingSink();
+
+        new BasinWorldGenerator(
+            TerrainContent.Shipped(), new ContentId("temperate-offshore"),
+            FluidSystemContent.Shipped(), Templates(floor, bound)).Generate(
+            Parameters(), sink, new RandomSource(seed).Stream(StreamId.WorldGen));
+
+        return sink;
+    }
+
+    /// <summary>
+    /// R15-V8: A BASIN BELOW THE VIABILITY FLOOR IS RE-DRAWN TO MEET IT
+    /// (SDD-010 §2 step 8, finding 288). Demanding one more charged structure
+    /// than this seed's first draw produced forces exactly the resample the
+    /// band exists for — and the kept world is a DIFFERENT basin, not the
+    /// first one patched, because stamping a charged trap would break §4b's
+    /// dry-hole diagnosis (a dry hole proves SOURCE failed for its play).
+    /// </summary>
+    [Fact]
+    public void R15V8_a_basin_below_the_viability_floor_is_redrawn_to_meet_it()
+    {
+        RecordingSink first = Generate(1UL);
+        int charged = ChargedCount(first);
+
+        RecordingSink floored = GenerateFloored(1UL, floor: charged + 1, bound: 16);
+
+        Assert.True(ChargedCount(floored) >= charged + 1,
+            $"the floor demanded {charged + 1} charged structures and the kept world " +
+            $"holds {ChargedCount(floored)}");
+
+        // A re-drawn world, not the first world adjusted: structure count or
+        // shape moves because the horizon itself was re-derived.
+        Assert.NotEqual(first.Accumulations, floored.Accumulations);
+    }
+
+    /// <summary>
+    /// R15-V8 × PV7: THE RETRY LOOP IS PART OF THE PURE FUNCTION. One seed is
+    /// one world INCLUDING which re-draw it settled on — the substreams advance
+    /// deterministically per attempt, so meeting the floor twice gives the
+    /// identical basin, element for element.
+    /// </summary>
+    [Fact]
+    public void R15V8_the_same_seed_meets_the_floor_with_the_same_world()
+    {
+        int floor = ChargedCount(Generate(1UL)) + 1;
+
+        RecordingSink once = GenerateFloored(1UL, floor, bound: 16);
+        RecordingSink again = GenerateFloored(1UL, floor, bound: 16);
+
+        Assert.Equal(once.Accumulations.Count, again.Accumulations.Count);
+
+        for (int i = 0; i < once.Accumulations.Count; i++)
+            Assert.Equal(once.Accumulations[i], again.Accumulations[i]);
+    }
+
+    /// <summary>
+    /// R15-V8: AN UNMEETABLE FLOOR IS A FAULT NAMING THE TEMPLATE — a
+    /// content-tuning error reported outright, never a world quietly shipped
+    /// in violation and never an unbounded search.
+    /// </summary>
+    [Fact]
+    public void R15V8_an_unmeetable_floor_is_a_fault_naming_the_template()
+    {
+        ModelFault fault = Assert.Throws<ModelFault>(
+            () => GenerateFloored(1UL, floor: 10000, bound: 2));
+
+        Assert.Contains("north-sea-analogue", fault.Fault.Detail, StringComparison.Ordinal);
+        Assert.Contains("10000", fault.Fault.Detail, StringComparison.Ordinal);
     }
 
     /// <summary>The shipped terrain-class content loads and is internally

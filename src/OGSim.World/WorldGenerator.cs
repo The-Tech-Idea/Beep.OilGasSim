@@ -39,7 +39,14 @@ public sealed class BasinWorldGenerator(
     /// finding-270 amendment) — Step 7 draws one per compartment from this
     /// list, the same door <paramref name="terrainClasses"/> already came
     /// through.</summary>
-    IReadOnlyList<FluidSystemDefinition> fluidSystems) : IWorldGenerator
+    IReadOnlyList<FluidSystemDefinition> fluidSystems,
+
+    /// <summary>Every world template this build's content declared (SDD-010
+    /// §1's pass-7 amendment, finding 288). `WorldParameters.Template` names
+    /// one; the generator resolves it here because the parameters arrive at
+    /// CreateNew, after composition. The template owns which knob values are
+    /// legal and the viability band a drawn world must meet.</summary>
+    ICatalog<WorldTemplateDefinition> worldTemplates) : IWorldGenerator
 {
     /// <summary>How coarse a regional survey is. Deliberately BAD: regional data
     /// is a gravity and magnetics pass over a whole basin, and a player who
@@ -71,7 +78,13 @@ public sealed class BasinWorldGenerator(
                 "no fluid system was declared; a generated compartment cannot draw one from " +
                 "an empty list");
 
-        Validate(parameters);
+        // WHICH BASIN ARCHETYPE this world is drawn from (SDD-010 §1's pass-7
+        // amendment, finding 288). An unknown id refuses by name through the
+        // catalogue's own indexer, the same door an unknown starting state
+        // already refuses through.
+        WorldTemplateDefinition template = worldTemplates[parameters.Template];
+
+        Validate(parameters, template);
 
         // The world seed comes from the caller's stream, ONCE. Everything after
         // this is derived — so the whole world is a function of one number, and
@@ -87,7 +100,7 @@ public sealed class BasinWorldGenerator(
         GeneratedSurface surface = GenerateSurface(parameters, streams, terrainClasses);
 
         IReadOnlyList<GeneratedAccumulation> accumulations =
-            GenerateGeology(parameters, streams, surface.Terrain, fluidSystems);
+            ViableGeology(parameters, template, streams, surface.Terrain, fluidSystems);
 
         for (int i = 0; i < accumulations.Count; i++) sink.AddAccumulation(accumulations[i]);
 
@@ -105,6 +118,59 @@ public sealed class BasinWorldGenerator(
     }
 
     // ---------------------------------------------------------- geology
+
+    /// <summary>
+    /// Geology that meets the template's VIABILITY band (SDD-010 §2 step 8,
+    /// finding 288): draw, count what fill-spill charged, and keep the first
+    /// world with at least <c>minimumChargedAccumulations</c> — or fault when
+    /// the bound is spent, naming the template and the count, because a world
+    /// quietly shipped in violation would be a content-tuning error nobody
+    /// ever learns about (R15-V8).
+    /// </summary>
+    /// <remarks>
+    /// <para><b>A retry re-draws the whole basin, structure first.</b>
+    /// Viability can fail on kitchen maturity — a fact of the step-2 horizon
+    /// — so re-drawing only the per-trap noise could never fix it (the §2
+    /// step-8 row's own finding-288 correction). Each attempt continues the
+    /// step substreams where the last left them, so the retry sequence is a
+    /// pure function of seed and parameters and one seed is still one world
+    /// (PV7), including which attempt it settled on. Attempt zero consumes
+    /// the streams exactly as generation always has, so every template with
+    /// a floor of zero — the base game — produces the world it always did,
+    /// byte for byte.</para>
+    ///
+    /// <para><b>Stamping a charged trap instead was considered and refused</b>
+    /// (§1's finding-288 amendment): a dry hole proves SOURCE failed for the
+    /// whole play (§4b), and a play holding one stamped full trap among
+    /// genuinely dry siblings would make that inference false. The world
+    /// stays a pure fill-spill outcome; viability only decides which drawn
+    /// world is kept.</para>
+    /// </remarks>
+    private static IReadOnlyList<GeneratedAccumulation> ViableGeology(
+        WorldParameters parameters, WorldTemplateDefinition template, StepStreams streams,
+        GeneratedTerrain terrain, IReadOnlyList<FluidSystemDefinition> fluidSystems)
+    {
+        for (var attempt = 0; ; attempt++)
+        {
+            IReadOnlyList<GeneratedAccumulation> drawn =
+                GenerateGeology(parameters, streams, terrain, fluidSystems);
+
+            var charged = 0;
+
+            for (int i = 0; i < drawn.Count; i++)
+                if (drawn[i].Compartments.Count > 0) charged++;
+
+            if (charged >= template.MinimumChargedAccumulations) return drawn;
+
+            if (attempt >= template.ResampleBound)
+                throw new ModelFault("SDD-010 §2 step 8 (finding 288)", null,
+                    $"template '{template.Id.Value}' demands at least " +
+                    $"{template.MinimumChargedAccumulations} charged accumulations and the " +
+                    $"last of {attempt + 1} draws reached {charged}; the viability band and " +
+                    "the basin it asks of cannot both be right — a content-tuning error, " +
+                    "reported rather than shipped (R15-V8)");
+        }
+    }
 
     private static IReadOnlyList<GeneratedAccumulation> GenerateGeology(
         WorldParameters parameters, StepStreams streams, GeneratedTerrain terrain,
@@ -821,8 +887,14 @@ public sealed class BasinWorldGenerator(
     /// SDD-010 §4: out-of-range is a refusal naming ALL violations, never a
     /// clamp. A clamped world would start playable and wrong, and the player
     /// would never learn which knob they had set impossibly.
+    ///
+    /// <para>Two layers, one refusal (finding 288). The physical guards are
+    /// what the quantities MEAN — a maturity of 1.4 is nonsense whatever any
+    /// template says — and the TEMPLATE's ranges are what this archetype is
+    /// tuned and measured for. Both lists land in the same fault, so a caller
+    /// told one of three problems is never fixing one of three.</para>
     /// </summary>
-    private static void Validate(WorldParameters parameters)
+    private static void Validate(WorldParameters parameters, WorldTemplateDefinition template)
     {
         var problems = new List<string>();
 
@@ -843,6 +915,48 @@ public sealed class BasinWorldGenerator(
 
         if (parameters.RivalCount < 0)
             problems.Add($"rival count {parameters.RivalCount} is negative");
+
+        if (parameters.WidthCells < template.MinimumWidthCells
+            || parameters.WidthCells > template.MaximumWidthCells)
+            problems.Add($"width {parameters.WidthCells} cells is outside the " +
+                $"[{template.MinimumWidthCells}, {template.MaximumWidthCells}] " +
+                $"template '{template.Id.Value}' is tuned for");
+
+        if (parameters.HeightCells < template.MinimumHeightCells
+            || parameters.HeightCells > template.MaximumHeightCells)
+            problems.Add($"height {parameters.HeightCells} cells is outside the " +
+                $"[{template.MinimumHeightCells}, {template.MaximumHeightCells}] " +
+                $"template '{template.Id.Value}' is tuned for");
+
+        if (parameters.LandFraction < template.MinimumLandFraction
+            || parameters.LandFraction > template.MaximumLandFraction)
+            problems.Add($"land fraction {Format(parameters.LandFraction)} is outside the " +
+                $"[{Format(template.MinimumLandFraction)}, {Format(template.MaximumLandFraction)}] " +
+                $"template '{template.Id.Value}' is tuned for");
+
+        if (parameters.ResourceRichness < template.MinimumResourceRichness
+            || parameters.ResourceRichness > template.MaximumResourceRichness)
+            problems.Add($"resource richness {Format(parameters.ResourceRichness)} is outside the " +
+                $"[{Format(template.MinimumResourceRichness)}, {Format(template.MaximumResourceRichness)}] " +
+                $"template '{template.Id.Value}' is tuned for");
+
+        if (parameters.BasinMaturity < template.MinimumBasinMaturity
+            || parameters.BasinMaturity > template.MaximumBasinMaturity)
+            problems.Add($"basin maturity {Format(parameters.BasinMaturity)} is outside the " +
+                $"[{Format(template.MinimumBasinMaturity)}, {Format(template.MaximumBasinMaturity)}] " +
+                $"template '{template.Id.Value}' is tuned for");
+
+        if (parameters.ClimateSeverity < template.MinimumClimateSeverity
+            || parameters.ClimateSeverity > template.MaximumClimateSeverity)
+            problems.Add($"climate severity {Format(parameters.ClimateSeverity)} is outside the " +
+                $"[{Format(template.MinimumClimateSeverity)}, {Format(template.MaximumClimateSeverity)}] " +
+                $"template '{template.Id.Value}' is tuned for");
+
+        if (parameters.RivalCount < template.MinimumRivalCount
+            || parameters.RivalCount > template.MaximumRivalCount)
+            problems.Add($"rival count {parameters.RivalCount} is outside the " +
+                $"[{template.MinimumRivalCount}, {template.MaximumRivalCount}] " +
+                $"template '{template.Id.Value}' is tuned for");
 
         if (problems.Count > 0)
             throw new ModelFault("SDD-010 §4", null,

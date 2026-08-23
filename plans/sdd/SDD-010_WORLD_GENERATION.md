@@ -29,7 +29,7 @@ principle applied INSIDE world-gen. PV7 (regeneration identity) follows.
 | 5 Traps | Local maxima of the reservoir horizon with closure height ≥ content minimum; closure polygon by contour walk. Trap type from context (fault-bounded vs fold) → **subtlety class** (D0–D3) from type + depth + a noise-floor table |
 | 6 Charge | **Fill-spill**: mature source polygons emit charge volume; migrate up-dip along the carrier horizon; traps fill in spill-point elevation order; overflow continues up-dip. The classic algorithm — produces charged-and-empty traps naturally (R15-V7) |
 | 7 Accumulations | Volume = min(charge reaching trap, closure pore volume × draws of φ, So); fluid from source maturity (oil/gas window); compartments: fault-crossing closures split with content probability; **AccessRequirements** derived from generated depth/water depth/temperature/k/H₂S; **each compartment draws a fluid-system (crude quality) choice from content, same step (finding 270)** |
-| 8 Plays & classes | Group by (source unit, reservoir unit, trap type). **Era-layering enforcement**: per basin, per class-quota band (content) — if a class falls outside its band, deterministically resample step 5–7 noise offsets with an incrementing counter (bounded retries → world-gen fault, a content-tuning error, R15-V8/V11) |
+| 8 Plays & classes | Group by (source unit, reservoir unit, trap type). **Era-layering enforcement**: per basin, per class-quota band (content) — if a class falls outside its band, deterministically resample step 5–7 noise offsets with an incrementing counter (bounded retries → world-gen fault, a content-tuning error, R15-V8/V11). **The VIABILITY band resamples from step 2's structural noise instead** — viability can fail on kitchen maturity, a fact of the horizon no step-5–7 re-draw can move (finding 288's amendment, §1) |
 
 > **Amendment (finding 270): a compartment's crude quality is drawn here,
 > not assumed.** Step 7 already fixes `FluidForm` (oil vs gas, an
@@ -207,6 +207,64 @@ public sealed record WorldParameters(
 > Terrain classes are content (`terrain-class`,
 > [C16](../catalog/C16_TERRAIN_CLASSES.md)); the template's cut tables map
 > (height, slope, climate) onto class ids.
+
+> **Amendment (finding 288): the template becomes real content, and its first
+> band is VIABILITY.** Everything above this line was contract prose: no
+> `world-template` content kind exists, `WorldParameters.Template` is read by
+> nothing, no knob range is declared anywhere, and step 8's quota-band
+> resampling — this document's own §1 headline ("the class-quota resampling
+> that guarantees era layering") — has no implementation at all. The
+> Settlers-shaped product needs exactly the piece this mechanism was designed
+> to provide, so the mechanism lands with viability as its first band:
+>
+> - **The `world-template` content kind** is registered and loaded like every
+>   other kind, entries in `content/world-templates/`. This finding's entry
+>   schema carries what this finding consumes: the knob legal ranges the
+>   pass-7 amendment promised (out-of-range ⇒ refusal at `CreateNew`, all
+>   violations named), `viability.minimumChargedAccumulations`, and
+>   `viability.resampleBound`. The archetype/weight/cut TABLES the pass-7
+>   text also assigns to the template remain future work — the generator's
+>   current in-source tables stand until the pass that moves them, and the
+>   entry schema grows those fields when it does. Stated so a reader of the
+>   pass-7 amendment does not take this finding as having landed them.
+>
+> - **Viability is a quota band**: a world is viable when fill-spill left at
+>   least `minimumChargedAccumulations` structures charged. The BASE entry
+>   declares 0 — a barren basin is a real outcome of the realistic game and
+>   "the largest way to be wrong there is" (design 06 §5) stays purchasable.
+>   The days STYLE OVERLAY overrides the template entry with a real floor —
+>   the Factorio rule that a map always carries its starter patch, arriving
+>   through the same order-1 whole-entry override every other days departure
+>   uses. No client changes, no style branch anywhere in the generator: the
+>   guarantee is a fact of which content composed (design 03 §3.2).
+>
+> - **A viability failure resamples from step 2's structural noise, not step
+>   5's** — and this corrects the step-8 row (F-4). That row's "resample step
+>   5–7 noise offsets" was written for CLASS quotas, where the structure
+>   stands and the per-trap draws move. Viability can fail on kitchen
+>   maturity — `MatureFraction` is a fact of the step-2 horizon — and no
+>   re-draw of porosity or subtlety can charge a basin whose source never
+>   cooked. So a viability retry re-runs the whole geology, structure first:
+>   the step substreams are stateful and each attempt CONTINUES them where
+>   the last stopped, so the retry's horizon seed is the structure stream's
+>   next draw — the incrementing counter is the stream position itself.
+>   Deterministic end to end: the retry sequence is a pure function of seed
+>   and parameters, so one seed is still one world (PV7), including which
+>   attempt it settled on — and attempt zero consumes the streams exactly as
+>   generation always has, so a floor of zero reproduces every pre-288 world
+>   byte for byte.
+>
+> - **Bounded, then a FAULT.** `resampleBound` retries; exhaustion is a
+>   world-gen fault naming the template id, the band, and the count reached —
+>   a content-tuning error reported outright (R15-V8), never a world quietly
+>   shipped in violation, and never an unbounded search.
+>
+> - **A stamped trap was considered and refused**: placing a charged
+>   structure post-hoc would break §4b's diagnosis invariant — a dry hole
+>   proves SOURCE failed for the whole play, and a play holding one stamped
+>   full trap among genuinely dry siblings makes that inference false. The
+>   world stays a pure fill-spill outcome; the guarantee only decides which
+>   drawn world is kept.
 
 ## 4b. Dry structures are prospects too
 

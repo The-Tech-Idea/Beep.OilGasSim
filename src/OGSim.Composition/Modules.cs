@@ -1860,7 +1860,12 @@ internal sealed class WorldModule(
     // terrainClasses already is: content-derived, resolved before any module
     // composes, and handed to the generator directly rather than through
     // Require<T>, because the generator is not a DI consumer.
-    IReadOnlyList<FluidSystemDefinition> fluidSystems) : EngineModule(Declare(
+    IReadOnlyList<FluidSystemDefinition> fluidSystems,
+
+    // The world templates, whole (finding 288): which one a world is drawn
+    // from arrives with `WorldParameters` at CreateNew, after composition,
+    // so the generator holds the catalogue and resolves the id then.
+    ICatalog<WorldTemplateDefinition> worldTemplates) : EngineModule(Declare(
     "world",
     provides: [typeof(IWorldGenerator), typeof(WorldState)],
     requires: [],
@@ -1872,7 +1877,8 @@ internal sealed class WorldModule(
         ArgumentNullException.ThrowIfNull(composition);
 
         composition.Provide<IWorldGenerator>(
-            new OGSim.World.BasinWorldGenerator(terrainClasses, climateId, fluidSystems));
+            new OGSim.World.BasinWorldGenerator(
+                terrainClasses, climateId, fluidSystems, worldTemplates));
 
         // EMPTY, and filled once by generation before the first tick. Composed
         // rather than created by `CreateNew` because the FIELD reads it — a well

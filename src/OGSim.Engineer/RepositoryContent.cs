@@ -37,6 +37,7 @@ public static class RepositoryContent
         // the relations' cross-references resolve because everything they name
         // loads in this same set.
         "activities", "equipment", "relations", "game-styles", "starting-states",
+        "world-templates",
     };
 
     public static IContentSource Read(

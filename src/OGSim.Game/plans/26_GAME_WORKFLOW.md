@@ -394,3 +394,59 @@ starter patch; this generator does not yet — that is world generation's
 question (SDD-010), the one open Settlers-standard item, and no purse
 answers it. The auto-player's late-game overspend (seed 3, dying at
 $-0.0M as a five-well producing field) remains an instrument bound.
+
+### The starter patch (2026-08-23, finding 288) — the guarantee, built as the SDD always said
+
+The "one open Settlers-standard item" above closed the same day, and the
+mechanism was already designed: SDD-010's own §1 headline promises "the
+class-quota resampling that guarantees era layering", the
+`WorldParameters` contract promises "content quotas after bounded
+resampling ... a world-gen FAULT (R15-V8)", and none of it existed — no
+`world-template` content kind, `WorldParameters.Template` read by
+nothing, zero resample code. Finding 288 implements it with VIABILITY as
+the first band:
+
+- **`world-template` is real content** (`content/world-templates/`): the
+  knob ranges the pass-7 amendment promised (out-of-range refuses at
+  `CreateNew`, all violations named) plus
+  `viability.{minimumChargedAccumulations, resampleBound}`.
+- **The base entry declares floor 0** — a barren basin stays a real
+  outcome of the realistic game (design 06 §5). **The days overlay
+  overrides the entry with floor 2, bound 8** — the whole guarantee is
+  the same order-1 content override the purse and the coaster parcel
+  already use. No client changed; no style branch exists anywhere.
+- **A sub-floor world is re-drawn from the structure up** (the step-8
+  row's own finding-288 correction: viability can fail on kitchen
+  maturity, a fact of the step-2 horizon no per-trap re-draw can move).
+  The step substreams continue across attempts, so the retry chain is a
+  pure function of seed and parameters — one seed is still one world
+  (PV7), and a floor of zero reproduces every pre-288 world byte for
+  byte. Bound exhausted → a fault naming the template and the count
+  (R15-V8), never a hopeless board quietly dealt.
+- Pinned by R15V8 ×3 in `OGSim.World.Tests` (redraw-to-floor,
+  PV7-through-retries, unmeetable-floor fault — proven failing with the
+  floor ignored), an unknown-template refusal and the product-level
+  guarantee walk in `NewGameTests` (the floor read off the overlay's own
+  JSON; also proven failing).
+
+Re-measured, shipped configuration ($110M + floor 2), same policy:
+
+| Seed | 1 | 2 | 3 | 4 | 5 | 11 |
+|---|---|---|---|---|---|---|
+| post-287 | dead 75 (0 wells) | +$37.6M | dead 92 | +$271.3M | dead 72 (0 wells, barren) | dead 56 |
+| post-288 | dead 48 (re-drawn board, 1 well) | **+$37.6M, untouched** | untouched | **+$271.3M, untouched** | dead 54 (re-drawn board, **2 wells, oil lifted**) | untouched |
+
+**Four of six boards are byte-untouched** — the band is surgical, and
+every winning run is exactly the run it was. The two sub-floor boards
+(seed 1's single accumulation, seed 5's barren kitchen) are re-drawn
+into real maps: seed 5, which could never hold oil at any purse, now
+drills two wells and lifts crude. Both still die under the shipped
+auto-player — they now lose PLAYING, to the late-game policy bound and
+late discovery, not to empty rock — and that residual is the instrument,
+not the map: a map with two real fields is winnable by construction,
+which is the Settlers criterion the /goal named.
+
+One stated consequence: a pre-288 Days save made on a sub-floor board
+refuses to load by name after this (regeneration now resamples, and the
+restore's boundary check correctly rejects the mismatch) — the standard
+consequence of any content change, and no released saves exist.

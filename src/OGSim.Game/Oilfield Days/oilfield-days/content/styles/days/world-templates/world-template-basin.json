@@ -1,0 +1,13 @@
+{
+  "kind": "world-template",
+  "id": "world-template-basin",
+  "widthCells": { "minimum": 24, "maximum": 40 },
+  "heightCells": { "minimum": 24, "maximum": 40 },
+  "landFraction": { "minimum": 0.30, "maximum": 0.95 },
+  "resourceRichness": { "minimum": 0.50, "maximum": 1.90 },
+  "basinMaturity": { "minimum": 0.0, "maximum": 1.0 },
+  "climateSeverity": { "minimum": 0.0, "maximum": 3.0 },
+  "rivalCount": { "minimum": 0, "maximum": 7 },
+  "viability": { "minimumChargedAccumulations": 2, "resampleBound": 8 },
+  "note": "The Settlers starter-patch guarantee (SDD-010 §2 step 8, finding 288; plans 22): an Oilfield Days map always holds at least two real accumulations, the way a Factorio map always spawns its starter resources — a basin the charge missed is re-drawn deterministically rather than handed to a player who cannot know it is hopeless. Two, from the sweep's own boards (plans 26 §6): four of its six seeds already carry two or more accumulations and the band leaves them byte-untouched — the boards that win at the shipped purse are among them — while the one-accumulation board and the barren one are re-drawn into real maps. Bound 8: a third of the measured seeds fall below this floor, so eight re-draws leave a residual fault rate well under one in a thousand — loud when it happens, and content-tunable. Ranges identical to the base entry; only viability departs."
+}
