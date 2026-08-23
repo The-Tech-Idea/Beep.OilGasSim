@@ -4,6 +4,9 @@ namespace Beep.GameBuilder;
 
 public static class BeepProjectDefaults
 {
+    private const int TextureFilterNearest = 0;
+    private const int TextureFilterLinearWithMipmaps = 2;
+
     /// <summary>Set a project setting WITHOUT saving — caller batches all changes then saves once.</summary>
     public static void Set(string key, Variant value) => ProjectSettings.SetSetting(key, value);
 
@@ -27,7 +30,7 @@ public static class BeepProjectDefaults
         Set("display/window/size/viewport_width", DesignWidth);
         Set("display/window/size/viewport_height", DesignHeight);
         ApplyStretch();
-        Set("rendering/textures/canvas_textures/default_texture_filter", 0);
+        Set("rendering/textures/canvas_textures/default_texture_filter", TextureFilterLinearWithMipmaps);
         RegisterUiRegister();
     }
 
@@ -122,8 +125,8 @@ public static class BeepProjectDefaults
         Set("display/window/size/viewport_height", DesignHeight);
         SetWindowSize(info.TargetResolution.X, info.TargetResolution.Y);
         ApplyStretch();
-        if (info.PixelArt)
-            Set("rendering/textures/canvas_textures/default_texture_filter", 0);
+        Set("rendering/textures/canvas_textures/default_texture_filter",
+            info.PixelArt ? TextureFilterNearest : TextureFilterLinearWithMipmaps);
 
         Set("application/config/name", info.GameName);
         Set("application/config/version", info.Version);

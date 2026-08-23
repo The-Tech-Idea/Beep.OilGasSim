@@ -334,6 +334,158 @@ public interface ICatalogSet
 > defines, because a game that cannot read its own equipment has nothing to
 > start (G2).
 
+> **Amendment (finding 261): the material catalogue widened from three to
+> the shipped nine, hardcoded rather than content-loaded — a narrower step
+> than "materials are their own task" was scoped as when that line was
+> written (this file's own tracker, found going through the plan while
+> R9.2's dehydration investigation named the three-of-nine limit as its
+> second blocker).** `Defaults.Materials` (`OGSim.Composition`) carried oil,
+> gas and water alone since composition began, with its own comment naming
+> the gap: "the nine of `content/materials/` arrive with R20c.9." R20c.9's
+> own row names wells and reservoirs as what remained of ITS scope — never
+> materials — so this was not that task's unfinished half, it was nobody's
+> numbered task at all, only a line in this file's "Next" prose.
+> `MaterialContentKind` (`OGSim.Kernel`) has shipped
+> and been content-tested since it was written and is registered in
+> `EngineBuilder.FacilityContent`'s loader nowhere, the same "built and
+> tested, composed nowhere" shape this tracker keeps finding (findings 257,
+> 259 most recently).
+>
+> **Not closed the same way, on purpose.** Reading `content/materials/`
+> through `MaterialContentKind` would make `MaterialCount` a per-build,
+> content-derived value — and `Defaults` is a static class, read by every
+> module at compose time; a static field cannot hold one engine build's
+> content without leaking into the next build in the same process, which is
+> exactly the static-mutable-state law L2 forbids and exactly what would
+> make two engines built in the same test run interfere with each other.
+> Threading a dynamic material count through every one of `Defaults`'s
+> current callers (every facility, every well component, every test fixture)
+> is a real refactor and a materially larger task than widening a list —
+> named here rather than attempted in the same change, matching R9.1's own
+> precedent for not guessing at more than one design fork at once.
+>
+> **What this amendment actually does: `Defaults.Materials` gains all nine
+> entries, hand-authored the same way the existing three already were**
+> (id and declared phase, `Properties: []` — nothing reads a material's
+> `Properties` today either, so this changes nothing about what was already
+> inert). `MaterialCount` moves from `3` to `9`. **Ordinals are DERIVED, not
+> hand-typed**: `OilOrdinal`/`GasOrdinal`/`WaterOrdinal` are read off a
+> `MaterialCatalogue` built from `Materials` itself (`.Resolve(id).Ordinal`)
+> rather than written as numeric literals that would have to be kept in sync
+> by hand — the ordinal-drift bug §6's own text warns an implementer against
+> committing "in week two." The catalogue's id-sort (§6, unaffected by this
+> amendment) moves oil from ordinal 0 to 2, gas from 1 to 4 and water from 2
+> to 6; `LiquidOrdinals` derives from the two properties and needed no
+> change.
+>
+> **Confirmed safe against every existing caller before it was trusted**:
+> no production code holds a raw `new MaterialId(0/1/2)` literal anywhere in
+> `src/` — every consumer reaches oil, gas or water through
+> `Defaults.OilOrdinal`/`GasOrdinal`/`WaterOrdinal`, exactly as §6's own
+> ordinal-assignment rule requires, so the shift is invisible to every
+> caller that follows the rule and would have been the one thing worth
+> catching if any caller did not.
+>
+> **The six new materials — carbon dioxide, condensate, hydrogen sulphide,
+> nitrogen, sales gas, sulphur — are honestly zero everywhere, not a phantom
+> capability.** Nothing in this composition produces any of them: a well's
+> completion still declares its stream from oil, gas and water alone, so
+> every stream this engine solves carries six ordinals that are always zero.
+> This is not the same defect a purchasable no-op is (finding 260's own
+> dehydrator, reverted for exactly that reason) — nobody pays for a material
+> existing in the catalogue, and the catalogue accurately naming nine
+> materials the design specifies, six of them not yet produced by anything,
+> is a truer statement than naming three and hiding the other six entirely.
+> **What would actually make them non-zero**: a completion, or the drive
+> mechanism behind it, would need to declare a real composition for sour or
+> wet gas — R18's own `SourFraction` already exists as a scalar the hazard
+> model reads and is the closest existing concept to reuse, but turning it
+> into real H₂S/CO₂ mass crossing the network is genuinely separate physics,
+> not a consequence of the catalogue existing. Named rather than guessed at.
+> Sweetening (R9.3) needed exactly this catalogue widening and still needs
+> that separate step before it can compose meaningfully — finding 260's own
+> "a different blocker" is this amendment closing half of it, not all of it.
+
+> **Amendment (finding 270): a seventh content kind, `fluid-system` — API
+> gravity joins the pipeline as real, per-accumulation content instead of one
+> engine-wide constant.** `BlackOilInputs` (`OGSim.Contracts/BlackOilModel.cs`)
+> has been documented since it was written as "what a `fluid-system` content
+> entry carries" and no `FluidSystemContentKind` has ever existed — the
+> gap this amendment closes. Design 06's own accumulation-truth diagram
+> already lists "fluid type · quality" as a per-accumulation fact; design 08
+> §3.1 already prices a quality differential off API gravity and sulfur.
+> Neither had anything to point at, because every compartment in every game
+> shared one `Defaults.Fluid` (`OGSim.Composition/EngineBuilder.cs`,
+> `OilGravity: new ApiGravity(35.0)`).
+>
+> **`FluidSystemDefinition`, an UNGATED content definition** (no
+> `RequiresTech`/`Era`/`Rung` — a reservoir's own fluid is a truth fact
+> world generation draws, not equipment a company buys, so it does not
+> derive from `FacilityUnitDefinition`; it derives from `ContentDefinition`
+> directly, the same shape `MaterialDefinition` already uses for the same
+> reason):
+>
+> ```csharp
+> public sealed record FluidSystemDefinition(
+>     ContentId Id,
+>     double ApiGravityDegrees,
+>     double GasSpecificGravity,       // γg, air = 1
+>     double ReservoirTemperatureKelvin,
+>     double SolutionGorAtBubblePoint  // Rsb, sm³/sm³
+>     ) : ContentDefinition(Id);
+> ```
+>
+> **None of the four fields goes through the unit-string grammar (§4).**
+> `ApiGravity` is read as a bare number in DEGREES — its own native unit
+> (`ApiGravity(double Degrees)`, `OGSim.Kernel/Quantities.cs`) — because
+> °API relates to specific gravity by `141.5/SG − 131.5`, a NONLINEAR
+> transform the grammar's factor-plus-offset token table cannot represent;
+> writing `"35 api"` through `UnitGrammar` would either silently apply a
+> linear conversion to a value that has none, or need a special-cased token
+> that pretends the grammar's own contract still holds. `GasSpecificGravity`
+> and `SolutionGorAtBubblePoint` are dimensionless ratios read the same bare
+> way — for consistency with `ApiGravity` on the same record, not because
+> the grammar could not carry them (§6's separator fractions already prove
+> it can, via `Dimension.Dimensionless`). `ReservoirTemperature` DOES go
+> through the grammar (`Dimension.Temperature`) — it is a real, linear
+> quantity with no such obstruction.
+>
+> **`FluidForm` (`OGSim.Contracts`) is not read from content in this
+> amendment.** Every `fluid-system` entry constructs as `FluidForm.BlackOil`
+> at the point composition builds a `BlackOilInputs` from a loaded
+> `FluidSystemDefinition` — `OGSim.Kernel` (where every other content kind
+> lives, `FacilityKinds.cs`/`ContentKinds.cs`) may not depend on
+> `OGSim.Contracts` (design 03's downward-only layering), and nothing this
+> amendment declares is a gas-condensate system. A modified-black-oil
+> `fluid-system` entry is a real future case and is named rather than
+> guessed at here — it would need `FluidForm` itself moved down to
+> `OGSim.Kernel` (matching where `Era`/`PhaseAtStandardConditions` already
+> live for exactly this reason) before content could name it.
+>
+> **Registered exactly like the six facility kinds and the ninth thing
+> registered nowhere yet (materials, this same section, finding 261):
+> appended to `EngineBuilder.FacilityContent`'s content-kind array and to
+> `GodotContentSource.Loadable`.** Unlike materials, this one does NOT go
+> through `Defaults` — `MaterialsModule` keeps every loaded
+> `FluidSystemDefinition` as its own `BlackOilModel` instance in a
+> `Dictionary<ContentId, IFluidPropertyModel>`, avoiding the exact
+> static-leaks-across-builds trap finding 261's own amendment named as the
+> reason materials could not be closed the same way — this dictionary is
+> built fresh every `EngineBuilder.Build` call, owned by composition, never
+> a static field.
+>
+> **Validation** (`ConsistencyProblems`, §5's stage 5): API gravity outside
+> roughly 10–70° is refused by name (below ~10° is denser than water and
+> not a producible liquid hydrocarbon by this engine's own black-oil
+> correlations' validity range; above ~70° is condensate territory this
+> amendment's `FluidForm.BlackOil` constant cannot honestly represent) —
+> `BlackOilModel`'s own `ValidityRange` is the authority SDD-003 §4.1
+> already cites for correlation applicability; this is a load-time guard
+> against declaring a fluid system the correlations were never fitted to,
+> not a second copy of that range. Gas specific gravity and Rsb refused at
+> or below zero, matching `BlackOilModel`'s own constructor guards
+> (`BlackOilModel.cs`).
+
 ## 7. Mods
 
 ```csharp

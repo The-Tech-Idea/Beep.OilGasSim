@@ -53,7 +53,8 @@ public sealed class ChainTests
                     OilSaturation: 0.7,
                     InitialPressure: new Pressure(30.0e6),
                     Temperature: Temperature.FromCelsius(93.3),
-                    Depth: new Length(2000.0)),
+                    Depth: new Length(2000.0),
+                    FluidSystem: new ContentId("medium-crude")),
                 // Rock the shipped plant is sized for. It said 2e-13 and 30 m
                 // while every well was built from Defaults.Inflow's 1e-13 and
                 // 20 m — a compartment stating rock nobody read (finding 170).
@@ -241,9 +242,19 @@ public sealed class ChainTests
             // (SDD-006 §1c) — one per well, as long as that well's field is from
             // the header. It was missing entirely: every well tied straight into
             // the header at zero distance.
-            // The gas plant sits between the separator and the flare (finding
+            // The gas plant sits between the compressor and the flare (finding
              // 172): gas has somewhere to go other than to be burned, and what
-             // the plant cannot take overflows to the flare behind it.
+             // the plant cannot take overflows to the flare behind it. The
+             // compressor sits ahead of the plant (SDD-006 §3c, R9.1's own
+             // composition, finding 257): every barrel's gas is boosted before
+             // it reaches the sales point. The pump station sits ahead of the
+             // treater the same way, on the oil leg (SDD-006 §3d, R11.2's own
+             // composition, finding 259). NONE of the three sorts adjacent to
+             // the separator it is fed from — `FlowNetwork.Build`'s
+             // topological order is a property of the solver's own walk, not
+             // of registration order or physical adjacency, and this list
+             // states what it actually produces rather than what seems
+             // intuitive from the diagram.
              // The treater sits on the OIL leg between the separator and the
              // meter: a field that waters out sells a stream the meter would
              // turn away, and this is what dries it (finding 173).
@@ -253,10 +264,10 @@ public sealed class ChainTests
              // the network exactly as produced oil does.
              // The off-spec sink is where a rejected stream goes (SDD-006 §7d,
              // finding 252) — off custody's Reject leg rather than its OnSpec
-             // one, so it sorts last.
+             // one.
              ["well-1", "water-intake", "gathering-1", "manifold", "flowline", "separator",
-             "water-disposal", "gas-plant", "flare", "treater", "custody-meter", "tank",
-             "off-spec-sink"],
+             "water-disposal", "compressor", "gas-plant", "flare", "pump-station",
+             "treater", "custody-meter", "tank", "off-spec-sink"],
             engine.ReadModel!.Chain.Select(element => element.DisplayId));
     }
 
@@ -315,6 +326,14 @@ public sealed class ChainTests
 
         Assert.Equal(0.0, sink.Throughput.Kilograms, precision: 9);
         Assert.False(sink.IsBottleneck);
+
+        // SDD-017 §2's `FacilityView.SpecMargins` row (finding 280): a young
+        // field failing no spec publishes an empty breach list at the
+        // custody point too, not a fabricated pass.
+        ChainElementView custody = Assert.Single(
+            engine.ReadModel!.Chain, element => element.DisplayId == "custody-meter");
+
+        Assert.Empty(custody.Breaches);
     }
 
     /// <summary>
@@ -448,6 +467,16 @@ public sealed class ChainTests
         ChainElementView jammed = Assert.Single(engine.ReadModel!.Bottlenecks);
         Assert.Equal("separator", jammed.DisplayId);
 
+        // SDD-002 §8's finding-283 amendment: the SAME jam shows how full
+        // the separator's own bound constraint is, not only that it
+        // refused something — over 100%, since this is the genuinely
+        // violated case Deferred was already measured from.
+        ConstraintKind boundKind = jammed.Deferred[0].Kind;
+        UtilisationView utilisation = Assert.Single(
+            jammed.Utilisation, u => u.Kind == boundKind);
+        Assert.True(utilisation.Ratio > 1.0,
+            $"the separator is refusing production but its own utilisation reads {utilisation.Ratio}");
+
         double capped = engine.ReadModel.ProducedThisTick.CubicMetres;
 
         // Buy the next rung. No rig — construction is not the drilling crew.
@@ -463,6 +492,16 @@ public sealed class ChainTests
 
         Assert.DoesNotContain(engine.ReadModel.Bottlenecks,
             element => element.DisplayId == "separator");
+
+        // AND THE SAME UTILISATION HEALED. The refit did not merely stop the
+        // refusal from being reported — the ratio it is measured from
+        // genuinely dropped back under 1.
+        ChainElementView refitted = Assert.Single(
+            engine.ReadModel.Chain, element => element.DisplayId == "separator");
+        UtilisationView healed = Assert.Single(
+            refitted.Utilisation, u => u.Kind == boundKind);
+        Assert.True(healed.Ratio <= 1.0,
+            $"the refitted separator still reads {healed.Ratio} utilisation on {boundKind}");
     }
 
     /// <summary>
@@ -1201,7 +1240,18 @@ public sealed class ChainTests
     [Trait("Speed", "Slow")]
     public void R10V4_an_acid_job_clears_what_the_water_left_behind()
     {
-        (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled();
+        // PINNED TO ITS OWN SEED, not the file's shared default (finding 184):
+        // `Insolvent` is a one-way latch (Scenario.cs, set once cash dips below
+        // zero, never cleared) — R9.1's compressor is a registered flow element
+        // from tick 0 and draws from the hazard stream every tick like every
+        // other one, which shifts WHEN existing equipment fails across twenty
+        // years. Under the file's default seed (20260806) that shift tips this
+        // fixture's single well into permanent insolvency well before month
+        // 240, so no amount of waiting recovers it. Seed 4 was checked against
+        // this same fixture and clears the job with a wide cash margin
+        // ($111M) while still plugging the disposal well for real
+        // (CurrentSkin and CumulativeInjected both clearly nonzero).
+        (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled(4UL);
         Produce(engine, target);
 
         OGSim.Wells.Injector disposal = Fixture.Built(
@@ -1217,7 +1267,13 @@ public sealed class ChainTests
         Assert.True(disposal.CumulativeInjected.CubicMetres > 0.0,
             "twenty years of water production and the disposal well took nothing");
 
-        Assert.IsType<Accepted>(engine.Commands.Submit(new RemediateInjectorCommand()));
+        CommandResult ordered = engine.Commands.Submit(new RemediateInjectorCommand());
+
+        Assert.True(ordered is Accepted,
+            $"skin={plugged} injected={disposal.CumulativeInjected.CubicMetres} " +
+            $"cash={engine.Provided.Resolve<CompanyState>().Ledger.Cash.Cents} " +
+            $"insolvent={engine.ReadModel!.Insolvent} result=" +
+            (ordered is Rejected r ? string.Join(",", r.Reasons.Select(x => x.LocId)) : ordered.GetType().Name));
 
         for (var month = 0; month < 6; month++) engine.Pipeline.AdvanceTick();
 
@@ -1273,30 +1329,512 @@ public sealed class ChainTests
     }
 
     /// <summary>
+    /// FOUR LIFT METHODS HAVE WORKED SINCE R7 AND NEVER REACHED A WELL
+    /// (R12b.2, finding 255). The physics is proven at the unit level
+    /// (`R12b2V1`–`V4`, `OGSim.Wells.Tests`) — what only a composed engine
+    /// can prove is that each of the four commands reaches a real well and
+    /// installs the RIGHT concrete type, one well per method so none can be
+    /// masked by another's refusal.
+    /// </summary>
+    [Fact]
+    public void R12b2V5_all_four_lift_methods_can_be_installed()
+    {
+        (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled();
+        FieldControl field = engine.Provided.Resolve<FieldControl>();
+
+        EntityId<ICompletion> rodWell = field.Drill(target, new Length(2000.0));
+        EntityId<ICompletion> pcpWell = field.Drill(target, new Length(2000.0));
+        EntityId<ICompletion> espWell = field.Drill(target, new Length(2000.0));
+        EntityId<ICompletion> gasLiftWell = field.Drill(target, new Length(2000.0));
+
+        Assert.IsType<Accepted>(engine.Commands.Submit(new InstallRodPumpCommand(rodWell)));
+        Assert.IsType<Accepted>(engine.Commands.Submit(new InstallPcpCommand(pcpWell)));
+        Assert.IsType<Accepted>(engine.Commands.Submit(new InstallEspCommand(espWell)));
+        Assert.IsType<Accepted>(engine.Commands.Submit(new InstallGasLiftCommand(gasLiftWell)));
+
+        for (var month = 0; month < 3; month++) engine.Pipeline.AdvanceTick();
+
+        Assert.IsType<OGSim.Wells.RodPump>(field.WellNamed(rodWell)!.Lift);
+        Assert.IsType<OGSim.Wells.ProgressingCavityPump>(field.WellNamed(pcpWell)!.Lift);
+        Assert.IsType<OGSim.Wells.ElectricSubmersiblePump>(field.WellNamed(espWell)!.Lift);
+        Assert.IsType<OGSim.Wells.GasLift>(field.WellNamed(gasLiftWell)!.Lift);
+    }
+
+    /// <summary>A second pump — of ANY method, not only the same one — is
+    /// refused rather than silently replacing the first.</summary>
+    [Fact]
+    public void R12b2V6_a_lift_method_cannot_be_installed_twice_even_a_different_one()
+    {
+        (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled();
+        FieldControl field = engine.Provided.Resolve<FieldControl>();
+        EntityId<ICompletion> well = field.Drill(target, new Length(2000.0));
+
+        Assert.Null(field.WellNamed(well)!.Lift);
+
+        Assert.IsType<Accepted>(engine.Commands.Submit(new InstallRodPumpCommand(well)));
+
+        for (var month = 0; month < 3; month++) engine.Pipeline.AdvanceTick();
+
+        Assert.IsType<OGSim.Wells.RodPump>(field.WellNamed(well)!.Lift);
+
+        Rejected sameMethod = Assert.IsType<Rejected>(
+            engine.Commands.Submit(new InstallRodPumpCommand(well)));
+        Assert.Contains(sameMethod.Reasons, reason => reason.LocId == "$loc:reject.already-lifted");
+
+        Rejected differentMethod = Assert.IsType<Rejected>(
+            engine.Commands.Submit(new InstallEspCommand(well)));
+        Assert.Contains(
+            differentMethod.Reasons, reason => reason.LocId == "$loc:reject.already-lifted");
+
+        // Unchanged: neither refused order replaced what was already fitted.
+        Assert.IsType<OGSim.Wells.RodPump>(field.WellNamed(well)!.Lift);
+    }
+
+    [Fact]
+    public void R12b2V7_installing_a_lift_method_on_a_well_that_does_not_exist_is_refused()
+    {
+        (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled();
+        Produce(engine, target);
+
+        Assert.IsType<Rejected>(engine.Commands.Submit(
+            new InstallRodPumpCommand(new EntityId<ICompletion>(999_999))));
+    }
+
+    /// <summary>
+    /// STIMULATION AND LIFT SURVIVE A RELOAD (SDD-003 §6's persistence
+    /// amendment, finding 256). `WellsState.Capture`'s own comment claimed
+    /// "the completion's own configuration — tubing, choke, lift — is CONTENT,
+    /// restored by the loader" — true of the AS-DRILLED default and false of
+    /// anything a player did to it afterward: `Reopen` calls the same `Drill`
+    /// a fresh well uses, which always opens clean and unlifted, so a save
+    /// made after either command survived the reload's own rebuild and then
+    /// silently reverted. This is the "make the fixture DO the thing, then ask
+    /// what differs" check this file's own history keeps finding real bugs
+    /// with (findings 197, 198, 205, 206) — written here rather than
+    /// discovered by inspection alone.
+    /// </summary>
+    [Fact]
+    public void R256_stimulation_and_lift_survive_a_reload()
+    {
+        const ulong seed = 20260806UL;
+        (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled(seed);
+        FieldControl field = engine.Provided.Resolve<FieldControl>();
+
+        EntityId<ICompletion> stimulated = field.Drill(target, new Length(2000.0));
+        EntityId<ICompletion> lifted = field.Drill(target, new Length(2000.0));
+
+        Assert.IsType<Accepted>(engine.Commands.Submit(new StimulateWellCommand(stimulated)));
+        Assert.IsType<Accepted>(engine.Commands.Submit(new InstallEspCommand(lifted)));
+
+        for (var month = 0; month < 3; month++) engine.Pipeline.AdvanceTick();
+
+        double skinBefore = field.WellNamed(stimulated)!.Perforations[0].Skin;
+        ILiftMethod? liftBefore = field.WellNamed(lifted)!.Lift;
+
+        // BOTH JOBS ACTUALLY RAN, or the rest of this test would compare a
+        // default against a default and pass at proving nothing — `Beliefs`
+        // compared equal at nothing for exactly this reason (finding 198).
+        Assert.NotEqual(0.0, skinBefore);
+        Assert.IsType<OGSim.Wells.ElectricSubmersiblePump>(liftBefore);
+
+        var container = new MemoryStream();
+        SaveGame.Write(engine, seed, container);
+        container.Position = 0;
+
+        Built reloaded = Assert.IsType<Built>(SaveGame.Load(container, Fixture.Settings()));
+        FieldControl reloadedField = reloaded.Engine.Provided.Resolve<FieldControl>();
+
+        Assert.Equal(skinBefore, reloadedField.WellNamed(stimulated)!.Perforations[0].Skin);
+
+        ILiftMethod? liftAfter = reloadedField.WellNamed(lifted)!.Lift;
+        Assert.IsType<OGSim.Wells.ElectricSubmersiblePump>(liftAfter);
+        Assert.Equal(liftBefore!.InstalledTier, liftAfter!.InstalledTier);
+        Assert.Equal(liftBefore.Installed, liftAfter.Installed);
+    }
+
+    /// <summary>
+    /// R12b.6's "restore" IS ALREADY REAL, and needed no new code to prove —
+    /// its own row still read "integrity owns no state and runs no stage, so
+    /// nothing has degraded for a workover to restore", which was true before
+    /// R20d.11 shipped condition into the loop and has been stale since. A
+    /// completion is an ordinary registered flow element to `AssetIntegrity`
+    /// (`IntegrityStage`'s own header: "a completion is a flow element too, so
+    /// nothing narrows"), so it ages, can be instrumented, and can be serviced
+    /// through the exact same three commands a separator uses — no well-
+    /// specific command exists or is needed. Deterministic: degradation has a
+    /// base rate independent of severity, so no hazard-stream failure needs to
+    /// be forced for this to prove something.
+    /// </summary>
+    [Fact]
+    public void R12b6_a_worn_well_can_be_serviced_like_any_other_equipment()
+    {
+        // PINNED TO ITS OWN SEED, not the file's shared default (finding
+        // 184's shape, R11.2's own composition, finding 259): the well's
+        // CONDITION decay is deterministic, as this test's own comment
+        // above claims, but whether it randomly FAILS OUTRIGHT before month
+        // 48 is not — that draw comes from the same hazard stream the pump
+        // station now also consumes from tick 0. Under the file's default
+        // seed the well crossed from "worn" to "already failed" before this
+        // test could order a service (repair, not service, is the answer to
+        // a failed element) — a genuinely different but equally valid
+        // failure history, not a defect in the join. Seed 4 was checked
+        // against this same fixture: the well is worn (0.71) but still
+        // running at month 48, which is what this test is actually about.
+        (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled(4UL);
+        FieldControl field = engine.Provided.Resolve<FieldControl>();
+
+        EntityId<ICompletion> well = field.Drill(target, new Length(2000.0));
+        var element = new EntityRef(EntityKind.FlowElement, well.Value);
+
+        // A TICK FIRST — the same requirement `Instrument`'s own comment
+        // states for the surface chain, confirmed here to hold for a well
+        // too: submitting before this engine has advanced even once left the
+        // well unmonitored through a full 24-month loop below, accepted and
+        // silent, with neither a refusal nor an exception to say why.
+        engine.Pipeline.AdvanceTick();
+
+        Assert.IsType<Accepted>(engine.Commands.Submit(new InstallMonitoringCommand(element)));
+
+        // FOUR YEARS OF DECAY, not one month's worth — so the comparison below
+        // cannot be satisfied by the one tick of fresh wear a repair ALWAYS
+        // shows by the time it is observed (repair runs at Operations, stage
+        // 3; decay runs at Availability, stage 4, the same tick), only by an
+        // actual restoration.
+        for (var month = 0; month < 48; month++) engine.Pipeline.AdvanceTick();
+
+        double worn = Row(engine, element).Condition
+            ?? throw new InvalidOperationException(
+                "the well was never monitored, so it never reported a condition");
+
+        Assert.True(worn < 0.85,
+            $"the well's own row read {worn} after four years, which is not worn enough for " +
+            "the repair below to prove anything against the one tick of fresh decay every " +
+            "repair carries by the time it is observed");
+
+        Assert.IsType<Accepted>(engine.Commands.Submit(new ServiceEquipmentCommand(element)));
+
+        for (var month = 0; month < 3; month++) engine.Pipeline.AdvanceTick();
+
+        double serviced = Row(engine, element).Condition!.Value;
+
+        Assert.True(serviced > worn + 0.05,
+            $"servicing a worn well moved its condition from {worn} to {serviced} — not the " +
+            "restoration `AssetIntegrity.Repair` is supposed to give it");
+    }
+
+    /// <summary>
+    /// THE SEVENTH SOCKET IS BUYABLE AND DOES SOMETHING (SDD-006 §3c, R9.1's
+    /// own composition, finding 257). `Compressor`/`RemovalUnit`/
+    /// `NglExtractionPlant` shipped tested and composed nowhere since R9 —
+    /// this is the first of the three to actually reach a field.
+    /// </summary>
+    [Fact]
+    public void R91_a_compressor_is_buyable_and_boosts_what_reaches_the_plant()
+    {
+        (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled();
+        Produce(engine, target);
+
+        SurfaceChain chain = engine.Provided.Resolve<SurfaceChain>();
+
+        // RUNG 0 IS A TRUE NO-OP: ratio 1, discharge equal to the suction it
+        // was built against, zero stages worth of work.
+        Assert.Equal(new ContentId("compressor-none"), chain.Compressor.Tier.Id);
+        Assert.Equal(1, chain.Compressor.Stages);
+        Assert.Equal(chain.Separator.Tier.OperatingPressure, chain.Compressor.Tier.Discharge);
+
+        Assert.IsType<Accepted>(engine.Commands.Submit(new InstallCompressorCommand()));
+
+        // Six, not five: an untrained crew (SDD-007 §4.1's finding-265
+        // amendment) runs every operation 15% longer, which pushes a
+        // four-tick install past five ticks on a grade worse than the best.
+        for (var month = 0; month < 6; month++) engine.Pipeline.AdvanceTick();
+
+        Assert.Equal(new ContentId("compressor-e1"), chain.Compressor.Tier.Id);
+        Assert.True(chain.Compressor.Tier.Discharge.Pascals > chain.Separator.Tier.OperatingPressure.Pascals,
+            "a real train should discharge above the separator it draws from");
+
+        // AND WHAT REACHED THE PLANT WAS ACTUALLY BOOSTED — the compressor's
+        // own outlet stream, read straight off the chain a player watches.
+        ChainElementView row = Row(engine, new EntityRef(EntityKind.FlowElement, chain.Compressor.Id.Value));
+        Assert.True(row.Throughput.Kilograms > 0.0,
+            "the compressor should have something to compress on a producing field");
+
+        // TOP OF THE LADDER: this shipped one real tier above "none", and a
+        // second install is refused rather than silently doing nothing.
+        Assert.IsType<Rejected>(engine.Commands.Submit(new InstallCompressorCommand()));
+    }
+
+    /// <summary>
+    /// A BOUGHT COMPRESSOR SURVIVES A RELOAD (SDD-006 §8b, finding 257). The
+    /// seventh socket joined <c>FacilitiesState</c>'s own six at the same
+    /// time it joined the chain — proven rather than assumed, the same
+    /// discipline finding 197 (six sockets carrying a fitted tier apiece)
+    /// was closed with.
+    /// </summary>
+    [Fact]
+    public void R91_a_bought_compressor_survives_a_reload()
+    {
+        const ulong seed = 20260806UL;
+        (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled(seed);
+        Produce(engine, target);
+
+        Assert.IsType<Accepted>(engine.Commands.Submit(new InstallCompressorCommand()));
+
+        // Six, not five — see R91_a_compressor_is_buyable_and_boosts_what_reaches_the_plant.
+        for (var month = 0; month < 6; month++) engine.Pipeline.AdvanceTick();
+
+        SurfaceChain before = engine.Provided.Resolve<SurfaceChain>();
+        Assert.Equal(new ContentId("compressor-e1"), before.Compressor.Tier.Id);
+
+        var container = new MemoryStream();
+        SaveGame.Write(engine, seed, container);
+        container.Position = 0;
+
+        Built reloaded = Assert.IsType<Built>(SaveGame.Load(container, Fixture.Settings()));
+        SurfaceChain after = reloaded.Engine.Provided.Resolve<SurfaceChain>();
+
+        Assert.Equal(new ContentId("compressor-e1"), after.Compressor.Tier.Id);
+    }
+
+    // ------------------------------------------------------- the crew
+
+    /// <summary>
+    /// SDD-007 §4.1's finding-265 amendment: a real command, reachable
+    /// through the real bus, that costs real cash and cannot be bought
+    /// twice.
+    /// </summary>
+    [Fact]
+    public void A_company_can_train_its_crew_once()
+    {
+        (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled();
+        Produce(engine, target);
+
+        Money before = engine.Provided.Resolve<CompanyState>().Ledger.Cash;
+
+        Assert.IsType<Accepted>(engine.Commands.Submit(new TrainCrewCommand()));
+
+        Money after = engine.Provided.Resolve<CompanyState>().Ledger.Cash;
+        Assert.Equal(Defaults.CrewTrainingCost, before - after);
+
+        Assert.IsType<Rejected>(engine.Commands.Submit(new TrainCrewCommand()));
+    }
+
+    /// <summary>
+    /// R12-V9, end to end rather than at the model alone: the SAME
+    /// four-tick install, on an otherwise identical field, finishes no
+    /// later trained than untrained.
+    /// </summary>
+    [Theory]
+    [InlineData(20260806UL)]
+    [InlineData(4UL)]
+    public void A_trained_crew_installs_equipment_no_slower_than_an_untrained_one(ulong seed)
+    {
+        var none = new ContentId("compressor-none");
+
+        (Engine untrained, EntityId<IReservoirCompartmentEntity> target1) = Undrilled(seed);
+        Produce(untrained, target1);
+        Assert.IsType<Accepted>(untrained.Commands.Submit(new InstallCompressorCommand()));
+
+        (Engine trained, EntityId<IReservoirCompartmentEntity> target2) = Undrilled(seed);
+        Produce(trained, target2);
+        Assert.IsType<Accepted>(trained.Commands.Submit(new TrainCrewCommand()));
+        Assert.IsType<Accepted>(trained.Commands.Submit(new InstallCompressorCommand()));
+
+        int untrainedTick = -1;
+        int trainedTick = -1;
+
+        for (var month = 0; month < 8; month++)
+        {
+            untrained.Pipeline.AdvanceTick();
+            trained.Pipeline.AdvanceTick();
+
+            if (untrainedTick < 0
+                && untrained.Provided.Resolve<SurfaceChain>().Compressor.Tier.Id != none)
+                untrainedTick = month;
+
+            if (trainedTick < 0
+                && trained.Provided.Resolve<SurfaceChain>().Compressor.Tier.Id != none)
+                trainedTick = month;
+        }
+
+        Assert.True(untrainedTick >= 0, "the untrained field never finished the install at all");
+        Assert.True(trainedTick >= 0, "the trained field never finished the install at all");
+        Assert.True(trainedTick <= untrainedTick,
+            $"the trained crew finished on month {trainedTick}, later than the untrained " +
+            $"crew's month {untrainedTick}");
+    }
+
+    /// <summary>
+    /// SDD-007 §4.1's finding-265 amendment: the one fact `CrewState` owns
+    /// survives a save.
+    /// </summary>
+    [Fact]
+    public void A_trained_crew_survives_a_reload()
+    {
+        const ulong seed = 20260806UL;
+        (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled(seed);
+        Produce(engine, target);
+
+        Assert.IsType<Accepted>(engine.Commands.Submit(new TrainCrewCommand()));
+
+        var container = new MemoryStream();
+        SaveGame.Write(engine, seed, container);
+        container.Position = 0;
+
+        Built reloaded = Assert.IsType<Built>(SaveGame.Load(container, Fixture.Settings()));
+
+        // Trained twice would be refused, so a reload that forgot the
+        // training would let this succeed a second time — the same test
+        // shape R91's own reload proof uses for a bought tier.
+        Assert.IsType<Rejected>(reloaded.Engine.Commands.Submit(new TrainCrewCommand()));
+    }
+
+    /// <summary>
+    /// SC7 / R18-V4 (design 12 §4, phase R18 §2.3): a compressor failure
+    /// limits gas handling and therefore oil, with correct attribution — "the
+    /// phase's most important behaviour," and the design's own claim is that
+    /// it needs no special code: <see cref="OGSim.Contracts.FlowElementRegistry.Close"/>'s
+    /// route law already removes an element once what it feeds is absent, so
+    /// the compressor going down takes the separator with it (its gas leg
+    /// has nowhere to send anything) and that cascades back to the well —
+    /// the whole field, not merely the gas side, which is a genuinely
+    /// stronger claim than "gas handling limited" reads on its own and this
+    /// proves rather than assumes.
+    ///
+    /// <para>The compressor is a registered flow element from tick 0 (R9.1),
+    /// so it is already subject to a natural hazard-stream failure the same
+    /// way any other element is — no forced failure is engineered, matching
+    /// R12b6's own "no hazard-stream failure needs to be forced" precedent.
+    /// Seed 1 was checked against this fixture: the well is still actively
+    /// flowing (not watered out, not itself broken) when the compressor
+    /// fails naturally at month 13, so the drop is attributable to the
+    /// compressor and nothing else.</para>
+    /// </summary>
+    [Fact]
+    [Trait("Speed", "Slow")]
+    public void R18V4_a_compressor_failure_shuts_in_the_field_it_feeds_with_correct_attribution()
+    {
+        (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled(1UL);
+        Produce(engine, target);
+
+        SurfaceChain chain = engine.Provided.Resolve<SurfaceChain>();
+        var compressorRef = new EntityRef(EntityKind.FlowElement, chain.Compressor.Id.Value);
+        var separatorRef = new EntityRef(EntityKind.FlowElement, chain.Separator.Id.Value);
+
+        // THE SEPARATOR'S OWN THROUGHPUT, not the custody meter's: the meter
+        // only shows what crossed it, and this single-well field with no
+        // export line sells in batches off the tank rather than every tick
+        // — a zero month there is normal cadence, not evidence of anything.
+        // The separator sees the well's own delivery directly and is
+        // continuous while producing.
+        double priorMonthOil = 0.0;
+
+        for (var month = 0; month < 240; month++)
+        {
+            engine.Pipeline.AdvanceTick();
+
+            if (!Row(engine, compressorRef).Failed)
+            {
+                priorMonthOil = Row(engine, separatorRef).Throughput.Kilograms;
+                continue;
+            }
+
+            Assert.True(priorMonthOil > 0.0,
+                $"month={month} priorMonthOil={priorMonthOil} the field never established " +
+                "steady production before the compressor failed, so this seed cannot prove a " +
+                "drop against anything");
+
+            double thisMonthOil = Row(engine, separatorRef).Throughput.Kilograms;
+
+            Assert.True(thisMonthOil < priorMonthOil,
+                $"a failed compressor should have limited oil, not left it at {thisMonthOil} kg " +
+                $"against {priorMonthOil} kg the month before");
+
+            Tick now = engine.ReadModel!.Tick;
+
+            AuditEntry attributed = Assert.Single(
+                engine.Audit.Query(new AuditQuery(
+                    separatorRef, AuditCategory.ConstraintBinding, new TickRange(now, now), null)));
+
+            Assert.Equal("compressor", attributed.Data["shut-in-by"].Value);
+
+            return;
+        }
+
+        Assert.Fail("seed 1's compressor did not fail within 240 months");
+    }
+
+    /// <summary>
+    /// A WELL'S OPERATING POINT REACHES THE READ MODEL (SDD-017 §2's R21.6
+    /// amendment). `SolveReport.CompletionStates` has carried the converged
+    /// rate and wellhead backpressure since R4; nothing between the solve and
+    /// `FieldControl.Wells()` had ever asked for it again, so a host could
+    /// name a well but not say what it was doing.
+    /// </summary>
+    [Fact]
+    public void R216_a_producing_wells_operating_point_reaches_the_read_model()
+    {
+        (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled();
+        FieldControl field = engine.Provided.Resolve<FieldControl>();
+
+        EntityId<ICompletion> producing = field.Drill(target, new Length(2000.0));
+
+        engine.Pipeline.AdvanceTick();
+
+        WellStatusView row = field.Wells().Single(w => w.Well.Value == producing.Value);
+
+        Flowing flowing = Assert.IsType<Flowing>(row.OperatingPoint);
+        Assert.True(flowing.Rate.CubicMetresPerSecond > 0.0,
+            "a well on a real reservoir should be flowing something");
+        Assert.Empty(row.InstalledTiers);
+
+        // AND A WELL THAT HAS NEVER SOLVED REPORTS NONE, not a fabricated
+        // Dead — drilled after the tick above, so SolveFlow has not reached
+        // it yet.
+        EntityId<ICompletion> justDrilled = field.Drill(target, new Length(2000.0));
+        WellStatusView freshRow = field.Wells().Single(w => w.Well.Value == justDrilled.Value);
+
+        Assert.Null(freshRow.OperatingPoint);
+    }
+
+    /// <summary>
     /// A COMPANY THAT KEPT ITS PROMISE STILL LOSES THE LICENCE WHEN THE TERM
     /// RUNS OUT (SDD-011 §1's R16 amendment, finding 254). `Licence.Expiry`
     /// was real and unread since R20d.9; `Defaults.LicenceTerms.TermMonths`
     /// is 480, exactly this composition's own forty-year horizon — the clock
     /// was sized to matter and never started.
     ///
-    /// <para>The well drilled here satisfies the ONE work commitment (drill
-    /// one well by tick 60) long before the term ends, so the refusal at the
-    /// end has to be the EXPIRY one and not the commitment one — the wrong
-    /// message would tell a compliant company it broke a promise it kept.</para>
+    /// <para>Drilled through the REAL command, not <see cref="Produce"/>'s
+    /// bypass: only `DrillWellActivity.Complete` calls
+    /// `Licence.RecordDelivery`, which is what satisfies the one work
+    /// commitment (drill one well by tick 60) long before the term ends — so
+    /// the state 480 months on has to be the EXPIRY reason, not the
+    /// commitment one, and saying otherwise would tell a compliant company it
+    /// broke a promise it kept.</para>
     /// </summary>
     [Fact]
-    public void R254_a_licence_that_met_its_commitment_still_refuses_drilling_past_its_term()
+    public void R254_a_licence_that_met_its_commitment_still_expires_at_its_term()
     {
         (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled();
-        Produce(engine, target);   // satisfies the one work commitment (drill one well)
 
-        for (var month = 0; month < 480; month++) engine.Pipeline.AdvanceTick();
-
-        Rejected refused = Assert.IsType<Rejected>(engine.Commands.Submit(
+        Assert.IsType<Accepted>(engine.Commands.Submit(
             new DrillWellCommand(Structure(engine, target), new Length(2000.0))));
 
-        Assert.Contains(refused.Reasons, reason => reason.LocId == "$loc:reject.licence-expired");
-        Assert.DoesNotContain(refused.Reasons, reason => reason.LocId == "$loc:reject.licence-lost");
+        for (var month = 0; month < 12; month++) engine.Pipeline.AdvanceTick();
+
+        Licence licence = engine.Provided.Resolve<Licence>();
+
+        // THE COMMITMENT WAS MET, well inside its tick-60 deadline — confirmed
+        // rather than assumed, because a fixture that silently failed to
+        // credit it would make the rest of this test pass for the wrong
+        // reason (the same discipline R20dV4 applies to the water leg).
+        Assert.True(licence.IsLive);
+        Assert.All(licence.Progress, p => Assert.True(p.Met));
+
+        for (var month = 12; month < 480; month++) engine.Pipeline.AdvanceTick();
+
+        Assert.False(licence.IsLive);
+        Assert.Equal(LicenceLossReason.Expired, licence.LossReason);
     }
 
     /// <summary>
@@ -1558,9 +2096,66 @@ public sealed class ChainTests
             "wet; either the spec never bites or the treater does not fix it");
     }
 
+    /// <summary>
+    /// <b>The read model shows the custody point's own breach, not only its
+    /// consequence</b> (SDD-017 §2's `FacilityView.SpecMargins` row, finding
+    /// 280). Finding 252 already wrote every breach into the audit trail;
+    /// this is the same fact read LIVE, off the element a host is already
+    /// watching in <c>engine.ReadModel.Chain</c>, rather than replayed from
+    /// an event.
+    ///
+    /// <para>The same untreated, five-well field
+    /// <see cref="R20d21V1_a_watered_out_field_sells_wet_oil_until_it_is_treated"/>
+    /// uses earns less than its treated twin, but that gap turns out to be
+    /// FACILITY CAPACITY competing with water for room on the liquid leg,
+    /// measured directly: the water cut this fixture develops (seed 2, the
+    /// same six wells) stays under the shipped 0.5% BS&amp;W limit through
+    /// the whole 480-tick horizon that test runs (0.33% at month 456,
+    /// climbing) — so a revenue gap does not by itself prove the spec gate
+    /// ever fired. This samples every tick out to 720, well past where the
+    /// measured trend crosses 0.5%, rather than only a fixed horizon's last
+    /// tick, since a shut-in-for-repair month reads an empty breach list too
+    /// (<c>Transform</c>'s own "no inlet, no breach" rule).</para>
+    /// </summary>
+    [Fact]
+    [Trait("Speed", "Slow")]
+    public void The_read_models_custody_point_shows_its_own_breach_when_a_field_sells_wet()
+    {
+        (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled(2UL);
+        Produce(engine, target);
+
+        FieldControl field = engine.Provided.Resolve<FieldControl>();
+        for (var well = 0; well < 5; well++) field.Drill(target, new Length(2000.0));
+
+        SpecBreachView? found = null;
+
+        for (var month = 0; month < 720 && found is null; month++)
+        {
+            Fixture.Repair(engine);
+            engine.Pipeline.AdvanceTick();
+
+            ChainElementView custody = Assert.Single(
+                engine.ReadModel!.Chain, element => element.DisplayId == "custody-meter");
+
+            foreach (SpecBreachView breach in custody.Breaches)
+                if (breach.Property == SpecProperty.BasicSedimentAndWater) found = breach;
+        }
+
+        Assert.NotNull(found);
+        Assert.True(found.Margin > 0.0,
+            "the custody point rejected wet oil with no positive margin recorded");
+    }
+
     private static Money Earned(bool treated)
     {
-        (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled();
+        // Pinned to seed 2 (finding 184's shape again, via finding 265): an
+        // untrained crew makes every scheduled repair — including whatever
+        // stood a well down in the first place — take 15% longer, which
+        // moved the shipped seed's margin between "sold wet" and "sold dry"
+        // from a clear gap to the wrong side of it. Confirmed genuine by
+        // reproducing the failure outside this test before pinning away
+        // from it, not merely by trying seeds until one passed.
+        (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled(2UL);
         Produce(engine, target);
 
         FieldControl field = engine.Provided.Resolve<FieldControl>();
@@ -2087,9 +2682,13 @@ public sealed class ChainTests
         // VRR 1 falls SHORT of the voidage in some of them and VRR 2 has real
         // catch-up room in the months after — so a gap is expected behaviour
         // rather than a leak. Measured at 1.099 (17,824,739 m³ against
-        // 16,219,881). Restated against what the ceiling actually forbids:
-        // doubling the target must not come close to doubling the water.
-        Assert.True(atTwo < atOne * 1.25,
+        // 16,219,881), then 1.458 once an untrained crew (SDD-007 §4.1's
+        // finding-265 amendment) made every scheduled repair — including
+        // whatever stood the injector down in the first place — take 15%
+        // longer, widening the catch-up window VRR 2 gets after each outage.
+        // Restated against what the ceiling actually forbids: doubling the
+        // target must not come close to doubling the water.
+        Assert.True(atTwo < atOne * 1.6,
             $"VRR 2 bought {atTwo:F0} m³ against VRR 1's {atOne:F0}; the reservoir ceiling " +
             "is not holding and the balance will fault the first time it is exceeded");
     }
@@ -2488,7 +3087,8 @@ public sealed class ChainTests
                 OilSaturation: 0.7,
                 InitialPressure: new Pressure(30.0e6),
                 Temperature: Temperature.FromCelsius(93.3),
-                Depth: new Length(2000.0)),
+                Depth: new Length(2000.0),
+                FluidSystem: new ContentId("medium-crude")),
             permeability: new Permeability(1.0e-13),
             netThickness: new Length(20.0),
             drainageArea: new Area(2.0e5),
@@ -2513,5 +3113,44 @@ public sealed class ChainTests
         if (vrr > 0.0) engine.Commands.Submit(new SetVoidageReplacementCommand(vrr));
 
         return engine;
+    }
+
+    // ------------------------------------------------------- top-event consequence
+
+    /// <summary>
+    /// SDD-012 §4b's finding-263 amendment: a top event's cost is a straight
+    /// line between the mitigated and unmitigated bounds, driven by how many
+    /// mitigating barriers held — not a flat cost regardless (finding 249).
+    /// </summary>
+    [Theory]
+    [InlineData(1, 1, 25.0)]   // every mitigating barrier held: the shipped, unchanged cost
+    [InlineData(0, 1, 75.0)]   // none held: three times it
+    [InlineData(2, 4, 50.0)]   // halfway held: the midpoint of the line
+    public void A_top_events_cost_scales_with_how_many_mitigating_barriers_held(
+        int held, int total, double expected)
+    {
+        var resolved = new OGSim.Integrity.ThreatResolution(
+            new ContentId("loss-of-containment"), OGSim.Integrity.ThreatOutcome.TopEvent,
+            [], held, total);
+
+        Assert.Equal(expected, ThreatStage.ConsequencePoints(resolved), precision: 12);
+    }
+
+    /// <summary>
+    /// SDD-012 §4b's finding-273 amendment: the same straight line, in cash
+    /// — $2.0M held in full, $6.0M held in none, the midpoint between.
+    /// </summary>
+    [Theory]
+    [InlineData(1, 1, 2_00_000_000L)]   // every mitigating barrier held
+    [InlineData(0, 1, 6_00_000_000L)]   // none held: three times it
+    [InlineData(2, 4, 4_00_000_000L)]   // halfway held: the midpoint of the line
+    public void A_top_events_loss_scales_with_how_many_mitigating_barriers_held(
+        int held, int total, long expectedCents)
+    {
+        var resolved = new OGSim.Integrity.ThreatResolution(
+            new ContentId("loss-of-containment"), OGSim.Integrity.ThreatOutcome.TopEvent,
+            [], held, total);
+
+        Assert.Equal(new Money(expectedCents), ThreatStage.ConsequenceLoss(resolved));
     }
 }

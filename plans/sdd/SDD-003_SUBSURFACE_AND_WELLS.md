@@ -167,6 +167,61 @@ nothing. `AccessRequirements` are consumed **only** by the gating validator on
 development commands (SDD-005 §3). Neither is ever readable from the belief
 layer or the read model — the R15-V10 leak test covers both.
 
+> **Amendment (finding 270): a compartment now names WHICH fluid system it
+> is, not just what state it is in.** Every compartment shared one engine-wide
+> `IFluidPropertyModel` (`Defaults.Fluid`, one `°API`, one gas gravity) since
+> the fluid model plugin slot was declared — a design 06 §2.3 truth attribute
+> ("fluid type · quality") this document never carried, because SDD-004 had
+> nothing to draw it from (SDD-004's own finding-270 amendment closes that
+> half).
+>
+> **`GeneratedCompartment` gains `ContentId FluidSystem`** — which
+> `fluid-system` content entry (SDD-004's finding-270 amendment) this
+> compartment's fluid correlations run against, drawn by world generation
+> (SDD-010's own finding-270 amendment) the same way `Temperature`/`Porosity`
+> already are and persisted the same way.
+>
+> **Resolution is per-compartment, not per-engine, for the consumers already
+> shaped that way.** `IDriveMechanism`, `MaterialBalance`/`GasMaterialBalance`
+> and `ReservoirCompartment` already take `IFluidPropertyModel` as a plain
+> per-call parameter (§4.2's own `SolveEndPressure` signature above) — nothing
+> in THEIR signatures changes. What changes is which instance
+> `SubsurfaceState` passes: a `Dictionary<ContentId, IFluidPropertyModel>`
+> composition builds from every loaded `fluid-system` entry (SDD-004's
+> amendment), looked up by the compartment's own `FluidSystem` id through a
+> private `FluidFor` helper. Naming a fluid system a save or a generated
+> world does not have — a schema drift between the content that generated a
+> world and the content a build ships — is a `ContentFault` refusing by
+> name, the SAME shape `DriveNamed` already refuses an unknown drive id with
+> in this same file, substituting crude quality for drive mechanism; never a
+> silent fall-back to the engine's old single default. (`Rung<TTier>` in
+> `OGSim.Composition/FacilitiesState.cs` is the same pattern's restore-only
+> cousin; `DriveNamed` is the closer precedent here because a fluid system
+> is named at CREATE time too, not only on restore.)
+>
+> **Out of scope, named rather than solved.** Surface-side consumers that
+> operate on COMMINGLED streams from multiple compartments —
+> `OGSim.Facilities.Pipeline`/`Separator`, and `ProductionLoop`'s bulk
+> per-tick `WellsState.RefreshFromReservoir` refresh — keep reading the one
+> shipped default fluid system. Blending several compartments' distinct fluid
+> properties into one surface stream's effective properties is a genuine,
+> separate modelling question (real petroleum engineering answers it with a
+> volume-weighted average, itself a design decision this document does not
+> make casually) and is not this amendment's to invent an answer to.
+>
+> **Amendment (finding 271): a new truth-door member, and the blending
+> question above turned out not to block pricing.** `TrueFluidSystemOf`
+> joins `TrueVoidageRoomOf`/`TrueWorstSourFraction` — read directly by
+> `ProductionLoop` for design 08 §3.1's quality-differential pricing term
+> (SDD-009 §6's own amendment), not routed through `ObservationSampler`.
+> Pricing needed a per-tick, production-weighted GRADE for the sale, not the
+> commingled surface stream's own effective properties — `ProductionLoop`
+> already tracks each compartment's reservoir-volume withdrawal for the
+> tick, from BEFORE the network solve commingles anything, so a weighted
+> average of the grade NUMBER (not the fluid) answers the pricing question
+> without touching `Pipeline`/`Separator` or resolving how they would blend
+> two streams' PVT properties. The carve-out above stands unchanged.
+
 ### 3.1 Material balance solve
 
 The black-oil material balance in Havlena-Odeh grouping, solved for end-of-tick
@@ -372,6 +427,74 @@ volumetric line is linear to floating-point tolerance, because the player is
 invited to extrapolate it and read `G` off the x-intercept. A line that drifted
 by a percent would make a correct deduction give a wrong answer, and the mechanic
 depends on the player being able to trust their own arithmetic.
+
+> **Amendment (finding 264) — the line was implemented and dispatched by
+> nothing.** `GasMaterialBalance.Solve` (`OGSim.Subsurface`, R5.7) has carried
+> this exact arithmetic since it was written, tested only against inputs a
+> fixture assembled by hand — the tracker's own words were "there is no
+> dry-gas compartment anywhere in this composition, so `p/Z` has no subject to
+> fit a line against." Two gaps stood between the formula and a real
+> compartment, and this closes the RESERVOIR half of both, deliberately not
+> the WELL half (below).
+>
+> **§3.1's oil form is dispatched by `Drive.SolveEndPressure`, one
+> `IDriveMechanism` per compartment (§4.2b); this gains a sibling rather than
+> a branch inside the oil path.**
+>
+> ```csharp
+> // A standalone IDriveMechanism — NOT a DriveMechanism subclass, because that
+> // base class's SolveEndPressure calls §3.1's oil form unconditionally. Two
+> // different balance equations are two different mechanisms, not one
+> // mechanism with a flag.
+> internal sealed class VolumetricGasDrive : IDriveMechanism
+> {
+>     public ContentId Id { get; } = new("volumetric-gas-drive");
+>     public AdmittedTerms Admits { get; } =
+>         new(GasCap: false, AquiferInflux: true);   // water drive bends the line; §3.1's
+>                                                     // gas-cap ratio is an OIL-ZONE concept
+>                                                     // a dry-gas compartment has none of
+>     public IReadOnlyList<ContentId> AcceptedInjectants { get; } = [];
+> }
+> ```
+>
+> **`MaterialBalanceInput` and `InitialConditions` both gain two fields the gas
+> form needs and the oil form never asked for**: `GasInPlace` (G — already
+> declared on `InitialConditions`, hardcoded to zero at both of its
+> construction sites, which is finding 145's own shape one level down) and a
+> new `ReservoirTemperature`, because `IFluidPropertyModel.Z(p, t)` is the one
+> fluid call in this whole document that takes temperature as an argument
+> rather than folding it into the model. Every existing drive receives both
+> and reads neither, the same way every drive already receives `GasCapRatio`
+> and only the gas-cap drive reads it.
+>
+> **A compartment must be BUILT as dry gas, not discovered as one.** World
+> generation decides oil-versus-gas nowhere in this composition — G6 §2.7's
+> handoff carries an oil saturation and nothing names a hydrocarbon phase —
+> and deciding that is a real petroleum-systems question (source maturity,
+> not merely structure size) this amendment does not answer. So a dry-gas
+> compartment is HAND-DECLARED, the same way every fixture in this codebase
+> already hand-declares an oil one: `SubsurfaceState.CreateGas` /
+> `FieldControl.AddGasCompartment`, mirroring `Create`/`AddCompartment`'s own
+> shape — pore volume, gas saturation (against the SAME connate-water
+> agreement check §3.1 already makes for oil, substituting Sg for So),
+> pressure, reservoir temperature, rock, a single gas-water contact (`Contacts`
+> carries two lengths and reads neither anywhere in this assembly today — a
+> pre-existing gap this amendment does not create and does not close), a
+> drive, and an optional aquifer. `GasInPlace = PV·Sg / Bg(Pi)`, the gas
+> form's own N.
+>
+> **What this amendment does NOT close, and why it stops here.** §6.1 already
+> pins the well half — `q_sc = C·(Pr² − Pwf²)ⁿ`, C and n content per
+> completion test — but §6.1b's produced-stream conversion is written entirely
+> in terms of a completion's TOTAL LIQUID rate, split by water cut with
+> solution gas lifted out of the oil by `Rs`. A gas well has no liquid rate at
+> its core; it has a gas rate with a possible condensate yield, and nothing in
+> this document says how that stream reaches the network. Building the
+> inflow model alone would let a gas well solve a rate and have no specified
+> path to turn it into a `MaterialStream` — a design gap, not an
+> implementation one, and exactly the kind of fork this project stops at
+> rather than invents past. It is R14.6's own remaining half, named rather
+> than guessed at.
 
 ### 3.1c Water cut — the fractional-flow S-curve
 
@@ -1329,6 +1452,136 @@ public interface ICompletion : IFlowElement
 > does not yet map to a facility or an activity (R20d.10's own open item),
 > so building them now would mean inventing the mapping rather than reading
 > it — named and left, not silently dropped.
+
+> **R12b.2 amendment (finding 255): a well can be given a pump.** §6.2
+> declares four working `ILiftMethod`s (R7.1–R7.5, all ✅) and nothing in
+> this composition ever constructs one against a real well — `Completion`
+> opens with `lift: null` always (`CompletionFor`), and no command touches
+> it afterward, the same "real mechanism, joined to nothing" shape as
+> findings 149, 200, 207, 252, 253 and 254.
+>
+> **Two immutable references, not one, and both have to move together.**
+> `Completion.Lift` is one; the other is `_outflow`, because
+> `HydrostaticFrictionOutflowModel` (§6.2) takes its `ILiftMethod?` at
+> construction and has no setter of its own — §6.2's hooks are read INSIDE
+> the outflow model's own `RequiredBottomhole`, not read separately by
+> `Completion`, so installing a lift method that only updated the property
+> a host reads would leave the solve using the old one (an L5 hazard: two
+> places would each answer "what lift is installed" and only one would be
+> true of the physics). `Completion` gains one member that swaps both:
+>
+> ```csharp
+> // Both move together or neither does — `_outflow` is what the solve
+> // actually reads, `Lift` is what a host and R18's hazard model read, and a
+> // half-installed lift would make the two disagree about the same well.
+> void InstallLift(ILiftMethod lift, IOutflowModel outflow);
+> ```
+>
+> **The caller builds the new outflow model, not `Completion`.** A
+> `Completion` holds `IOutflowModel` through the interface (law L1) and
+> cannot rebuild a `HydrostaticFrictionOutflowModel` it has no concrete
+> reference to; asking it to would mean either depending on the concrete
+> type or growing a second construction path outside composition. The
+> tubing geometry the new model needs is not a fact `Completion` loses
+> between drilling and installing lift — `CompletionFor`'s `tubing` is
+> exactly `(totalDepth, totalDepth, 0.0889 m, 4.6e-5)`, and `totalDepth` is
+> recoverable from the well's own perforations (`DeepestMd`, already
+> `ProductionLoop`'s own method for the same reconstruction problem
+> `WellboreNamed` solves) rather than a second stored copy.
+>
+> **Started at one technique and widened to all four in the same task.** A
+> rod pump shipped first — un-gated, its tier content
+> (`content/wells/rod-pump-a.json`), mirroring `TakeOrPayContentKind`'s
+> ungated form rather than a facility ladder's gated one: a pump is
+> installed once, not upgraded through a progression this composition has
+> no second rung for yet. **All four now ship**: PCP shares the rod pump's
+> exact model (§6.2 gives both the same relation, differing only in the
+> tier's envelope, so both are content-typed as one shared
+> `DisplacementPumpDefinition`/`DisplacementPumpTier` distinguished by
+> which rung a caller reads); ESP adds a piecewise-linear head curve and an
+> efficiency; gas lift adds an injection rate and a gas density. One
+> activity per method (`InstallRodPumpActivity`, `InstallPcpActivity`,
+> `InstallEspActivity`, `InstallGasLiftActivity`), sharing the refusal
+> logic and the tubing-geometry reconstruction through a `LiftGate` static
+> helper — the same shape five equipment installs already share through
+> `RungGate.Buyable`. **Four DISTINCT `ActivityTerms.Template` ids, not
+> one shared across the four**: `ActivityState` keys its catalogue by
+> `Template` in a dictionary, so the first draft's single shared
+> `install-lift` id would have let the last-registered activity silently
+> replace the other three in the lookup — caught building the composition
+> test that exercises all four, not by inspection.
+>
+> **Gas lift's injection gas is a fixed, content-declared rate with no
+> supply-side modelling**, stated as a limit rather than an oversight:
+> `GasLift.InjectionRate` exists precisely so "R9 replaces the purchased
+> supply with the field's own compressed gas" one day, and R9's own
+> gas-processing chain (compression, dehydration, NGL) is itself still
+> built-and-not-composed (R11.2's open row) — wiring gas lift's supply
+> into gas the field has not yet learned to process would be inventing a
+> second, larger mechanism this task did not scope.
+>
+> **Refused where installing one would improve nothing**: no such well,
+> the well is plugged, or the well already carries ANY lift method — a
+> second pump of any kind on the same string is not a decision this
+> mechanic models.
+
+> **Persistence amendment (finding 256): stimulation and lift do not survive
+> a reload.** `WellsState.Capture`'s own comment claims "the completion's own
+> configuration — tubing, choke, lift — is CONTENT, restored by the loader
+> rather than copied into every save (SDD-013 §4)" — true of the AS-DRILLED
+> default and false of anything a player did to it afterward. `Reopen` calls
+> the same `Drill` a fresh well uses, which always opens at `Skin: 0.0` and
+> `Lift: null` (`CompletionFor`); nothing downstream reapplies a stimulation
+> job or a lift install, so a save made after either command survives the
+> reload's own `Rebuild` and then silently reverts. The same "real mechanism,
+> joined to nothing" shape this file has now found four times (149, 200/207,
+> 252, 253/255) recurs a fifth time, on the save path rather than the command
+> path.
+>
+> **`Completion` gains one read-only fact.** Skin is a REBUILT list, not a
+> counter (§6's R12b.7 amendment), so nothing on the completion previously
+> said how much of it was stimulation; a save needs the decision, not the
+> resulting number, because reapplying it IS `Stimulate` itself and
+> `Stimulate` is written in terms of a reduction, not a floor.
+>
+> ```csharp
+> // The sum of every skinReduction a stimulation job has ever ordered on this
+> // completion — what a save needs to reproduce the effect by calling
+> // Stimulate again, once, against a freshly reopened well's own zero
+> // baseline, rather than a second mechanism that pokes Perforation directly.
+> double SkinReduction { get; }
+> ```
+>
+> **Lift needs no new member at all.** `ILiftMethod.InstalledTier` and
+> `.Installed` already carry exactly what a reinstall needs to ask "which of
+> the four shipped tiers, and when" — the gap was never in what `Completion`
+> exposes, only in nothing reading it before a reload discarded it.
+>
+> **Both restore through the command's own mechanism, not a bypass.**
+> `WellsState.Restore` calls `completion.Stimulate(saved.SkinReduction)`
+> when it is positive — the exact call `StimulateWellActivity.Complete`
+> makes, replayed once against the rebuilt well's own baseline, the same way
+> `Reopen` replays `Drill` rather than laying a second construction path
+> beside it (S013-5's own reasoning, one level up). Lift is reinstalled the
+> same way, but from composition rather than from `WellsState`: rebuilding
+> the concrete `ILiftMethod` and its outflow model needs `LiftTiers` (to look
+> up which tier the saved id names) and `FieldControl` (`LiftGate.OutflowFor`,
+> which reads the well's own tubing geometry) — neither of which
+> `OGSim.Wells` may depend on (law L1). `SaveGame.Restore` calls a new
+> `LiftGate.Reconstruct` right after `wells.completions` restores, the same
+> place `Rebuild` already runs, for the same layering reason.
+>
+> **`LiftTiers` is now provided**, the same way `field` itself is
+> (`FieldModule.Compose`) — a reload is a second real consumer, after the
+> four install activities, and neither could reach it as a constructor
+> parameter alone.
+>
+> **`WellsState.SchemaVersion` moves 2 → 3.** Three fields join the block per
+> well: `skin-reduction` (0.0 when never stimulated), `lift-tier` (empty
+> string when no lift is installed — `ContentId` cannot itself be empty, so
+> the sentinel is unambiguous), and the installed date as
+> `lift-installed-year`/`lift-installed-month` (unread when `lift-tier` is
+> empty).
 
 ### 6.1 Inflow (SI Darcy form, per perforation)
 

@@ -5,6 +5,7 @@ using Godot;
 using OGSim.Composition;
 using OilfieldDays.App;
 using OilfieldDays.Host;
+using System;
 
 namespace OilfieldDays.Ui;
 
@@ -22,6 +23,7 @@ namespace OilfieldDays.Ui;
 /// same place and the same style. A made-up percentage would look right and be
 /// a lie.</para>
 /// </summary>
+[Tool]
 public sealed partial class GameHud : CanvasLayer
 {
     /// <summary>The shipped scenario's target and deadline (EngineBuilder.FirstField).</summary>
@@ -36,23 +38,18 @@ public sealed partial class GameHud : CanvasLayer
     private const int MostToasts = 4;
 
     private VBoxContainer _toasts = null!;
-    private HBoxContainer _hotbar = null!;
+    private PanelContainer _toastTemplate = null!;
 
     public override void _Ready()
     {
         Layer = 10;
 
-        var root = new Control { Name = "HudRoot", MouseFilter = Control.MouseFilterEnum.Ignore };
+        Control root = RequireNamed<Control>(this, "HudRoot");
+        root.MouseFilter = Control.MouseFilterEnum.Ignore;
         root.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
-        AddChild(root);
 
-        // The prompt for whatever is under the wheels, and the toasts. That is
-        // all: every readout moved to the shell's panels, and the hotbar went
-        // with them — it listed the same numbered actions the ACTIONS panel
-        // already lists, so it was a second copy of one list crowding the bottom
-        // of the screen and hiding behind the selection card.
-        root.AddChild(BuildPrompt());
-        root.AddChild(BuildToastColumn());
+        BindPrompt(root);
+        BindToastColumn(root);
     }
 
     /// <summary>Offer, or stop offering, whatever is under the wheels.</summary>
@@ -74,24 +71,27 @@ public sealed partial class GameHud : CanvasLayer
     /// </remarks>
     public void Toast(string message, bool bad)
     {
-        var panel = new PanelContainer();
-        panel.AddThemeStyleboxOverride("panel", SlateChrome.FieldPlate());
+        var panel = (PanelContainer)_toastTemplate.Duplicate();
+        panel.Name = "Toast";
+        panel.Visible = true;
+        panel.Modulate = Colors.White;
 
-        Label label = SlateChrome.Text(message, 17, bad ? KitTheme.Red.Lightened(0.35f) : KitTheme.Ink);
+        Label label = RequireNamed<Label>(panel, "ToastText");
+        label.Text = message;
         label.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         label.CustomMinimumSize = new Vector2(460, 0);
-        panel.AddChild(label);
+        label.AddThemeFontSizeOverride("font_size", 17);
+        label.AddThemeColorOverride("font_color", bad ? KitTheme.Red.Lightened(0.35f) : KitTheme.Ink);
+
         _toasts.AddChild(panel);
 
         // A column that can grow without limit is a column that covers the game.
         // Months can arrive faster than a toast fades — a fast-forward runs
         // thirty of them before a single fade completes — so the oldest go
         // immediately rather than waiting their turn.
-        while (_toasts.GetChildCount() > MostToasts)
+        while (ToastCount() > MostToasts)
         {
-            Node oldest = _toasts.GetChild(0);
-            _toasts.RemoveChild(oldest);
-            oldest.QueueFree();
+            RemoveOldestToast();
         }
 
         Tween tween = CreateTween();
@@ -100,31 +100,102 @@ public sealed partial class GameHud : CanvasLayer
         tween.TweenCallback(Callable.From(panel.QueueFree));
     }
 
-    private Control BuildPrompt()
+    private void BindPrompt(Control root)
     {
-        _promptPanel = new PanelContainer { Visible = false, CustomMinimumSize = new Vector2(460, 0) };
-        _promptPanel.AddThemeStyleboxOverride("panel", SlateChrome.FieldPlate());
+        _promptPanel = RequireNamed<PanelContainer>(root, "PromptPanel");
+        _prompt = RequireNamed<Label>(_promptPanel, "Prompt");
+        _prompt.Name = "Prompt";
 
-        _promptPanel.SetAnchorsPreset(Control.LayoutPreset.CenterBottom);
-        _promptPanel.Position = new Vector2(-230, -142);
-
-        _prompt = SlateChrome.Text(string.Empty, 22, KitTheme.Ink, HorizontalAlignment.Center);
-        _promptPanel.AddChild(_prompt);
-
-        return _promptPanel;
+        StylePrompt();
     }
 
-    private Control BuildToastColumn()
+    private void BindToastColumn(Control root)
     {
-        var holder = new Control { MouseFilter = Control.MouseFilterEnum.Ignore };
-        holder.SetAnchorsPreset(Control.LayoutPreset.CenterTop);
-        holder.Position = new Vector2(-250, 88);
+        Control holder = RequireNamed<Control>(root, "ToastHolder");
+        holder.MouseFilter = Control.MouseFilterEnum.Ignore;
+        holder.AnchorLeft = 0.5f;
+        holder.AnchorTop = 0.0f;
+        holder.AnchorRight = 0.5f;
+        holder.AnchorBottom = 0.0f;
+        holder.OffsetLeft = -250.0f;
+        holder.OffsetTop = 88.0f;
+        holder.OffsetRight = 250.0f;
+        holder.OffsetBottom = 88.0f;
+        holder.GrowHorizontal = Control.GrowDirection.Both;
+        holder.GrowVertical = Control.GrowDirection.End;
         holder.CustomMinimumSize = new Vector2(500, 0);
-
-        _toasts = new VBoxContainer { CustomMinimumSize = new Vector2(500, 0) };
-        _toasts.AddThemeConstantOverride("separation", 8);
-        holder.AddChild(_toasts);
-
-        return holder;
+        _toasts = RequireNamed<VBoxContainer>(holder, "Toasts");
+        _toastTemplate = RequireNamed<PanelContainer>(_toasts, "ToastTemplate");
+        StyleToasts();
     }
+
+    private void StylePrompt()
+    {
+        _promptPanel.Visible = false;
+        _promptPanel.CustomMinimumSize = new Vector2(460, 0);
+        _promptPanel.AddThemeStyleboxOverride("panel", SlateChrome.FieldPlate());
+        _prompt.AddThemeFontSizeOverride("font_size", 22);
+        _prompt.AddThemeColorOverride("font_color", KitTheme.Ink);
+        _prompt.HorizontalAlignment = HorizontalAlignment.Center;
+    }
+
+    private void StyleToasts()
+    {
+        _toasts.CustomMinimumSize = new Vector2(500, 0);
+        _toasts.AddThemeConstantOverride("separation", 8);
+        _toastTemplate.Visible = Godot.Engine.IsEditorHint();
+        _toastTemplate.AddThemeStyleboxOverride("panel", SlateChrome.FieldPlate());
+
+        Label sample = RequireNamed<Label>(_toastTemplate, "ToastText");
+        sample.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+        sample.CustomMinimumSize = new Vector2(460, 0);
+        sample.AddThemeFontSizeOverride("font_size", 17);
+        sample.AddThemeColorOverride("font_color", KitTheme.Ink);
+    }
+
+    private int ToastCount()
+    {
+        int count = 0;
+
+        foreach (Node child in _toasts.GetChildren())
+        {
+            if (child != _toastTemplate)
+                count++;
+        }
+
+        return count;
+    }
+
+    private void RemoveOldestToast()
+    {
+        foreach (Node child in _toasts.GetChildren())
+        {
+            if (child == _toastTemplate)
+                continue;
+
+            _toasts.RemoveChild(child);
+            child.QueueFree();
+            return;
+        }
+    }
+
+    private static T? FindNamed<T>(Node at, string name) where T : Node
+    {
+        if (at is T typed && at.Name == name)
+            return typed;
+
+        foreach (Node child in at.GetChildren())
+        {
+            T? found = FindNamed<T>(child, name);
+
+            if (found is not null)
+                return found;
+        }
+
+        return null;
+    }
+
+    private static T RequireNamed<T>(Node at, string name) where T : Node =>
+        FindNamed<T>(at, name) ?? throw new InvalidOperationException(
+            $"{nameof(GameHud)} requires a design-time {typeof(T).Name} named '{name}' under {at.GetPath()}.");
 }

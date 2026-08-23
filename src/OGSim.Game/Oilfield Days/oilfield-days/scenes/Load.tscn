@@ -1,6 +1,7 @@
-[gd_scene load_steps=2 format=3]
+[gd_scene load_steps=3 format=3]
 
 [ext_resource type="Script" path="res://game/Screens/LoadGame.cs" id="1_script"]
+[ext_resource type="Texture2D" path="res://assets/icons/crude-oil-storage-tank.png" id="2_slot_icon"]
 
 [node name="Load" type="Control"]
 anchors_preset = 15
@@ -9,3 +10,101 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("1_script")
+
+[node name="Ground" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.01, 0.014, 0.021, 1)
+
+[node name="LoadPanel" type="PanelContainer" parent="."]
+custom_minimum_size = Vector2(900, 720)
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -450.0
+offset_top = -360.0
+offset_right = 450.0
+offset_bottom = 360.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Page" type="VBoxContainer" parent="LoadPanel"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="Title" type="Label" parent="LoadPanel/Page"]
+layout_mode = 2
+text = "LOAD GAME"
+horizontal_alignment = 1
+
+[node name="Scroll" type="ScrollContainer" parent="LoadPanel/Page"]
+custom_minimum_size = Vector2(860, 540)
+layout_mode = 2
+horizontal_scroll_mode = 0
+
+[node name="List" type="VBoxContainer" parent="LoadPanel/Page/Scroll"]
+custom_minimum_size = Vector2(840, 0)
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="EmptyState" type="Label" parent="LoadPanel/Page/Scroll/List"]
+layout_mode = 2
+text = "No saved games. A run saves from the pause menu while it is playing."
+autowrap_mode = 3
+
+[node name="SlotTemplate" type="PanelContainer" parent="LoadPanel/Page/Scroll/List"]
+visible = false
+custom_minimum_size = Vector2(830, 0)
+layout_mode = 2
+
+[node name="SlotRow" type="HBoxContainer" parent="LoadPanel/Page/Scroll/List/SlotTemplate"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="SlotIcon" type="TextureRect" parent="LoadPanel/Page/Scroll/List/SlotTemplate/SlotRow"]
+custom_minimum_size = Vector2(40, 40)
+layout_mode = 2
+texture = ExtResource("2_slot_icon")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="SlotLines" type="VBoxContainer" parent="LoadPanel/Page/Scroll/List/SlotTemplate/SlotRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 2
+
+[node name="SlotTitle" type="Label" parent="LoadPanel/Page/Scroll/List/SlotTemplate/SlotRow/SlotLines"]
+layout_mode = 2
+text = "Beep Energy Co.   -   month 12"
+
+[node name="SlotMeta" type="Label" parent="LoadPanel/Page/Scroll/List/SlotTemplate/SlotRow/SlotLines"]
+layout_mode = 2
+text = "$60.0M   -   2 wells   -   24 km basin   -   seed 20260818"
+
+[node name="LoadButton" type="Button" parent="LoadPanel/Page/Scroll/List/SlotTemplate/SlotRow"]
+custom_minimum_size = Vector2(140, 46)
+layout_mode = 2
+text = "LOAD"
+
+[node name="DeleteButton" type="Button" parent="LoadPanel/Page/Scroll/List/SlotTemplate/SlotRow"]
+custom_minimum_size = Vector2(140, 46)
+layout_mode = 2
+text = "DELETE"
+
+[node name="Problem" type="Label" parent="LoadPanel/Page"]
+custom_minimum_size = Vector2(840, 0)
+layout_mode = 2
+autowrap_mode = 3
+
+[node name="BackButton" type="Button" parent="LoadPanel/Page"]
+custom_minimum_size = Vector2(220, 50)
+layout_mode = 2
+size_flags_horizontal = 4
+text = "BACK"

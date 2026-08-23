@@ -298,6 +298,97 @@ the cure window is the player's warning (IR-consistent).
 > posts a movement, so the cure-window pin above stays a statement about state
 > transitions rather than about money moving.
 
+> **Amendment (finding 262): the reserves' own value, not only what the bank
+> will advance against it.** SDD-014 §4 pins a Capital efficiency score
+> dimension on "value = cash + PV(1P) − debt − provisions", and R11.6's own
+> blocker names "company VALUE (not just cash)" as a read-model projection
+> that does not exist — both read a PV(1P) this section never exposed, because
+> `PresentValue` computed it and immediately applied the advance-rate haircut
+> before returning, so only the LENDABLE fraction of the reserves' worth ever
+> left `ReserveBasedLending`.
+>
+> **`BorrowingTerms` gains the raw figure beside the haircut one**, from the
+> same computation rather than a second one (law L5 — one discounted-cash-flow
+> walk, two roundings of it):
+>
+> ```csharp
+> public sealed record BorrowingTerms(
+>     Money BorrowingBase,
+>     Money ReserveValue,      // PV(1P), BEFORE the advance-rate haircut —
+>                              // what the oil is worth, not what it is lent
+>                              // against (SDD-014 §4's "company value")
+>     double Rate,
+>     double EsgSpread);
+> ```
+>
+> `Redetermine` walks the decline curve once into an unrounded total and rounds
+> it twice — once bare for `ReserveValue`, once scaled by the advance rate for
+> `BorrowingBase` — rather than rounding `ReserveValue` and then scaling the
+> rounded figure, which would compound two roundings into one and could move
+> `BorrowingBase` by a cent against every test already pinned to it.
+>
+> **Company value itself is composition arithmetic, not a new model.** There is
+> no second "how much is this company worth" policy to swap — it is
+> `cash + ReserveValue − debt − provisions`, four facts each already owned
+> elsewhere (the ledger's cash and abandonment-provision balances, `Bank.Drawn`,
+> and now `Terms.ReserveValue`) summed once in `FieldProjection.Publish` and
+> published as `FieldReadModel.CompanyValue` (SDD-017 §2). Nothing here scores
+> R24.6: Capital efficiency also needs Δ-over-the-scenario-span and cumulative
+> distributions/capex, which this amendment does not touch. And it does not by
+> itself rebuild the berth/cargo mechanic R11.6 reverted — it closes the one
+> prerequisite that row named, not the mechanic itself.
+
+> **Amendment (finding 274) — the forced amortisation schedule this section
+> already promised, run for the first time. R13.10's first of three, player-
+> side restructuring findings.** "Cure window → forced amortisation schedule"
+> is this section's OWN text, above, since the section was first pinned —
+> `CovenantState.Amortising` (`OGSim.Contracts/EconomicsContracts.cs`) has
+> carried a doc comment saying so since it was declared, and nothing has ever
+> read the state to act on it. A company that breached its covenant and let
+> the six-tick cure window run out sat in `Amortising` forever, doing nothing
+> different from a company that had never breached at all.
+>
+> **The schedule: 5% of what is drawn, swept from cash every tick the
+> covenant reads `Amortising`.** Grounded in real distressed-refinancing
+> practice — a rapid-amortisation covenant breach typically targets curing or
+> retiring the facility within 12–24 months; 5%/month retires a loan in
+> ~20 months if sustained, inside that range. Confirmed with Fahad before
+> landing, the same gate laytime/demurrage, the quality differential, the
+> hedge and insurance all went through (F-2 — a number with no derivation is
+> a violation regardless of how it is arrived at).
+>
+> **Capped at both `Drawn` and available cash** — a sweep can retire a loan
+> early but never manufacture debt beyond what is owed, and never drives cash
+> negative: a company that cannot afford even the swept amount pays what it
+> has and nothing more. Posted `Account.Debt` against `Account.Cash`,
+> `MovementCategory.Financing` — the same category `ChargeInterest` already
+> uses one call above it, since a principal repayment is the same kind of
+> financing movement interest already is, not a new one.
+>
+> **Re-assessed the SAME tick, against the post-sweep balance, same terms.**
+> `Bank.Settle` calls `IReserveBasedLending.Assess` a second time after the
+> sweep, with the unchanged `Terms` (the base does not move mid-tick) and the
+> now-lower `Drawn` `Bank` computes live off the ledger. `Assess`'s own first
+> line — `debt <= terms.BorrowingBase ⇒ Clear` — already handles "swept its
+> way back under the base" without any change to the state machine itself:
+> a company that sweeps enough clears the SAME tick, which is exactly what
+> the `Amortising` enum member's own doc comment ("a company that starts
+> producing its way out of it recovers") already promised and nothing had
+> ever delivered.
+>
+> **Scope, named rather than solved**: R13.10's other two levers — a
+> working-interest sale (design 08 §7's "asset sales"/"forced farm-outs",
+> merged from the seller's side) and takeover as a last resort — are each
+> their own finding, their own amendment. The FULL asset market SDD-011 §4
+> already specifies (a rival buying a PLAYER'S distressed assets, with a
+> "data room" observation replay) stays blocked: `Rival` is a complete,
+> real design and is never instantiated anywhere in the composed engine
+> (`new Rival(` — zero hits in `src/`, despite R16.4 being marked done), and
+> the data room's own claim does not hold up independently even if it were —
+> `IBeliefStore` has no bulk-import path by design, and the audit trail does
+> not record enough of an observation to replay one. Named as a separate,
+> larger task this amendment does not attempt.
+
 ## 6. Prices
 
 ```csharp
@@ -412,7 +503,228 @@ Insurance (ED6): premium(class) = exposure(class) · rate(record) per year;
 > already proven end to end by the bond forfeit, so this needed no new
 > ledger vocabulary, only a second poster of the existing kind.
 
-## 8. Error surface
+> **Amendment (finding 271): §6's quality differential, priced — the second
+> of design 08 §3.1's three terms to leave the formula and become a real
+> number.** `ProductionLoop.PostEconomics` priced every oil sale off the bare
+> benchmark, `_market.OilPrice`, with no differential term anywhere in the
+> code — a company holding a heavy-sour field and one holding a light-sweet
+> field earned identically, and finding 270's whole point (a compartment's
+> API gravity is now a real, drawn, per-field fact) had nothing downstream to
+> change because of it.
+>
+> ```text
+> Realised  =  Benchmark × (1 + rate × (API − reference))
+> rate       =  0.007                    // fraction of benchmark, per °API
+> reference  =  35.0°                    // Defaults.Fluid's own grade
+> ```
+>
+> **`rate` is not invented.** It comes from ESMAP/World Bank's statistical
+> study of crude price differentials ("Crude Oil Price Differentials and
+> Differences in Oil Qualities"), which finds each degree of API gravity
+> moves relative price by roughly 0.007 of the benchmark. The same study puts
+> sulphur's per-unit effect at roughly 0.056 per percentage point — about
+> eight times API's own — and **sulphur is deliberately not priced**: finding
+> 270's `fluid-system` content carries API gravity alone, and folding a
+> guessed sulphur figure into this term would invent a bigger number than the
+> one this amendment is careful to ground. Real heavy-sour differentials run
+> wider than API alone predicts for exactly this reason — this is a genuine
+> but partial model of design 08 §3.1's quality term, not a claim that
+> sulphur's premium/discount is covered.
+>
+> **`reference` is not a second number either.** `Defaults.Economics`'s own
+> shipped benchmark price is already derived "$377/m³ ÷ 0.85 t/m³" — and
+> 0.85 specific gravity is, to three significant figures, `Defaults.Fluid`'s
+> own 35° API. The benchmark was always implicitly priced against medium
+> crude; this amendment is the first place that assumption is written down
+> and used, rather than left as an unstated fact behind a dollar figure. One
+> consequence worth stating plainly: **a field that only ever produces the
+> shipped default grade prices at exactly the bare benchmark, unchanged from
+> before this amendment** — the full fast gate and slow suite both confirm
+> this by staying green with no test re-stated.
+>
+> **The differential is priced against a PRODUCTION-WEIGHTED grade, not a
+> single compartment's.** `ProductionLoop` already tracks each producing
+> compartment's own reservoir-volume withdrawal for the tick, in
+> `_byCompartment` — the same figure `SubsurfaceState.CommitTick` charges
+> each compartment against — so a field split across two fluid systems is
+> weighted by how much each one actually contributed this tick, not averaged
+> flat or priced off whichever compartment happens to be first. Walked over
+> the completions in their own declared order, never the dictionary (rule
+> D-5), the same discipline `PublishWithdrawals` already holds for the
+> identical reason.
+>
+> **`SubsurfaceState.TrueFluidSystemOf`** joins `TrueVoidageRoomOf` and
+> `TrueWorstSourFraction` as a truth-door member read by a composition
+> mechanic directly rather than through `ObservationSampler` — SDD-003 §3.0b
+> carries the citation; SDD-008 §3's table is unchanged, because none of
+> these three route through a belief.
+>
+> **Gas is untouched.** Sales gas prices off its own separate `_gasPrice`
+> (§6's own "separate benchmarks" line) and this engine tracks no gas
+> quality fact to differentiate against — the differential applies to the
+> oil sale alone.
+>
+> **A tick that reaches this term with no producing compartment to weight is
+> a refusal, not a default of zero.** A sale (`_sale is AuditId`) only exists
+> when `Delivered.Total.KgPerSecond > 0.0`, which requires real production
+> this tick — an `InvariantFault` names the gap rather than silently pricing
+> at the reference grade if that invariant is ever wrong. An unknown fluid
+> system id (a save or a generated world naming one this build's content
+> does not contain) is a `ContentFault`, the same shape `SubsurfaceState`'s
+> own `FluidFor` already refuses with.
+>
+> **Location differential stays open** — design 08 §3.1's third term, and
+> this amendment's own stated boundary: this engine has no per-field
+> distance-to-market fact to price against yet, and inventing one alongside
+> a grounded quality term would be exactly the kind of number this session's
+> standing discipline forbids.
+
+> **Amendment (finding 272): §7's hedge, typed and priced — R13.3's own
+> second casualty, the mechanism finding 250's own amendment named and
+> deliberately left open rather than fabricating alongside take-or-pay.**
+> The formula block above
+> pins the SHAPE (`settle = volume · (clamp(benchmark, floor, cap) −
+> benchmark)`) and no number — the same gap laytime/demurrage and the
+> quality differential each closed in their own tasks, confirmed with Fahad
+> before landing rather than invented at the call site.
+>
+> **One shipped collar, the same "one contract, not a ladder" shape
+> `TakeOrPayTerms` already has:**
+>
+> ```csharp
+> public sealed record HedgeTerms(
+>     double HedgedFraction,   // of the tick's own production, 0..1
+>     Money Floor,              // per tonne
+>     Money Cap);               // per tonne
+> ```
+>
+> **Settles fresh every tick, against that tick's OWN production and that
+> tick's OWN benchmark — no window, no accumulator, no state to own.**
+> Take-or-pay needs a clock because its penalty is a per-WINDOW shortfall;
+> a collar's settlement is a per-TICK spot difference and nothing about one
+> month's figure depends on any other's, so `Hedge.SettleAt` is a static,
+> stateless function rather than a class — the deliberately smaller
+> surface, not an oversight.
+>
+> **The numbers, grounded in the shipped market's OWN parameters rather
+> than a fresh invented band.** `Defaults.Market`'s volatility (0.09 a
+> month, log space) already exists to describe how far this engine's price
+> actually moves; a year-long, one-standard-deviation collar around its
+> long-run mean reuses it rather than asking Fahad for a second, unrelated
+> figure: annualised σ = 0.09·√12 ≈ 0.3118, floor = mean·e⁻σ ≈ mean·0.7322,
+> cap = mean·e⁺σ ≈ mean·1.3658. Half of each tick's own production is
+> hedged (`HedgedFraction = 0.5`) — an ordinary middle ground between full
+> exposure and giving up all the upside a full hedge would.
+>
+> **Settlement is against the RAW benchmark, never the quality-adjusted
+> realised price (SDD-009 §6's finding-271 amendment).** A financial hedge
+> references the market a company sells INTO — a published benchmark
+> quote — not the specific parcel's own API gravity; conflating the two
+> would make a company's hedge payout depend on which grade it happened to
+> produce that month, which is not how a collar struck against a market
+> index works.
+>
+> **No command, no player-facing acquisition — the same scope decision
+> finding 250 made for take-or-pay.** `ISalesContract` was already
+> corrected to a concrete type with no polymorphic plugin surface (finding
+> 250); a hedge a player could choose to buy, size, or re-strike needs its
+> own premium/cost model before it is a real decision rather than a free
+> option, and that is a materially larger task this amendment does not
+> invent an answer to. What ships is a standing collar the company is
+> already in, the same way `TakeOrPayContract` is granted at tick 0 rather
+> than bought.
+>
+> **`Account.Hedge` joins the chart of accounts.** Direction is which side
+> of the `Movement` the settlement posts to, never a signed `Money` —
+> SDD-009 §1's own rule, that the ledger says direction through debit/credit
+> rather than through the sign of an amount.
+>
+> **A real INV2 violation surfaced in the slow suite, and is worth recording
+> because it is not this amendment's formula that was wrong.** `Account` is
+> a C# enum `CostLedger.AssertBalanced` never enumerates directly — it walks
+> a SEPARATE, hand-maintained `AllAccounts` array, and `Hedge` was added to
+> the enum without being added to that array. Every hedge settlement still
+> posted correctly (debit one account, credit the other, same amount), but
+> `AssertBalanced` silently summed only the CASH side of each one and never
+> the `Hedge` side, so forty years of accumulated settlements read as a
+> trial-balance residue with no posting responsible for it — seven slow
+> tests failed with `INV2`, each naming a different accumulated figure, none
+> of them a bug in what was posted. Fixed by adding `Account.Hedge` to
+> `AllAccounts`; the fix touches only how the balance is CHECKED, not
+> anything computed, so no test needed re-pinning once it was closed — a
+> different shape of surprise than findings 265/268's, worth telling apart
+> from a false start in the mechanism itself.
+
+> **Amendment (finding 273): §7's insurance, typed and priced — the third
+> of `ISalesContract`'s four kinds and the deepest of the three, because its
+> own formula had nothing to read.** `min(loss − deductible, limit)` needs a
+> `loss`, and until this amendment a top event cost the company only ESG
+> standing points (SDD-012 §4b) — never a dollar. That gap is closed
+> alongside this one, in SDD-012 §4b's own finding-273 amendment, and this
+> amendment prices what a STANDING POLICY does about the loss that
+> amendment now produces, not the loss itself.
+>
+> **One shipped policy, the same shape `HedgeTerms` already has:**
+>
+> ```csharp
+> public sealed record InsuranceTerms(
+>     Money Exposure,          // the worst loss this policy is priced against
+>     double BaseRatePerYear,  // of Exposure, at a perfect (100) ESG standing
+>     double EsgRateSpread,    // additional, at the worst (0) standing
+>     Money Deductible,
+>     Money Limit);
+> ```
+>
+> **`Exposure` is `TopEventLossUnmitigated` itself** (SDD-012 §4b's own
+> finding-273 amendment) — the worst this policy could ever have to pay,
+> reused rather than a THIRD invented dollar figure alongside the two that
+> amendment already grounds.
+>
+> **`rate(record)` reuses the ESG standing `ReserveBasedLending` already
+> reads (SDD-009 §5), not a second record.** Design 08 §7 ED6's own words —
+> "gives the HSE record a second economic channel beside ESG" — are the
+> instruction: `rate = BaseRatePerYear + (100 − standing)/100 · EsgRateSpread`,
+> the identical base-rate-plus-spread shape the borrowing base is already
+> priced with (8% base, up to 4% ESG spread) — 3% base, up to 9% spread here,
+> scaled for a different risk rather than copying the lending numbers
+> verbatim. A spotless company pays 3% of exposure a year; the worst-rated
+> one pays 12%.
+>
+> **`Deductible = $0.5M`, `Limit = Exposure` ($6.0M)** — a company still
+> carries a small loss itself (the deductible), and the policy fully covers
+> even the worst top event once that clears.
+>
+> **Premium charges every tick, whether or not a loss lands — `1/12` of the
+> annual figure, SDD-001 §3's 30/360 month.** A claim settles only on the
+> tick a loss does, and for the SAME tick — a claim is what the loss caused,
+> not an independent event with its own timing. Posted `Account.
+> InsurancePremium` against `Account.Cash` (`MovementCategory.Insurance`,
+> both declared since this composition's very first chart of accounts and
+> read by nothing until now) and, on a claim, `Account.Cash` against a new
+> `Account.InsuranceClaim` — a separate account rather than netting against
+> `InsurancePremium`, so a read model can show what a policy cost and what
+> it paid back as two numbers rather than one that hides both.
+>
+> **No player-facing command — the same scope decision findings 250/272
+> made for take-or-pay and the hedge.** A player-chosen policy (which class,
+> which deductible, which limit, at what premium) is a real decision this
+> amendment does not invent; what ships is a standing policy the company is
+> already in, granted the same way `TakeOrPayContract` is at tick 0.
+>
+> **Stateless, like the hedge and unlike take-or-pay** — a policy's premium
+> and claim are both pure functions of one tick's own standing or loss, so
+> `Insurance` is a static class (`OGSim.Company`) with nothing to persist
+> between ticks.
+>
+> **A field with nothing running still pays the premium, and it moves a
+> fixed-cash test's own number.** `GameplayTests.
+> A_company_that_runs_out_of_money_is_insolvent` measured an idle field's
+> insolvency tick directly rather than re-deriving it from five compounding
+> costs, and re-measured it after this amendment: month 111 → month 95, the
+> ~$15,000/month premium a spotless standing still prices against a $6.0M
+> exposure, compounding against a fixture with almost nothing else moving.
+> Corrected the same way findings 258/265 were — measured, not guessed, and
+> the test re-stated in terms of the new number rather than tuned to hide it.
 
 | Situation | Response |
 |---|---|

@@ -1,0 +1,9 @@
+{
+  "kind": "pump-station",
+  "id": "pump-station-e1",
+  "availableFromEra": "E1",
+  "rung": 1,
+  "ratedCapacity": "20 kg/s",
+  "efficiency": "75 pct",
+  "discharge": "70 bar"
+}

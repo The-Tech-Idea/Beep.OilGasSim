@@ -1,0 +1,18 @@
+{
+  "kind": "esp",
+  "id": "esp-a",
+  "minRateCubicMetresPerSecond": 0.0,
+  "maxRateCubicMetresPerSecond": 0.05,
+  "maxDepthMetres": 4000.0,
+  "maxDeviationDegrees": 60.0,
+  "maxGasFraction": 0.1,
+  "maxTemperatureCelsius": 150.0,
+  "maxSolidsFraction": 0.02,
+  "efficiency": 0.55,
+  "headCurve": [
+    { "rateCubicMetresPerSecond": 0.0, "headMetres": 1400.0 },
+    { "rateCubicMetresPerSecond": 0.01, "headMetres": 1100.0 },
+    { "rateCubicMetresPerSecond": 0.02, "headMetres": 700.0 },
+    { "rateCubicMetresPerSecond": 0.04, "headMetres": 0.0 }
+  ]
+}

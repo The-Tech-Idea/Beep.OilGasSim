@@ -75,7 +75,7 @@ public sealed partial class DualGridTerrain : TileMapLayer
     /// sits at the corner of four cells and the far edge has cells on one side
     /// only — without the extra pass the material would end a half tile early.
     /// </remarks>
-    public void Repaint(WorldMap map, Func<Vector2I, bool> isMaterial)
+    public void Repaint(WorldMap map, Func<Vector2I, bool> isMaterial, bool treatOutsideAsMaterial = false)
     {
         ArgumentNullException.ThrowIfNull(map);
         ArgumentNullException.ThrowIfNull(isMaterial);
@@ -91,10 +91,10 @@ public sealed partial class DualGridTerrain : TileMapLayer
             {
                 int mask = 0;
 
-                if (Holds(map, isMaterial, x - 1, y - 1)) mask |= 1;   // top-left
-                if (Holds(map, isMaterial, x, y - 1)) mask |= 2;       // top-right
-                if (Holds(map, isMaterial, x - 1, y)) mask |= 4;       // bottom-left
-                if (Holds(map, isMaterial, x, y)) mask |= 8;           // bottom-right
+                if (Holds(map, isMaterial, x - 1, y - 1, treatOutsideAsMaterial)) mask |= 1;   // top-left
+                if (Holds(map, isMaterial, x, y - 1, treatOutsideAsMaterial)) mask |= 2;       // top-right
+                if (Holds(map, isMaterial, x - 1, y, treatOutsideAsMaterial)) mask |= 4;       // bottom-left
+                if (Holds(map, isMaterial, x, y, treatOutsideAsMaterial)) mask |= 8;           // bottom-right
 
                 int frame = FrameByMask[mask];
 
@@ -109,10 +109,10 @@ public sealed partial class DualGridTerrain : TileMapLayer
         }
     }
 
-    private static bool Holds(WorldMap map, Func<Vector2I, bool> isMaterial, int x, int y)
+    private static bool Holds(WorldMap map, Func<Vector2I, bool> isMaterial, int x, int y, bool treatOutsideAsMaterial)
     {
         var cell = new Vector2I(x, y);
 
-        return map.Contains(cell) && isMaterial(cell);
+        return map.Contains(cell) ? isMaterial(cell) : treatOutsideAsMaterial;
     }
 }

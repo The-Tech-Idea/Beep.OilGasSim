@@ -205,6 +205,39 @@ public sealed record ObjectiveView(
     ContentId RealityProfile);            // scores are stamped (18 §5b.6)
 ```
 
+> **Amendment (finding 262) — `CompanyView` gains what the company is worth,
+> not only what it holds.** `Cash` and `Debt` say what a company has been paid
+> and what it owes; neither says what it could sell for, which is the number
+> SDD-014 §4 scores Capital efficiency against and the one R11.6's own row
+> names as the missing prerequisite for any mechanic that defers revenue
+> reading as a decision rather than a loss:
+>
+> ```csharp
+> public sealed record CompanyView(
+>     Money Cash, Money Debt, Money BorrowingBase, double BorrowingRate,
+>     double EsgRateSpread, double ReserveReplacementRatio,
+>     SurfaceVolume Reserves1P, SurfaceVolume Reserves2P, SurfaceVolume Reserves3P,
+>     double EsgStanding, double SocialLicence,
+>     Money CompanyValue);   // cash + PV(1P) − debt − provisions (SDD-009 §5)
+> ```
+>
+> `FieldReadModel.CompanyValue` is composition arithmetic over facts already
+> owned elsewhere — `Bank.Terms.ReserveValue` (SDD-009 §5's amendment), the
+> ledger's own cash and abandonment-provision balances, and `Bank.Drawn` —
+> summed once in `FieldProjection.Publish`, never a second model. It answers
+> "what is this business worth" on its own; it does not by itself close R24.6
+> (Capital efficiency also needs the change in this figure over the scenario
+> span, plus cumulative distributions and capex) or rebuild R11.6's reverted
+> berth/cargo mechanic.
+>
+> **Reached an objective too, one task later (finding 267, SDD-014 §2's own
+> amendment).** The figure existed at Publish (stage 13) and nowhere earlier,
+> so `Defaults.ProjectedPaths` had nothing to register it against — an
+> objective evaluates at stage 12. `FieldPosition` now carries it, computed
+> once in `Take` from the same three facts, and `company.value` is a valid
+> path; `Publish` reads it off the position instead of computing it a second
+> time.
+
 > **R20d.1 amendment — the chain, as one row per element.** §2's views split the
 > two halves of the bottleneck report across the hierarchy: `FieldView` carries
 > `DeferredByElement` and `FacilityView` carries `UnitUtilisation`. That is right
@@ -236,6 +269,34 @@ public sealed record ObjectiveView(
 > The rows fold into `FieldView.DeferredByElement` and
 > `FacilityView.UnitUtilisation` when those views have something to hang from.
 
+> **Amendment (finding 282) — `IFacility`/`FacilityUnit` removed as dead
+> scaffolding, and what that means for the future of `FacilityView`.**
+> Phase 4's research (this session) found the literal thing `FacilityView`
+> presupposes — a real `IFacility`(container)/`FacilityUnit`(member)
+> parent-child hierarchy — had already been declared once
+> (`OGSim.Contracts/FacilityContracts.cs`) and never implemented: zero
+> callers, zero references anywhere, and sitting directly beneath that same
+> file's own header comment stating *"there is no facility-type hierarchy in
+> code at all (02 §4.1)"* — the interface contradicted the law recorded two
+> lines above it. `MASTER_TRACKER.md`'s finding 159 records a separate,
+> earlier rejection of a second element-type interface for the identical
+> reason. Both `IFacility` and the unused `EntityKind.FacilityUnit` are gone
+> (`EntityKind`'s remaining values pinned explicitly first, since the enum
+> is cast to `long` and persisted in save files — an implicit renumbering on
+> removal would have corrupted an existing save's kind tags for every member
+> after the one removed).
+>
+> **This settles how `FacilityView`/`UnitUtilisation` get built, whenever
+> that work resumes**: as a read-model-only projection over the flat
+> `SurfaceChain`, the exact pattern `ChainElementView` above already uses —
+> never by resurrecting `IFacility`/`FacilityUnit` as real domain types. The
+> "one Facility, one Site" framing (this composition has exactly one surface
+> chain, always) needs no container type of its own; `UnitUtilisation`
+> itself still waits on the §8 amendment this document already names two
+> paragraphs up — exposing `ConstraintEvaluation` out of `SolveReport` — a
+> genuine `OGSim.Flow` contract change, unaffected by this cleanup either
+> way.
+
 > **R21.5 amendment — the wells, as a subset read model can show them.** §2's
 > `WellView` carries a site, an operating point and sampled IPR/VLP curves,
 > none of which the current loop has a source for — and the subset read model
@@ -254,6 +315,51 @@ public sealed record ObjectiveView(
 > the surface does not offer, the surface is incomplete*), which is where it was
 > supposed to be found. It folds into `WellView` when a site and an operating
 > point have sources.
+
+> **R21.6 amendment — the operating point has a source now, and it needed no
+> new solve.** SDD-002 §9's `SolveReport.CompletionStates` already carries
+> every completion's converged rate AND wellhead backpressure — "S0 of the
+> next segment/tick initialises from these" — so the value this row was
+> waiting on has existed since R4 shipped; nothing downstream of the solve had
+> ever asked for it a second time.
+>
+> ```csharp
+> public sealed record WellStatusView(
+>     EntityRef Well, string DisplayId,
+>     WellStatus Status,
+>     SurfaceVolume ProducedThisTick,
+>     OperatingPoint? OperatingPoint,           // null: not solved this tick
+>     IReadOnlyList<ContentId> InstalledTiers);  // the fitted lift's tier, 0 or 1
+> ```
+>
+> **Reconstructed, not stored, and that is deliberate (law L5).** `Completion.
+> SolveOperatingPoint` is a pure function of the reservoir pressure it already
+> holds (refreshed every tick regardless of whether the well solves,
+> `WellsState.RefreshFromReservoir`) and the wellhead backpressure it is asked
+> about. `ProductionLoop` retains the LAST segment's `CompletionState` per
+> completion across a tick's `Accumulate` calls — cleared at `SolveFlow`'s own
+> tick boundary, the same place `_byCompartment` already clears — and the read
+> model calls `SolveOperatingPoint` once more against that retained backpressure
+> rather than caching the `OperatingPoint` object itself, which would be a
+> second value derived from the same inputs and liable to disagree with the
+> commit that actually ran (finding 137's own lesson, one layer up).
+>
+> **`null` is a well that did not solve this tick**, not a fabricated `Dead`:
+> a freshly-drilled completion before its first `SolveFlow`, or one shut out of
+> every segment by an upstream failure the whole month, has no converged state
+> to reconstruct from and says so rather than guessing.
+>
+> **`InstalledTiers` is 0 or 1 element today**, not a placeholder for a list
+> that never grows: `Completion.Lift` is a single nullable reference (R12b.2's
+> own scope limit — a second pump on one string is a ladder this composition
+> does not model), so the field is plural because `WellView`'s existing name
+> already is, not because a well can carry more than one.
+>
+> **Site and the sampled IPR/VLP curves remain out of scope**, named rather
+> than silently dropped: a site needs R20d.8's spatial half, which this task
+> does not touch, and a curve needs a SAMPLING pass across a rate range that
+> a single operating point does not — a real, separate feature rather than a
+> field this task happened not to fill in.
 
 > **Contract pass 10 — `FinanceView` was missing from the root.** This section
 > listed fourteen members and claimed "the exact 16-section ⇔ R21 §2.4b
@@ -297,6 +403,197 @@ public sealed record ObjectiveView(
 > Empty for a hand-built field, which is correct and not missing: a prospect is
 > something a world GENERATED, and a scenario that placed its reservoir directly
 > has nothing to explore.
+
+> **R21.6 amendment — `WorldView` had a producer and no consumer that may
+> reach it.** `WorldState.View` (§1's amendment above) has built a complete
+> `WorldView` since world generation shipped, and had exactly one reader in
+> the whole repository: its own unit test, resolving `WorldState` straight out
+> of the composition DI container. Neither real client may do that — §1's
+> "commands in, read model out" is the whole of what a client may touch — so a
+> map game's own map was unreachable through the one surface a map screen is
+> required to use.
+>
+> **Carried on `FieldReadModel` itself, not split beside it.** `IEngine.World`
+> is declared as its own top-level member, separate from `ReadModel`, because
+> that interface's split treats immutable state as a different KIND of thing
+> from the tick-to-tick record — but this composition's `Engine` does not
+> implement `IEngine` (§0's own reason: eleven of that interface's fifteen
+> projections have no source) and its `FieldReadModel` has never been split
+> that way for anything else. Rebuilding a `WorldView` from state already held
+> costs nothing a second field on one record does not already cost every other
+> unchanging fact on it, and a second read-model shape existing solely for one
+> field would be the second-owner shape law L5 forbids.
+>
+> `null` before generation has run, the same answer for the same reason a
+> read model itself is `null` before the first tick: a game that has not been
+> created has no map, and an empty one would be a lie about a world never
+> drawn.
+
+> **Amendment (finding 278) — `ExplorationView.Licences`, the first piece
+> of a multi-phase roadmap closing this document's remaining gap, and the
+> ONE item of it worth landing on its own merits rather than as a rename.**
+> This session researched all fourteen SDD-017 views against what
+> `FieldReadModel` actually ships (`plans/MASTER_TRACKER.md`'s own R21.6
+> row already tracks the same Served/Partial/Absent split) and found most
+> of `CompanyView`/`FinanceView`/`MarketView`/`ObjectiveView`'s members
+> ALREADY real and ALREADY reachable through `FieldReadModel`, just under
+> flatter names than SDD-017's nested shape — reshaping working, already-
+> consumed fields to match a naming convention would be a pure-cosmetic,
+> breaking change with no functional gap behind it, and risks the SECOND
+> shape law L5 forbids. That work is not landed here, and is not planned
+> to be: `FieldReadModel`'s current flat names stay the read model's one
+> owner of those facts.
+>
+> **`Licence` was different: a real, wired, already-enforced mechanic
+> (`OGSim.Company/Licence.cs`, SDD-011 §1) that a player could not see AT
+> ALL through the read model** — not a naming gap, a genuine blind spot. A
+> licence's work commitment can be missed and its bond forfeited
+> (`LicenceStage`, already real, already tested) with nothing on
+> `FieldReadModel` a host could have shown the player coming.
+>
+> **A single field, not a list.** SDD-017's own shape is a LIST of
+> `(Licence, Area, Expiry, CommitmentItemsOutstanding)` tuples, for a
+> company that may hold several — but SDD-011 §1's own R20d.9 amendment
+> already settled that this composition has exactly ONE licence, always,
+> the same reason `Bank`/the one `Tank` are singular facts rather than
+> lists of one. `Area: Polygon` is named rather than solved: no licence/
+> block geometry exists anywhere in this composition (confirmed again by
+> finding 277's own research into `Rival`/`Block` — SDD-011 §1 states
+> plainly that a multi-block company is R20's content).
+>
+> ```csharp
+> public sealed record LicenceView(
+>     EntityRef Licence, Tick Expiry, int CommitmentItemsOutstanding,
+>     bool IsLive, LicenceLossReason? LossReason);
+> ```
+>
+> **`IsLive`/`LossReason` are not in SDD-017's own tuple** — added because
+> a licence that has ALREADY been lost is the single most important thing
+> this view exists to show, and `LossReason` reuses `LicenceStage`'s own
+> "one transition, two named reasons" shape rather than a bare boolean
+> that cannot say which.
+>
+> Published from the SAME `Licence` instance `LicenceStage`/
+> `DrillWellCommand` already read and mutate (`FieldProjection` gains a
+> constructor dependency on it, `composition.Require<OGSim.Company.
+> Licence>()` at the same call site `bank`/`history` are already threaded
+> from) — one owner, no second copy.
+
+> **Amendment (finding 279) — `FieldView.WaterCut`, Phase 2's second
+> landed item.** `ProductionLoop.WaterCut` (`OGSim.Composition/
+> ProductionLoop.cs`) has been real since SDD-012 §1's souring mechanic
+> needed a `k_w` term — a plain ratio of what the custody meter delivered
+> last close (`water / (water + oil)`, zero on a field that has produced
+> nothing) — and it already has a real consumer, `AssetIntegrity.Advance`'s
+> corrosion rate (`OGSim.Integrity`). It never reached `FieldReadModel`: a host could watch a
+> field water out only by reading tank inventory trends by eye. **This is
+> the truth-side figure, not a belief** — SDD-017 §2's own `FieldView`
+> pairs `WaterCut`/`GasOilRatio` beside `ProducedActual`/
+> `ProducedPotential`, both real quantities the custody meter measured
+> this tick, distinct from `CompartmentView`'s BELIEVED pressure/water-cut/
+> GOR triple a few lines above it in this same document (R21-V4's truth/
+> belief boundary). `GasOilRatio` stays out — the roadmap already named it
+> genuinely unbuilt (no `TrueGasOilRatioOf` or equivalent exists anywhere
+> in `OGSim.Subsurface`) — this amendment publishes only the half that is
+> already computed.
+>
+> **A flat field, not a nested `FieldView`** — `FieldReadModel.WaterCut`,
+> matching every other scalar this record already carries directly
+> (`Cash`, `Wells`, `ProducedThisTick`) rather than introducing SDD-017's
+> nesting for one number, the same precedent `LicenceView` broke from only
+> because five related facts belonged together. Read straight off
+> `loop.WaterCut` at `Publish` (stage 13) — the same tick's custody-metered
+> delivery `ProducedThisTick` already reads, so the two figures describe
+> the same close and cannot disagree about which month they are from.
+
+> **Amendment (finding 280) — `FacilityView.SpecMargins`, Phase 2's third
+> landed item, breaches only.** `CustodyTransferPoint.LastBreaches`
+> (`OGSim.Facilities/SpecificationGate.cs`) is real and live — reset every
+> `Transform`, so it always describes the pass just made — and finding 252
+> already gave it a real consumer: `ProductionLoop.RecordRejection` writes
+> every breach (property, limit, measured, margin) into the audit trail the
+> same tick it happens. **So this is not quite the "discarded every
+> transform" gap the roadmap named it as** — it is recorded, just not
+> LIVE. A host asking "is the custody point on spec right now" has to
+> replay and parse `AuditCategory.Rejection` string-typed entries rather
+> than read a field, which is the same live-status gap `LicenceView` closed
+> for the licence: an event stream answers "what happened", never "what is
+> true this instant" without extra work on the reading end.
+>
+> **Not a margin for every spec property, as the roadmap's own framing
+> warned** — `SpecificationCheck.Evaluate` reports only what actually
+> FAILED (SDD-006 §7's own "every breach, not the first"), so a stream
+> comfortably on spec publishes an empty list, not five margins sitting
+> safely negative. `SpecBreach.Margin` names how far over, which is what a
+> player sizing a fix needs; a passing property's distance from its own
+> limit is not computed anywhere and is not what this closes.
+>
+> **`SpecBreachView`, a composition-owned mirror, not `OGSim.Facilities.
+> SpecBreach` itself** — `Layering_TheReadModelNamesNoDomainModule`
+> (`MetadataRules.cs`) only walks `FieldReadModel`'s own direct properties,
+> so a domain type nested inside `ChainElementView` would slip past that
+> guard's shallow check without tripping it — and sliding through a blind
+> spot is not the same as being allowed. `ICustodyTransferPoint`
+> (`OGSim.Contracts`) declares `Spec` and not `LastBreaches`, so there is
+> no contract-level type to read this off across the layering boundary
+> either way; a composition-owned record with the identical shape, keyed
+> off `OGSim.Contracts.SpecProperty` (already contracts-level), is the same
+> pattern `LicenceView`/`WeatherView`/`WaterFloodView` already use rather
+> than a new one:
+>
+> ```csharp
+> public sealed record SpecBreachView(SpecProperty Property, double Limit, double Measured)
+> {
+>     public double Margin => Measured - Limit;
+> }
+> ```
+>
+> **Placed on `ChainElementView`, not a new top-level field** — exactly one
+> `CustodyTransferPoint` exists in this composition (the same "one, always"
+> reasoning `LicenceView`/`Bank`/the one `Tank` already rest on), but WHICH
+> element is off spec is exactly the fact `ChainElementView` already exists
+> to carry (`Deferred` is the same idiom: a per-element list of "why this
+> element behaved as it did", keyed to the element a host is already
+> looking at). `ChainElementView.Breaches` is `[]` for every element but
+> the custody point, and its own `LastBreaches` for that one, read in
+> `ProductionLoop.Chain()` where the real `IFlowElement` instance
+> (`ordered[i]`) is already in hand.
+
+> **Amendment (finding 281) — `LogisticsView.Berths`, Phase 2's fourth
+> landed item, and a correction to the roadmap's own framing of it.** The
+> roadmap named this "real, missing only `NextFree` scheduling" — wrong on
+> the "only": `LogisticsView.Berths` as SDD-017 literally specifies it is
+> `IReadOnlyList<(EntityRef Berth, Tick NextFree)>`, a SCHEDULED future
+> tick a berth becomes free. **No such schedule exists anywhere in this
+> composition, and none is being built here** — R11.6's own shipped
+> mechanic (findings 268/269) gates loading on TANK LEVEL, reactively:
+> nothing draws from the tank until it holds a full `Defaults.CargoSize`
+> parcel, the berth clears it at its own rate once it does, and there is
+> no advance booking to compute a `NextFree` tick FROM. Publishing one
+> would mean inventing a number with no derivation (F-2).
+>
+> **What is real, and was published instead**: `ProductionLoop.
+> _cargoActiveDays` (SDD-006 §7a.4's finding-269 amendment) — how many
+> days the CURRENT cargo has occupied the berth, live, the same fact
+> `ChargeDemurrageIfLate` already reads to decide whether a departing
+> cargo owes demurrage. Held against `Defaults.CargoLaytimeDays`, a host
+> can already answer the more actionable question a schedule would only
+> approximate — "is this berth already running past its free time" —
+> without this composition ever needing to predict WHEN a reactive gate
+> will next trip.
+>
+> ```csharp
+> public sealed record BerthView(
+>     MassRate LoadingRate, double ActiveDays, double LaytimeDays, bool IsLate);
+> ```
+>
+> **A single field, not a list** — one `ExportTerminal`, one `Berth`, the
+> same "one, always" reasoning `LicenceView`/`Bank`/the one `Tank` already
+> rest on. `ActiveDays == 0` doubles as "no cargo is currently loading",
+> the same state `_cargoActiveDays` itself already carries — no second
+> flag invented to say the same thing twice (law L5). Read via a new
+> `ProductionLoop.Berth` property, the same shape `Storage` already is,
+> rather than a new constructor dependency.
 
 ## 3. The path registry (SDD-014 §2's source)
 

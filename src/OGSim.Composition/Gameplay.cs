@@ -59,7 +59,35 @@ public sealed record WellStatusView(
     EntityRef Well,
     string DisplayId,
     WellStatus Status,
-    SurfaceVolume ProducedThisTick);
+    SurfaceVolume ProducedThisTick,
+
+    /// <summary>
+    /// SDD-017 §2's R21.6 amendment: reconstructed from the last segment's
+    /// converged wellhead backpressure, not cached — <c>null</c> means the
+    /// well did not solve this tick (freshly drilled, or shut out of every
+    /// segment by an upstream failure the whole month), never a fabricated
+    /// <see cref="Dead"/>.
+    /// </summary>
+    OperatingPoint? OperatingPoint,
+
+    /// <summary>The fitted lift method's tier, if any — 0 or 1 element today,
+    /// because <see cref="ICompletion.Lift"/> is a single nullable reference
+    /// (R12b.2's own scope limit), not because a well can carry more than
+    /// one.</summary>
+    IReadOnlyList<ContentId> InstalledTiers)
+{
+    // Finding 131 — InstalledTiers is a collection.
+    public bool Equals(WellStatusView? other) =>
+        other is not null && Well == other.Well
+        && string.Equals(DisplayId, other.DisplayId, StringComparison.Ordinal)
+        && Status == other.Status && ProducedThisTick == other.ProducedThisTick
+        && OperatingPoint == other.OperatingPoint
+        && Structural.Equal(InstalledTiers, other.InstalledTiers);
+
+    public override int GetHashCode() =>
+        HashCode.Combine(Well, DisplayId, Status, ProducedThisTick,
+                         OperatingPoint, Structural.HashOf(InstalledTiers));
+}
 
 /// <summary>
 /// An undrilled structure and what the company thinks its chances are
@@ -140,7 +168,26 @@ public sealed record FieldPosition(
     int Wells,
     int ActivitiesRunning,
     SurfaceVolume ProducedThisTick,
-    bool Insolvent);
+    bool Insolvent,
+
+    /// <summary>
+    /// What this company is worth, not merely what it holds (SDD-014 §2's
+    /// finding-267 amendment): <c>cash + PV(1P) − debt − provisions</c>.
+    /// Computed here rather than only at <see cref="FieldProjection.Publish"/>
+    /// so an objective can be measured against it — R11.6's own prerequisite,
+    /// unreachable from stage 12 until this field existed this early.
+    /// </summary>
+    Money CompanyValue,
+
+    /// <summary>
+    /// R13.10's last-resort restructuring finding (SDD-014 §5a's finding-276
+    /// amendment): the covenant has read <c>Amortising</c> for 12 straight
+    /// ticks — 18 months past the original breach, once the 6-tick cure
+    /// window is counted — with no more working interest left to sell. Once
+    /// TRUE, always true, the same latch <see cref="Insolvent"/> already is:
+    /// a company does not get its field back.
+    /// </summary>
+    bool TakenOver);
 
 /// <summary>
 /// What the player can see, rebuilt at the close of every tick.
@@ -222,6 +269,31 @@ public sealed record WaterFloodView(
 /// nothing about what is waiting to be sold.</para>
 /// </summary>
 public readonly record struct StorageView(Mass Held, Mass Ullage);
+
+/// <summary>
+/// SDD-017 §2's `LogisticsView.Berths` row (finding 281) — a single field
+/// rather than a list, since this composition holds exactly one export
+/// terminal and one berth, always. `ActiveDays`/`LaytimeDays`/`IsLate`
+/// stand in for SDD-017's own `NextFree: Tick`, which this reactive,
+/// tank-level-gated mechanic has no schedule to compute (this record's
+/// own doc comment names why).
+/// </summary>
+public readonly record struct BerthView(
+    MassRate LoadingRate, double ActiveDays, double LaytimeDays, bool IsLate);
+
+/// <summary>
+/// SDD-017 §2's `ExplorationView.Licences` row (finding 278) — a single
+/// field rather than a list, since this composition holds exactly one
+/// licence, always (SDD-011 §1's R20d.9 amendment). `IsLive`/`LossReason`
+/// are not in SDD-017's own tuple, added because a licence already lost is
+/// the single most important thing this view exists to show.
+/// </summary>
+public sealed record LicenceView(
+    EntityRef Licence,
+    Tick Expiry,
+    int CommitmentItemsOutstanding,
+    bool IsLive,
+    OGSim.Company.LicenceLossReason? LossReason);
 
 public sealed record FieldReadModel(
     Tick Tick,
@@ -357,6 +429,20 @@ public sealed record FieldReadModel(
     Money Debt,
 
     /// <summary>
+    /// What this company is worth, not merely what it holds (SDD-017 §2's
+    /// finding-262 amendment): <c>cash + PV(1P) − debt − provisions</c>
+    /// (SDD-014 §4, SDD-009 §5).
+    ///
+    /// <para>Cash and production between them cannot say this — the same gap
+    /// <see cref="Reserves"/>'s own doc comment names, and the reason: a field
+    /// run to exhaustion improves both right up to the month it stops. This is
+    /// the number a company is actually sold on, and the prerequisite R11.6's
+    /// own row named for any mechanic that defers revenue to read as a
+    /// decision rather than a loss.</para>
+    /// </summary>
+    Money CompanyValue,
+
+    /// <summary>
     /// Everything this company has ever burned, and its record (SDD-012 §4).
     ///
     /// <para>Both, because one without the other cannot be acted on. The mass
@@ -427,7 +513,49 @@ public sealed record FieldReadModel(
     /// well was nearly down or barely started, and could not tell an operation
     /// that had stalled from one progressing normally.</para>
     /// </summary>
-    IReadOnlyList<OperationView> Operations)
+    IReadOnlyList<OperationView> Operations,
+
+    /// <summary>
+    /// The renderable world — terrain, settlements, transport, harbours,
+    /// climate regions and jurisdictions (SDD-017 §2's R21.6 amendment).
+    ///
+    /// <para><c>WorldState.View</c> has built this in full since world
+    /// generation shipped and had exactly one reader anywhere in the
+    /// repository — its own unit test, resolving `WorldState` straight out of
+    /// the DI container — because neither real client may do that (SDD-017
+    /// §1's "commands in, read model out"). A map game's own map was
+    /// unreachable through the surface a map screen is required to use.</para>
+    ///
+    /// <para><c>null</c> before generation has run, the same answer for the
+    /// same reason a read model before the first tick is null: a game that
+    /// has not been created has no map, and an empty one would be a lie about
+    /// a world never drawn. IMMUTABLE after creation and carried on the flat
+    /// record anyway rather than split beside it the way `IEngine.World` is
+    /// — this composition's own read model has always been one record, and
+    /// splitting one field out of it for a reason no consumer here asked for
+    /// would be a second shape competing with the one that already works.</para>
+    /// </summary>
+    WorldView? World,
+
+    /// <summary>The same latch <see cref="FieldPosition.TakenOver"/> is,
+    /// republished (SDD-014 §5a's finding-276 amendment).</summary>
+    bool TakenOver,
+
+    /// <summary>SDD-017 §2's `ExplorationView.Licences` row (finding 278) —
+    /// the player's own licence clock and work commitment, invisible to a
+    /// host until now.</summary>
+    LicenceView Licence,
+
+    /// <summary>SDD-017 §2's `FieldView.WaterCut` row (finding 279). The
+    /// TRUTH-side figure — what the custody meter delivered this close —
+    /// not a belief, and real since SDD-012 §1's souring mechanic needed
+    /// it; never published until now.</summary>
+    double WaterCut,
+
+    /// <summary>SDD-017 §2's `LogisticsView.Berths` row (finding 281) — the
+    /// one berth's current cargo, live: how long it has occupied the berth
+    /// and against what laytime.</summary>
+    BerthView Berth)
 {
     /// <summary>Where the chain is jammed, if anywhere — the elements that
     /// refused production this tick.</summary>
@@ -459,12 +587,13 @@ public sealed record FieldReadModel(
         && Structural.Equal(Chain, other.Chain)
         && Structural.Equal(Wellbores, other.Wellbores)
         && Structural.Equal(CashByCause, other.CashByCause)
-        && Structural.Equal(Operations, other.Operations);
+        && Structural.Equal(Operations, other.Operations)
+        && World == other.World;
 
     public override int GetHashCode() =>
         HashCode.Combine(Tick, Date, Cash, Wells, ActivitiesRunning, ProducedThisTick,
             HashCode.Combine(Insolvent, Progress, Structural.HashOf(Beliefs),
-                             Structural.HashOf(Chain), Structural.HashOf(Wellbores)));
+                             Structural.HashOf(Chain), Structural.HashOf(Wellbores), World));
 }
 
 /// <summary>
@@ -488,7 +617,11 @@ internal sealed class FieldProjection(
     Bank bank,
     ReserveHistory history,
     OGSim.Environment.WeatherState weather,
-    EsgAssessment esg)
+    EsgAssessment esg,
+
+    // SDD-017 §2's finding-278 amendment — read only, the same Licence
+    // instance LicenceStage/DrillWellCommand already own and mutate.
+    OGSim.Company.Licence licence)
 {
     /// <summary>The one region this world has (SDD-016 §1).</summary>
     private const int FieldRegion = 0;
@@ -501,9 +634,13 @@ internal sealed class FieldProjection(
     /// a job, short enough that ρ^h has not collapsed to the seasonal mean.</summary>
     private const int ForecastHorizonDays = 7;
 
-    public FieldPosition Take(Tick tick, GameDate date, bool insolvent) =>
-        new(tick, date, company.Ledger.Cash, field.WellCount, activities.InProgress,
-            loop.ProducedThisTick, insolvent);
+    public FieldPosition Take(Tick tick, GameDate date, bool insolvent, bool takenOver)
+    {
+        Money cash = company.Ledger.Cash;
+
+        return new(tick, date, cash, field.WellCount, activities.InProgress,
+            loop.ProducedThisTick, insolvent, CompanyValueOf(cash), takenOver);
+    }
 
     public FieldReadModel Publish(FieldPosition position, ScenarioProgress progress) =>
         new(position.Tick, position.Date, position.Cash, position.Wells,
@@ -524,7 +661,7 @@ internal sealed class FieldProjection(
             history.Ratio(
                 reserves.Remaining(loop.CumulativeProduced).Proved,
                 loop.CumulativeProduced),
-            bank.Terms, bank.Covenant, bank.Drawn,
+            bank.Terms, bank.Covenant, bank.Drawn, position.CompanyValue,
             loop.CumulativeFlared,
             esg.Of(),
             new WaterFloodView(
@@ -532,7 +669,43 @@ internal sealed class FieldProjection(
                 loop.SourFraction),
             loop.Storage,
             company.Ledger.CashByCause(position.Tick),
-            activities.Operations());
+            activities.Operations(),
+            world.View,
+            position.TakenOver,
+            LicenceOf(),
+            loop.WaterCut,
+            loop.Berth);
+
+    /// <summary>SDD-017 §2's finding-278 amendment — the read model's one
+    /// window onto the licence `LicenceStage`/`DrillWellCommand` already own.
+    /// </summary>
+    private LicenceView LicenceOf()
+    {
+        int outstanding = 0;
+
+        for (int i = 0; i < licence.Progress.Count; i++)
+            if (!licence.Progress[i].Met) outstanding++;
+
+        return new LicenceView(
+            new EntityRef(EntityKind.Licence, licence.Id.Value),
+            licence.Expiry, outstanding, licence.IsLive, licence.LossReason);
+    }
+
+    /// <summary>
+    /// What this company is worth (SDD-014 §2's finding-267 amendment): the same
+    /// three facts <see cref="Publish"/> used to read directly, now the one
+    /// place either stage reads from (law L5).
+    ///
+    /// <para>Credits are negative in this ledger (SDD-009 §1), so what is held
+    /// against abandonment is the negation of the account balance — the same
+    /// convention <c>Bank.Drawn</c> and <c>ProductionLoop</c>'s own accrual
+    /// use.</para>
+    /// </summary>
+    private Money CompanyValueOf(Money cash)
+    {
+        Money provisions = -company.Ledger.BalanceOf(Account.AbandonmentProvision);
+        return cash + bank.Terms.ReserveValue - bank.Drawn - provisions;
+    }
 
     /// <summary>
     /// The undrilled structures, in the order the world placed them (D-5).

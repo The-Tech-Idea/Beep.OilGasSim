@@ -1,0 +1,8 @@
+{
+  "kind": "fluid-system",
+  "id": "heavy-sour-crude",
+  "apiGravityDegrees": 22.0,
+  "gasSpecificGravity": 0.80,
+  "reservoirTemperature": "93.3 degc",
+  "solutionGorAtBubblePoint": 30.0
+}

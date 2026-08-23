@@ -30,14 +30,14 @@ public static class KitTheme
     // navy grounds and panel faces of the setup and gameplay screens, the amber
     // that titles every panel in them, and the green and red on the two buttons
     // that mean go and stop.
-    public static readonly Color Void = Color.FromHtml("0A1219");
-    public static readonly Color Surface = Color.FromHtml("13212C");
-    public static readonly Color Amber = Color.FromHtml("E8B54B");
-    public static readonly Color Sky = Color.FromHtml("58A9D8");
-    public static readonly Color Green = Color.FromHtml("4E9A4E");
-    public static readonly Color Red = Color.FromHtml("A93F35");
-    public static readonly Color Ink = Color.FromHtml("DCE6EE");
-    public static readonly Color Muted = Color.FromHtml("8095A6");
+    public static readonly Color Void = Color.FromHtml("071011");
+    public static readonly Color Surface = Color.FromHtml("121A1B");
+    public static readonly Color Amber = Color.FromHtml("E7A62F");
+    public static readonly Color Sky = Color.FromHtml("4AA9D4");
+    public static readonly Color Green = Color.FromHtml("83C660");
+    public static readonly Color Red = Color.FromHtml("C84B3F");
+    public static readonly Color Ink = Color.FromHtml("F4E7C9");
+    public static readonly Color Muted = Color.FromHtml("7E877F");
 
     /// <summary>Build the theme and hang it on the window root.</summary>
     public static void Install(Node any)
@@ -70,8 +70,8 @@ public static class KitTheme
         // The stock controls the kit does not replace — dropdowns and text
         // fields — are dressed to match, so a screen mixing the two does not
         // read as two screens.
-        StyleBoxFlat field = Box(Color.FromHtml("0F1B24"), Color.FromHtml("2A3D4C"));
-        StyleBoxFlat lit = Box(Color.FromHtml("0F1B24"), Amber);
+        StyleBoxFlat field = Box(Color.FromHtml("0B1213"), Color.FromHtml("334143"), radius: 2);
+        StyleBoxFlat lit = Box(Color.FromHtml("172225"), Amber, radius: 2);
 
         foreach (string type in new[] { "OptionButton", "LineEdit", "Button" })
         {
@@ -79,16 +79,16 @@ public static class KitTheme
             theme.SetStylebox("hover", type, lit);
             theme.SetStylebox("pressed", type, lit);
             theme.SetStylebox("focus", type, SlateChrome.Nothing);
-            theme.SetStylebox("disabled", type, Box(Color.FromHtml("0C151C"), Color.FromHtml("22323F")));
+            theme.SetStylebox("disabled", type, Box(Color.FromHtml("11191A"), Color.FromHtml("263234"), radius: 2));
             theme.SetColor("font_color", type, Ink);
             theme.SetColor("font_hover_color", type, Amber);
             theme.SetColor("font_disabled_color", type, Muted.Darkened(0.3f));
         }
 
-        theme.SetStylebox("panel", "PanelContainer", Box(Surface, Color.FromHtml("2C4354"), radius: 8));
-        theme.SetStylebox("panel", "Panel", Box(Surface, Color.FromHtml("2C4354"), radius: 8));
+        theme.SetStylebox("panel", "PanelContainer", Box(Surface, Color.FromHtml("334143"), radius: 2));
+        theme.SetStylebox("panel", "Panel", Box(Surface, Color.FromHtml("334143"), radius: 2));
 
-        theme.SetStylebox("panel", "PopupMenu", Box(Color.FromHtml("0F1B24"), Amber));
+        theme.SetStylebox("panel", "PopupMenu", Box(Color.FromHtml("0B1213"), Amber, radius: 2));
         theme.SetColor("font_color", "PopupMenu", Ink);
         theme.SetColor("font_hover_color", "PopupMenu", Amber);
 

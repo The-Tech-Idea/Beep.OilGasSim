@@ -107,23 +107,32 @@ public sealed class ReserveBasedLending : IReserveBasedLending
         // act on.
         double spread = _esgSpreadAtWorst * (1.0 - esgStanding);
 
-        return new BorrowingTerms(PresentValue(provedReserves), _baseRate + spread, spread);
+        // ONE WALK, TWO ROUNDINGS (SDD-009 §5's finding-262 amendment) — never
+        // a rounded ReserveValue scaled again into BorrowingBase, which would
+        // compound two roundings into one and could move BorrowingBase by a
+        // cent against every test already pinned to it.
+        double raw = PresentValueCents(provedReserves);
+        Money reserveValue = Money.RoundHalfEven(raw);
+        Money borrowingBase = Money.RoundHalfEven(raw * _advanceRate);
+
+        return new BorrowingTerms(borrowingBase, reserveValue, _baseRate + spread, spread);
     }
 
     /// <summary>
-    /// The present value of the proved case: each year's production from the
-    /// decline curve, at today's netback, discounted back.
+    /// The present value of the proved case, in cents and BEFORE the
+    /// advance-rate haircut: each year's production from the decline curve, at
+    /// today's netback, discounted back.
     ///
     /// <para>The curve is what makes this a PV rather than a multiple. Reserves
     /// that arrive over twenty years are worth materially less than the same
     /// volume over five, which is the difference between a shallow decline and a
     /// steep one and exactly what a bank is paid to notice.</para>
     /// </summary>
-    private Money PresentValue(SurfaceVolume proved)
+    private double PresentValueCents(SurfaceVolume proved)
     {
         Money netback = _netback();
 
-        if (proved.CubicMetres <= 0.0 || netback <= Money.Zero) return Money.Zero;
+        if (proved.CubicMetres <= 0.0 || netback <= Money.Zero) return 0.0;
 
         double remaining = proved.CubicMetres;
         double value = 0.0;
@@ -141,7 +150,7 @@ public sealed class ReserveBasedLending : IReserveBasedLending
             value += produced * netback.Cents * discount;
         }
 
-        return Money.RoundHalfEven(value * _advanceRate);
+        return value;
     }
 
     /// <summary>

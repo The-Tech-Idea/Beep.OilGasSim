@@ -339,6 +339,36 @@ public static class SaveGame
         source.Position = 0;
         RestoreTrail(ready.Engine, source);
 
+        // AND THE READ MODEL, after the trail (SDD-013 §4 / SDD-014 §5a's
+        // finding-266 amendment). `Engine.ReadModel` is null until stage 12
+        // (objectives) and stage 13 (close) have run once — true for a game
+        // that has not started, and until now also true for one a player just
+        // reopened, which is not the same fact: a reload has a month behind it
+        // and a null read model told the host to show nothing for it. Running
+        // both stages here, once, rebuilds that month rather than waiting for
+        // the next real tick to overwrite it.
+        //
+        // Safe to run AFTER the trail restores rather than before: both stages'
+        // own state (objectives.evaluation, objectives.reporting) already came
+        // back in the walk above, so this call re-derives the SAME verdict the
+        // save held and reports nothing new — anything it did emit would land
+        // with a fresh id above the trail's restored high-water mark rather than
+        // colliding with one, the same as any other tick's.
+        //
+        // NOT a full tick, and the position it builds is not quite what the
+        // save last held: five projections are recomputed from stages 1–11
+        // every tick and deliberately never saved (SDD-013 §4), so this call
+        // reads them at their fresh-composition default rather than re-running
+        // the stages that would produce them — SDD-014 §5a's own S014-5 names
+        // exactly what that costs and why it is not solved here.
+        var clock = ready.Engine.Provided.Resolve<SimulationClock>();
+        var context = new TickContext { Tick = clock.CurrentTick, Date = clock.Date };
+
+        var objectives = ready.Engine.Provided.Resolve<ObjectiveStage>();
+        objectives.Execute(context);
+
+        ready.Engine.Provided.Resolve<CloseStage>().Execute(context);
+
         return ready;
     }
 
@@ -402,6 +432,16 @@ public static class SaveGame
                 Rebuild(engine, loaded);
 
             StateBlock.Restore(owners[i], BlockFor(loaded, owners[i].Key.Value));
+
+            // AND REINSTALL EVERY LIFT METHOD (SDD-003 §6's persistence
+            // amendment, finding 256), immediately after the wells' own
+            // block restores. `WellsState.Restore` above already replayed
+            // stimulation through `Stimulate` itself — it could not do the
+            // same for lift, because rebuilding a concrete `ILiftMethod`
+            // needs `LiftTiers` and `FieldControl`'s tubing geometry, neither
+            // of which `OGSim.Wells` may depend on (law L1).
+            if (string.Equals(owners[i].Key.Value, WellsKey, StringComparison.Ordinal))
+                ReinstallLift(engine, loaded);
         }
 
         var random = engine.Provided.Resolve<IRandomSource>();
@@ -551,6 +591,12 @@ public static class SaveGame
         // already found once for the reservoir.
         engine.Provided.Resolve<Environment.WeatherState>()
             .SealGeneration([Defaults.ScaledClimate(from.ClimateSeverity)]);
+
+        // AND THE RIVAL ROSTER, THE SAME WAY (SDD-011 §2's finding-277
+        // amendment) — rebuilt fresh from the SAME saved parameters and the
+        // SAME regenerated prospects rather than persisted, the same reason
+        // weather is resealed here rather than restored from a block.
+        EngineBuilder.SealRivals(engine, from);
     }
 
     /// <summary>
@@ -573,7 +619,45 @@ public static class SaveGame
             field.Reopen(wells[i].Id, wells[i].Drains, wells[i].TotalDepth);
     }
 
+    /// <summary>
+    /// Reinstalls the lift method every saved well carried (SDD-003 §6's
+    /// persistence amendment, finding 256), through the same construction
+    /// <c>InstallXxxActivity.Complete</c> uses. A rebuilt completion opens
+    /// with <c>Lift: null</c> (<c>CompletionFor</c>), so without this a
+    /// reload would silently strip every pump a player had bought.
+    ///
+    /// <para>Composition-level rather than <c>WellsState</c>'s own, for the
+    /// same reason <see cref="Rebuild"/> is: reconstructing the concrete
+    /// <see cref="ILiftMethod"/> needs <see cref="OGSim.Wells.LiftTiers"/>
+    /// (which of the four shipped tiers the saved id names) and
+    /// <see cref="FieldControl"/> (<c>LiftGate.OutflowFor</c>'s tubing
+    /// geometry), neither of which <c>OGSim.Wells</c> may depend on
+    /// (law L1).</para>
+    /// </summary>
+    private static void ReinstallLift(Engine engine, Loaded loaded)
+    {
+        IReadOnlyList<OGSim.Wells.SavedWell> wells = OGSim.Wells.WellsState.Saved(
+            StateBlock.ReaderFor(BlockFor(loaded, WellsKey)));
 
+        var field = engine.Provided.Resolve<FieldControl>();
+        var tiers = engine.Provided.Resolve<OGSim.Wells.LiftTiers>();
+
+        for (int i = 0; i < wells.Count; i++)
+        {
+            if (wells[i].LiftTier is not ContentId tierId) continue;
+
+            var well = new EntityId<ICompletion>(wells[i].Id.Value);
+            var component = new EntityId<IWellComponent>(wells[i].Id.Value);
+
+            ILiftMethod lift = LiftGate.Reconstruct(
+                tiers, component, tierId, wells[i].LiftInstalled!.Value);
+
+            OGSim.Wells.Completion completion = LiftGate.CompletionOf(
+                field, new EntityRef(EntityKind.Completion, wells[i].Id.Value));
+
+            completion.InstallLift(lift, LiftGate.OutflowFor(field, well, lift));
+        }
+    }
 
     /// <summary>
     /// One owner's block, or a fault naming it.

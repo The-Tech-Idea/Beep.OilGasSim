@@ -236,6 +236,28 @@ public class BowTieTests
         Assert.Contains("no preventive barriers", fault.Fault.Detail);
     }
 
+    [Fact] // A top event nothing blunts has no consequence-tier denominator
+    public void HS2_a_threat_with_no_mitigating_barriers_is_a_model_fault()
+    {
+        (BowTie tie, _) = New();
+
+        var fault = Assert.Throws<ModelFault>(
+            () => tie.Resolve(Threat, Barriers(preventive: 2, mitigating: 0), _ => 1.0));
+
+        Assert.Contains("no mitigating barriers", fault.Fault.Detail);
+    }
+
+    [Fact] // The denominator SDD-012 §4b's finding-263 amendment needs
+    public void HS2_a_resolution_carries_how_many_mitigating_barriers_there_were()
+    {
+        (BowTie tie, _) = New();
+
+        ThreatResolution result = tie.Resolve(
+            Threat, Barriers(preventive: 2, mitigating: 4), _ => 1.0);
+
+        Assert.Equal(4, result.TotalMitigatingBarriers);
+    }
+
     [Fact] // Every resolution is audited, with the failed barriers named
     public void HS2_a_near_miss_is_audited_with_its_failed_barriers()
     {

@@ -88,6 +88,43 @@ public sealed record ManifoldDefinition(
     : FacilityUnitDefinition(Id, RequiresTech, AvailableFromEra, Rung);
 
 /// <summary>
+/// SDD-006 §3c's compressor datasheet (R9.1's own composition, finding 257) —
+/// the seventh rung-based socket, joining the six R20c.9 already wired.
+///
+/// <para><c>Discharge</c> is on the tier for the reason <see cref="
+/// SeparatorDefinition.OperatingPressurePascals"/> already is: a boosting or
+/// set-pressure element's target is "the player's decision, made when the
+/// station is bought" (SDD-006 §3c/§3d), and every other such decision in
+/// this engine is a tier field rather than a free-form command parameter.
+/// Suction is NOT here — it is where the train sits in the network, supplied
+/// at construction from the separator it feeds from, not a fact about which
+/// train was bought.</para>
+/// </summary>
+public sealed record CompressorDefinition(
+    ContentId Id, ContentId? RequiresTech, Era AvailableFromEra, int Rung,
+    double RatedCapacityKgPerSecond,
+    double MaxStageRatio,
+    double PolytropicExponent,
+    double PolytropicEfficiency,
+    double MolarMassKgPerMol,
+    double DerateFractionPerKelvin,
+    double DerateReferenceKelvin,
+    double DischargePascals)
+    : FacilityUnitDefinition(Id, RequiresTech, AvailableFromEra, Rung);
+
+/// <summary>
+/// SDD-006 §3d's liquid pump station datasheet (R11.2's own composition,
+/// finding 259) — the eighth rung-based socket, the compressor's shape
+/// reused for the oil leg.
+/// </summary>
+public sealed record PumpStationDefinition(
+    ContentId Id, ContentId? RequiresTech, Era AvailableFromEra, int Rung,
+    double RatedCapacityKgPerSecond,
+    double Efficiency,
+    double DischargePascals)
+    : FacilityUnitDefinition(Id, RequiresTech, AvailableFromEra, Rung);
+
+/// <summary>
 /// The gate and the rung, read once for all six (SDD-004 §6's R20c.9
 /// amendment). A reader per kind would be six chances to spell
 /// <c>availableFromEra</c> differently.
@@ -313,5 +350,72 @@ public sealed class ManifoldContentKind : FacilityContentKind<ManifoldDefinition
     protected override IEnumerable<string> DatasheetProblems(ManifoldDefinition unit)
     {
         if (unit.Slots <= 0) yield return $"slots {unit.Slots} must be positive";
+    }
+}
+
+public sealed class CompressorContentKind : FacilityContentKind<CompressorDefinition>
+{
+    public override string Name => "compressor";
+
+    public override ContentDefinition Read(JsonElement element)
+    {
+        FacilityGate gate = FacilityGate.Read(element);
+
+        return new CompressorDefinition(
+            gate.Id, gate.RequiresTech, gate.AvailableFromEra, gate.Rung,
+            SeparatorContentKind.Si(element, "ratedCapacity", Dimension.MassRate),
+            PropertyKindContentKind.Required(element, "maxStageRatio").GetDouble(),
+            PropertyKindContentKind.Required(element, "polytropicExponent").GetDouble(),
+            SeparatorContentKind.Si(element, "polytropicEfficiency", Dimension.Dimensionless),
+            PropertyKindContentKind.Required(element, "molarMass").GetDouble(),
+            SeparatorContentKind.Si(element, "derateFractionPerKelvin", Dimension.Dimensionless),
+            SeparatorContentKind.Si(element, "derateReference", Dimension.Temperature),
+            SeparatorContentKind.Si(element, "discharge", Dimension.Pressure));
+    }
+
+    protected override IEnumerable<string> DatasheetProblems(CompressorDefinition unit)
+    {
+        if (unit.RatedCapacityKgPerSecond < 0.0) yield return "ratedCapacity must not be negative";
+
+        if (unit.MaxStageRatio <= 1.0)
+            yield return "maxStageRatio must exceed 1; the stage count divides by its logarithm";
+
+        if (unit.PolytropicExponent <= 1.0) yield return "polytropicExponent must exceed 1";
+
+        if (unit.PolytropicEfficiency is <= 0.0 or > 1.0)
+            yield return "polytropicEfficiency must be a fraction in (0, 1]";
+
+        if (unit.MolarMassKgPerMol <= 0.0) yield return "molarMass must be positive";
+
+        if (unit.DerateFractionPerKelvin < 0.0)
+            yield return "derateFractionPerKelvin must not be negative";
+
+        if (unit.DischargePascals <= 0.0) yield return "discharge must be positive";
+    }
+}
+
+public sealed class PumpStationContentKind : FacilityContentKind<PumpStationDefinition>
+{
+    public override string Name => "pump-station";
+
+    public override ContentDefinition Read(JsonElement element)
+    {
+        FacilityGate gate = FacilityGate.Read(element);
+
+        return new PumpStationDefinition(
+            gate.Id, gate.RequiresTech, gate.AvailableFromEra, gate.Rung,
+            SeparatorContentKind.Si(element, "ratedCapacity", Dimension.MassRate),
+            SeparatorContentKind.Si(element, "efficiency", Dimension.Dimensionless),
+            SeparatorContentKind.Si(element, "discharge", Dimension.Pressure));
+    }
+
+    protected override IEnumerable<string> DatasheetProblems(PumpStationDefinition unit)
+    {
+        if (unit.RatedCapacityKgPerSecond < 0.0) yield return "ratedCapacity must not be negative";
+
+        if (unit.Efficiency is <= 0.0 or > 1.0)
+            yield return "efficiency must be a fraction in (0, 1]";
+
+        if (unit.DischargePascals <= 0.0) yield return "discharge must be positive";
     }
 }

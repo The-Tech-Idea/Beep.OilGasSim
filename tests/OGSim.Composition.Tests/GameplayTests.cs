@@ -28,7 +28,8 @@ public sealed class GameplayTests
                     OilSaturation: 0.7,
                     InitialPressure: new Pressure(30.0e6),
                     Temperature: Temperature.FromCelsius(93.3),
-                    Depth: new Length(2000.0)),
+                    Depth: new Length(2000.0),
+                    FluidSystem: new ContentId("medium-crude")),
                 // Rock the shipped plant is sized for. It said 2e-13 and 30 m
                 // while every well was built from Defaults.Inflow's 1e-13 and
                 // 20 m — a compartment stating rock nobody read (finding 170).
@@ -488,17 +489,23 @@ public sealed class GameplayTests
         Built built = Assert.IsType<Built>(EngineBuilder.Build(Fixture.Settings()));
         Engine engine = built.Engine;
 
-        // $50M at $300k a month, minus the $12M bond forfeited at month 24
-        // when the licence's one commitment goes unmet (R20d.9), minus the
-        // annual take-or-pay shortfall on the whole committed volume this
-        // idle field never delivers a barrel against (SDD-009 §7's R13.3
-        // amendment, finding 250): insolvency now arrives at month 82,
-        // measured directly rather than hand-derived from three compounding
-        // costs.
-        for (var month = 0; month < 79; month++) engine.Pipeline.AdvanceTick();
+        // $50M at $300k a month, minus the $12M bond forfeited at month 60
+        // when the licence's one commitment goes unmet (`Defaults.LicenceTerms`'s
+        // `Due: new Tick(60)`, R20d.9.1), minus the annual take-or-pay shortfall
+        // on the whole committed volume this idle field never delivers a barrel
+        // against (SDD-009 §7's R13.3 amendment, finding 250), minus the
+        // insurance premium this idle field pays every tick regardless of
+        // whether it ever has an incident to claim against (SDD-009 §7's
+        // finding-273 amendment): insolvency arrives at month 95, measured
+        // directly rather than hand-derived from four compounding costs.
+        // **Corrected from month 111** (finding 273): the premium is a real,
+        // small monthly cost even with nothing running, and this idle
+        // field's own solvency clock was always going to be the fixture
+        // most sensitive to it.
+        for (var month = 0; month < 95; month++) engine.Pipeline.AdvanceTick();
         Assert.False(engine.ReadModel!.Insolvent, "the company is not out of money yet");
 
-        for (var month = 0; month < 3; month++) engine.Pipeline.AdvanceTick();
+        engine.Pipeline.AdvanceTick();
         Assert.True(engine.ReadModel!.Insolvent, "the company has spent everything");
     }
 

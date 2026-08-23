@@ -1,0 +1,12 @@
+{
+  "kind": "pcp",
+  "id": "pcp-a",
+  "minRateCubicMetresPerSecond": 0.0,
+  "maxRateCubicMetresPerSecond": 0.015,
+  "maxDepthMetres": 1800.0,
+  "maxDeviationDegrees": 45.0,
+  "maxGasFraction": 0.1,
+  "maxTemperatureCelsius": 120.0,
+  "maxSolidsFraction": 0.15,
+  "displacementCubicMetresPerSecond": 0.015
+}

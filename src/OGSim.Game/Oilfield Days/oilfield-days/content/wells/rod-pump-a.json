@@ -1,0 +1,12 @@
+{
+  "kind": "rod-pump",
+  "id": "rod-pump-a",
+  "minRateCubicMetresPerSecond": 0.0,
+  "maxRateCubicMetresPerSecond": 0.01,
+  "maxDepthMetres": 3000.0,
+  "maxDeviationDegrees": 15.0,
+  "maxGasFraction": 0.1,
+  "maxTemperatureCelsius": 150.0,
+  "maxSolidsFraction": 0.05,
+  "displacementCubicMetresPerSecond": 0.01
+}

@@ -31,24 +31,6 @@ internal sealed class TestModule(
 internal static class Fixture
 {
     /// <summary>
-    /// An element this test needs the plant to have built.
-    /// </summary>
-    /// <remarks>
-    /// A plant's elements became optional with S2 (plans 22 §4). A test about
-    /// what a separator DOES is entitled to one, and should fail saying it is
-    /// missing rather than throw a null reference three lines later — which is
-    /// the difference between a diagnosis and a puzzle.
-    /// </remarks>
-    internal static T Built<T>(T? element, string named)
-        where T : class
-    {
-        Assert.True(element is not null,
-            $"this test needs a {named} and the plant has none built");
-
-        return element!;
-    }
-
-    /// <summary>
     /// Run months the way a company runs them: fixing what breaks.
     ///
     /// <para>Since R20d.22 equipment ages and fails, and the route law shuts in
@@ -95,8 +77,7 @@ internal static class Fixture
     /// </summary>
     public static EngineSettings Settings(
         FaultHandling handling = FaultHandling.Strict, string profile = "simulation",
-        ulong seed = 20260806UL, IReadOnlyList<IContentSource>? content = null,
-        ContentId? startingState = null, ContentId? rules = null) =>
+        ulong seed = 20260806UL, IReadOnlyList<IContentSource>? content = null) =>
         new(new GameDate(1965, 1),
             WorldSeed: seed,
             new AuditRetention(DetailWindowTicks: 12),
@@ -104,19 +85,7 @@ internal static class Fixture
             LogLevel.Info,
             handling,
             new ContentId(profile),
-            content ?? [ShippedContent()],
-
-            // A COMMISSIONED PLANT, because these tests are about what a field
-            // DOES (plans 22 §4, S2 step 4). The shipped game opens on bare
-            // ground; a test about water cut is entitled to a separator without
-            // having to build one first, and this is the one place that says so
-            // for all of them.
-            startingState ?? Defaults.OpeningPosition,
-
-            // REALISTIC, because that is what these tests are: an operator
-            // working a field it holds (plans 23). The game runs at `frontier`;
-            // a test that wants those rules asks for them by name.
-            rules ?? RuleSets.Realistic.Id);
+            content ?? [ShippedContent()]);
 
     /// <summary>
     /// The repository's own <c>content/</c>, read from disk — which is what a
@@ -168,6 +137,24 @@ internal static class Fixture
             files.Add(new ContentFile("contracts/" + Path.GetFileName(path),
                                       File.ReadAllText(path)));
 
+        // AND THE ONE ROD-PUMP TIER (SDD-003 §6.2's R12b.2 amendment, finding
+        // 255) — the same door.
+        string wells = Path.Combine(here.Parent!.Parent!.FullName, "content", "wells");
+
+        foreach (string path in Directory.EnumerateFiles(wells, "*.json")
+                                         .OrderBy(p => p, StringComparer.Ordinal))
+            files.Add(new ContentFile("wells/" + Path.GetFileName(path),
+                                      File.ReadAllText(path)));
+
+        // AND THE FLUID SYSTEMS (SDD-004 §6's finding-270 amendment) — the
+        // same door.
+        string fluidSystems = Path.Combine(here.Parent!.Parent!.FullName, "content", "fluid-systems");
+
+        foreach (string path in Directory.EnumerateFiles(fluidSystems, "*.json")
+                                         .OrderBy(p => p, StringComparer.Ordinal))
+            files.Add(new ContentFile("fluid-systems/" + Path.GetFileName(path),
+                                      File.ReadAllText(path)));
+
         return new DirectorySource(files);
     }
 
@@ -182,9 +169,16 @@ internal static class Fixture
             [
                 new SeparatorContentKind(), new TankContentKind(), new TreaterContentKind(),
                 new GasPlantContentKind(), new ExportLineContentKind(), new ManifoldContentKind(),
+                new CompressorContentKind(),
+                new PumpStationContentKind(),
                 new OGSim.Capabilities.TechnologyContentKind(),
                 new OGSim.World.TerrainClassContentKind(),
                 new TakeOrPayContentKind(),
+                new DisplacementPumpContentKind("rod-pump"),
+                new DisplacementPumpContentKind("pcp"),
+                new EspContentKind(),
+                new GasLiftContentKind(),
+                new FluidSystemContentKind(),
             ],
             new PluginRegistry());
 
@@ -225,6 +219,11 @@ internal static class Fixture
     public static IReadOnlyList<OGSim.World.TerrainClassDefinition> TerrainClasses() =>
         Loaded().Of<OGSim.World.TerrainClassDefinition>().All;
 
+    /// <summary>The shipped fluid systems (finding 270), for the tests that
+    /// build the module list themselves.</summary>
+    public static IReadOnlyList<FluidSystemDefinition> FluidSystems() =>
+        Loaded().Of<FluidSystemDefinition>().All;
+
     /// <summary>The shipped take-or-pay contract (SDD-009 §7's R13.3
     /// amendment), for the tests that build the module list themselves.</summary>
     public static OGSim.Company.TakeOrPayTerms TakeOrPay()
@@ -235,6 +234,49 @@ internal static class Fixture
         return new OGSim.Company.TakeOrPayTerms(
             definition.CommittedVolume, definition.WindowMonths, definition.PenaltyRate);
     }
+
+    /// <summary>The four shipped lift tiers (SDD-003 §6.2's R12b.2
+    /// amendment), for the tests that build the module list themselves.</summary>
+    public static OGSim.Wells.LiftTiers LiftTiers()
+    {
+        ICatalogSet loaded = Loaded();
+
+        DisplacementPumpDefinition rod =
+            loaded.Of<DisplacementPumpDefinition>()[new ContentId("rod-pump-a")];
+        DisplacementPumpDefinition pcp =
+            loaded.Of<DisplacementPumpDefinition>()[new ContentId("pcp-a")];
+        EspDefinition esp = loaded.Of<EspDefinition>()[new ContentId("esp-a")];
+        GasLiftDefinition gasLift =
+            loaded.Of<GasLiftDefinition>()[new ContentId("gas-lift-a")];
+
+        return new OGSim.Wells.LiftTiers(
+            DisplacementPump(rod), DisplacementPump(pcp),
+            new OGSim.Wells.EspTier(
+                esp.Id, Envelope(esp.MinRate, esp.MaxRate, esp.MaxDepth, esp.MaxDeviationDegrees,
+                                  esp.MaxGasFraction, esp.MaxTemperature, esp.MaxSolidsFraction),
+                esp.HeadCurve, esp.Efficiency),
+            new OGSim.Wells.GasLiftTier(
+                gasLift.Id,
+                Envelope(gasLift.MinRate, gasLift.MaxRate, gasLift.MaxDepth,
+                         gasLift.MaxDeviationDegrees, gasLift.MaxGasFraction,
+                         gasLift.MaxTemperature, gasLift.MaxSolidsFraction),
+                gasLift.InjectionRate.CubicMetresPerSecond, gasLift.GasDensityKgPerM3));
+    }
+
+    private static OGSim.Wells.DisplacementPumpTier DisplacementPump(
+        DisplacementPumpDefinition definition) =>
+        new(definition.Id,
+            Envelope(definition.MinRate, definition.MaxRate, definition.MaxDepth,
+                     definition.MaxDeviationDegrees, definition.MaxGasFraction,
+                     definition.MaxTemperature, definition.MaxSolidsFraction),
+            definition.Displacement.CubicMetresPerSecond);
+
+    private static LiftEnvelope Envelope(
+        ReservoirRate minRate, ReservoirRate maxRate, Length maxDepth,
+        double maxDeviationDegrees, double maxGasFraction, Temperature maxTemperature,
+        double maxSolidsFraction) =>
+        new(minRate, maxRate, maxDepth, maxDeviationDegrees, maxGasFraction, maxTemperature,
+            maxSolidsFraction);
 
     private sealed class DirectorySource(IReadOnlyList<ContentFile> files) : IContentSource
     {
@@ -295,7 +337,7 @@ public sealed class ShippedSetTests
         IReadOnlyList<IModule> modules = EngineBuilder.ShippedModules(
             audit, new SimulationClock(new GameDate(1965, 1)), new RandomSource(1UL),
             Defaults.Simulation, Fixture.Ladders(), Fixture.Registry(), Fixture.TerrainClasses(),
-            Fixture.TakeOrPay(), Defaults.OpeningPosition, RuleSets.Realistic);
+            Fixture.TakeOrPay(), Fixture.LiftTiers(), Fixture.FluidSystems());
 
         var provided = new HashSet<Type>();
         foreach (IModule module in modules)
@@ -323,7 +365,7 @@ public sealed class ShippedSetTests
         var reversed = new List<IModule>(EngineBuilder.ShippedModules(
             audit, new SimulationClock(new GameDate(1965, 1)), new RandomSource(1UL),
             Defaults.Simulation, Fixture.Ladders(), Fixture.Registry(), Fixture.TerrainClasses(),
-            Fixture.TakeOrPay(), Defaults.OpeningPosition, RuleSets.Realistic));
+            Fixture.TakeOrPay(), Fixture.LiftTiers(), Fixture.FluidSystems()));
         reversed.Reverse();
 
         Built forward = Assert.IsType<Built>(EngineBuilder.Build(Fixture.Settings()));
@@ -388,6 +430,18 @@ public sealed class ShippedSetTests
     /// analogy rather than checking §4.2) would have let a diffusing node reach
     /// stage 4's segmentation the SAME month it diffused (SDD-005's R20d.10
     /// correction).</para>
+    ///
+    /// <para>R13.3 gave <b>Company</b> a fourth contributor: <c>HedgeStage</c>
+    /// (order 3, SDD-009 §7's finding-272 amendment), settling the one
+    /// shipped collar against that tick's own production and benchmark.</para>
+    ///
+    /// <para>And a fifth: <c>InsurancePremiumStage</c> (order 4, SDD-009 §7's
+    /// finding-273 amendment), charging the one shipped policy's premium
+    /// every tick off that tick's own ESG standing.</para>
+    ///
+    /// <para>And a sixth: <c>RivalExplorationStage</c> (order 5, SDD-011 §2's
+    /// finding-277 amendment), a rival's own exploration attempt every 6
+    /// ticks, disclosed into the player's beliefs.</para>
     /// </summary>
     [Fact]
     public void The_shipped_engine_runs_the_stages_its_modules_declared()
@@ -400,11 +454,16 @@ public sealed class ShippedSetTests
              StageId.SolveFlow, StageId.MaterialBalance, StageId.Custody,
              StageId.Economics, StageId.HseRegulation, StageId.Information,
 
-             // Three StageId.Company participants: CompanyModule's
+             // Six StageId.Company participants: CompanyModule's
              // LicenceStage (order 0), CapabilitiesModule's diffusion
-             // (order 1), and FieldModule's TakeOrPayStage (order 2,
-             // SDD-009 §7's R13.3 amendment, finding 250).
-             StageId.Company, StageId.Company, StageId.Company,
+             // (order 1), FieldModule's TakeOrPayStage (order 2, SDD-009 §7's
+             // R13.3 amendment, finding 250), FieldModule's HedgeStage
+             // (order 3, SDD-009 §7's finding-272 amendment), HseModule's
+             // InsurancePremiumStage (order 4, SDD-009 §7's finding-273
+             // amendment), and InformationModule's RivalExplorationStage
+             // (order 5, SDD-011 §2's finding-277 amendment).
+             StageId.Company, StageId.Company, StageId.Company, StageId.Company,
+             StageId.Company, StageId.Company,
              StageId.Objectives, StageId.Close],
             built.Engine.Pipeline.DeclaredOrder());
     }
@@ -423,6 +482,104 @@ public sealed class ShippedSetTests
             Assert.IsType<TickCompleted>(built.Engine.Pipeline.AdvanceTick());
 
         Assert.Equal(100, built.Engine.Pipeline.CurrentTick.Value);
+    }
+}
+
+/// <summary>
+/// SDD-004 §6's own amendment (finding 261): the material catalogue widened
+/// from three to the shipped nine, and the ordinals oil, gas and water were
+/// built against moved — proven here rather than only asserted in the SDD,
+/// the same discipline every other widening in this file has been held to.
+/// </summary>
+public sealed class MaterialCatalogueTests
+{
+    [Fact]
+    public void The_catalogue_carries_all_nine_shipped_materials()
+    {
+        Assert.Equal(9, Defaults.MaterialCount);
+        Assert.Equal(9, Defaults.Materials.Count);
+    }
+
+    /// <summary>
+    /// Oil, gas and water moved off the ordinals the chain was originally
+    /// built against — the id-sorted catalogue now has six more entries
+    /// ahead of and between them. A caller reaching for a raw literal
+    /// instead of `Defaults.OilOrdinal`/`GasOrdinal`/`WaterOrdinal` would
+    /// silently move the wrong material through the wrong leg; nothing in
+    /// `src/` does, and this pins the values so a future change to the
+    /// catalogue's own id-sort has something to disagree with.
+    /// </summary>
+    [Fact]
+    public void Oil_gas_and_water_ordinals_moved_with_the_widened_catalogue()
+    {
+        Assert.Equal(2, Defaults.OilOrdinal.Ordinal);
+        Assert.Equal(4, Defaults.GasOrdinal.Ordinal);
+        Assert.Equal(6, Defaults.WaterOrdinal.Ordinal);
+    }
+
+    /// <summary>
+    /// The six materials nothing produces yet are still real catalogue
+    /// entries a caller can resolve by id — carbon dioxide, condensate,
+    /// hydrogen sulphide, nitrogen, sales gas and sulphur are not silently
+    /// absent, they are silently zero, which is the honest difference
+    /// finding 261 draws against finding 260's reverted dehydrator.
+    /// </summary>
+    [Theory]
+    [InlineData("carbon-dioxide")]
+    [InlineData("condensate")]
+    [InlineData("hydrogen-sulphide")]
+    [InlineData("nitrogen")]
+    [InlineData("sales-gas")]
+    [InlineData("sulphur")]
+    public void An_unproduced_material_still_resolves_from_the_catalogue(string id)
+    {
+        var catalogue = new MaterialCatalogue(Defaults.Materials);
+
+        IMaterial material = catalogue.Resolve(new ContentId(id));
+
+        Assert.Equal(id, material.Id.Value);
+    }
+
+    /// <summary>
+    /// The composed engine builds and plays at the widened material count —
+    /// the ordinal shift is invisible to a field that never reaches for a
+    /// raw literal, proven by running rather than only by inspection.
+    /// </summary>
+    [Fact]
+    public void A_field_composes_and_produces_at_the_widened_material_count()
+    {
+        Built built = Assert.IsType<Built>(EngineBuilder.Build(Fixture.Settings()));
+
+        FieldControl field = built.Engine.Provided.Resolve<FieldControl>();
+
+        EntityId<IReservoirCompartmentEntity> compartment = field.AddCompartment(
+            new GeneratedCompartment(
+                PoreVolume: new ReservoirVolume(100.0e6),
+                Porosity: 0.22,
+                OilSaturation: 0.7,
+                InitialPressure: new Pressure(30.0e6),
+                Temperature: Temperature.FromCelsius(93.3),
+                Depth: new Length(2000.0),
+                FluidSystem: new ContentId("medium-crude")),
+            permeability: new Permeability(1.0e-13),
+            netThickness: new Length(20.0),
+            drainageArea: new Area(2.0e5),
+            rockCompressibility: 4.5e-10,
+            gasOilContact: new Length(1900.0),
+            oilWaterContact: new Length(2100.0),
+            Defaults.Wettability, Defaults.Drive,
+            Defaults.AquiferStrength, Defaults.AquiferResponseTime);
+
+        built.Engine.Provided.Resolve<WorldState>().DeclareKnownField(
+            compartment, new ReservoirVolume(100.0e6));
+
+        field.Drill(compartment, new Length(2000.0));
+
+        built.Engine.Pipeline.AdvanceTick();
+
+        Assert.True(built.Engine.ReadModel!.ProducedThisTick.CubicMetres > 0.0,
+            "a field must still produce oil at the widened material count, through the " +
+            "ordinal the catalogue now assigns rather than the one it used to");
     }
 }
 
@@ -810,6 +967,25 @@ public sealed class FacilityContentTests
     }
 
     /// <summary>
+    /// A fluid system outside the correlations' own validity range (SDD-004
+    /// §6's finding-270 amendment) is refused the same way — a consistency
+    /// failure at load, naming the file, not a value the engine tries to
+    /// solve with.
+    /// </summary>
+    [Fact]
+    public void A_fluid_system_with_an_impossible_api_gravity_refuses_the_engine()
+    {
+        BuildResult result = EngineBuilder.Build(Fixture.Settings(
+            content: [Edited("medium-crude", "\"apiGravityDegrees\": 35.0",
+                                             "\"apiGravityDegrees\": 5.0")]));
+
+        LoadFailure failure = Assert.Single(
+            Assert.IsType<BuildRefusedByContent>(result).Failures);
+
+        Assert.Contains("medium-crude", failure.File, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// And a ladder with a hole is refused too — this one at COMPOSITION rather
     /// than at load, because a gap is a statement about a set and the loader's
     /// consistency pass sees one definition at a time.
@@ -855,7 +1031,7 @@ public sealed class AccessWindowTests
         var modules = new List<IModule>(EngineBuilder.ShippedModules(
             audit, clock, new RandomSource(20260806UL), Defaults.Simulation,
             Fixture.Ladders(), Fixture.Registry(), Fixture.TerrainClasses(), Fixture.TakeOrPay(),
-            Defaults.OpeningPosition, RuleSets.Realistic));
+            Fixture.LiftTiers(), Fixture.FluidSystems()));
 
         for (int i = 0; i < modules.Count; i++)
             if (modules[i] is EnvironmentModule)
@@ -876,7 +1052,8 @@ public sealed class AccessWindowTests
                 OilSaturation: 0.7,
                 InitialPressure: new Pressure(30.0e6),
                 Temperature: Temperature.FromCelsius(93.3),
-                Depth: new Length(2000.0)),
+                Depth: new Length(2000.0),
+                FluidSystem: new ContentId("medium-crude")),
             permeability: new Permeability(1.0e-13),
             netThickness: new Length(20.0),
             drainageArea: new Area(2.0e5),
@@ -1143,7 +1320,8 @@ public sealed class EquipmentEraTests
                 OilSaturation: 0.7,
                 InitialPressure: new Pressure(30.0e6),
                 Temperature: Temperature.FromCelsius(93.3),
-                Depth: new Length(2000.0)),
+                Depth: new Length(2000.0),
+                FluidSystem: new ContentId("medium-crude")),
             permeability: new Permeability(1.0e-13),
             netThickness: new Length(20.0),
             drainageArea: new Area(2.0e5),
@@ -1290,7 +1468,8 @@ public sealed class LicenceTests
                     OilSaturation: 0.7,
                     InitialPressure: new Pressure(30.0e6),
                     Temperature: Temperature.FromCelsius(93.3),
-                    Depth: new Length(2000.0)),
+                    Depth: new Length(2000.0),
+                    FluidSystem: new ContentId("medium-crude")),
                 permeability: new Permeability(1.0e-13),
                 netThickness: new Length(20.0),
                 drainageArea: new Area(2.0e5),
@@ -1328,7 +1507,9 @@ public sealed class LicenceTests
     /// <summary>
     /// <b>A well that stands satisfies the commitment</b> — drilled well inside
     /// the month-60 deadline, the licence stays live past it, and no bond is
-    /// ever forfeited.
+    /// ever forfeited. Also (finding 278) the read model's own
+    /// <c>LicenceView</c> agrees with the real <c>Licence</c> it is a window
+    /// onto — the same <c>Expiry</c>, zero items outstanding, and live.
     /// </summary>
     [Fact]
     [Trait("Speed", "Slow")]
@@ -1348,6 +1529,13 @@ public sealed class LicenceTests
             engine.Audit.Query(new AuditQuery(null, AuditCategory.Financial, null, null)),
             entry => entry.Data.TryGetValue("spend", out AuditValue spend)
                      && spend.Value == "licence-bond-forfeit");
+
+        LicenceView view = engine.ReadModel!.Licence;
+        Assert.Equal(new EntityRef(EntityKind.Licence, licence.Id.Value), view.Licence);
+        Assert.Equal(licence.Expiry, view.Expiry);
+        Assert.Equal(0, view.CommitmentItemsOutstanding);
+        Assert.True(view.IsLive);
+        Assert.Null(view.LossReason);
     }
 
     /// <summary>
@@ -1365,6 +1553,24 @@ public sealed class LicenceTests
         var licence = engine.Provided.Resolve<OGSim.Company.Licence>();
         OGSim.Company.CompanyState company = engine.Provided.Resolve<OGSim.Company.CompanyState>();
 
+        // AN UNDRILLED FIELD ALSO OWES TAKE-OR-PAY (R13.3, finding 258): it
+        // delivers nothing, so every window this fixture crosses is a full
+        // shortfall against the shipped contract's committed volume — the
+        // same formula `TakeOrPayContract.AssessAt` posts, read from the
+        // shipped terms rather than a second hardcoded number.
+        OGSim.Company.TakeOrPayTerms takeOrPay = Fixture.TakeOrPay();
+        Money windowPenalty = Money.RoundHalfEven(
+            takeOrPay.PenaltyRate.Cents * takeOrPay.CommittedVolume.CubicMetres);
+
+        // AND THE ONE SHIPPED POLICY, EVERY TICK (SDD-009 §7's finding-273
+        // amendment): a standing policy prices whether or not there is
+        // anything to insure against, and this field never has an incident
+        // to move its ESG standing off the record's own resting value — read
+        // from the real assessment rather than hand-derived, the exact
+        // mistake finding 258 itself was about.
+        Money insurancePremium = OGSim.Company.Insurance.PremiumThisTick(
+            Defaults.Insurance, engine.Provided.Resolve<EsgAssessment>().Of());
+
         // Up to but not including the deadline tick — the commitment is still
         // outstanding and nothing has been forfeited yet.
         for (var month = 0; month < 59; month++) engine.Pipeline.AdvanceTick();
@@ -1373,14 +1579,18 @@ public sealed class LicenceTests
         Money cashBeforeForfeit = company.Ledger.Cash;
 
         // The deadline tick itself: the commitment is unmet, so the bond
-        // forfeits ON TOP OF the month's ordinary standing charge.
+        // forfeits ON TOP OF the month's ordinary standing charge — and this
+        // tick is ALSO a take-or-pay window boundary (12-month windows from
+        // tick 0 land on every multiple of 12, and the deadline is tick 60).
         engine.Pipeline.AdvanceTick();
 
         Assert.False(licence.IsLive, "the commitment went unmet at its own deadline");
 
         Assert.Equal(
             cashBeforeForfeit.Cents - Defaults.LicenceTerms.Bond.Cents
-                - Defaults.Economics.FixedOperatingCostPerTick.Cents,
+                - Defaults.Economics.FixedOperatingCostPerTick.Cents
+                - windowPenalty.Cents
+                - insurancePremium.Cents,
             company.Ledger.Cash.Cents);
 
         AuditEntry forfeit = Assert.Single(
@@ -1390,8 +1600,24 @@ public sealed class LicenceTests
 
         Assert.True(forfeit.Data.ContainsKey("unmet-count"));
 
+        // AND THE READ MODEL AGREES (finding 278): a player watching only
+        // `LicenceView`, never the unit-tested `Licence` class directly,
+        // sees the exact same loss — live flips false, the reason names
+        // which of the two SDD-011 §1 transitions this was, and the one
+        // commitment item this fixture's terms declare (due tick 60,
+        // never delivered against by an undrilled field) shows outstanding.
+        LicenceView lostView = engine.ReadModel!.Licence;
+        Assert.False(lostView.IsLive);
+        Assert.Equal(OGSim.Company.LicenceLossReason.CommitmentUnmet, lostView.LossReason);
+        Assert.Equal(1, lostView.CommitmentItemsOutstanding);
+        Assert.Equal(licence.Expiry, lostView.Expiry);
+
         // NEVER TWICE (the repeated-forfeit bug this join found and fixed):
-        // another sixty months costs nothing further.
+        // another sixty months costs nothing further FROM THE LICENCE — but
+        // take-or-pay is its own clock, independent of the licence's, and
+        // keeps assessing a still-undrilled field every window regardless of
+        // whether the licence is even live. Five more windows close in the
+        // next sixty months (ticks 72, 84, 96, 108, 120).
         Money afterFirstForfeit = company.Ledger.Cash;
 
         for (var month = 0; month < 60; month++) engine.Pipeline.AdvanceTick();
@@ -1399,7 +1625,9 @@ public sealed class LicenceTests
         Assert.Equal(
             0L,
             afterFirstForfeit.Cents - company.Ledger.Cash.Cents
-                - (60L * Defaults.Economics.FixedOperatingCostPerTick.Cents));
+                - (60L * Defaults.Economics.FixedOperatingCostPerTick.Cents)
+                - (5L * windowPenalty.Cents)
+                - (60L * insurancePremium.Cents));
 
         // AND FURTHER DRILLING REFUSES, naming the reason.
         Rejected refused = Assert.IsType<Rejected>(

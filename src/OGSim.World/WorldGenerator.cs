@@ -33,7 +33,13 @@ public sealed class BasinWorldGenerator(
     /// same door <paramref name="terrainClasses"/> already came through — the
     /// generator declares which region this basin has, composition decides
     /// what the id resolves to.</summary>
-    ContentId climateId) : IWorldGenerator
+    ContentId climateId,
+
+    /// <summary>Every fluid system this build's content declared (SDD-010 §2's
+    /// finding-270 amendment) — Step 7 draws one per compartment from this
+    /// list, the same door <paramref name="terrainClasses"/> already came
+    /// through.</summary>
+    IReadOnlyList<FluidSystemDefinition> fluidSystems) : IWorldGenerator
 {
     /// <summary>How coarse a regional survey is. Deliberately BAD: regional data
     /// is a gravity and magnetics pass over a whole basin, and a player who
@@ -60,6 +66,11 @@ public sealed class BasinWorldGenerator(
         ArgumentNullException.ThrowIfNull(sink);
         ArgumentNullException.ThrowIfNull(worldGen);
 
+        if (fluidSystems.Count == 0)
+            throw new ModelFault("SDD-010 §2's finding-270 amendment", null,
+                "no fluid system was declared; a generated compartment cannot draw one from " +
+                "an empty list");
+
         Validate(parameters);
 
         // The world seed comes from the caller's stream, ONCE. Everything after
@@ -76,7 +87,7 @@ public sealed class BasinWorldGenerator(
         GeneratedSurface surface = GenerateSurface(parameters, streams, terrainClasses);
 
         IReadOnlyList<GeneratedAccumulation> accumulations =
-            GenerateGeology(parameters, streams, surface.Terrain);
+            GenerateGeology(parameters, streams, surface.Terrain, fluidSystems);
 
         for (int i = 0; i < accumulations.Count; i++) sink.AddAccumulation(accumulations[i]);
 
@@ -96,7 +107,8 @@ public sealed class BasinWorldGenerator(
     // ---------------------------------------------------------- geology
 
     private static IReadOnlyList<GeneratedAccumulation> GenerateGeology(
-        WorldParameters parameters, StepStreams streams, GeneratedTerrain terrain)
+        WorldParameters parameters, StepStreams streams, GeneratedTerrain terrain,
+        IReadOnlyList<FluidSystemDefinition> fluidSystems)
     {
         IRandomStream structure = streams.For(WorldStep.Structure);
         IRandomStream traps = streams.For(WorldStep.Traps);
@@ -241,7 +253,14 @@ public sealed class BasinWorldGenerator(
                         OilSaturation: 0.60 + sizing.NextUnit() * 0.25,
                         InitialPressure: new Pressure(depth.Metres * 1.0e4),
                         Temperature: new Temperature(288.0 + depth.Metres * 0.03),
-                        Depth: depth),
+                        Depth: depth,
+
+                        // Step 7's crude-quality draw (SDD-010 §2's finding-270
+                        // amendment) — same stream, same step, right after the
+                        // saturation draw above: an index into this build's
+                        // declared fluid systems, not a new stream and not a
+                        // new RNG law.
+                        FluidSystem: fluidSystems[sizing.NextInt(fluidSystems.Count)].Id),
                 ]));
         }
 

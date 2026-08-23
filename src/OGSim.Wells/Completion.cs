@@ -91,7 +91,10 @@ public sealed record CompletionFluid(
 public sealed class Completion : ICompletion
 {
     private readonly IInflowModel _inflow;
-    private readonly IOutflowModel _outflow;
+
+    // NOT readonly (SDD-003 §6.2's R12b.2 amendment, finding 255): installing
+    // a lift method replaces this with a model built around the new hooks.
+    private IOutflowModel _outflow;
 
     // NOT readonly (finding 137). CompletionFluid.ReservoirPressure is
     // documented as "from the compartment, through a contract", and a readonly
@@ -184,9 +187,36 @@ public sealed class Completion : ICompletion
             stimulated[i] = Perforations[i] with { Skin = Perforations[i].Skin - skinReduction };
 
         Perforations = stimulated;
+        SkinReduction += skinReduction;
     }
 
-    public ILiftMethod? Lift { get; }
+    /// <summary>
+    /// SDD-003 §6's persistence amendment (finding 256): the sum of every
+    /// <see cref="Stimulate"/> reduction this completion has ever been given.
+    /// Skin itself is a rebuilt list, not a counter, so nothing else on this
+    /// completion says how much of it is stimulation — a save needs exactly
+    /// this to reproduce the effect, by calling <see cref="Stimulate"/> again,
+    /// once, against a freshly reopened well's own zero baseline.
+    /// </summary>
+    public double SkinReduction { get; private set; }
+
+    public ILiftMethod? Lift { get; private set; }
+
+    /// <summary>
+    /// SDD-003 §6.2's R12b.2 amendment (finding 255) — installing a lift
+    /// method. Both references move together: <see cref="Lift"/> is what a
+    /// host and R18's hazard model read, <c>_outflow</c> is what the solve
+    /// actually reads §6.2's hooks through, and a half-installed lift would
+    /// leave those two disagreeing about the same well (law L5).
+    /// </summary>
+    public void InstallLift(ILiftMethod lift, IOutflowModel outflow)
+    {
+        ArgumentNullException.ThrowIfNull(lift);
+        ArgumentNullException.ThrowIfNull(outflow);
+
+        Lift = lift;
+        _outflow = outflow;
+    }
 
     public bool IsPressureDecoupled => _pressureDecoupled;
 

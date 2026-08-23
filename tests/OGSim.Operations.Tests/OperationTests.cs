@@ -47,7 +47,8 @@ public static class Fx
         var clock = new SimulationClock(new GameDate(1970, 1));
         var trail = new AuditTrail(clock, new AuditRetention(5000));
         var scheduler = new OperationScheduler(
-            new RandomSource(seed).Stream(StreamId.Operations), trail, materialCount: 3);
+            new RandomSource(seed).Stream(StreamId.Operations), trail, materialCount: 3,
+            crewDurationFactor: () => 1.0);
 
         scheduler.Register(Rig);
         return (scheduler, trail);
@@ -165,6 +166,63 @@ public class SchedulingTests
     }
 }
 
+/// <summary>
+/// SDD-007 §4.1's finding-265 amendment — R12-V9: higher skill reduces
+/// duration by the declared amount, layered onto the outcome table's own
+/// grade rather than replacing it.
+/// </summary>
+public class CrewEffectTests
+{
+    private static (OperationScheduler Scheduler, AuditTrail Trail) With(double crewDurationFactor)
+    {
+        var clock = new SimulationClock(new GameDate(1970, 1));
+        var trail = new AuditTrail(clock, new AuditRetention(100));
+        var scheduler = new OperationScheduler(
+            new RandomSource(1UL).Stream(StreamId.Operations), trail, materialCount: 3,
+            crewDurationFactor: () => crewDurationFactor);
+
+        scheduler.Register(Fx.Rig);
+        return (scheduler, trail);
+    }
+
+    [Fact] // An untrained crew (1.15) makes a 60-day job take 69 days
+    public void An_untrained_crew_lengthens_the_effective_duration()
+    {
+        (OperationScheduler scheduler, _) = With(1.15);
+
+        var scheduled = Assert.IsType<Scheduled>(scheduler.Submit(
+            Fx.Spec(durationDays: 60, outcomes: Fx.Always(OutcomeGrade.OnTime)),
+            0, [], Fx.Exists));
+
+        Assert.Equal(69, scheduled.Operation.Outcome.EffectiveDurationDays);
+    }
+
+    [Fact] // A trained crew (0.95) makes the same job take 57 days
+    public void A_trained_crew_shortens_the_effective_duration()
+    {
+        (OperationScheduler scheduler, _) = With(0.95);
+
+        var scheduled = Assert.IsType<Scheduled>(scheduler.Submit(
+            Fx.Spec(durationDays: 60, outcomes: Fx.Always(OutcomeGrade.OnTime)),
+            0, [], Fx.Exists));
+
+        Assert.Equal(57, scheduled.Operation.Outcome.EffectiveDurationDays);
+    }
+
+    [Fact] // The reservation covers the crew-adjusted worst case, not the table's alone
+    public void The_reservation_covers_the_crew_adjusted_worst_case()
+    {
+        (OperationScheduler scheduler, _) = With(1.15);
+
+        // Fx.Table's worst row is Disaster at 2.5x — 60 * 2.5 * 1.15 = 172.5,
+        // ceiling 173. Day 172 is still inside that reservation.
+        scheduler.Submit(Fx.Spec(durationDays: 60), 0, [], Fx.Exists);
+
+        Assert.IsType<Refused>(scheduler.Submit(Fx.Spec(), 172, [], Fx.Exists));
+        Assert.IsType<Scheduled>(scheduler.Submit(Fx.Spec(), 173, [], Fx.Exists));
+    }
+}
+
 public class OutcomeTests
 {
     // ------------------------------------------------------------ R12-V5
@@ -178,7 +236,8 @@ public class OutcomeTests
         var clock = new SimulationClock(new GameDate(1970, 1));
         var trail = new AuditTrail(clock, new AuditRetention(100));
         var scheduler = new OperationScheduler(
-            new RandomSource(20240701UL).Stream(StreamId.Operations), trail, materialCount: 3);
+            new RandomSource(20240701UL).Stream(StreamId.Operations), trail, materialCount: 3,
+            crewDurationFactor: () => 1.0);
 
         const int trials = 20_000;
         for (int i = 0; i < trials; i++)
@@ -215,7 +274,8 @@ public class OutcomeTests
             var scheduler = new OperationScheduler(
                 new RandomSource(seed).Stream(StreamId.Operations),
                 new AuditTrail(clock, new AuditRetention(100)),
-                materialCount: 3);
+                materialCount: 3,
+                crewDurationFactor: () => 1.0);
 
             var grades = new List<OutcomeGrade>();
             for (int i = 0; i < 200; i++)

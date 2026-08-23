@@ -24,6 +24,7 @@ namespace OilfieldDays.Ui;
 /// <c>OGSim.Composition</c> are the whole player vocabulary; anything else the
 /// game appeared to offer would be a promise the engine never made.</para>
 /// </summary>
+[Tool]
 public sealed partial class CommandBar : CanvasLayer
 {
     /// <summary>The depth a well is drilled to, matching the reference client.</summary>
@@ -35,6 +36,7 @@ public sealed partial class CommandBar : CanvasLayer
     private PanelContainer _panel = null!;
     private Label _target = null!;
     private VBoxContainer _list = null!;
+    private Button _actionTemplate = null!;
 
     public event Action<string, bool>? Reported;
 
@@ -45,35 +47,35 @@ public sealed partial class CommandBar : CanvasLayer
     {
         Layer = 11;
 
-        var root = new Control { MouseFilter = Control.MouseFilterEnum.Ignore };
+        Control root = RequireNamed<Control>(this, "CommandRoot");
         root.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
-        AddChild(root);
+        root.MouseFilter = Control.MouseFilterEnum.Ignore;
 
-        _panel = SlateChrome.Sign(
-            "ACTIONS", new Vector2(400, 0), Control.LayoutPreset.BottomLeft, new Vector2(122, -128));
+        _panel = RequireNamed<PanelContainer>(root, "ActionPanel");
 
+        _panel.CustomMinimumSize = new Vector2(400, 0);
+        _panel.AddThemeStyleboxOverride("panel", SlateChrome.PanelPlate(0));
+        _panel.SetAnchorsPreset(Control.LayoutPreset.BottomLeft);
+        _panel.Position = new Vector2(122, -128);
         _panel.GrowVertical = Control.GrowDirection.Begin;
-        root.AddChild(_panel);
+        StyleHeader(_panel);
 
-        VBoxContainer column = SlateChrome.ContentOf(_panel);
+        VBoxContainer column = RequireNamed<VBoxContainer>(_panel, "Content");
         column.CustomMinimumSize = new Vector2(364, 0);
         column.AddThemeConstantOverride("separation", 10);
 
-        _target = new Label
-        {
-            CustomMinimumSize = new Vector2(364, 0),
-            AutowrapMode = TextServer.AutowrapMode.WordSmart,
-        };
+        _target = RequireNamed<Label>(column, "Target");
+        ConfigureTarget();
 
-        _target.AddThemeFontSizeOverride("font_size", 16);
-        _target.AddThemeColorOverride("font_color", KitTheme.Ink);
-        column.AddChild(_target);
+        _list = RequireNamed<VBoxContainer>(column, "ActionList");
+        ConfigureList();
 
-        _list = new VBoxContainer { CustomMinimumSize = new Vector2(364, 0) };
-        _list.AddThemeConstantOverride("separation", 6);
-        column.AddChild(_list);
+        _actionTemplate = RequireNamed<Button>(_list, "ActionButtonTemplate");
+        StyleAction(_actionTemplate, _actionTemplate.Text, KitTheme.Amber);
+        _actionTemplate.Visible = Godot.Engine.IsEditorHint();
 
-        ShowNothing();
+        if (!Godot.Engine.IsEditorHint())
+            ShowNothing();
     }
 
     public override void _UnhandledInput(InputEvent @event)
@@ -240,35 +242,35 @@ public sealed partial class CommandBar : CanvasLayer
         }
 
         // Planned work only while it still runs, and monitoring only while there
-        // is nothing to read: both are the engine's own rules, and offering the
-        // other one would be offering a refusal.
-        if (element.Condition is not null)
-        {
-            Add("Overhaul it", KitTheme.Green, () =>
-                Dispatch(World.JobKind.Service, id, new ServiceEquipmentCommand(element.Element)));
-        }
-        else
-        {
-            Add("Fit condition monitoring", KitTheme.Sky, () =>
-                Dispatch(World.JobKind.FitMonitoring, id, new InstallMonitoringCommand(element.Element)));
-        }
-    }
+		// is nothing to read: both are the engine's own rules, and offering the
+		// other one would be offering a refusal.
+		if (element.Condition is not null)
+		{
+			Add("Overhaul it", KitTheme.Green, () =>
+				Dispatch(World.JobKind.Service, id, new ServiceEquipmentCommand(element.Element)));
+		}
+		else
+		{
+			Add("Fit condition monitoring", KitTheme.Sky, () =>
+				Dispatch(World.JobKind.FitMonitoring, id, new InstallMonitoringCommand(element.Element)));
+		}
+	}
 
-    /// <summary>A unit, and the one thing a player can still change about it.</summary>
-    public void ShowUnit(World.Unit unit, System.Action afterRecall)
-    {
-        string doing = unit.State switch
-        {
-            World.UnitState.Idle => "in the yard",
-            World.UnitState.Travelling => "on its way out",
-            World.UnitState.Working => $"working since month {unit.StartedOn}",
-            _ => "on its way home",
-        };
+	/// <summary>A unit, and the one thing a player can still change about it.</summary>
+	public void ShowUnit(World.Unit unit, System.Action afterRecall)
+	{
+		string doing = unit.State switch
+		{
+			World.UnitState.Idle => "in the yard",
+			World.UnitState.Travelling => "on its way out",
+			World.UnitState.Working => $"working since month {unit.StartedOn}",
+			_ => "on its way home",
+		};
 
-        Reset($"{unit.Kind.DisplayName}\n{doing}");
+		Reset($"{unit.Kind.DisplayName}\n{doing}");
 
-        // Only while travelling: nothing has been submitted yet, so there is
-        // something to call back. After arrival the work is the engine's.
+		// Only while travelling: nothing has been submitted yet, so there is
+		// something to call back. After arrival the work is the engine's.
         if (unit.State != World.UnitState.Travelling)
             return;
 
@@ -360,12 +362,21 @@ public sealed partial class CommandBar : CanvasLayer
         Offered?.Invoke([]);
 
         foreach (Node child in _list.GetChildren())
+        {
+            if (child == _actionTemplate)
+                continue;
+
+            _list.RemoveChild(child);
             child.QueueFree();
+        }
     }
 
     private void Add(string label, Color colour, Action action)
     {
-        Button button = SlateChrome.Action($"{_actions.Count + 1}.  {label}", colour, new Vector2(364, 42), fontSize: 16);
+        Button button = (Button)_actionTemplate.Duplicate();
+        button.Name = "ActionButton";
+        button.Visible = true;
+        StyleAction(button, $"{_actions.Count + 1}.  {label}", colour);
         button.Pressed += () => action();
         _labels.Add(label);
         _list.AddChild(button);
@@ -406,4 +417,62 @@ public sealed partial class CommandBar : CanvasLayer
         ExpandExportCommand => "An export expansion",
         _ => command.GetType().Name,
     };
+
+    private void ConfigureTarget()
+    {
+        _target.CustomMinimumSize = new Vector2(364, 0);
+        _target.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+        _target.AddThemeFontSizeOverride("font_size", 16);
+        _target.AddThemeColorOverride("font_color", KitTheme.Ink);
+    }
+
+    private void ConfigureList()
+    {
+        _list.CustomMinimumSize = new Vector2(364, 0);
+        _list.AddThemeConstantOverride("separation", 6);
+    }
+
+    private static void StyleAction(Button button, string text, Color colour)
+    {
+        SlateChrome.ApplyChunk(button, text, RoleOf(colour), new Vector2(364, 42), fontSize: 16);
+    }
+
+    private static UiSurface.Role RoleOf(Color colour) =>
+        colour == KitTheme.Green ? UiSurface.Role.Success
+        : colour == KitTheme.Red ? UiSurface.Role.Danger
+        : colour == KitTheme.Amber ? UiSurface.Role.Warning
+        : colour == KitTheme.Sky ? UiSurface.Role.Info
+        : UiSurface.Role.Neutral;
+
+    private static void StyleHeader(Node panel)
+    {
+        if (FindNamed<Label>(panel, "Header") is { } header)
+        {
+            header.Text = "ACTIONS";
+            SlateChrome.PromoteHeader(header, UiSurface.Role.Warning);
+        }
+
+        if (FindNamed<ColorRect>(panel, "Rule") is { } rule)
+            rule.Visible = false;
+    }
+
+    private static T? FindNamed<T>(Node at, string name) where T : Node
+    {
+        if (at is T typed && at.Name == name)
+            return typed;
+
+        foreach (Node child in at.GetChildren())
+        {
+            T? found = FindNamed<T>(child, name);
+
+            if (found is not null)
+                return found;
+        }
+
+        return null;
+    }
+
+    private static T RequireNamed<T>(Node at, string name) where T : Node =>
+        FindNamed<T>(at, name) ?? throw new InvalidOperationException(
+			$"{nameof(CommandBar)} requires a design-time {typeof(T).Name} named '{name}' under {at.GetPath()}.");
 }

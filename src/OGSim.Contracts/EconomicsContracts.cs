@@ -38,6 +38,13 @@ public interface IFiscalRegime
 /// <summary>What the bank will lend against, and what it costs.</summary>
 public sealed record BorrowingTerms(
     Money BorrowingBase,
+
+    /// <summary>The reserves' present value BEFORE the advance-rate haircut
+    /// (SDD-009 §5's amendment) — what the oil is worth, not what the bank
+    /// will lend against it. The term SDD-014 §4's company value formula
+    /// reads (finding 262).</summary>
+    Money ReserveValue,
+
     double Rate,
 
     /// <summary>The ESG standing's effect on the rate, carried separately

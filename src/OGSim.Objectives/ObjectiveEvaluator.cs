@@ -29,22 +29,102 @@ namespace OGSim.Objectives;
 public sealed class PredicateState
 {
     private readonly Dictionary<string, int> _sustained = [];
+    private readonly List<string> _sustainedOrder = [];
     private readonly Dictionary<string, int> _sequenceStep = [];
+    private readonly List<string> _sequenceOrder = [];
     private readonly HashSet<string> _neverBroken = [];
+    private readonly List<string> _neverOrder = [];
 
     public int SustainedTicks(string node) => _sustained.GetValueOrDefault(node);
 
-    public void SetSustained(string node, int ticks) => _sustained[node] = ticks;
+    public void SetSustained(string node, int ticks)
+    {
+        if (!_sustained.ContainsKey(node)) _sustainedOrder.Add(node);
+        _sustained[node] = ticks;
+    }
 
     public int SequenceStep(string node) => _sequenceStep.GetValueOrDefault(node);
 
-    public void SetSequenceStep(string node, int step) => _sequenceStep[node] = step;
+    public void SetSequenceStep(string node, int step)
+    {
+        if (!_sequenceStep.ContainsKey(node)) _sequenceOrder.Add(node);
+        _sequenceStep[node] = step;
+    }
 
     /// <summary>A `Never` that has been broken STAYS broken — that is what makes
     /// it a failure condition rather than a momentary check.</summary>
     public bool IsBroken(string node) => _neverBroken.Contains(node);
 
-    public void MarkBroken(string node) => _neverBroken.Add(node);
+    public void MarkBroken(string node)
+    {
+        if (_neverBroken.Add(node)) _neverOrder.Add(node);
+    }
+
+    /// <summary>
+    /// SDD-014 §5a's finding-266 amendment. A `List` beside each
+    /// `Dictionary`/`HashSet`, walked instead of them (SDD-000 §3) — insertion
+    /// order, so two saves of the same play produce the same bytes.
+    /// </summary>
+    public void Capture(IStateWriter writer, string prefix)
+    {
+        writer.WriteInt64(prefix + "sustained.count", _sustainedOrder.Count);
+        for (int i = 0; i < _sustainedOrder.Count; i++)
+        {
+            string node = _sustainedOrder[i];
+            string at = prefix + "sustained." + i.ToString("D4", System.Globalization.CultureInfo.InvariantCulture) + ".";
+
+            writer.WriteString(at + "node", node);
+            writer.WriteInt64(at + "ticks", _sustained[node]);
+        }
+
+        writer.WriteInt64(prefix + "sequence.count", _sequenceOrder.Count);
+        for (int i = 0; i < _sequenceOrder.Count; i++)
+        {
+            string node = _sequenceOrder[i];
+            string at = prefix + "sequence." + i.ToString("D4", System.Globalization.CultureInfo.InvariantCulture) + ".";
+
+            writer.WriteString(at + "node", node);
+            writer.WriteInt64(at + "step", _sequenceStep[node]);
+        }
+
+        writer.WriteInt64(prefix + "never.count", _neverOrder.Count);
+        for (int i = 0; i < _neverOrder.Count; i++)
+        {
+            string at = prefix + "never." + i.ToString("D4", System.Globalization.CultureInfo.InvariantCulture) + ".";
+            writer.WriteString(at + "node", _neverOrder[i]);
+        }
+    }
+
+    public void Restore(IStateReader reader, string prefix)
+    {
+        _sustained.Clear();
+        _sustainedOrder.Clear();
+        _sequenceStep.Clear();
+        _sequenceOrder.Clear();
+        _neverBroken.Clear();
+        _neverOrder.Clear();
+
+        long sustainedCount = reader.ReadInt64(prefix + "sustained.count");
+        for (long i = 0; i < sustainedCount; i++)
+        {
+            string at = prefix + "sustained." + i.ToString("D4", System.Globalization.CultureInfo.InvariantCulture) + ".";
+            SetSustained(reader.ReadString(at + "node"), (int)reader.ReadInt64(at + "ticks"));
+        }
+
+        long sequenceCount = reader.ReadInt64(prefix + "sequence.count");
+        for (long i = 0; i < sequenceCount; i++)
+        {
+            string at = prefix + "sequence." + i.ToString("D4", System.Globalization.CultureInfo.InvariantCulture) + ".";
+            SetSequenceStep(reader.ReadString(at + "node"), (int)reader.ReadInt64(at + "step"));
+        }
+
+        long neverCount = reader.ReadInt64(prefix + "never.count");
+        for (long i = 0; i < neverCount; i++)
+        {
+            string at = prefix + "never." + i.ToString("D4", System.Globalization.CultureInfo.InvariantCulture) + ".";
+            MarkBroken(reader.ReadString(at + "node"));
+        }
+    }
 }
 
 /// <summary>

@@ -1,0 +1,13 @@
+{
+  "kind": "gas-lift",
+  "id": "gas-lift-a",
+  "minRateCubicMetresPerSecond": 0.0,
+  "maxRateCubicMetresPerSecond": 0.05,
+  "maxDepthMetres": 4500.0,
+  "maxDeviationDegrees": 75.0,
+  "maxGasFraction": 1.0,
+  "maxTemperatureCelsius": 180.0,
+  "maxSolidsFraction": 0.05,
+  "injectionRateCubicMetresPerSecond": 0.02,
+  "gasDensityKgPerCubicMetre": 80.0
+}

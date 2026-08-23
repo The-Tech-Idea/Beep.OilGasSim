@@ -34,13 +34,25 @@ public readonly record struct EntityId<T>(ulong Value) : IComparable<EntityId<T>
     public int CompareTo(EntityId<T> other) => Value.CompareTo(other.Value);
 }
 
-/// <summary>Entity kinds for the type-erased reference (SDD-001 S001-3, decided).</summary>
+/// <summary>
+/// Entity kinds for the type-erased reference (SDD-001 S001-3, decided).
+///
+/// <para>Values are pinned explicitly because this enum is cast to
+/// <c>long</c> and persisted in save files (e.g. <c>CompanyState</c>,
+/// <c>BeliefStore</c>, <c>Activities</c>) — an implicit, declaration-order
+/// numbering would silently renumber every member after any future
+/// insertion or removal and corrupt an existing save's kind tags. 8 is a
+/// deliberate gap: <c>FacilityUnit</c> was removed as dead scaffolding
+/// (this cleanup) without shifting anything that follows it.</para>
+/// </summary>
 public enum EntityKind
 {
-    Well, Wellbore, Completion, Perforation, Compartment, Reservoir, Field,
-    Facility, FacilityUnit, Pipeline, Tank, Berth, Cargo, CustodyPoint,
-    Licence, Company, Operation, Rig, Prospect, Play, Basin, Block, Settlement,
-    FlowElement, Objective, Barrier, Threat
+    Well = 0, Wellbore = 1, Completion = 2, Perforation = 3, Compartment = 4,
+    Reservoir = 5, Field = 6, Facility = 7, Pipeline = 9, Tank = 10,
+    Berth = 11, Cargo = 12, CustodyPoint = 13, Licence = 14, Company = 15,
+    Operation = 16, Rig = 17, Prospect = 18, Play = 19, Basin = 20,
+    Settlement = 21, FlowElement = 22, Objective = 23, Barrier = 24,
+    Threat = 25
 }
 
 /// <summary>

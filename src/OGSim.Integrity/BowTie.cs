@@ -94,16 +94,24 @@ public sealed record ThreatResolution(
     ContentId Threat,
     ThreatOutcome Outcome,
     IReadOnlyList<ContentId> FailedBarriers,
-    int MitigatingBarriersHeld)
+    int MitigatingBarriersHeld,
+
+    /// <summary>How many mitigating barriers this threat declared — the
+    /// denominator a consumer needs to turn <see cref="MitigatingBarriersHeld"/>
+    /// into a fraction (SDD-012 §4b's finding-263 amendment). Carried rather
+    /// than left for the caller to recount from the same barrier list this
+    /// method already walked (law L5).</summary>
+    int TotalMitigatingBarriers)
 {
     // Finding 131.
     public bool Equals(ThreatResolution? other) =>
         other is not null && Threat == other.Threat && Outcome == other.Outcome
         && MitigatingBarriersHeld == other.MitigatingBarriersHeld
+        && TotalMitigatingBarriers == other.TotalMitigatingBarriers
         && Structural.Equal(FailedBarriers, other.FailedBarriers);
 
     public override int GetHashCode() =>
-        HashCode.Combine(Threat, Outcome, MitigatingBarriersHeld,
+        HashCode.Combine(Threat, Outcome, MitigatingBarriersHeld, TotalMitigatingBarriers,
                          Structural.HashOf(FailedBarriers));
 }
 
@@ -157,11 +165,13 @@ public sealed class BowTie
 
         var failed = new List<ContentId>();
         int preventive = 0;
+        int mitigating = 0;
 
         for (int i = 0; i < barriers.Count; i++)
         {
             Barrier barrier = barriers[i];
-            if (!barrier.IsPreventive) continue;
+
+            if (!barrier.IsPreventive) { mitigating++; continue; }
 
             preventive++;
 
@@ -174,6 +184,15 @@ public sealed class BowTie
             throw new ModelFault("SDD-012 §4b", null,
                 $"threat {threat.Value} has no preventive barriers; a threat nothing " +
                 "stands against is not modelled by a bow-tie");
+
+        // THE SAME REFUSAL, MIRRORED. A top event that reached one with
+        // nothing declared to blunt it is a content gap, not a game state —
+        // §4b's own consequence-tier arithmetic (finding 263) has no
+        // denominator without at least one.
+        if (mitigating == 0)
+            throw new ModelFault("SDD-012 §4b", null,
+                $"threat {threat.Value} has no mitigating barriers; a top event " +
+                "nothing blunts is not modelled by a bow-tie");
 
         ThreatOutcome outcome = failed.Count switch
         {
@@ -188,7 +207,7 @@ public sealed class BowTie
 
         Audit(threat, outcome, failed, preventive, mitigatingHeld);
 
-        return new ThreatResolution(threat, outcome, failed, mitigatingHeld);
+        return new ThreatResolution(threat, outcome, failed, mitigatingHeld, mitigating);
     }
 
     /// <summary>

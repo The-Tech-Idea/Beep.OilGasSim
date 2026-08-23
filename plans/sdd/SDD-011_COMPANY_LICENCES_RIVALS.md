@@ -228,6 +228,120 @@ declared extra σ (you read their press release, not their logs). Updates the
 player's play-shared Betas exactly like own data — R16-V5 with no new
 mechanism.
 
+> **Amendment (finding 277) — `Rival` composed for the first time, the
+> narrower slice this section's own §2.2 rationale already calls for.**
+> `Rival`/`LicenceRound`/`PublicDisclosure` shipped as a complete, unit-tested
+> class set at R16.3/R16.4 and were never instantiated anywhere in the
+> composed engine — a real mechanism with zero production callers, the
+> session's own dominant defect pattern. §1's own R20d.9 amendment already
+> settled that this composition has ONE field and ONE licence, granted
+> unconditionally at tick 0, and that a multi-licence company is R20's
+> content — so the fuller vision above (a `Block` entity, a round cadence,
+> the player's own licence contestable) is not this composition's to build
+> without reopening a decision already pinned correctly. `R16_COMPANY.md`
+> §2.2 independently narrows to the same place: "Rivals are simple and their
+> *results* are the point... full AI operators are deferred."
+>
+> **What is built: rivals independently explore prospects in the SAME
+> basin — never the player's own field/licence, which stays exactly as
+> unconditionally granted as it always has been — and a completed result
+> becomes public data (this section's own subject) feeding the player's
+> real beliefs.** `WorldParameters.RivalCount` (a real, exposed, saved
+> new-game knob nothing had ever read) drives a roster of `Defaults.Rivals`
+> personalities, cycled round-robin — three hand-authored archetypes,
+> the same "single hand-authored instance ahead of R20's content" precedent
+> §1 already established for `Defaults.LicenceTerms`. Each rival owns its
+> own `BeliefStore` (confirmed safe to construct independently — no
+> shared/static state), EPHEMERAL rather than persisted: `BeliefStore`'s
+> `IStateOwner.Key` is a hardcoded literal, so a second `composition.Own`
+> call on it would throw under the write-once-per-key law (L5) — persisting
+> N independent belief stores is a change to a shipped SDD-008 class
+> (a parameterised key, a schema bump), a materially larger, separate task,
+> and rivals rebuild their beliefs deterministically from truth every game
+> regardless.
+>
+> **A rival's belief about an undrilled prospect is `structure-capacity`,
+> not `oil-in-place`.** `RegionalObservationModel`'s own rule (SDD-008 §3)
+> is that oil-in-place needs an accumulation to measure — an undrilled
+> prospect legitimately has none, the same reason the PLAYER cannot buy an
+> oil-in-place belief before a discovery well either. Seeded DIRECTLY from
+> truth (`WorldState.CapacityOf`) at the SAME regional sigma
+> (1.2, matching `RegionalObservationModel`'s own `("regional",
+> "oil-in-place")` order of magnitude) — no RNG draw, deliberately: sampling
+> through `ObservationSampler` would consume `StreamId.Measurement`, the
+> SAME stream every existing pinned-value test in the slow suite depends on
+> the exact draw sequence of, and inserting new draws anywhere in it would
+> shift every one of them (finding 265's own crew-multiplier experience).
+> `Rival.BidFor`'s own `valueOf` converts capacity into a dollar figure via
+> `Defaults.TypeCurve`'s OWN recovery factor (0.35) — reused, not a second
+> invented one — and the shipped oil price, the same "$/m³" conversion
+> `Defaults.Economics`'s own comment already uses.
+>
+> **`Rival.BidFor` is used exactly as shipped — its `EMV · a · U` formula,
+> not extended to this section's own fuller "SDD-008 §5 volumetrics × their
+> POS × a coarse development template NPV".** Adding POS-weighting is a
+> real further refinement this amendment does not attempt; named rather
+> than silently narrowed. Every 6 ticks, each rival (in declared roster
+> order) ranks not-yet-explored prospects and attempts its top bid, if one
+> clears: reads TRUE oil-in-place for that prospect (the same door
+> `DrillWell.cs` reads for the player's own discovery), resolves INSTANTLY
+> — no rig-scheduled multi-month activity, a stated simplification matching
+> this section's own "not full AI operators, at a fraction of the cost"
+> framing — and builds a discovery-well-sigma (0.30, the SAME sigma the
+> player's own discovery well carries) observation of what it found.
+>
+> **Keyed to a NEW, rival-exclusive kind (`rival-disclosure`), not
+> `oil-in-place` or `structure-capacity` — two corrections made during
+> implementation, both caught by full slow-suite runs (F-4).** The first
+> draft disclosed oil-in-place directly: `Defaults.OilInPlaceKind` on a
+> PROSPECT subject is reserved for `DrillWell.cs`'s own discovery, which
+> writes the compartment's oil-in-place DIRECTLY and then calls
+> `IBeliefStore.ReKey` to move whatever else the prospect held onto the same
+> compartment — and `ReKey` refuses to MERGE two beliefs about one kind
+> (SDD-008 §4). The second draft moved to `structure-capacity`, reasoning it
+> was the SAME safe kind the player's own pre-drill seismic surveys already
+> re-key through — and a second slow-suite run found that reasoning
+> incomplete: `ReKey` migrates STRUCTURE-CAPACITY from a prospect too, so a
+> rival's own pre-populated belief on that SAME prospect collided exactly
+> the same way the moment the player drilled it (`Compartment:N already
+> holds a belief about 'structure-capacity'`, reproduced in
+> `NewGameTests.cs`'s own established fixtures both times). **The kind that
+> is actually safe is one `DrillWell.cs` never writes and `ReKey` never
+> migrates** — a brand-new `rival-disclosure` kind (`Defaults.SpaceOf`/
+> `SigmaFloorFor` both gain a row for it), keyed DIRECTLY to the compartment
+> for a genuine discovery (the compartment already exists in truth the
+> instant a rival's own attempt confirms it, bypassing the prospect and so
+> bypassing `ReKey` entirely) or to the prospect itself for a dry result (no
+> compartment exists, and a dry outcome never triggers `DrillWell.cs`'s own
+> re-key either, so nothing ever migrates it onto anything else).
+>
+> **The observation widens through `PublicDisclosure.Publish` at
+> `extraSigma ≈ 0.6`** (landing the widened sigma at `√(0.30² + 0.6²) ≈
+> 0.67`, worse than the player's own discovery well but sharper than a 2D
+> seismic survey (0.6) — a rival's real drilling result becoming public is
+> qualitatively better information than a survey shot over acreage that
+> isn't yours) **and applies into the player's real `IBeliefStore` through
+> the SAME conjugate-update door every other observation already uses** —
+> no new belief-update machinery. All three numbers (the roster, the
+> 6-tick cadence, `extraSigma ≈ 0.6`) were confirmed with Fahad before
+> landing, the same gate every other invented number this session has gone
+> through.
+>
+> **A resolved prospect is never re-attempted** — a small new persisted
+> `IStateOwner` tracks which prospects already carry a rival result, so a
+> reload cannot repeat or duplicate one.
+>
+> **Named rather than solved, again**: technology gating
+> (`Rival.HasTechnologyAt` stays uncalled — exploring isn't gated on
+> technology in this engine, and a rival that never produces never needs
+> lift technology); host/read-model visibility beyond the audit trail
+> (`ExplorationView` and the whole SDD-017 read-model surface for
+> exploration data is never constructed anywhere in this composition —
+> a separate, pre-existing, much larger gap); and the rival-side asset
+> market (SDD-011 §4, below) — still blocked, because a rival that only
+> explores never holds reserves, drills a producing well, or goes
+> distressed, so it has nothing an asset market could sell.
+
 ## 4. The asset market (08 §5b)
 
 ```text
@@ -248,6 +362,85 @@ own cash, ledgered via PartnerPayable. Revenue shares are NEVER carried — only
 costs. One field, one rule; the classic "free well" is carry == the well's AFE.
 rival.assetOffer: D-severity, deadline, EM7 default = decline.
 ```
+
+> **Amendment (finding 275) — the PLAYER as the distressed party, the second
+> of R13.10's three restructuring findings.** The block above is the
+> RIVAL-SIDE asset market — a player buying a distressed rival's assets —
+> and it stays exactly as blocked as finding 274's own amendment (SDD-009
+> §5) found it: `Rival` is a complete, real design (`OGSim.Company/Rivals.cs`)
+> never instantiated anywhere in the composed engine, and the data room's own
+> "replay a seller's audit entries" claim does not hold up independently
+> either — `IBeliefStore` has no bulk-import path by design, and an audit
+> entry does not record enough of an observation to replay one (no subject
+> id, no observed value). Named again rather than solved here.
+>
+> **What IS built is the mirror transaction: the player selling a working
+> interest to an abstract partner, design 08 §7's "asset sales"/"forced
+> farm-outs" merged from the seller's own side** — the same decision either
+> name describes: give up a share of the field's future economics for cash
+> now. `WorkingInterest` (`OGSim.Company`) is the SAME row this section's
+> own text already named for the rival-side "minority stake" case — one
+> type, read from whichever side of the transaction is real. `PartnerPayable`
+> gets its first real producer, the same account this section's own text
+> already named for the carried-interest case.
+>
+> **Priced off the SAME DCF walk `Bank`'s own borrowing base already runs**
+> (SDD-009 §5): `Bank.Terms.ReserveValue` — the reserves' present value
+> BEFORE the advance-rate haircut, `ReserveBasedLending.PresentValueCents`
+> exposed uncut since finding 262 — times the fraction sold, at a 25%
+> distress discount. **A stated simplification of this section's own "P50
+> NPV" wording**: the walk prices 1P/Proved, not a second P50 reserves class
+> this composition has never built (SDD-009 §4's own reserves booking is
+> 1P/2P/3P by class, and a genuine P50 figure is a materially larger further
+> task, named rather than invented here) — the same simplification finding
+> 274 used for the covenant's own borrowing base, now reused a second time
+> rather than diverging from it.
+>
+> **`SellWorkingInterestCommand(double Fraction)`** (`OGSim.Composition`):
+> refused above a cumulative 50% cap (past it the company has given up
+> operatorship in substance, which is R13.10's third finding — a takeover —
+> rather than a sale), and refused unless the company is already financially
+> distressed — the covenant reading `Curing`/`Amortising`, or cash below
+> zero (read the same way `ObjectiveStage.Insolvent` derives it, without
+> depending on that stage's own persisted latch, which exists for the
+> scenario's verdict and not for gating a command). Both numbers — the 50%
+> cap and the 25% discount — were confirmed with Fahad before landing, the
+> same gate every other invented number this session has gone through; the
+> discount sits inside the real 20-40% range distressed oil and gas asset
+> sales commonly trade at.
+>
+> **The sale proceeds are booked as a capital transaction, not revenue**:
+> `Account.Cash` against `Account.Equity`, the same distinction this
+> engine's own opening balance draws — the company is not selling a barrel,
+> it is selling a share of itself. **Ongoing production is then split every
+> tick** (`ProductionLoop.PostEconomics`): every revenue account this stage
+> posts — oil sale gross AND gas sale, since a partner's interest is in the
+> field and not in one hydrocarbon stream — and the field's own operating
+> cost both scale by `(1 − PartnerShare)` for the company's own books; the
+> partner's share posts to `Account.PartnerPayable` instead, credited by
+> their revenue share and debited by their cost share, so the balance
+> tracks what the company owes them net rather than two running totals.
+> Royalty and tax stay on the FULL gross, unaffected by any private
+> split — a licence's fiscal terms are assessed against the whole field, not
+> the company's ownership structure, and the licence holder pays them in
+> full. Demurrage stays out of scope, named rather than split — a logistics
+> penalty, not the field's own operating cost this amendment prices.
+>
+> **`WorkingInterest` is the first of R13.10's three levers that needs its
+> own persisted state**: unlike the hedge or insurance (finding 272/273,
+> stateless — nothing about one tick's settlement depends on another's), a
+> sold stake is permanent, so `PartnerShare` is an `IStateOwner`
+> (`company.working-interest`) rather than recomputed. `PartnerShare` only
+> grows — there is no mechanism to buy a share back, named as a further task
+> rather than built, and carried interest's `remainingCarry` deferred-cost
+> mechanic this section's own text describes for the rival-side case stays
+> unbuilt on the player-side too: this amendment ships a straight
+> proportional split, not a carry.
+>
+> **With no sale ever made, `PartnerShare` is zero and every changed line
+> reduces to exactly the single movement it replaces** — proven by the
+> entire existing suite staying green unchanged, the same proof finding
+> 271's quality differential used for its own "unchanged default" claim.
 
 ## 5. Regulator
 

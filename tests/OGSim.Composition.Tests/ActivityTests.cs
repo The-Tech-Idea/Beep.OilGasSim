@@ -32,7 +32,8 @@ public sealed class ActivityTests
                     OilSaturation: 0.7,
                     InitialPressure: new Pressure(TruePressurePascals),
                     Temperature: Temperature.FromCelsius(93.3),
-                    Depth: new Length(2000.0)),
+                    Depth: new Length(2000.0),
+                    FluidSystem: new ContentId("medium-crude")),
                 // Rock the shipped plant is sized for. It said 2e-13 and 30 m
                 // while every well was built from Defaults.Inflow's 1e-13 and
                 // 20 m — a compartment stating rock nobody read (finding 170).
@@ -341,8 +342,12 @@ public sealed class ActivityTests
 
         // A YEAR OF NORMAL MONTHS FIRST, so there is a non-zero baseline to
         // lose — the well the drilling loop stops on has not necessarily
-        // reached the network yet on the very tick it completes.
-        Fixture.Run(engine, months: 12);
+        // reached the network yet on the very tick it completes. Two years,
+        // not one: an untrained crew (SDD-007 §4.1's finding-265 amendment)
+        // runs every scheduled operation 15% longer, including the repairs
+        // Fixture.Run orders for whatever equipment fails first, so a year
+        // that used to be comfortable margin no longer always is.
+        Fixture.Run(engine, months: 24);
 
         Assert.True(engine.ReadModel!.ProducedThisTick.CubicMetres > 0.0,
             "the fixture field produced nothing even before the test — no baseline to lose");

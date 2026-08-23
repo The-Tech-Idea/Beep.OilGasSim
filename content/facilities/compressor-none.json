@@ -1,0 +1,14 @@
+{
+  "kind": "compressor",
+  "id": "compressor-none",
+  "availableFromEra": "E1",
+  "rung": 0,
+  "ratedCapacity": "1000 kg/s",
+  "maxStageRatio": 3.5,
+  "polytropicExponent": 1.25,
+  "polytropicEfficiency": "75 pct",
+  "molarMass": 0.0187,
+  "derateFractionPerKelvin": "0 pct",
+  "derateReference": "999 degC",
+  "discharge": "15 bar"
+}

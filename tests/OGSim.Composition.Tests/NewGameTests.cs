@@ -592,6 +592,28 @@ public sealed class NewGameTests
     }
 
     /// <summary>
+    /// AND A HOST CAN ACTUALLY REACH IT (SDD-017 §2's R21.6 amendment, found
+    /// going through the plan). `WorldState.View` above is real and has had
+    /// exactly one reader anywhere in the repository — this test's own
+    /// sibling, resolving `WorldState` straight out of the DI container.
+    /// Neither real client may do that (SDD-017 §1: commands in, read model
+    /// out), so a map game's own map was unreachable through the surface a
+    /// map screen is required to use until `FieldReadModel` carried it too.
+    /// </summary>
+    [Fact]
+    public void R216_the_read_model_carries_the_same_world_a_host_can_actually_reach()
+    {
+        Engine engine = NewGame(seed: 5UL);
+        engine.Pipeline.AdvanceTick();
+
+        WorldView? direct = WorldOf(engine).View;
+        WorldView? published = engine.ReadModel!.World;
+
+        Assert.NotNull(published);
+        Assert.Equal(direct, published);
+    }
+
+    /// <summary>
     /// A world is never generated into an engine that would not compose. The
     /// refusal comes back untouched, because there is nowhere to put a world.
     /// </summary>
@@ -1474,7 +1496,16 @@ public sealed class NewGameTests
     [Fact]
     public void R21V13_the_standing_indicators_are_in_every_snapshot()
     {
-        Engine engine = NewGame(7UL);
+        // Seed 7 moved to seed 10 (found going through the plan): R9.1's
+        // compressor is a registered flow element from tick 0 and consumes a
+        // hazard-stream draw every tick like every other one, which moves the
+        // draw sequence exactly as finding 184 documents any new registered
+        // element does. On seed 7 that moved WHICH drilling attempt found the
+        // discovery late enough that the company's dry-hole spend outran it
+        // before a year of producing history could accumulate — a genuine
+        // property of this seed's luck under the new sequence, not a defect
+        // in the join. Seed 10 finds its discovery with room to spare.
+        Engine engine = NewGame(10UL);
         WorldState world = WorldOf(engine);
 
         engine.Pipeline.AdvanceTick();
@@ -1596,6 +1627,70 @@ public sealed class NewGameTests
         }
 
         Assert.Fail("sixty basins produced no discovery to borrow against");
+    }
+
+    /// <summary>
+    /// SDD-017 §2's finding-262 amendment: `CompanyValue` is
+    /// `cash + PV(1P) − debt − provisions`, not a fifth number invented beside
+    /// the four it is made of. Proven with all four terms non-zero — a field
+    /// that has produced long enough to accrue a plugging provision, and a
+    /// company that has borrowed against its reserves — so none of the four
+    /// terms is silently multiplying by zero and hiding a wiring mistake.
+    /// </summary>
+    [Fact]
+    public void A_companys_value_is_exactly_cash_plus_reserves_less_debt_and_provisions()
+    {
+        for (ulong seed = 1UL; seed < 60UL; seed++)
+        {
+            Engine engine = NewGame(seed);
+            WorldState world = WorldOf(engine);
+
+            var charged = -1;
+
+            for (int i = 0; i < world.Prospects.Count; i++)
+                if (world.Beneath(world.Prospects[i]) is not null) { charged = i; break; }
+
+            if (charged < 0) continue;
+
+            engine.Commands.Submit(
+                new DrillWellCommand(world.Prospects[charged], new Length(2000.0)));
+
+            Fixture.Run(engine, 48);
+
+            if (engine.ReadModel!.Wells == 0) continue;      // the hole was lost
+
+            Money available = engine.ReadModel!.Borrowing.BorrowingBase;
+            if (available <= Money.Zero) continue;
+
+            Assert.IsType<Accepted>(engine.Commands.Submit(
+                new BorrowCommand(Money.RoundHalfEven(available.Cents / 2.0))));
+
+            Fixture.Run(engine, 1);
+
+            Money provisions = -engine.Provided.Resolve<CompanyState>()
+                .Ledger.BalanceOf(Account.AbandonmentProvision);
+            if (provisions <= Money.Zero) continue;
+
+            Money debt = engine.ReadModel!.Debt;
+            Assert.True(debt > Money.Zero, "the drawdown did not register as debt");
+
+            Money expected = engine.ReadModel!.Cash + engine.ReadModel!.Borrowing.ReserveValue
+                - debt - provisions;
+
+            Assert.Equal(expected, engine.ReadModel!.CompanyValue);
+
+            // SDD-014 §2's finding-267 amendment: computed ONCE, at stage 12,
+            // not recomputed a second time at stage 13. `ObjectiveStage.Position`
+            // is what an objective was actually measured against this tick; if
+            // it disagreed with what the host is shown, "one owner" (L5) would
+            // be false regardless of what either number happened to equal.
+            FieldPosition position = engine.Provided.Resolve<ObjectiveStage>().Position!;
+            Assert.Equal(position.CompanyValue, engine.ReadModel!.CompanyValue);
+            return;
+        }
+
+        Assert.Fail("sixty basins produced no field with a discovery, a drawdown " +
+                     "and an accrued provision all at once");
     }
 
     /// <summary>
@@ -2050,5 +2145,27 @@ public sealed class NewGameTests
         for (var day = 0; day < 5; day++)
             Assert.Equal(original.TemperatureOn(0, day).ToCelsius(),
                 afterLoad.TemperatureOn(0, day).ToCelsius(), 9);
+    }
+
+    /// <summary>
+    /// SDD-011 §2/§3's finding-277 amendment — R16.4 real at last.
+    /// `Basin()`'s own `RivalCount: 3` composes real rivals, and every
+    /// OTHER test in this file already proves they do not disturb the
+    /// player's own field/licence (all pass, unchanged, with rivals active
+    /// throughout). This one proves the other half: a rival actually
+    /// explores and its result reaches the audit trail.
+    /// </summary>
+    [Fact]
+    public void Rivals_explore_and_disclose_a_result()
+    {
+        Engine engine = NewGame(1);
+
+        for (var month = 0; month < 24; month++) engine.Pipeline.AdvanceTick();
+
+        IReadOnlyList<AuditEntry> results = engine.Audit.Query(
+            new AuditQuery(null, AuditCategory.StateTransition, null, null));
+
+        Assert.Contains(results, e =>
+            e.Data.TryGetValue("kind", out AuditValue kind) && kind.Value == "rival.result");
     }
 }

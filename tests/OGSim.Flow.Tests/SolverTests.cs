@@ -234,6 +234,20 @@ public class SolverTests
             * WholeTick.DurationDays * 86_400.0;
 
         Assert.Equal(analytic, deferred.Kilograms, precision: 3);
+
+        // SDD-002 §8's finding-283 amendment: the SAME attribution pass now
+        // also carries every constraint it evaluated, capacity against the
+        // uncapped load Deferred was itself measured from — not only the
+        // fact that it bound, but by how much.
+        (EntityId<IFlowElement> uElement, ConstraintKind uKind, double capacity, double load) =
+            Assert.Single(report.Utilisations);
+
+        Assert.Equal(2UL, uElement.Value);
+        Assert.Equal(ConstraintKind.TotalCapacity, uKind);
+        Assert.Equal(30.0, capacity, 6);
+        Assert.Equal(
+            wanted.Rate.CubicMetresPerSecond * SyntheticCompletion.DensityKgPerCubicMetre,
+            load, 6);
     }
 
     [Fact] // A capacity that is not exceeded defers nothing
@@ -244,7 +258,22 @@ public class SolverTests
             [Edge(1, 0, 2, 0), Edge(2, 1, 3, 0)]);
 
         (FlowSolver solver, _) = NewSolver();
-        Assert.Empty(solver.Solve(WholeTick, topology).Deferrals);
+        SolveReport report = solver.Solve(WholeTick, topology);
+
+        Assert.Empty(report.Deferrals);
+
+        // SDD-002 §8's finding-283 amendment: a healthy element's own
+        // utilisation is now visible even though nothing was ever refused —
+        // the actual point of this finding, since Deferrals alone can only
+        // ever say "empty" for a constraint that is not being violated.
+        (EntityId<IFlowElement> uElement, ConstraintKind uKind, double capacity, double load) =
+            Assert.Single(report.Utilisations);
+
+        Assert.Equal(2UL, uElement.Value);
+        Assert.Equal(ConstraintKind.TotalCapacity, uKind);
+        Assert.Equal(1000.0, capacity, 6);
+        Assert.True(load < capacity, $"a healthy element reported load {load} >= capacity {capacity}");
+        Assert.True(load > 0.0, "the source's own mass never reached the restrictor");
     }
 
     [Fact] // FV4: the deferred volume must not depend on how long convergence took

@@ -640,6 +640,50 @@ UNCAPPED target S1 last produced, and each violated constraint's
 > S3 keeps the pro-rata cap and nothing else. **Accumulation across segments is
 > unaffected**: each segment contributes its own converged figure.
 
+> **Amendment (finding 283) — `Utilisations`, closing the gap SDD-017 §2's
+> R20d.1 amendment named and deferred:** *"`Utilisation` is deliberately
+> absent: it needs the raw `ConstraintEvaluation`s, and `SolveReport`
+> reports only the violations."* The attribution pass above already calls
+> `element.EvaluateConstraints(input)` for every registered element, every
+> segment, on the fully-converged uncapped state — the exact walk
+> `Deferrals` is built from — and discarded the result once the violation
+> check was done. `SolveReport` now also carries every one, not only the
+> violating ones:
+>
+> ```csharp
+> public sealed record SolveReport(
+>     IReadOnlyList<ElementSolution> Solutions,
+>     IReadOnlyList<CompletionState> CompletionStates,
+>     IReadOnlyList<(EntityId<IFlowElement> Element, ConstraintKind Kind, Mass Deferred)> Deferrals,
+>     IReadOnlyList<(EntityId<IFlowElement> Element, ConstraintKind Kind, double Capacity, double Load)> Utilisations,
+>     IReadOnlyList<ForcedShutIn> ForcedShutIns,
+>     int OuterIterations);
+> ```
+>
+> **Not a second solve, not a second walk** — one more list populated
+> inside the same loop, from the same `ConstraintEvaluation` the violation
+> check already reads. A custody transfer point, which declares no capacity
+> constraint of its own (SDD-006 §7's own "a custody point meters and
+> gates; the pipe on either side has the throughput"), contributes nothing
+> to `Utilisations` for the same reason it contributes nothing to
+> `Deferrals` today — no special case, the empty list falls out of
+> `EvaluateConstraints` returning `[]`.
+>
+> **Accumulation across segments is DIFFERENT from `Deferrals`, and stated
+> here rather than left to guess.** `Deferrals` is a Mass — additive, so
+> summing a tick's several segments is physically meaningful. A
+> Load-against-Capacity RATIO is not additive; two segments each at 75%
+> utilisation do not sum to a meaningful 150%. The composition layer
+> therefore reads `Utilisations` as the LAST-SOLVED segment's own snapshot
+> per element, overwritten rather than accumulated — "what is true as the
+> tick closes", the same framing `ProductionLoop.WaterCut`/`BerthView`
+> already use for their own tick-level facts. An element absent from a
+> LATER segment (unavailable, failed) is simply not re-touched by that
+> segment's own accumulation and keeps the reading from the last segment it
+> actually participated in — "the last time this element was measured this
+> tick", not a live-this-instant guarantee, and stated as such rather than
+> implied.
+
 ## 9. Commit and conservation
 
 > **Pass-3 amendment (finding 67):** the commit family is pinned. **Pass 10**

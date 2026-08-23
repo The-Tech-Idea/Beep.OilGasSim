@@ -201,7 +201,7 @@ void fragment(){
         ///    fullscreen layers, every frame (~80 sin() per pixel — at 1080p that's ~166M
         ///    per frame). A texture is 2 fetches. This is the single most expensive thing
         ///    the weather system does, and it costs the same whether it's clear or overcast.
-        ///  • Pixel art. GameInfo.PixelArt defaults to true, and smooth continuous FBM does
+        ///  • Pixel art. When GameInfo.PixelArt is enabled, smooth continuous FBM does
         ///    not read as pixel art. An authored texture does.
         ///  • Art direction. Coverage/wind/colour stay tunable either way, but only a
         ///    texture lets you choose the cloud SHAPE.

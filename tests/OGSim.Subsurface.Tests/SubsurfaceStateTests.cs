@@ -27,8 +27,11 @@ public sealed class SubsurfaceStateTests
                 Temperature.FromCelsius(10.0), Temperature.FromCelsius(180.0)));
 
     private static SubsurfaceState Fresh() =>
-        new(Fluid(), new SolutionGasDrive(), Souring.SweetRock, Souring.TheRock,
+        new(new Dictionary<ContentId, IFluidPropertyModel> { [FluidSystemId] = Fluid() },
+            new SolutionGasDrive(), Souring.SweetRock, Souring.TheRock,
             Souring.SouringReference, maxTickPressureDropFraction: 0.2);
+
+    private static readonly ContentId FluidSystemId = new("medium-crude");
 
     /// <summary>A million cubic metres of pore volume at 30 MPa — a small field
     /// that depletes visibly over a handful of years.</summary>
@@ -38,7 +41,8 @@ public sealed class SubsurfaceStateTests
         OilSaturation: 0.7,
         InitialPressure: new Pressure(30.0e6),
         Temperature: Temperature.FromCelsius(93.3),
-        Depth: new Length(2000.0));
+        Depth: new Length(2000.0),
+        FluidSystem: FluidSystemId);
 
     private static EntityId<IReservoirCompartmentEntity> Add(SubsurfaceState state) =>
         state.Create(
@@ -83,6 +87,111 @@ public sealed class SubsurfaceStateTests
         Assert.Equal(1, state.Count);
         Assert.Equal(30.0e6, state.TruePressureOf(id).Pascals, 6);
     }
+
+    /// <summary>
+    /// R20d.9's finding-270 amendment: TWO compartments, identically shaped,
+    /// naming DIFFERENT fluid systems. If <c>SubsurfaceState</c> silently fell
+    /// back to one shared model, they would compute the same voidage room —
+    /// this is the test that would fail if <c>FluidFor</c> were ever replaced
+    /// with the old single <c>_fluid</c> field.
+    /// </summary>
+    [Fact]
+    public void A_compartments_own_fluid_system_is_used_not_a_shared_default()
+    {
+        var light = new ContentId("light-crude");
+        var heavy = new ContentId("heavy-crude");
+
+        var state = new SubsurfaceState(
+            new Dictionary<ContentId, IFluidPropertyModel>
+            {
+                [light] = Model(45.0),
+                [heavy] = Model(18.0),
+            },
+            new SolutionGasDrive(), Souring.SweetRock, Souring.TheRock,
+            Souring.SouringReference, maxTickPressureDropFraction: 0.2);
+
+        EntityId<IReservoirCompartmentEntity> lightId = Add(state, light);
+        EntityId<IReservoirCompartmentEntity> heavyId = Add(state, heavy);
+
+        // Voidage room is zero at Pi for every compartment whatever its fluid
+        // (SDD-003 §3.1: every expansion term is zero there) — so this has to
+        // produce first, or the assertion below would pass for the wrong
+        // reason (both sides trivially zero).
+        state.CommitTick([Produce(lightId, 5_000.0), Produce(heavyId, 5_000.0)]);
+
+        ReservoirVolume lightRoom = state.TrueVoidageRoomOf(lightId);
+        ReservoirVolume heavyRoom = state.TrueVoidageRoomOf(heavyId);
+
+        Assert.NotEqual(lightRoom.CubicMetres, heavyRoom.CubicMetres, 3);
+    }
+
+    private static IFluidPropertyModel Model(double apiGravityDegrees) => new BlackOilModel(
+        new BlackOilInputs(
+            OilGravity: new ApiGravity(apiGravityDegrees),
+            GasSpecificGravity: 0.75,
+            ReservoirTemperature: Temperature.FromCelsius(93.3),
+            SolutionGorAtBubblePoint: 100.0,
+            Form: FluidForm.BlackOil),
+        new ValidityRange(
+            new Pressure(500.0), new Pressure(60e6),
+            Temperature.FromCelsius(10.0), Temperature.FromCelsius(180.0)));
+
+    /// <summary>
+    /// R20d.9's finding-270 amendment, the same "drive survives a reload"
+    /// shape finding 192 already proves — substituting fluid system for drive
+    /// mechanism. Two compartments, two different fluid systems: if the
+    /// restore ever fell back onto one model for both, their voidage rooms
+    /// would come back equal even though they went in different.
+    /// </summary>
+    [Fact]
+    public void A_compartments_own_fluid_system_survives_a_reload()
+    {
+        var light = new ContentId("light-crude");
+        var heavy = new ContentId("heavy-crude");
+
+        SubsurfaceState Build() => new(
+            new Dictionary<ContentId, IFluidPropertyModel>
+            {
+                [light] = Model(45.0),
+                [heavy] = Model(18.0),
+            },
+            new SolutionGasDrive(), Souring.SweetRock, Souring.TheRock,
+            Souring.SouringReference, maxTickPressureDropFraction: 0.2);
+
+        SubsurfaceState captured = Build();
+        EntityId<IReservoirCompartmentEntity> lightId = Add(captured, light);
+        EntityId<IReservoirCompartmentEntity> heavyId = Add(captured, heavy);
+
+        // Voidage room is zero at Pi whatever the fluid (SDD-003 §3.1) — has
+        // to produce first, the same reason the sibling non-reload test does.
+        captured.CommitTick([Produce(lightId, 5_000.0), Produce(heavyId, 5_000.0)]);
+
+        double expectedLight = captured.TrueVoidageRoomOf(lightId).CubicMetres;
+        double expectedHeavy = captured.TrueVoidageRoomOf(heavyId).CubicMetres;
+
+        SubsurfaceState restored = Build();
+        StateBlock.Restore(restored, StateBlock.Capture(captured).Written());
+
+        Assert.Equal(expectedLight, restored.TrueVoidageRoomOf(lightId).CubicMetres, 3);
+        Assert.Equal(expectedHeavy, restored.TrueVoidageRoomOf(heavyId).CubicMetres, 3);
+        Assert.NotEqual(expectedLight, expectedHeavy, 3);
+    }
+
+    private static EntityId<IReservoirCompartmentEntity> Add(
+        SubsurfaceState state, ContentId fluidSystem) =>
+        state.Create(
+            Generated() with { FluidSystem = fluidSystem },
+            permeability: new Permeability(1.0e-13),
+            netThickness: new Length(20.0),
+            drainageArea: new Area(2.0e5),
+            rockCompressibility: 4.5e-10,
+            gasOilContact: new Length(1900.0),
+            oilWaterContact: new Length(2100.0),
+            RelativePermeabilityCurve.Validated(
+                swc: 0.30, sor: 0.25, krwMax: 0.35, kroMax: 0.90, nw: 3.0, no: 2.0),
+            new ContentId("solution-gas-drive"),
+            aquiferStrength: 0.0,
+            Duration.FromTicks(1.0));
 
     /// <summary>
     /// The headline: producing oil costs pressure. Without this the reservoir is

@@ -70,6 +70,96 @@ the registry is a content fault — so an objective can never reference data the
 player cannot see (GM4/R24-V14 mechanised), and a read-model rename breaks
 content loudly at load, not silently at runtime.
 
+> **Amendment (finding 267) — `company.value` joins the registry.**
+> SDD-017 §2's finding-262 amendment gave `FieldReadModel` a `CompanyValue`
+> (`cash + PV(1P) − debt − provisions`, the same figure SDD-014 §4 already
+> scored Capital efficiency against) and said plainly what it did not do:
+> "it does not by itself close R24.6 … or rebuild R11.6's reverted berth/cargo
+> mechanic." What it also did not do, unnamed at the time, is reach an
+> OBJECTIVE — `Defaults.ProjectedPaths` registered `company.cash` and
+> `company.insolvent` the same task and never added `company.value` beside
+> them, so a scenario asking for "the company is worth $X" was and is refused
+> at composition as an unknown path, the exact GM4 mechanism this section
+> exists to guarantee working against the one figure R11.6's own row names as
+> its prerequisite.
+>
+> **Computed once, at stage 12, not twice.** `FieldPosition` — the position an
+> objective sees (§5a) — gains `Money CompanyValue`, computed in
+> `FieldProjection.Take` from the same three facts `Publish` already read it
+> from (`Bank.Terms.ReserveValue`, `Bank.Drawn`, the ledger's cash and
+> abandonment-provision balances). `Publish` now reads `position.CompanyValue`
+> instead of recomputing it — one owner (law L5), where before the value
+> existed only late enough for a host to see it and too late for an objective
+> to ask about it.
+>
+> **Still does not rebuild R11.6.** This closes the one prerequisite
+> `FieldReadModel.CompanyValue`'s own doc comment names for "a mechanic that
+> defers revenue reading as a decision rather than a loss" — a scenario CAN
+> now be authored against `company.value` — not the berth/cargo mechanic
+> itself, which stays its own task exactly as SDD-017 said.
+
+> **Amendment (finding 276) — `company.taken-over` joins the registry,
+> R13.10's third and last restructuring finding.** Findings 274 and 275 gave
+> a distressed company two levers — a forced cash sweep, a working-interest
+> sale — and both run out of road: a sweep needs cash the company may not
+> have, and a sale is capped at 50% before the company has given up
+> operatorship in substance. This is what happens when both are exhausted.
+>
+> **The plan this amendment implements originally described the mechanism as
+> "the scenario's `Overall` verdict becomes `Failed`", and that turned out
+> not to be how `Overall` works** (F-4 — implementation showing a design
+> wrong is corrected here, not worked around in code). `ScenarioRunner.Overall`
+> (§5a) is PURELY a function of the scenario's own DECLARED `Objectives`/
+> `Failures` predicates, evaluated against read-model paths — the same
+> "content, not code" shape §3.3 pins for the win condition itself. Nothing
+> in the engine may reach in and set a verdict directly; `company.insolvent`
+> does not either, which is why an idle company today can run cash-negative
+> forever without the shipped scenario ending — `Defaults.ProjectedPaths`
+> registers the path and no content currently declares a Failure objective
+> against it. **`company.taken-over` is built the identical way, for
+> consistency with that precedent rather than in spite of it**: a computed,
+> latched, audited fact a scenario's content CAN reference, not a verdict
+> forced from outside the predicate system. Wiring either fact into the
+> SHIPPED scenario's own Failure objectives is unchanged, pre-existing,
+> content-authoring work this amendment does not newly create or attempt to
+> close.
+>
+> **The trigger: the covenant has read `Amortising` for 12 straight ticks —
+> 18 months of covenant distress once the 6-tick cure window is counted —
+> with `WorkingInterest.PartnerShare` already at finding 275's own 50% cap.**
+> 12 ticks, confirmed with Fahad before landing the same gate every other
+> invented number this session has gone through. The clock (`ObjectiveStage`'s
+> own `_ticksAmortising`) resets to zero on anything OTHER than `Amortising`
+> — a company that cures its covenant genuinely clears the risk rather than
+> merely pausing a clock that resumes where it left off, the same shape
+> `Curing`'s own cure window already has in `Lending.cs`. `PartnerShare` only
+> grows (finding 275), so once the cap is reached it never becomes false
+> again — the only thing that can still change is the clock.
+>
+> **Once true, always true — the SAME latch `Insolvent` already is, on the
+> SAME owner.** `ObjectiveStage.TakenOver`, computed and audited
+> (`AuditCategory.StateTransition`, `["kind"] = "company.taken-over"` — the
+> SAME "one transition, a `kind`-keyed reason" shape `licence.expired`/
+> `licence.commitment-unmet` already established for a licence's own loss,
+> SDD-011 §1's R20d.9 amendment) right beside where `Insolvent` is computed,
+> since both are company-level terminal facts and `ObjectiveStage` is
+> already their one owner (law L5). `ObjectiveStage` gains two new read-only
+> dependencies to make the check — `Bank` (the covenant) and
+> `WorkingInterest` (the share) — neither of which it may mutate.
+>
+> **Persisted, the same reason `Insolvent` itself needed to be (finding
+> 266)**: `objectives.reporting`'s schema moves 1 → 2, carrying `TakenOver`
+> and the ticks-Amortising clock alongside it, so a reload cannot silently
+> reset either — a save mid-clock that came back at zero would let a player
+> launder ten of the twelve ticks by saving and loading, the same exploit
+> class the covenant clock's own carve-out closed at finding 210 and laytime/
+> demurrage's own persistence closed at finding 269.
+>
+> **Published on `FieldPosition`/`FieldReadModel` as `bool TakenOver`,
+> appended after `CompanyValue`/`World` respectively rather than inserted —
+> every existing positional construction of either record keeps its
+> meaning.** A host can show it the same way it already shows `Insolvent`.
+
 ## 3. Evaluation
 
 Stage 12, pure over the sealed snapshot + sealed event list (SDD-001 §6):
@@ -239,11 +329,12 @@ public interface IScenarioRunner
     ScenarioProgress Evaluate(ObjectiveSnapshot position, Tick tick);
 }
 
-// The stateful nodes' counters (§1), persisted with the objective (SDD-013's
-// `objectives` block). NOT `ObjectiveState`: that enum is what an objective has
-// COME TO, and this is what its SustainedFor / InSequence / Never nodes have
-// accumulated on the way. One name for two concepts is what glossary rule N1
-// forbids, and the two meet on one object the moment a runner is written.
+// The stateful nodes' counters (§1), persisted as part of `ScenarioRunner`'s
+// own state below (§5a's finding-266 amendment) — NOT a standalone `objectives`
+// block; no such block exists. NOT `ObjectiveState` either: that enum is what an
+// objective has COME TO, and this is what its SustainedFor / InSequence / Never
+// nodes have accumulated on the way. One name for two concepts is what glossary
+// rule N1 forbids, and the two meet on one object the moment a runner is written.
 public sealed class PredicateState { … }
 ```
 
@@ -285,6 +376,91 @@ per-predicate distance metric — how near is `SustainedFor(12)` at month seven,
 how near is a `Never` to breaking — and no such metric is specified. Inventing
 one at the call site is what F-4 forbids; open item S014-4 carries it.
 
+### Amendment (finding 266) — a reload silently rewound every objective
+
+**Nothing this section describes was persisted.** `ScenarioRunner._tracked`'s
+`PredicateState` per objective, its `_states` latch and its `_overall` latch,
+and `ObjectiveStage`'s "already reported" cache all lived only in memory. A
+reload composed a fresh `ScenarioRunner` from the same content and got fresh,
+EMPTY counters — so `SustainedFor(12)` resumed from zero instead of wherever it
+stood, a `Never` that had already broken (Failed, latched) could read
+un-broken again if the condition happened to hold true at the reload instant,
+and stage 13's read model stayed `null` until a further tick ran one full
+`Execute`, because nothing had rebuilt `Position` (found chasing the client's
+GC-2: "a restored engine has no read model until a tick runs" — the fifteen
+projections behind it are no longer the blocker R20d.12.0 recorded, F-4). None
+of that is "a game that has not started has nothing to show" (`Engine.ReadModel`'s
+own doc comment) — a reload HAS a month behind it, and the month vanishing is
+data loss with an audit trail that then re-announces already-settled verdicts
+on top of it.
+
+**Two owners, because two different facts (L5).** `ScenarioRunner` decides
+where a run stands; `ObjectiveStage` decides what has already been told to the
+trail about it (R24-V15 keeps the runner unable to reach `IAuditTrail` at all,
+so that cache was never the runner's fact to own).
+
+- `ScenarioRunner` now implements `IStateOwner`, key `objectives.evaluation`.
+  Captures `_overall`, then per tracked objective (in `_tracked`'s own
+  construction order, which is the scenario's declared order and does not
+  change without a content edit): the objective's id (checked on restore
+  against what `_tracked[i]` actually is, refused by name on a mismatch — a
+  scenario's objective SET is content, not something a save is allowed to
+  reshape), its latched `ObjectiveState`, and its `PredicateState`'s three
+  counters (`SustainedTicks`/`SequenceStep`/`IsBroken` per node, each keyed by
+  the node's own path string and written in the order each was first touched —
+  a `List` alongside each `Dictionary`/`HashSet`, never an enumeration of
+  either, per SDD-000 §3).
+- `ObjectiveStage` now implements `IStateOwner`, key `objectives.reporting`.
+  Captures `Insolvent` (SDD-009 §7's latch, unpersisted since it was written
+  and folded in here rather than left a second, smaller gap beside this one)
+  and the "already reported" cache — `_reported` and `_reportedByObjective`,
+  the latter written in first-touch order the same way.
+
+**Why restoring the evaluation state first is what makes an immediate
+re-`Execute` safe.** `SaveGame.Load` (SDD-013 §6's amendment, this same
+finding) now calls `objectives.Execute` once, at the restored tick and date,
+immediately after `Restore` and before returning. That call re-derives
+`Position` and `Progress` against the STATE the restore just put back —
+mostly, though not entirely, the identical inputs `Execute` last saw before
+the save (the exception is named below). With `ScenarioRunner`'s latches
+restored, `Progress.Objectives` comes back holding the SAME states
+`ObjectiveStage`'s reporting cache already has on file for every objective
+whose reading has not changed, so the per-objective diff at
+`ObjectiveStage.Execute`'s loop finds `state == before` and reports nothing
+new. Doing this with the evaluation state still zeroed would have re-diffed
+every settled objective against a fabricated `Pending` and re-announced it —
+the exact defect this amendment exists to close, reintroduced one layer up.
+
+**The named exception — S014-5.** `Position` is built by the SAME
+`FieldProjection.Take` a real tick uses, and five of the projections it draws
+on are deliberately never saved because they are recomputed from stages 1–11
+every tick rather than stored (SDD-013 §4's own table, and this amendment's
+own SDD-013 §4 entry): this tick's production, the chain's throughput, every
+wellbore's rate, the borrowing terms, and the flood controller's figures. A
+reload runs NONE of those stages — running them would mean consuming random
+draws beyond the header's recorded stream positions, which loading a save must
+never do — so the immediate post-restore `Position` reads those five at their
+freshly-composed default rather than the save's last real value, until the
+next actual tick recomputes them on both counts.
+
+For every objective the shipped content authors today — `company.cash`,
+`company.insolvent`, anything over reserves or wells drilled — this is inert:
+those paths ARE persisted state and read correctly. **It stops being inert the
+day a `SustainedFor`, `InSequence` or `Never` node names one of the five**
+(`field.producedThisTick` already sits in the registry, SDD-017 §3, reachable
+and un-refused today): the immediate post-restore call could read a spurious
+zero for one evaluation and mutate the SAME `PredicateState` a real tick would
+have used — resetting a sustained count that should not have reset, or worse,
+latching a `Never` that should never have broken. Not guarded here, because no
+shipped or authored scenario reaches it and a guard invented against a
+predicate combination nothing uses would be F-4's "inventing a number" in
+different clothing. **What would close it**: either a "dry" partial tick that
+recomputes flow honestly without touching content or consuming a stream
+position — materially larger than this amendment — or refusing at load a
+stateful node that names one of the five paths, trading the future capability
+away instead of building the machinery for it. Neither is this amendment's to
+choose.
+
 ## 6. Test mapping
 
 GM2/GM3 (AST nodes incl. stateful counters) · GM4 + R24-V14 (§2 registry) ·
@@ -300,3 +476,4 @@ branching) · GM12 (mission completability scripts) · R24-V18 (stage placement)
 | S014-2 | Whether the Recovery proxy (2P-at-sanction) needs a truth-side CAL check to stay honest | R20 calibration |
 | S014-3 | **An objective cannot see events at stage 12.** §3 says evaluation is pure over "the sealed snapshot + sealed event list", and the pipeline seals at the CLOSE — after stage 12, because stages 12 and 13 may still publish. So `ObjectiveSnapshot.Events` is empty at the only point it is read, and an `OnEvent` predicate is silently false rather than wrong-and-loud. Three candidate answers, none of them free: seal before stage 12 and forbid publication after it; expose the pending list to stage 12 and stop calling it sealed; or evaluate `OnEvent` against the PREVIOUS tick's sealed set and accept a one-tick lag like stage 4's. **Until it is decided a runner REFUSES a scenario containing an `OnEvent`**, naming this item — a load-time refusal rather than a predicate that quietly never fires | R21e, deferred there rather than guessed |
 | S014-4 | Fractional objective progress — a per-predicate distance metric (how near is `SustainedFor(12)` at month seven?). `ScenarioProgress.Progress` is 0.0/1.0 until one is specified | First mission UI (R21f) |
+| S014-5 | A stateful node (`SustainedFor`/`InSequence`/`Never`) naming a per-tick FLOW path (production, chain throughput, a wellbore rate, borrowing terms, flood figures) can read a spurious default on the one evaluation `SaveGame.Load` runs immediately after a restore, before the next real tick recomputes those five (finding 266's §5a amendment, above) | First scenario that names one of the five inside a stateful node |

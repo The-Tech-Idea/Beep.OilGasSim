@@ -18,9 +18,11 @@ namespace OGSim.Composition.Tests;
 public sealed class ProductionLoopTests
 {
     /// <summary>A composed engine with one compartment and one well on it.</summary>
-    private static (Engine Engine, CompanyState Company) Field()
+    private static (Engine Engine, CompanyState Company) Field(
+        ulong? seed = null, ContentId? fluidSystem = null)
     {
-        Built built = Assert.IsType<Built>(EngineBuilder.Build(Fixture.Settings()));
+        Built built = Assert.IsType<Built>(EngineBuilder.Build(
+            seed is ulong s ? Fixture.Settings() with { WorldSeed = s } : Fixture.Settings()));
         CompanyState company = Find<CompanyState>(built.Engine);
 
         EntityId<IReservoirCompartmentEntity> compartment = built.Engine.Provided.Resolve<FieldControl>().AddCompartment(
@@ -36,7 +38,8 @@ public sealed class ProductionLoopTests
                 OilSaturation: 0.7,
                 InitialPressure: new Pressure(30.0e6),
                 Temperature: Temperature.FromCelsius(93.3),
-                Depth: new Length(2000.0)),
+                Depth: new Length(2000.0),
+                FluidSystem: fluidSystem ?? new ContentId("medium-crude")),
             // GOOD ROCK, kept. This fixture is the one that always built its
             // own well to match — 2e-13 and 30 m in both places — so it is the
             // one place finding 170 never bit, and the facility-limited test
@@ -282,6 +285,239 @@ public sealed class ProductionLoopTests
         Assert.Contains(transfers, entry => entry.Id == revenue!.Cause);
     }
 
+    /// <summary>The tick's oil sale, however many <c>Account.Revenue</c>
+    /// credits post this tick (sales gas posts one too) — the LAST one, the
+    /// same selector <see cref="Revenue_is_caused_by_a_custody_transfer"/>
+    /// already relies on, since the oil sale is posted after the gas
+    /// sale within <c>ProductionLoop.PostEconomics</c>.</summary>
+    private static Money OilRevenueThisTick(CompanyState company)
+    {
+        Movement? revenue = null;
+        foreach (Movement movement in company.Ledger.Movements)
+            if (movement.Credit == Account.Revenue) revenue = movement;
+
+        Assert.NotNull(revenue);
+        return revenue!.Amount;
+    }
+
+    /// <summary>
+    /// SDD-009 §6's finding-271 amendment: the shipped default grade IS the
+    /// benchmark's own reference (`Defaults.Fluid`'s 35° API — the same
+    /// grade `Defaults.Economics`'s "$377/m³ ÷ 0.85 t/m³" comment already
+    /// assumed), and this amendment must not have moved a single cent of it.
+    /// Checked against the reference itself: two fields built the same way,
+    /// differing only in which `Field()` overload names the grade, still
+    /// price identically. The sibling test below is where the amendment's
+    /// real claim — a DIFFERENT grade prices differently, by the pinned
+    /// amount — is actually proven; the full fast gate and slow suite (both
+    /// clean, unchanged, on the shipped default grade throughout) are the
+    /// broader evidence for this one.
+    /// </summary>
+    [Fact]
+    public void A_field_on_the_shipped_default_grade_prices_identically_however_named()
+    {
+        (Engine implicitGrade, CompanyState implicitCompany) = Field();
+        (Engine explicitGrade, CompanyState explicitCompany) =
+            Field(fluidSystem: new ContentId("medium-crude"));
+
+        implicitGrade.Pipeline.AdvanceTick();
+        explicitGrade.Pipeline.AdvanceTick();
+
+        Assert.Equal(
+            OilRevenueThisTick(implicitCompany).Cents,
+            OilRevenueThisTick(explicitCompany).Cents);
+    }
+
+    /// <summary>
+    /// SDD-009 §6's finding-271 amendment: a heavier grade sells at a real
+    /// discount, not a cosmetic one. Two otherwise-identical fields — same
+    /// rock, same well, same month's production — differing only in fluid
+    /// system, so the ratio of realised revenue IS the quality factor:
+    /// 1 + 0.007 × (22 − 35) = 0.909 for heavy-sour-crude against the 35°
+    /// API reference.
+    /// </summary>
+    [Fact]
+    public void A_heavier_grade_sells_at_the_priced_discount()
+    {
+        (Engine medium, CompanyState mediumCompany) = Field();
+        (Engine heavy, CompanyState heavyCompany) =
+            Field(fluidSystem: new ContentId("heavy-sour-crude"));
+
+        medium.Pipeline.AdvanceTick();
+        heavy.Pipeline.AdvanceTick();
+
+        Money mediumRevenue = OilRevenueThisTick(mediumCompany);
+        Money heavyRevenue = OilRevenueThisTick(heavyCompany);
+
+        Assert.True(mediumRevenue > Money.Zero);
+        Assert.True(heavyRevenue < mediumRevenue,
+            "a heavier, sourer grade priced no lower than the reference grade");
+
+        double ratio = heavyRevenue.Cents / (double)mediumRevenue.Cents;
+        Assert.Equal(0.909d, ratio, 3);
+    }
+
+    /// <summary>
+    /// SDD-006 §7a.3's finding-268 amendment: one cargo at a time, gated on
+    /// what the tank actually holds. Set well short of a full parcel directly
+    /// (<c>Tank.RestoreTo</c>, the same door a reload uses) rather than played
+    /// to it — a played field would take dozens of ticks to approach the
+    /// threshold and this is a fact about one tick's gate, not about the
+    /// field's own rate.
+    ///
+    /// <para>40 million kg, not one: <c>Receive</c> runs before the gate
+    /// checks <c>Held</c>, so this tick's OWN production counts too, and this
+    /// fixture's one well — good rock, kept for the facility-limited test
+    /// above — turned out to clear tens of millions of kg in a single tick,
+    /// comfortably crossing a margin that looked generous until it was
+    /// measured. Held BEFORE the tick still bounds what a wrongly-open gate
+    /// could have drawn it down to (well under the seed), which the threshold
+    /// check alone cannot tell apart from the gate correctly staying
+    /// shut.</para>
+    /// </summary>
+    [Fact]
+    public void A_cargo_does_not_lift_below_a_full_parcel()
+    {
+        (Engine engine, _) = Field();
+        var tank = engine.Provided.Resolve<SurfaceChain>().Tank;
+
+        var kilograms = new double[Defaults.MaterialCount];
+        kilograms[Defaults.OilOrdinal.Ordinal] = 40_000_000.0;
+
+        tank.RestoreTo(
+            MaterialInventory.Of(kilograms),
+            Allocation.FromSingle(new EntityRef(EntityKind.Compartment, 1)));
+
+        engine.Pipeline.AdvanceTick();
+
+        double held = engine.ReadModel!.Storage.Held.Kilograms;
+
+        // The threshold itself: whatever this tick's own well cleared, the
+        // gate stays shut below a full parcel.
+        Assert.True(held < Defaults.CargoSize.Kilograms,
+            $"the tank drew a cargo before it was full: held={held} against " +
+            $"a {Defaults.CargoSize.Kilograms} kg cargo");
+
+        // AND held did not fall below the seed: a wrongly-open gate would draw
+        // at the berth's rate (tens of millions of kg) regardless of this
+        // tick's production, which the threshold check above cannot catch
+        // starting from a value already under it.
+        Assert.True(held >= 40_000_000.0 - 2_000_000.0,
+            $"the tank drew from a cargo that was not full: held={held}, seeded at 40,000,000");
+    }
+
+    /// <summary>SDD-006 §7a.3's finding-268 amendment: the other half of the
+    /// same gate — a full cargo departs at the berth's rate rather than
+    /// waiting for a schedule step 2 does not build.</summary>
+    [Fact]
+    public void A_full_cargo_lifts_at_the_berths_rate()
+    {
+        (Engine engine, _) = Field();
+        var tank = engine.Provided.Resolve<SurfaceChain>().Tank;
+
+        var kilograms = new double[Defaults.MaterialCount];
+        kilograms[Defaults.OilOrdinal.Ordinal] = Defaults.CargoSize.Kilograms + 1_000_000.0;
+
+        tank.RestoreTo(
+            MaterialInventory.Of(kilograms),
+            Allocation.FromSingle(new EntityRef(EntityKind.Compartment, 1)));
+
+        Mass before = tank.Held.Total;
+
+        engine.Pipeline.AdvanceTick();
+
+        Mass after = engine.ReadModel!.Storage.Held;
+
+        Assert.True(after.Kilograms < before.Kilograms - 1_000_000.0,
+            $"a full cargo did not lift: before={before.Kilograms} after={after.Kilograms}");
+    }
+
+    private static IReadOnlyList<AuditEntry> DemurrageEntries(Engine engine) =>
+        [.. engine.Audit.Query(new AuditQuery(null, AuditCategory.Financial, null, null))
+            .Where(entry => entry.Data.TryGetValue("accrual", out AuditValue accrual)
+                             && accrual.Value == "demurrage")];
+
+    /// <summary>SDD-006 §7a.4's finding-269 amendment: a cargo that clears
+    /// inside the 60-day laytime costs nothing extra — demurrage is an
+    /// OVERRUN charge, not a tax on every lifting.</summary>
+    [Fact]
+    public void A_cargo_that_clears_within_laytime_is_not_charged_demurrage()
+    {
+        (Engine engine, _) = Field();
+        var tank = engine.Provided.Resolve<SurfaceChain>().Tank;
+
+        // Just over the line: at the shipped E1 rate (20 kg/s, 51.84e6
+        // kg/tick) this clears inside the first tick, nowhere near 60 days.
+        var kilograms = new double[Defaults.MaterialCount];
+        kilograms[Defaults.OilOrdinal.Ordinal] = Defaults.CargoSize.Kilograms + 1_000_000.0;
+
+        tank.RestoreTo(
+            MaterialInventory.Of(kilograms),
+            Allocation.FromSingle(new EntityRef(EntityKind.Compartment, 1)));
+
+        engine.Pipeline.AdvanceTick();
+
+        Assert.Empty(DemurrageEntries(engine));
+
+        // SDD-017 §2's `LogisticsView.Berths` row (finding 281): a cargo
+        // that departed the same tick it filled leaves no active days
+        // behind and is not late.
+        BerthView berth = engine.ReadModel!.Berth;
+        Assert.Equal(0.0, berth.ActiveDays);
+        Assert.False(berth.IsLate);
+        Assert.True(berth.LoadingRate.KgPerSecond > 0.0, "the berth's own rate must be real");
+    }
+
+    /// <summary>SDD-006 §7a.4's finding-269 amendment: a cargo that takes
+    /// long enough to clear — the shipped E1 rate against a tank sized well
+    /// past one cargo — overruns the 60-day laytime and is charged for it,
+    /// once, the tick it finally departs.</summary>
+    [Fact]
+    public void An_overrunning_cargo_is_charged_demurrage()
+    {
+        (Engine engine, _) = Field();
+        var tank = engine.Provided.Resolve<SurfaceChain>().Tank;
+
+        // Sized so the E1 berth (51.84e6 kg/tick) needs several ticks —
+        // 180+ days — to clear it, comfortably past the 60-day laytime.
+        var kilograms = new double[Defaults.MaterialCount];
+        kilograms[Defaults.OilOrdinal.Ordinal] = 300_000_000.0;
+
+        tank.RestoreTo(
+            MaterialInventory.Of(kilograms),
+            Allocation.FromSingle(new EntityRef(EntityKind.Compartment, 1)));
+
+        var ticks = 0;
+        var sawLate = false;
+
+        while (engine.ReadModel is null
+               || engine.ReadModel.Storage.Held.Kilograms >= Defaults.CargoSize.Kilograms)
+        {
+            engine.Pipeline.AdvanceTick();
+            ticks++;
+            Assert.True(ticks < 20, "the seeded cargo never departed");
+
+            if (engine.ReadModel!.Berth.IsLate) sawLate = true;
+        }
+
+        IReadOnlyList<AuditEntry> demurrage = DemurrageEntries(engine);
+
+        Assert.Single(demurrage);
+        Assert.True(
+            double.Parse(
+                demurrage[0].Data["overrun-days"].Value,
+                System.Globalization.CultureInfo.InvariantCulture) > 0.0,
+            "the charged entry names no positive overrun");
+
+        // SDD-017 §2's `LogisticsView.Berths` row (finding 281): the read
+        // model showed the overrun coming, live, before the charge ever
+        // posted — the same active-day count `ChargeDemurrageIfLate` used
+        // to price it.
+        Assert.True(sawLate, "the read model never showed the berth running late");
+
+        // AND THE CLOCK RESET the tick the cargo actually departed.
+        Assert.Equal(0.0, engine.ReadModel!.Berth.ActiveDays);
+    }
 
     /// <summary>
     /// R23-V16, the reachability half. SDD-012 §4b's R23.1 amendment, and
@@ -314,7 +550,20 @@ public sealed class ProductionLoopTests
     [Trait("Speed", "Slow")]
     public void R23V16_a_company_that_stops_flaring_recovers_its_standing()
     {
-        (Engine engine, _) = Field();
+        // PINNED TO ITS OWN SEED, not the file's shared default (finding 184):
+        // R9.1's compressor is a registered flow element from tick 0 that can
+        // independently fail and get repaired, so it draws extra outcomes from
+        // the scheduler's shared `_outcomes` stream (Scheduler.cs) across the
+        // dirty decade before this test's own InstallGasPlantCommand draws its
+        // success/failure grade — under the file's default seed that shift
+        // lands the gas plant's own install on a failed grade (it never fits
+        // past `gas-plant-none`, confirmed by a throughput trace showing 100%
+        // of gas still reaching the flare a decade after the purchase), where
+        // clean master's unshifted draw sequence lands on success. A seed is
+        // just as valid a way to play this field as another; this one was
+        // checked against the same fixture and clears the 0.5 bar with a wide
+        // margin (0.85).
+        (Engine engine, _) = Field(seed: 6UL);
         engine.Commands.Submit(new InstallSeparatorCommand());
 
         // A decade of burning everything the separator's gas leg produces.
@@ -497,5 +746,344 @@ public sealed class ProductionLoopTests
         Assert.True(warmest - coldest > 5.0,
             $"a year of solving spanned {warmest - coldest:F2} K, so the field is " +
             "running at a constant rather than at its own weather");
+    }
+
+    // ------------------------------------------------ working-interest sale
+    // SDD-011 §4's finding-275 amendment — R13.10's second restructuring lever.
+
+    /// <summary>The tick's own <c>Account.PartnerPayable</c> credit — the
+    /// partner's share of revenue, the same LAST-movement selector
+    /// <see cref="OilRevenueThisTick"/> already uses.</summary>
+    private static Money PartnerPayableCreditThisTick(CompanyState company)
+    {
+        Movement? credit = null;
+        foreach (Movement movement in company.Ledger.Movements)
+            if (movement.Credit == Account.PartnerPayable) credit = movement;
+
+        Assert.NotNull(credit);
+        return credit!.Amount;
+    }
+
+    /// <summary>
+    /// Seeds a real belief about oil in place for the fixture's one
+    /// compartment, the same door <c>DrillWellCommand</c>'s applier
+    /// delivers through (<c>Defaults.OilInPlaceKind</c> is log-space) — a
+    /// plausible in-place figure off this fixture's own declared rock
+    /// (pore volume x porosity x oil saturation), not an arbitrary one.
+    /// </summary>
+    private static void SeedOilInPlaceBelief(Engine engine)
+    {
+        WorldState world = engine.Provided.Resolve<WorldState>();
+        EntityId<IReservoirCompartmentEntity> compartment = world.Beneath(world.Prospects[0])!.Value;
+
+        double trueOilInPlace = 100.0e6 * 0.22 * 0.7;
+
+        engine.Provided.Resolve<IBeliefStore>().Apply(new Observation(
+            new EntityRef(EntityKind.Compartment, compartment.Value),
+            Defaults.OilInPlaceKind,
+            Math.Log(trueOilInPlace),
+            Sigma: 0.3,
+            BeliefSpace.Log,
+            Provenance.WellTest));
+    }
+
+    /// <summary>Pushes cash below zero directly, the same way
+    /// <c>GameplayTests</c>' insolvency fixture does — a restructuring lever
+    /// is gated on distress, and this is the fastest honest way to produce
+    /// it without a multi-decade covenant-breach run.</summary>
+    private static void ForceCashNegative(Engine engine, CompanyState company)
+    {
+        Money overdraw = company.Ledger.Cash + Money.FromMillions(1.0);
+
+        company.Ledger.Post(new Movement(
+            new Tick(0), Account.Opex, Account.Cash, overdraw,
+            MovementCategory.Operating, Asset: null,
+            Cause: engine.Audit.Record(
+                AuditCategory.Financial, subject: null, cause: null,
+                new Dictionary<string, AuditValue>(StringComparer.Ordinal))));
+
+        Assert.True(company.Ledger.Cash < Money.Zero, "the fixture failed to force distress");
+    }
+
+    /// <summary>
+    /// SDD-011 §4's finding-275 amendment: the sale prices at
+    /// <c>Bank.Terms.ReserveValue x fraction x (1 - discount)</c> — the SAME
+    /// DCF walk the borrowing base already runs, read at the tick the sale
+    /// APPLIES (stage 2, before stage 8 recomputes it that same tick), not a
+    /// value the test hands the command directly.
+    /// </summary>
+    [Fact]
+    public void A_sale_prices_at_the_reserve_value_times_fraction_at_the_discount()
+    {
+        (Engine engine, CompanyState company) = Field();
+
+        // Field()'s own FieldControl.Drill is a direct test shortcut around
+        // DrillWellCommand's applier, which is the one place a discovery
+        // delivers an oil-in-place OBSERVATION (SDD-008 §3) — so a
+        // hand-declared field carries no belief of its own, and
+        // ReservesBook (which reads beliefs, not truth) prices it at zero
+        // without one.
+        SeedOilInPlaceBelief(engine);
+
+        engine.Pipeline.AdvanceTick();
+
+        Bank bank = Find<Bank>(engine);
+        Money reserveValue = bank.Terms.ReserveValue;
+        Assert.True(reserveValue > Money.Zero, "the fixture has no reserves to price a sale off");
+
+        ForceCashNegative(engine, company);
+
+        Assert.IsType<Accepted>(engine.Commands.Submit(new SellWorkingInterestCommand(0.2)));
+
+        engine.Pipeline.AdvanceTick();
+
+        Money price = LastEquityCreditThisTick(company);
+        Assert.Equal(Money.RoundHalfEven(reserveValue.Cents * 0.2 * 0.75), price);
+    }
+
+    private static Money LastEquityCreditThisTick(CompanyState company)
+    {
+        Movement? credit = null;
+        foreach (Movement movement in company.Ledger.Movements)
+            if (movement.Credit == Account.Equity) credit = movement;
+
+        Assert.NotNull(credit);
+        return credit!.Amount;
+    }
+
+    /// <summary>A healthy company — Clear covenant, positive cash — cannot
+    /// use a restructuring lever: it is not a routine financing tool.</summary>
+    [Fact]
+    public void A_sale_while_financially_healthy_refuses()
+    {
+        (Engine engine, _) = Field();
+
+        engine.Pipeline.AdvanceTick();
+
+        var result = Assert.IsType<Rejected>(
+            engine.Commands.Submit(new SellWorkingInterestCommand(0.1)));
+
+        Assert.Contains(result.Reasons, r => r.LocId == "$loc:reject.not-distressed");
+    }
+
+    /// <summary>Selling past the 50% cumulative cap refuses and names the
+    /// ceiling rather than silently clamping.</summary>
+    [Fact]
+    public void A_sale_above_the_sellable_cap_refuses_naming_the_ceiling()
+    {
+        (Engine engine, CompanyState company) = Field();
+
+        engine.Pipeline.AdvanceTick();
+        ForceCashNegative(engine, company);
+
+        var result = Assert.IsType<Rejected>(
+            engine.Commands.Submit(new SellWorkingInterestCommand(0.6)));
+
+        Assert.Contains(result.Reasons, r =>
+            r.LocId == "$loc:reject.beyond-sellable-cap" && r.Detail.Contains("0.5"));
+    }
+
+    /// <summary>Two sales accumulate rather than replace, and the cap is
+    /// read against the CUMULATIVE share, not each sale in isolation.</summary>
+    [Fact]
+    public void Two_sequential_sales_accumulate_and_the_second_still_respects_the_cap()
+    {
+        (Engine engine, CompanyState company) = Field();
+
+        engine.Pipeline.AdvanceTick();
+        ForceCashNegative(engine, company);
+
+        Assert.IsType<Accepted>(engine.Commands.Submit(new SellWorkingInterestCommand(0.3)));
+        engine.Pipeline.AdvanceTick();
+
+        WorkingInterest stake = Find<WorkingInterest>(engine);
+        Assert.Equal(0.3, stake.PartnerShare, 9);
+
+        // The first sale's proceeds can have carried cash back above zero
+        // this same tick — re-forced rather than assumed, so what is being
+        // tested here is the CAP, not whether distress persisted on its own.
+        ForceCashNegative(engine, company);
+
+        // 0.3 + 0.3 = 0.6, past the 0.5 cap.
+        var overCap = Assert.IsType<Rejected>(
+            engine.Commands.Submit(new SellWorkingInterestCommand(0.3)));
+        Assert.Contains(overCap.Reasons, r => r.LocId == "$loc:reject.beyond-sellable-cap");
+
+        // 0.3 + 0.2 = 0.5, exactly at the cap — still sellable.
+        Assert.IsType<Accepted>(engine.Commands.Submit(new SellWorkingInterestCommand(0.2)));
+        engine.Pipeline.AdvanceTick();
+
+        Assert.Equal(0.5, stake.PartnerShare, 9);
+    }
+
+    /// <summary>
+    /// Once a stake is sold, the field's OWN production splits every tick
+    /// (`ProductionLoop.PostRevenueSplit`/`PostCostSplit`): the partner's
+    /// share of that same tick's oil-sale revenue lands in
+    /// `Account.PartnerPayable` rather than `Account.Revenue`, in
+    /// proportion to `PartnerShare` — set directly here (bypassing the
+    /// distress gate) because this test is about the SPLIT, not about
+    /// reaching it.
+    /// </summary>
+    [Fact]
+    public void Production_after_a_sale_splits_revenue_with_the_partner()
+    {
+        (Engine engine, CompanyState company) = Field();
+
+        Find<WorkingInterest>(engine).Sell(0.4);
+
+        engine.Pipeline.AdvanceTick();
+
+        Money companyRevenue = OilRevenueThisTick(company);
+        Money partnerRevenue = PartnerPayableCreditThisTick(company);
+
+        Assert.True(companyRevenue > Money.Zero);
+        Assert.True(partnerRevenue > Money.Zero);
+
+        double revenueShare = partnerRevenue.Cents / (double)(companyRevenue.Cents + partnerRevenue.Cents);
+        Assert.Equal(0.4, revenueShare, 3);
+
+        Money companyOpex = LastMovementWhere(company, m => m.Debit == Account.Opex).Amount;
+        Money partnerOpex = LastMovementWhere(company, m => m.Debit == Account.PartnerPayable).Amount;
+
+        Assert.True(companyOpex > Money.Zero);
+        Assert.True(partnerOpex > Money.Zero);
+
+        double opexShare = partnerOpex.Cents / (double)(companyOpex.Cents + partnerOpex.Cents);
+        Assert.Equal(0.4, opexShare, 3);
+    }
+
+    private static Movement LastMovementWhere(CompanyState company, Func<Movement, bool> match)
+    {
+        Movement? found = null;
+        foreach (Movement movement in company.Ledger.Movements)
+            if (match(movement)) found = movement;
+
+        Assert.NotNull(found);
+        return found!;
+    }
+
+    // -------------------------------------------------------------- takeover
+    // SDD-014 §5a's finding-276 amendment — R13.10's third and last
+    // restructuring finding.
+
+    /// <summary>Drives a real, unambiguous covenant breach directly — debited
+    /// against Capex_PPE like <see cref="Fixture"/>'s own drawn-debt setup,
+    /// so <see cref="Bank"/>'s own DCF walk (which prices this fixture's
+    /// reserves at zero) makes ANY debt exceed the borrowing base.</summary>
+    private static void ForceDrawnDebt(Engine engine, CompanyState company, Money amount)
+    {
+        company.Ledger.Post(new Movement(
+            new Tick(0), Account.Capex_PPE, Account.Debt, amount,
+            MovementCategory.Development, Asset: null,
+            Cause: engine.Audit.Record(
+                AuditCategory.Financial, subject: null, cause: null,
+                new Dictionary<string, AuditValue>(StringComparer.Ordinal))));
+    }
+
+    /// <summary>
+    /// A company with $0 reserves and any real debt breaches on tick 1
+    /// (Clear → Curing), the 6-tick cure window elapses on tick 7
+    /// (Curing → Amortising), and 12 further ticks Amortising — tick 18 —
+    /// is the takeover threshold. $100M against a fixture that can sweep at
+    /// most a few million a month never comes close to curing on its own.
+    /// </summary>
+    [Fact]
+    public void A_company_stuck_amortising_with_no_more_room_to_sell_is_taken_over()
+    {
+        (Engine engine, CompanyState company) = Field();
+
+        ForceDrawnDebt(engine, company, Money.FromMillions(100.0));
+        Find<WorkingInterest>(engine).Sell(0.5);   // at the sellable cap
+
+        for (var month = 0; month < 18; month++) engine.Pipeline.AdvanceTick();
+
+        Assert.True(engine.ReadModel!.TakenOver);
+
+        IReadOnlyList<AuditEntry> entries = engine.Audit.Query(
+            new AuditQuery(null, AuditCategory.StateTransition, null, null));
+
+        Assert.Contains(entries, e =>
+            e.Data.TryGetValue("kind", out AuditValue kind) && kind.Value == "company.taken-over");
+    }
+
+    /// <summary>Stuck in Amortising exactly as long, but with sellable room
+    /// left — the OTHER lever is still available, so this is not yet a
+    /// last resort.</summary>
+    [Fact]
+    public void A_company_that_can_still_sell_more_working_interest_is_not_taken_over()
+    {
+        (Engine engine, CompanyState company) = Field();
+
+        ForceDrawnDebt(engine, company, Money.FromMillions(100.0));
+        Find<WorkingInterest>(engine).Sell(0.3);   // under the 0.5 cap
+
+        for (var month = 0; month < 20; month++) engine.Pipeline.AdvanceTick();
+
+        Assert.False(engine.ReadModel!.TakenOver);
+    }
+
+    /// <summary>
+    /// A covenant cured before the threshold resets the clock rather than
+    /// pausing it — proven with a SECOND breach, not merely a cured one left
+    /// alone: 8 ticks into the first Amortising spell, the debt is cleared,
+    /// then re-drawn. A clock that only paused would need just 4 more
+    /// Amortising ticks (8 + 4 = 12) to trigger; a clock that genuinely
+    /// reset needs a full fresh 12 — so 10 ticks after the second breach is
+    /// enough to prove one from the other (short of the reset clock's own
+    /// 18-tick requirement, past what a merely-paused one would have taken).
+    /// </summary>
+    [Fact]
+    public void A_company_that_cures_its_covenant_before_the_threshold_is_never_at_risk()
+    {
+        (Engine engine, CompanyState company) = Field();
+
+        ForceDrawnDebt(engine, company, Money.FromMillions(100.0));
+        Find<WorkingInterest>(engine).Sell(0.5);
+
+        for (var month = 0; month < 14; month++) engine.Pipeline.AdvanceTick();   // 8 ticks Amortising
+
+        Bank bank = Find<Bank>(engine);
+        ClearDrawnDebt(engine, company, bank);
+
+        for (var month = 0; month < 3; month++) engine.Pipeline.AdvanceTick();    // confirm cured, Clear
+
+        ForceDrawnDebt(engine, company, Money.FromMillions(100.0));               // breach again
+
+        for (var month = 0; month < 10; month++) engine.Pipeline.AdvanceTick();
+
+        Assert.False(engine.ReadModel!.TakenOver);
+    }
+
+    /// <summary>
+    /// <b>The read model's water cut is the real field's, not a second
+    /// computation of it</b> (SDD-017 §2's `FieldView.WaterCut` row, finding
+    /// 279) — a truth-side figure the custody meter already delivers, `loop.
+    /// WaterCut` (SDD-012 §1's own `k_w` term), and until now invisible to a
+    /// host. Ten ticks is enough for a small connate cut to appear behind a
+    /// single well on good rock, before that well needs its first repair.
+    /// </summary>
+    [Fact]
+    public void The_read_model_publishes_the_real_field_water_cut()
+    {
+        (Engine engine, _) = Field();
+        ProductionLoop loop = Find<ProductionLoop>(engine);
+
+        for (var month = 0; month < 10; month++) engine.Pipeline.AdvanceTick();
+
+        Assert.True(loop.WaterCut > 0.0, "the field made no water at all by month 10");
+        Assert.Equal(loop.WaterCut, engine.ReadModel!.WaterCut);
+    }
+
+    private static void ClearDrawnDebt(Engine engine, CompanyState company, Bank bank)
+    {
+        if (bank.Drawn <= Money.Zero) return;
+
+        company.Ledger.Post(new Movement(
+            new Tick(0), Account.Debt, Account.Capex_PPE, bank.Drawn,
+            MovementCategory.Development, Asset: null,
+            Cause: engine.Audit.Record(
+                AuditCategory.Financial, subject: null, cause: null,
+                new Dictionary<string, AuditValue>(StringComparer.Ordinal))));
     }
 }

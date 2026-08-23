@@ -1,0 +1,8 @@
+{
+  "kind": "fluid-system",
+  "id": "medium-crude",
+  "apiGravityDegrees": 35.0,
+  "gasSpecificGravity": 0.75,
+  "reservoirTemperature": "93.3 degc",
+  "solutionGorAtBubblePoint": 100.0
+}

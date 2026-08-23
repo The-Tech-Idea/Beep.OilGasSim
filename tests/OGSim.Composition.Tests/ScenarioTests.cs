@@ -44,7 +44,8 @@ public sealed class ScenarioTests
 
     private static FieldPosition Position(long cents, int wells = 0) =>
         new(new Tick(1), new GameDate(1970, 1), new Money(cents), wells,
-            ActivitiesRunning: 0, new SurfaceVolume(0.0), Insolvent: false);
+            ActivitiesRunning: 0, new SurfaceVolume(0.0), Insolvent: false,
+            CompanyValue: new Money(cents), TakenOver: false);
 
     private static ObjectiveState Ask(ScenarioRunner runner, FieldPosition position, int tick) =>
         runner.Evaluate(Paths.SnapshotOf(position), new Tick(tick)).Overall;
@@ -254,6 +255,45 @@ public sealed class ScenarioTests
         Assert.Equal(new ContentId("first-field"), runner.Id);
     }
 
+    /// <summary>
+    /// SDD-014 §2's finding-267 amendment: a scenario CAN now ask for what the
+    /// company is worth, not only what it holds — `company.value` composes
+    /// (GM4's registry accepts it, so a mission naming it does not refuse at
+    /// load) and reads the one figure `FieldPosition.CompanyValue` carries
+    /// rather than a zero nobody computed.
+    /// </summary>
+    [Fact]
+    public void Company_value_is_a_registered_path_reading_the_position_it_names()
+    {
+        ProjectedPath? path = Defaults.ProjectedPaths
+            .FirstOrDefault(p => string.Equals(p.Path, "company.value", StringComparison.Ordinal));
+
+        Assert.NotNull(path);
+
+        var position = new FieldPosition(
+            new Tick(1), new GameDate(1970, 1), Cash: new Money(1),
+            Wells: 0, ActivitiesRunning: 0, new SurfaceVolume(0.0), Insolvent: false,
+            CompanyValue: new Money(123_456_00), TakenOver: false);
+
+        Assert.Equal(123_456_00.0, path!.Read(position), precision: 6);
+
+        // AND A SCENARIO CAN COMPOSE AGAINST IT — the same registry the shipped
+        // scenario is checked against above, refusing nothing this content asks.
+        // Built against `paths` directly rather than the file's own `Ask`
+        // helper: that helper's `Paths` is a smaller, hand-picked list that
+        // does not carry `company.value`, and the point here is the REAL one
+        // (`Defaults.ProjectedPaths`) does.
+        var paths = new ReadModelPaths(Defaults.ProjectedPaths);
+        var runner = new ScenarioRunner(
+            Asking(new Compare(
+                new Metric(new ReadModelPath("company.value")), CompareOp.Ge, new Const(0.0))),
+            paths.Schema);
+
+        ObjectiveState outcome = runner.Evaluate(paths.SnapshotOf(position), new Tick(1)).Overall;
+
+        Assert.Equal(ObjectiveState.Met, outcome);
+    }
+
     // ------------------------------------------------- R24-V19: the audit trail
 
     /// <summary>
@@ -265,7 +305,10 @@ public sealed class ScenarioTests
     /// §7's R13.3 amendment (finding 250) means an idle company also owes the
     /// shipped take-or-pay contract's full committed volume as shortfall
     /// every window, which brings insolvency in well before the scenario's
-    /// own month-120 deadline — measured at month 82.
+    /// own month-120 deadline — measured at month 111 (**corrected from 82,
+    /// found going through the plan**: R20d.9.1 moved the licence's one work
+    /// commitment from due-at-24 to due-at-60, which moved the bond forfeit
+    /// and everything after it, and this test's number was never revisited).
     /// </summary>
     [Fact]
     public void R24V19_a_failed_objective_is_recorded_once_when_it_actually_fails()
@@ -273,7 +316,7 @@ public sealed class ScenarioTests
         Built built = Assert.IsType<Built>(EngineBuilder.Build(Fixture.Settings()));
         Engine engine = built.Engine;
 
-        for (var month = 0; month < 90; month++) engine.Pipeline.AdvanceTick();
+        for (var month = 0; month < 112; month++) engine.Pipeline.AdvanceTick();
 
         Assert.True(engine.ReadModel!.Insolvent,
             "the fixture must actually go insolvent for this test to prove anything");
@@ -292,10 +335,12 @@ public sealed class ScenarioTests
     /// <summary>
     /// The per-objective event is not a duplicate of the scenario's combined
     /// verdict, even on a fixture where both fire at the SAME tick (SDD-009
-    /// §7's R13.3 amendment moved this fixture's insolvency to month 82,
-    /// before the scenario's own month-120 deadline could ever latch
-    /// <c>Overall</c> to <c>Expired</c> first — so the two events are no
-    /// longer temporally separated the way an earlier measurement found).
+    /// §7's R13.3 amendment moved this fixture's insolvency to month 111 —
+    /// **corrected from 82, the same R20d.9.1 staleness the sibling test
+    /// carried** — still well before the scenario's own month-120 deadline
+    /// could ever latch <c>Overall</c> to <c>Expired</c> first, so the two
+    /// events are no longer temporally separated the way an earlier
+    /// measurement found).
     /// What still makes the per-objective event worth having is CONTENT: it
     /// names WHICH objective broke, and the combined verdict — by design,
     /// SDD-014 §5a's report over a whole scenario rather than one term of
@@ -307,7 +352,7 @@ public sealed class ScenarioTests
         Built built = Assert.IsType<Built>(EngineBuilder.Build(Fixture.Settings()));
         Engine engine = built.Engine;
 
-        for (var month = 0; month < 90; month++) engine.Pipeline.AdvanceTick();
+        for (var month = 0; month < 112; month++) engine.Pipeline.AdvanceTick();
 
         IReadOnlyList<AuditEntry> transitions = engine.Audit.Query(
             new AuditQuery(null, AuditCategory.StateTransition, null, null));

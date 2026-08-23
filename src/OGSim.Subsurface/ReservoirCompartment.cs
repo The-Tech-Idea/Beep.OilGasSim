@@ -31,6 +31,7 @@ internal sealed class ReservoirCompartment : IReservoirCompartment
         ContactSet contacts,
         RockTruth rock,
         IDriveMechanism drive,
+        ContentId fluidSystem,
         IReadOnlyList<CompartmentLink> links)
     {
         ArgumentNullException.ThrowIfNull(initial);
@@ -42,6 +43,7 @@ internal sealed class ReservoirCompartment : IReservoirCompartment
         Contacts = contacts;
         Rock = rock;
         Drive = drive;
+        FluidSystem = fluidSystem;
         _links = [.. links];
 
         // A compartment opens AT its initial pressure holding its initial mass:
@@ -61,6 +63,11 @@ internal sealed class ReservoirCompartment : IReservoirCompartment
     public RockTruth Rock { get; }
 
     public IDriveMechanism Drive { get; }
+
+    /// <summary>Which fluid system this compartment's oil is (SDD-003 §3.0b's
+    /// finding-270 amendment) — a truth attribute world generation draws, the
+    /// same standing <see cref="Drive"/> has.</summary>
+    public ContentId FluidSystem { get; }
 
     public IReadOnlyList<CompartmentLink> Links => _links;
 
@@ -188,7 +195,9 @@ internal sealed class ReservoirCompartment : IReservoirCompartment
             CumulativeWaterInflux: next.WaterInflux,
             CumulativeInjected: next.Injected,
             StartPressure: startOfTick,
-            WithdrawnThisTick: withdrawnThisTick);
+            WithdrawnThisTick: withdrawnThisTick,
+            GasInPlace: Initial.GasInPlace,
+            ReservoirTemperature: Initial.ReservoirTemperature);
 
         // The DRIVE solves, not this class. Which expansion terms are admitted
         // is the mechanism's answer (SDD-003 §4.2b), and it is the reason
@@ -237,7 +246,9 @@ internal sealed class ReservoirCompartment : IReservoirCompartment
             // has no defaults (law L2), and the honest values for "how much room
             // is there right now" are the position this compartment is in.
             StartPressure: Pr,
-            WithdrawnThisTick: new ReservoirVolume(0.0));
+            WithdrawnThisTick: new ReservoirVolume(0.0),
+            GasInPlace: Initial.GasInPlace,
+            ReservoirTemperature: Initial.ReservoirTemperature);
 
         double room = -MaterialBalance.Residual(input, fluid, Initial.Pressure);
 
@@ -285,7 +296,9 @@ internal sealed class ReservoirCompartment : IReservoirCompartment
             // (finding 205). `SolveFromInitial` below is the half that was
             // missing.
             StartPressure: Initial.Pressure,
-            WithdrawnThisTick: new ReservoirVolume(0.0));
+            WithdrawnThisTick: new ReservoirVolume(0.0),
+            GasInPlace: Initial.GasInPlace,
+            ReservoirTemperature: Initial.ReservoirTemperature);
 
         Pr = Drive.SolveFromInitial(input, fluid);
     }

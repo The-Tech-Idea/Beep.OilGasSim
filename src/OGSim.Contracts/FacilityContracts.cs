@@ -1,19 +1,20 @@
 // Design 02 §4 — a facility is a container and a cost centre, NEVER a process.
 // All physics lives in units, each an IFlowElement. There is no facility-type
 // hierarchy in code at all (02 §4.1): "gas plant" is a template id in content.
+//
+// `IFacility` (container/Children, PPDM-style) was declared here once, right
+// beside this comment, contradicting the law the comment states — zero
+// implementations, zero references anywhere in the tree. Removed (this
+// cleanup, and finding 159's own separate rejection of a second element-type
+// interface for the identical reason). If a facility grouping is ever
+// genuinely needed, it is a read-model-only projection over the flat
+// `SurfaceChain` — the `ChainElementView` precedent — never a resurrection
+// of this interface.
 
 using System.Collections.Immutable;
 using OGSim.Kernel;
 
 namespace OGSim.Contracts;
-
-public interface IFacility
-{
-    EntityId<IFacility> Id { get; }
-    Coordinate Site { get; }
-    IReadOnlyList<EntityId<IFacility>> Children { get; }        // recursive (PPDM)
-    IReadOnlyList<EntityId<IFlowElement>> Units { get; }
-}
 
 /// <summary>One limit a stream must satisfy at a point (design 02 §4.3) — pinned proxies per SDD-006 §7.</summary>
 public enum SpecProperty

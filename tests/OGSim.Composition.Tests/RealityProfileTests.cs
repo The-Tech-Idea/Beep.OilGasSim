@@ -27,7 +27,8 @@ public sealed class RealityProfileTests
                 OilSaturation: 0.7,
                 InitialPressure: new Pressure(30.0e6),
                 Temperature: Temperature.FromCelsius(93.3),
-                Depth: new Length(2000.0)),
+                Depth: new Length(2000.0),
+                FluidSystem: new ContentId("medium-crude")),
                 // Rock the shipped plant is sized for. It said 2e-13 and 30 m
                 // while every well was built from Defaults.Inflow's 1e-13 and
                 // 20 m — a compartment stating rock nobody read (finding 170).
@@ -134,10 +135,15 @@ public sealed class RealityProfileTests
             Engine engine = At(profile);
             engine.Pipeline.AdvanceTick();
 
+            // NOT physical adjacency (SDD-006 §3c/§3d, R9.1's and R11.2's own
+            // composition, findings 257 and 259): `FlowNetwork.Build`'s
+            // topological order is a property of the solver's own walk.
+            // Stated as what it actually produces, matching R20d-V1's own
+            // sibling assertion.
             Assert.Equal(
                 ["well-1", "water-intake", "gathering-1", "manifold", "flowline", "separator",
-                 "water-disposal", "gas-plant", "flare", "treater", "custody-meter", "tank",
-                 "off-spec-sink"],
+                 "water-disposal", "compressor", "gas-plant", "flare", "pump-station",
+                 "treater", "custody-meter", "tank", "off-spec-sink"],
                 engine.ReadModel!.Chain.Select(element => element.DisplayId));
 
             // And the verb that answers a bottleneck is on offer either way.

@@ -16,6 +16,15 @@ using OGSim.Kernel;
 
 namespace OGSim.Wells;
 
+/// <summary>The four shipped tiers together (SDD-003 §6.2's R12b.2
+/// amendment, finding 255) — one per method, bundled so composition threads
+/// one value rather than four.</summary>
+public sealed record LiftTiers(
+    DisplacementPumpTier RodPump,
+    DisplacementPumpTier Pcp,
+    EspTier Esp,
+    GasLiftTier GasLift);
+
 /// <summary>
 /// What every method shares: identity as a component, an envelope, and the
 /// envelope's consequences. What it does NOT share is the effect — that is the
@@ -136,6 +145,22 @@ public abstract class LiftMethod : ILiftMethod
 /// <para>Its weakness is gas: an ESP in a gassy well gas-locks. That is the
 /// envelope breach R7 §2.2 is written about.</para>
 /// </summary>
+public sealed record EspTier(
+    ContentId Id,
+    LiftEnvelope Envelope,
+    IReadOnlyList<(double RateM3PerS, double HeadM)> HeadCurve,
+    double Efficiency)
+{
+    // Finding 131 — a record carrying a collection compares it structurally
+    // or not at all: the compiler's default is reference equality.
+    public bool Equals(EspTier? other) =>
+        other is not null && Id == other.Id && Envelope == other.Envelope
+        && Efficiency == other.Efficiency && Structural.Equal(HeadCurve, other.HeadCurve);
+
+    public override int GetHashCode() =>
+        HashCode.Combine(Id, Envelope, Efficiency, Structural.HashOf(HeadCurve));
+}
+
 public sealed class ElectricSubmersiblePump : LiftMethod
 {
     /// <summary>The density the catalogue curve is quoted at (SDD-003 §6.2).</summary>
@@ -232,6 +257,12 @@ public sealed class ElectricSubmersiblePump : LiftMethod
 /// removes weight, because the extra volume has to be pushed up the same tubing.
 /// The turning point falls out of those two terms rather than being asserted.</para>
 /// </summary>
+public sealed record GasLiftTier(
+    ContentId Id,
+    LiftEnvelope Envelope,
+    double InjectionRateCubicMetresPerSecond,
+    double GasDensityKgPerM3);
+
 public sealed class GasLift : LiftMethod
 {
     private readonly double _injectionRateM3PerS;
@@ -306,6 +337,12 @@ public sealed class GasLift : LiftMethod
 /// <para>Rate-limited and deviation-limited, which is why it belongs to shallow,
 /// low-rate, late-life wells — exactly the ones an ESP would be absurd on.</para>
 /// </summary>
+/// <summary>Shared by <see cref="RodPump"/> and <see cref="ProgressingCavityPump"/>
+/// — §6.2 gives both the same relation, so the tier they are fitted from is one
+/// shape too, distinguished only by which envelope a rung declares.</summary>
+public sealed record DisplacementPumpTier(
+    ContentId Id, LiftEnvelope Envelope, double DisplacementCubicMetresPerSecond);
+
 public sealed class RodPump : LiftMethod
 {
     private readonly double _displacementM3PerS;

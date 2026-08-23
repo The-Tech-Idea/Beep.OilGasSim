@@ -17,7 +17,18 @@ using OGSim.Kernel;
 
 namespace OGSim.Facilities;
 
-/// <summary>SDD-006 §3c's datasheet.</summary>
+/// <summary>
+/// SDD-006 §3c's datasheet.
+///
+/// <para><see cref="Discharge"/> joined the tier at R9.1's own composition
+/// (finding 257): sizing a compressor's discharge is "the player's decision,
+/// made when the station is bought" (§3d says the same of the liquid pump
+/// station in as many words), and every other boosting or set-pressure
+/// element in this engine — the separator's own <c>OperatingPressure</c> is
+/// the precedent — puts that decision on the TIER rather than threading a
+/// free-form number through an install command no other install takes
+/// one of.</para>
+/// </summary>
 public sealed record CompressorTier(
     ContentId Id,
     MassRate RatedCapacity,
@@ -26,7 +37,8 @@ public sealed record CompressorTier(
     double PolytropicEfficiency,    // η
     double MolarMassKgPerMol,       // MW of the gas
     double DerateFractionPerKelvin, // k_derate, 13 §3.3
-    Temperature DerateReference);   // T_ref
+    Temperature DerateReference,    // T_ref
+    Pressure Discharge);            // P2, the tier's own target
 
 /// <summary>
 /// SDD-006 §3c. Staged polytropic compression with interstage cooling.
@@ -39,9 +51,8 @@ public sealed record CompressorTier(
 /// </summary>
 public sealed class Compressor : IFlowElement
 {
-    private readonly CompressorTier _tier;
+    private CompressorTier _tier;
     private readonly Pressure _suction;
-    private readonly Pressure _discharge;
     private readonly double _compressibility;   // Z̄
     private readonly int _materialCount;
 
@@ -49,22 +60,43 @@ public sealed class Compressor : IFlowElement
         EntityId<IFlowElement> id,
         CompressorTier tier,
         Pressure suction,
-        Pressure discharge,
         double averageCompressibility,
         int materialCount)
     {
         ArgumentNullException.ThrowIfNull(tier);
-        Validate(tier, suction, discharge, averageCompressibility);
+        Validate(tier, suction, averageCompressibility);
 
         Id = id;
         _tier = tier;
         _suction = suction;
-        _discharge = discharge;
         _compressibility = averageCompressibility;
         _materialCount = materialCount;
     }
 
     public EntityId<IFlowElement> Id { get; }
+
+    /// <summary>What is fitted now (law L5) — the one fact about this train
+    /// there is, read by the install activity's own refusal and by anything
+    /// that reports what a company has bought.</summary>
+    public CompressorTier Tier => _tier;
+
+    /// <summary>Fit a bigger train. Called only by a COMPLETED install
+    /// (finding 257's own R9.1 join, mirroring every other socket's
+    /// <c>Fit</c>). Suction never changes here: it is where this train SITS,
+    /// not what it is built to reach, and a bigger train does not move a
+    /// separator's own operating pressure.</summary>
+    public void Fit(CompressorTier tier)
+    {
+        ArgumentNullException.ThrowIfNull(tier);
+        Validate(tier, _suction, _compressibility);
+        _tier = tier;
+    }
+
+    /// <summary>Named so a caller wiring the chain never writes a bare index
+    /// (finding 257, matching <see cref="Flare.Inlet"/>).</summary>
+    public static PortId Inlet { get; } = new(0);
+
+    public static PortId Outlet { get; } = new(1);
 
     public IReadOnlyList<PortSpec> Ports { get; } =
     [
@@ -82,7 +114,7 @@ public sealed class Compressor : IFlowElement
     {
         get
         {
-            double ratio = _discharge.Pascals / _suction.Pascals;
+            double ratio = _tier.Discharge.Pascals / _suction.Pascals;
             if (ratio <= 1.0) return 1;
 
             double exact = DetMath.Ln(ratio) / DetMath.Ln(_tier.MaxStageRatio);
@@ -91,7 +123,7 @@ public sealed class Compressor : IFlowElement
     }
 
     /// <summary>The equal ratio each stage takes.</summary>
-    public double StageRatio => DetMath.Pow(_discharge.Pascals / _suction.Pascals, 1.0 / Stages);
+    public double StageRatio => DetMath.Pow(_tier.Discharge.Pascals / _suction.Pascals, 1.0 / Stages);
 
     /// <summary>Discharge temperature of one stage, K. The reason r_max exists.</summary>
     public Temperature StageDischargeTemperature(Temperature suctionTemperature) =>
@@ -149,7 +181,7 @@ public sealed class Compressor : IFlowElement
         // fixed sink at stage 4 (SDD-006 §3), never a silent bite out of this
         // stream.
         return new TransformResult(
-            [inlet with { P = _discharge, T = inlet.T }],
+            [inlet with { P = _tier.Discharge, T = inlet.T }],
             Sourced: Composition.Zero(_materialCount),
             FuelConsumed: Composition.Zero(_materialCount),
             Disposed: NoDisposal(_materialCount),
@@ -179,16 +211,16 @@ public sealed class Compressor : IFlowElement
     /// exact power of r_max and would otherwise buy a whole extra stage.</summary>
     private const double CeilingTolerance = 1e-9;
 
-    private static void Validate(
-        CompressorTier tier, Pressure suction, Pressure discharge, double z)
+    private static void Validate(CompressorTier tier, Pressure suction, double z)
     {
         if (suction.Pascals <= 0.0)
             throw new ModelFault("SDD-006 §3c", null, "suction pressure must be positive");
 
-        if (discharge.Pascals < suction.Pascals)
+        if (tier.Discharge.Pascals < suction.Pascals)
             throw new ModelFault("SDD-006 §3c", null,
-                $"discharge {Format(discharge.Pascals)} Pa is below suction " +
-                $"{Format(suction.Pascals)} Pa; a compressor raises pressure");
+                $"tier {tier.Id.Value} discharges at {Format(tier.Discharge.Pascals)} Pa, " +
+                $"below the suction it would be installed at, {Format(suction.Pascals)} Pa; " +
+                "a compressor raises pressure");
 
         if (tier.MaxStageRatio <= 1.0)
             throw new ModelFault("SDD-006 §3c", null,
@@ -422,6 +454,17 @@ public sealed class NglExtractionPlant : IFlowElement
 }
 
 /// <summary>
+/// SDD-006 §4's removal-unit datasheet (R9.2's own composition, finding
+/// 260). Efficiency only — a removal unit does not set a pressure, so there
+/// is no discharge to carry the way <see cref="CompressorTier"/> and <see
+/// cref="PumpTier"/> do.
+/// </summary>
+public sealed record RemovalUnitTier(
+    ContentId Id,
+    double RemovalEfficiency,
+    double ByProductYield);
+
+/// <summary>
 /// Dehydration and sweetening: a removal step with a declared efficiency,
 /// routing what it removes to a named outlet.
 ///
@@ -434,42 +477,48 @@ public sealed class NglExtractionPlant : IFlowElement
 public sealed class RemovalUnit : IFlowElement
 {
     private readonly int _targetOrdinal;
-    private readonly double _removalEfficiency;
-    private readonly double _byProductYield;
     private readonly int _byProductOrdinal;
     private readonly int _materialCount;
+    private RemovalUnitTier _tier;
 
     public RemovalUnit(
         EntityId<IFlowElement> id,
-        ContentId tier,
+        RemovalUnitTier tier,
         int targetOrdinal,
-        double removalEfficiency,
         int byProductOrdinal,
-        double byProductYield,
         int materialCount)
     {
-        if (removalEfficiency is < 0.0 or > 1.0)
-            throw new ModelFault("SDD-006 §4", null,
-                $"removal efficiency for tier {tier.Value} is " +
-                removalEfficiency.ToString("R", System.Globalization.CultureInfo.InvariantCulture) +
-                ", not a fraction in [0, 1]");
-
-        if (byProductYield < 0.0)
-            throw new ModelFault("SDD-006 §4", null,
-                $"by-product yield for tier {tier.Value} is negative");
+        ArgumentNullException.ThrowIfNull(tier);
+        Validate(tier);
 
         Id = id;
-        Tier = tier;
+        _tier = tier;
         _targetOrdinal = targetOrdinal;
-        _removalEfficiency = removalEfficiency;
         _byProductOrdinal = byProductOrdinal;
-        _byProductYield = byProductYield;
         _materialCount = materialCount;
     }
 
     public EntityId<IFlowElement> Id { get; }
 
-    public ContentId Tier { get; }
+    public static PortId Inlet { get; } = new(0);
+    public static PortId Outlet { get; } = new(1);
+    public static PortId RejectOutlet { get; } = new(2);
+
+    /// <summary>The rung fitted now (SDD-006 §0c's refit).</summary>
+    public RemovalUnitTier Tier => _tier;
+
+    /// <summary>
+    /// Fits a better removal step into the same socket (SDD-006 §0c, R9.2's
+    /// own composition, finding 260) — the tier alone swaps; which materials
+    /// it acts on stays exactly what the unit was built against.
+    /// </summary>
+    public void Fit(RemovalUnitTier tier)
+    {
+        ArgumentNullException.ThrowIfNull(tier);
+        Validate(tier);
+
+        _tier = tier;
+    }
 
     /// <summary>Inlet, treated outlet, and the removed material's own outlet —
     /// water to disposal, acid gas to the sulphur unit or the flare.</summary>
@@ -498,7 +547,7 @@ public sealed class RemovalUnit : IFlowElement
 
         MaterialStream inlet = input.Inlets[0];
         double present = inlet.MassRates[new MaterialId(_targetOrdinal)].KgPerSecond;
-        double removed = present * _removalEfficiency;
+        double removed = present * _tier.RemovalEfficiency;
 
         var treated = new double[_materialCount];
         var rejected = new double[_materialCount];
@@ -514,15 +563,15 @@ public sealed class RemovalUnit : IFlowElement
         // what was removed. It is a conversion within the reject stream, not new
         // mass — an amine unit that created sulphur out of nothing would break
         // INV1 at its own element, which is where it should break.
-        if (_byProductYield > 0.0 && removed > 0.0)
+        if (_tier.ByProductYield > 0.0 && removed > 0.0)
         {
-            double sulphur = removed * _byProductYield;
+            double sulphur = removed * _tier.ByProductYield;
             rejected[_byProductOrdinal] += sulphur;
             rejected[_targetOrdinal] -= sulphur;
 
             if (rejected[_targetOrdinal] < 0.0)
                 throw new ModelFault("SDD-006 §4", null,
-                    $"tier {Tier.Value} declares a by-product yield above 1: it would " +
+                    $"tier {_tier.Id.Value} declares a by-product yield above 1: it would " +
                     "produce more sulphur than there was acid gas to make it from");
         }
 
@@ -538,4 +587,17 @@ public sealed class RemovalUnit : IFlowElement
     }
 
     public IReadOnlyList<ConstraintEvaluation> EvaluateConstraints(TransformInput input) => [];
+
+    private static void Validate(RemovalUnitTier tier)
+    {
+        if (tier.RemovalEfficiency is < 0.0 or > 1.0)
+            throw new ModelFault("SDD-006 §4", null,
+                $"removal efficiency for tier {tier.Id.Value} is " +
+                tier.RemovalEfficiency.ToString("R", System.Globalization.CultureInfo.InvariantCulture) +
+                ", not a fraction in [0, 1]");
+
+        if (tier.ByProductYield < 0.0)
+            throw new ModelFault("SDD-006 §4", null,
+                $"by-product yield for tier {tier.Id.Value} is negative");
+    }
 }

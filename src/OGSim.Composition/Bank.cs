@@ -50,7 +50,7 @@ public sealed class Bank : IStateOwner
 
     /// <summary>What the bank will lend today, and at what price.</summary>
     public BorrowingTerms Terms { get; private set; } =
-        new(Money.Zero, Rate: 0.0, EsgSpread: 0.0);
+        new(Money.Zero, ReserveValue: Money.Zero, Rate: 0.0, EsgSpread: 0.0);
 
     /// <summary>Where the company stands against its covenant.</summary>
     public CovenantStatus Covenant { get; private set; } = new(CovenantState.Clear, 0);
@@ -78,7 +78,51 @@ public sealed class Bank : IStateOwner
         if (owed > Money.Zero) ChargeInterest(tick, owed);
 
         Covenant = _lender.Assess(Terms, Drawn, Covenant);
+
+        // THE SWEEP (SDD-009 §5's finding-274 amendment) — the schedule the
+        // `Amortising` state has promised since it was declared and nothing
+        // ever ran. Re-assessed against the POST-sweep balance, same terms:
+        // a company that sweeps its way back under the base returns to
+        // `Clear` this same tick, which is what "producing your way out of
+        // it recovers" already meant.
+        if (Covenant.State == CovenantState.Amortising)
+        {
+            Sweep(tick);
+            Covenant = _lender.Assess(Terms, Drawn, Covenant);
+        }
     }
+
+    /// <summary>
+    /// 5% of what is drawn, paid down from cash — capped at both, so a
+    /// sweep never manufactures debt that was not there or cash the company
+    /// does not have. ~20 months to retire a loan if sustained, in line with
+    /// real distressed-refinancing rapid-amortisation terms (SDD-009 §5's
+    /// finding-274 amendment).
+    /// </summary>
+    private void Sweep(Tick tick)
+    {
+        Money drawn = Drawn;
+        if (drawn <= Money.Zero) return;
+
+        Money target = Money.RoundHalfEven(drawn.Cents * SweepRate);
+        Money swept = target > _company.Ledger.Cash ? _company.Ledger.Cash : target;
+        swept = swept > drawn ? drawn : swept;
+
+        if (swept <= Money.Zero) return;
+
+        _company.Ledger.Post(new Movement(
+            tick, Account.Debt, Account.Cash, swept,
+            MovementCategory.Financing, Asset: null, Cause: _audit.Record(
+                AuditCategory.Financial, subject: null, cause: null,
+                new Dictionary<string, AuditValue>(StringComparer.Ordinal)
+                {
+                    ["spend"] = new("covenant-sweep"),
+                    ["drawn-before-cents"] = new(drawn.Cents.ToString(
+                        System.Globalization.CultureInfo.InvariantCulture)),
+                })));
+    }
+
+    private const double SweepRate = 0.05;
 
     /// <summary>
     /// A month's interest, paid in cash. Charged whether or not the field

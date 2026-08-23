@@ -4,6 +4,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using Beep.ECS.UI;
+using Beep.ECS.UI.Kit;
 using Godot;
 using OGSim.Composition;
 using OGSim.Contracts;
@@ -21,6 +22,7 @@ namespace OilfieldDays.Ui;
 /// The mockups' fifth panel, Next Payday, is absent — there is no payday in the
 /// engine's economics; cash settles every tick.</para>
 /// </summary>
+[Tool]
 public sealed partial class SidePanels : PanelContainer
 {
     /// <summary>How many months of production the trend keeps.</summary>
@@ -32,6 +34,11 @@ public sealed partial class SidePanels : PanelContainer
     private VBoxContainer _objectives = null!;
     private VBoxContainer _alerts = null!;
     private VBoxContainer _reserves = null!;
+    private PanelContainer _objectiveRowTemplate = null!;
+    private Label _objectiveCaptionTemplate = null!;
+    private Button _alertButtonTemplate = null!;
+    private Label _alertCaptionTemplate = null!;
+    private PanelContainer _reserveRowTemplate = null!;
     private Trend _trend = null!;
     private Label _trendNote = null!;
     private Label _bottleneck = null!;
@@ -51,12 +58,24 @@ public sealed partial class SidePanels : PanelContainer
     /// one they will blame the engine for, and one they cannot predict is one
     /// they will turn off.
     /// </remarks>
-    private static void Order(Container parent, string label, string does, System.Action<bool> set)
+    private static void Order(Container parent, string name, string label, string captionName, string does, System.Action<bool> set, bool connect = true)
     {
-        CheckBox box = SlateChrome.Tick(label, false);
-        box.Toggled += on => set(on);
-        parent.AddChild(box);
-        parent.AddChild(SlateChrome.Caption("   " + does));
+        CheckBox box = RequireNamed<CheckBox>(parent, name);
+        box.Text = label;
+        box.ButtonPressed = false;
+        box.AddThemeFontSizeOverride("font_size", 15);
+
+        if (box is KitCheckBox kit)
+            kit.OnRole = UiSurface.Role.Success;
+
+        if (connect)
+            box.Toggled += on => set(on);
+
+        Label caption = RequireNamed<Label>(parent, captionName);
+        caption.Text = "   " + does;
+        caption.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+        caption.AddThemeFontSizeOverride("font_size", 13);
+        caption.AddThemeColorOverride("font_color", KitTheme.Muted);
     }
 
     /// <summary>A player wants to look at, and act on, something the panel named.</summary>
@@ -71,53 +90,82 @@ public sealed partial class SidePanels : PanelContainer
         // objectives a scenario sets and how many warnings are live, so a fixed
         // stack either wastes a third of the screen on a quiet month or loses the
         // basin off the bottom on a busy one.
-        var scroll = new ScrollContainer
-        {
-            HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled,
-            VerticalScrollMode = ScrollContainer.ScrollMode.Auto,
-        };
+        ScrollContainer scroll = RequireNamed<ScrollContainer>(this, "SideScroll");
+        scroll.HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled;
+        scroll.VerticalScrollMode = ScrollContainer.ScrollMode.Auto;
 
-        AddChild(scroll);
-
-        var column = new VBoxContainer { CustomMinimumSize = new Vector2(340, 0) };
+        VBoxContainer column = RequireNamed<VBoxContainer>(scroll, "SideColumn");
+        column.CustomMinimumSize = new Vector2(340, 0);
         column.AddThemeConstantOverride("separation", 6);
-        scroll.AddChild(column);
 
-        _objectives = SlateChrome.Collapsible("OBJECTIVES", column, 340, UiSurface.Role.Success);
-        _alerts = SlateChrome.Collapsible("ALERTS", column, 340, UiSurface.Role.Danger);
+        _objectives = SlateChrome.Collapsible(
+            "OBJECTIVES", column, 340, UiSurface.Role.Success, bodyName: "ObjectivesBody");
+        _alerts = SlateChrome.Collapsible(
+            "ALERTS", column, 340, UiSurface.Role.Danger, bodyName: "AlertsBody");
 
-        VBoxContainer trend = SlateChrome.Collapsible("PRODUCTION", column, 340, UiSurface.Role.Warning);
-        _trend = new Trend { CustomMinimumSize = new Vector2(300, 56) };
-        trend.AddChild(_trend);
+        _objectiveRowTemplate = RequireNamed<PanelContainer>(_objectives, "ObjectiveRowTemplate");
+        StyleInfoRow(_objectiveRowTemplate, UiSurface.Role.Success);
+        _objectiveRowTemplate.Visible = Godot.Engine.IsEditorHint();
 
-        _trendNote = SlateChrome.Caption("no production yet");
-        trend.AddChild(_trendNote);
+        _objectiveCaptionTemplate = RequireNamed<Label>(_objectives, "ObjectiveCaptionTemplate");
+        StyleCaption(_objectiveCaptionTemplate);
+        _objectiveCaptionTemplate.Visible = Godot.Engine.IsEditorHint();
+
+        _alertButtonTemplate = RequireNamed<Button>(_alerts, "AlertButtonTemplate");
+        StyleAlertButton(_alertButtonTemplate);
+        _alertButtonTemplate.Visible = Godot.Engine.IsEditorHint();
+
+        _alertCaptionTemplate = RequireNamed<Label>(_alerts, "AlertCaptionTemplate");
+        StyleCaption(_alertCaptionTemplate);
+        _alertCaptionTemplate.Visible = Godot.Engine.IsEditorHint();
+
+        VBoxContainer trend = SlateChrome.Collapsible(
+            "PRODUCTION", column, 340, UiSurface.Role.Warning, bodyName: "ProductionBody");
+
+        _trend = RequireNamed<Trend>(trend, "ProductionTrend");
+        _trend.CustomMinimumSize = new Vector2(300, 56);
+
+        _trendNote = RequireNamed<Label>(trend, "TrendNote");
+        _trendNote.Name = "TrendNote";
 
         // Where the chain is jammed belongs beside the production it is holding
         // back, not in a sign of its own on the far side of the screen.
-        _bottleneck = SlateChrome.Caption(string.Empty);
+        _bottleneck = RequireNamed<Label>(trend, "Bottleneck");
+        _bottleneck.Name = "Bottleneck";
         _bottleneck.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         _bottleneck.CustomMinimumSize = new Vector2(290, 0);
-        trend.AddChild(_bottleneck);
 
         VBoxContainer orders = SlateChrome.Collapsible(
-            "STANDING ORDERS", column, 340, UiSurface.Role.Success, startFolded: true);
+            "STANDING ORDERS", column, 340, UiSurface.Role.Success, startFolded: true,
+            bodyName: "OrdersBody");
 
-        Order(orders, "Keep the plant running", "send a crew the moment something stops",
-            on => Orders?.Invoke(0, on));
+        bool runtime = !Godot.Engine.IsEditorHint();
 
-        Order(orders, "Answer bottlenecks", "build what a lasting jam needs",
-            on => Orders?.Invoke(1, on));
+        Order(orders, "KeepPlantOrder", "Keep the plant running", "KeepPlantOrderCaption",
+            "send a crew the moment something stops",
+            on => Orders?.Invoke(0, on), runtime);
 
-        Order(orders, "Keep the rig busy", "drill the best undrilled structure",
-            on => Orders?.Invoke(2, on));
+        Order(orders, "AnswerBottlenecksOrder", "Answer bottlenecks", "AnswerBottlenecksOrderCaption",
+            "build what a lasting jam needs",
+            on => Orders?.Invoke(1, on), runtime);
 
-        _reserves = SlateChrome.Collapsible("RESERVES", column, 340, UiSurface.Role.Info, startFolded: true);
+        Order(orders, "KeepRigBusyOrder", "Keep the rig busy", "KeepRigBusyOrderCaption",
+            "drill the best undrilled structure",
+            on => Orders?.Invoke(2, on), runtime);
 
-        VBoxContainer basin = SlateChrome.Collapsible("THE BASIN", column, 340, UiSurface.Role.Neutral);
+        _reserves = SlateChrome.Collapsible(
+            "RESERVES", column, 340, UiSurface.Role.Info, startFolded: true,
+            bodyName: "ReservesBody");
 
-        _minimap = new Minimap { CustomMinimumSize = new Vector2(300, 190) };
-        basin.AddChild(_minimap);
+        _reserveRowTemplate = RequireNamed<PanelContainer>(_reserves, "ReserveRowTemplate");
+        StyleInfoRow(_reserveRowTemplate, UiSurface.Role.Info);
+        _reserveRowTemplate.Visible = Godot.Engine.IsEditorHint();
+
+        VBoxContainer basin = SlateChrome.Collapsible(
+            "THE BASIN", column, 340, UiSurface.Role.Neutral, bodyName: "BasinBody");
+
+        _minimap = RequireNamed<Minimap>(basin, "Minimap");
+        _minimap.CustomMinimumSize = new Vector2(300, 190);
     }
 
     public void Bind(FieldReadModel snapshot)
@@ -173,7 +221,8 @@ public sealed partial class SidePanels : PanelContainer
         {
             (ContentId objective, ObjectiveState state, double amount) = progress.Objectives[i];
 
-            _objectives.AddChild(SlateChrome.Row2(
+            _objectives.AddChild(InfoRow(
+                _objectiveRowTemplate,
                 Pretty(objective.ToString()),
                 $"{amount * 100.0:F0}%   {state}",
                 state switch
@@ -185,17 +234,19 @@ public sealed partial class SidePanels : PanelContainer
         }
 
         if (progress.Objectives.Count == 0)
-            _objectives.AddChild(SlateChrome.Caption("the scenario sets no objectives"));
+            _objectives.AddChild(Caption(_objectiveCaptionTemplate, "the scenario sets no objectives"));
 
         // The deadline is the scenario's too, and reads next to what it bounds.
         int left = Mathf.Max(0, DeadlineMonths - snapshot.Tick.Value);
 
-        _objectives.AddChild(SlateChrome.Row2(
+        _objectives.AddChild(InfoRow(
+            _objectiveRowTemplate,
             "Time left",
             $"{left / 12}y {left % 12}m",
             left <= 12 ? UiSurface.Role.Danger : UiSurface.Role.Info));
 
-        _objectives.AddChild(SlateChrome.Row2(
+        _objectives.AddChild(InfoRow(
+            _objectiveRowTemplate,
             "Overall", snapshot.Outcome.ToString(),
             snapshot.Insolvent ? UiSurface.Role.Danger : UiSurface.Role.Neutral));
     }
@@ -252,20 +303,16 @@ public sealed partial class SidePanels : PanelContainer
             stopped++;
             ulong id = element.Element.Value;
 
-            Button row = SlateChrome.Slab(
-                $"  {element.DisplayId} — out of service", false, false, new Vector2(300, 34));
-
-            row.AddThemeColorOverride("font_color", KitTheme.Red.Lightened(0.35f));
-            row.Alignment = HorizontalAlignment.Left;
+            Button row = AlertButton($"{element.DisplayId} - out of service");
             row.Pressed += () => EmitSignal(SignalName.GoTo, id);
             _alerts.AddChild(row);
         }
 
         for (int i = 0; i < _log.Count && i < 3 - Mathf.Min(stopped, 2); i++)
-            _alerts.AddChild(SlateChrome.Caption(_log[i]));
+            _alerts.AddChild(Caption(_alertCaptionTemplate, _log[i]));
 
         if (stopped == 0 && _log.Count == 0)
-            _alerts.AddChild(SlateChrome.Caption("nothing the engine called a warning"));
+            _alerts.AddChild(Caption(_alertCaptionTemplate, "nothing the engine called a warning"));
     }
 
     /// <summary>
@@ -283,19 +330,23 @@ public sealed partial class SidePanels : PanelContainer
 
         ReservesEstimate book = snapshot.Reserves;
 
-        _reserves.AddChild(SlateChrome.Row2(
+        _reserves.AddChild(InfoRow(
+            _reserveRowTemplate,
             "Proved", $"{book.Proved.CubicMetres:N0} m3", UiSurface.Role.Success));
 
-        _reserves.AddChild(SlateChrome.Row2(
+        _reserves.AddChild(InfoRow(
+            _reserveRowTemplate,
             "Probable", $"{book.Probable.CubicMetres:N0} m3", UiSurface.Role.Warning));
 
-        _reserves.AddChild(SlateChrome.Row2(
+        _reserves.AddChild(InfoRow(
+            _reserveRowTemplate,
             "Possible", $"{book.Possible.CubicMetres:N0} m3", UiSurface.Role.Neutral));
 
         // Null is not zero here, and saying so matters: under twelve months of
         // history there is no window to measure over, and printing 0.00 would
         // state a replacement failure that has not happened.
-        _reserves.AddChild(SlateChrome.Row2(
+        _reserves.AddChild(InfoRow(
+            _reserveRowTemplate,
             "Replacement",
             snapshot.ReserveReplacementRatio is double ratio
                 ? ratio.ToString("F2", CultureInfo.InvariantCulture)
@@ -307,86 +358,115 @@ public sealed partial class SidePanels : PanelContainer
 
     private static string Pretty(string id) => id.Replace('-', ' ');
 
+    private static PanelContainer InfoRow(PanelContainer template, string label, string value, UiSurface.Role role)
+    {
+        var row = (PanelContainer)template.Duplicate();
+        row.Name = "InfoRow";
+        row.Visible = true;
+        StyleInfoRow(row, role);
+
+        RequireNamed<Label>(row, "Label").Text = label;
+        RequireNamed<Label>(row, "Value").Text = value;
+
+        return row;
+    }
+
+    private Button AlertButton(string text)
+    {
+        var row = (Button)_alertButtonTemplate.Duplicate();
+        row.Name = "AlertButton";
+        row.Visible = true;
+        StyleAlertButton(row);
+        row.Text = "  " + text;
+        return row;
+    }
+
+    private static Label Caption(Label template, string text)
+    {
+        var label = (Label)template.Duplicate();
+        label.Name = "Caption";
+        label.Visible = true;
+        label.Text = text;
+        StyleCaption(label);
+        return label;
+    }
+
+    private static void StyleInfoRow(PanelContainer row, UiSurface.Role role)
+    {
+        row.AddThemeStyleboxOverride("panel", SlateChrome.FieldPlate());
+        row.MouseFilter = MouseFilterEnum.Ignore;
+
+        HBoxContainer line = RequireNamed<HBoxContainer>(row, "Line");
+        line.AddThemeConstantOverride("separation", 8);
+
+        Label label = RequireNamed<Label>(row, "Label");
+        label.AddThemeFontSizeOverride("font_size", 13);
+        label.AddThemeColorOverride("font_color", KitTheme.Muted);
+
+        Label value = RequireNamed<Label>(row, "Value");
+        value.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+        value.HorizontalAlignment = HorizontalAlignment.Right;
+        value.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+        value.AddThemeFontSizeOverride("font_size", 13);
+        value.AddThemeColorOverride("font_color", role switch
+        {
+            UiSurface.Role.Success => KitTheme.Green.Lightened(0.35f),
+            UiSurface.Role.Warning => KitTheme.Amber,
+            UiSurface.Role.Danger => KitTheme.Red.Lightened(0.35f),
+            UiSurface.Role.Info => KitTheme.Sky,
+            _ => KitTheme.Ink,
+        });
+    }
+
+    private static void StyleAlertButton(Button row)
+    {
+        row.CustomMinimumSize = new Vector2(300, 34);
+        row.Alignment = HorizontalAlignment.Left;
+        row.AddThemeColorOverride("font_color", KitTheme.Red.Lightened(0.35f));
+        row.AddThemeColorOverride("font_hover_color", KitTheme.Amber);
+        row.AddThemeStyleboxOverride("normal", SlateChrome.Row(false));
+        row.AddThemeStyleboxOverride("hover", SlateChrome.Row(true));
+        row.AddThemeStyleboxOverride("pressed", SlateChrome.Row(true));
+        row.AddThemeStyleboxOverride("focus", SlateChrome.Nothing);
+    }
+
+    private static void StyleCaption(Label label)
+    {
+        label.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+        label.AddThemeFontSizeOverride("font_size", 12);
+        label.AddThemeColorOverride("font_color", KitTheme.Muted);
+    }
+
     private static void Clear(Container container)
     {
         foreach (Node child in container.GetChildren())
         {
+            if (child.Name.ToString().EndsWith("Template", StringComparison.Ordinal))
+                continue;
+
             container.RemoveChild(child);
             child.QueueFree();
         }
     }
-}
 
-/// <summary>
-/// The mockups' production trend: what was produced each month, drawn as a line.
-///
-/// <para><b>The history is the host's, and it is only what was published.</b>
-/// The read model carries one month at a time, so a trend needs somebody to
-/// remember — and that somebody must be the client, because the engine keeps no
-/// series a host can ask for. Each point is a value the engine published on the
-/// tick it was sampled; nothing is interpolated, smoothed or filled in, so a gap
-/// in play is a gap in the line.</para>
-/// </summary>
-public sealed partial class Trend : Control
-{
-    private const int Window = 36;
-
-    private readonly List<double> _points = new();
-
-    /// <summary>How many months are on the chart.</summary>
-    public int Count => _points.Count;
-
-    /// <summary>The highest month recorded, which is what the chart scales to.</summary>
-    public double Peak { get; private set; }
-
-    public void Push(double value)
+    private static T? FindNamed<T>(Node at, string name) where T : Node
     {
-        _points.Add(value);
+        if (at is T typed && at.Name == name)
+            return typed;
 
-        if (_points.Count > Window)
-            _points.RemoveAt(0);
-
-        Peak = 0.0;
-
-        for (int i = 0; i < _points.Count; i++)
+        foreach (Node child in at.GetChildren())
         {
-            if (_points[i] > Peak)
-                Peak = _points[i];
+            T? found = FindNamed<T>(child, name);
+
+            if (found is not null)
+                return found;
         }
 
-        QueueRedraw();
+        return null;
     }
 
-    public override void _Draw()
-    {
-        DrawRect(new Rect2(Vector2.Zero, Size), new Color(0.05f, 0.09f, 0.13f, 0.85f));
-
-        // Three rules, so the eye has something to read height against.
-        for (int i = 1; i < 4; i++)
-        {
-            float y = Size.Y * i / 4.0f;
-            DrawLine(new Vector2(0, y), new Vector2(Size.X, y), new Color(1, 1, 1, 0.06f));
-        }
-
-        if (_points.Count < 2 || Peak <= 0.0)
-            return;
-
-        float step = Size.X / (Window - 1);
-
-        for (int i = 1; i < _points.Count; i++)
-        {
-            var from = new Vector2((i - 1) * step, Height(_points[i - 1]));
-            var to = new Vector2(i * step, Height(_points[i]));
-
-            DrawLine(from, to, KitTheme.Amber, 2.0f, antialiased: true);
-        }
-
-        // The latest month, marked: on a chart that scrolls, the end is the
-        // number a player is actually reading.
-        DrawCircle(
-            new Vector2((_points.Count - 1) * step, Height(_points[^1])), 3.0f, KitTheme.Amber);
-    }
-
-    private float Height(double value) =>
-        Size.Y - (float)(value / Peak * (Size.Y - 6.0)) - 3.0f;
+    private static T RequireNamed<T>(Node at, string name) where T : Node =>
+        FindNamed<T>(at, name) ?? throw new InvalidOperationException(
+            $"{nameof(SidePanels)} requires a design-time {typeof(T).Name} named '{name}' under {at.GetPath()}.");
 }
+

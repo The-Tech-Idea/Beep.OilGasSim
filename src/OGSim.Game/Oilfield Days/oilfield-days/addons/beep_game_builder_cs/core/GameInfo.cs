@@ -33,7 +33,7 @@ public partial class GameInfo : Resource
     // ── Display ──
     [Export] public int TargetResolutionWidth { get; set; } = 1280;
     [Export] public int TargetResolutionHeight { get; set; } = 720;
-    [Export] public bool PixelArt { get; set; } = true;
+    [Export] public bool PixelArt { get; set; } = false;
     [Export] public int TargetFps { get; set; } = 60;
 
     /// <summary>Convenience accessor built from the two exported int fields.</summary>

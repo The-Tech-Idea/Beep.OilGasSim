@@ -95,7 +95,12 @@ internal static class EngineCorpus
     private static IReadOnlyList<SourceFile>? _sources;
 
     /// <summary>Every .cs file under src/, parsed. bin/ and obj/ are excluded:
-    /// generated assembly-info would otherwise trip half these rules.</summary>
+    /// generated assembly-info would otherwise trip half these rules. So is
+    /// OGSim.Game: it is a Godot 4.x / net8.0 host, deliberately outside
+    /// OGSim.slnx and built through Godot rather than `dotnet build`, so
+    /// determinism and the architecture laws below are engine rules this
+    /// project was never asked to keep — a scoping gap the corpus never
+    /// closed until the project actually existed to trip it.</summary>
     public static IReadOnlyList<SourceFile> Sources => _sources ??= LoadSources();
 
     private static IReadOnlyList<SourceFile> LoadSources()
@@ -109,6 +114,7 @@ internal static class EngineCorpus
         {
             string normalised = path.Replace('\\', '/');
             if (normalised.Contains("/bin/") || normalised.Contains("/obj/")) continue;
+            if (normalised.Contains("/OGSim.Game/")) continue;
 
             string text = File.ReadAllText(path);
             files.Add(new SourceFile(

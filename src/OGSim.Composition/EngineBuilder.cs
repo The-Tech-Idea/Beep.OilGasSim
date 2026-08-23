@@ -41,6 +41,24 @@ internal static class Defaults
         new Pressure(500.0), new Pressure(60e6),
         Temperature.FromCelsius(10.0), Temperature.FromCelsius(180.0));
 
+    /// <summary>
+    /// SDD-009 §6's finding-271 amendment — design 08 §3.1's quality
+    /// differential, priced: <c>Realised = Benchmark × (1 + rate × (API −
+    /// reference))</c>. ~0.007 of benchmark price per °API, from ESMAP/World
+    /// Bank's statistical study of crude price differentials ("Crude Oil
+    /// Price Differentials and Differences in Oil Qualities").
+    ///
+    /// <para>Sulphur is NOT included — its per-unit effect in the same study
+    /// (~0.056 per percentage point, roughly eight times API's own) would
+    /// need a sulphur content this engine does not carry (finding 270's
+    /// `fluid-system` content deliberately ships API gravity alone), and a
+    /// guessed sulphur figure folded into one number would be a worse
+    /// mistake than the gap it papered over. Real heavy-sour differentials
+    /// run wider than API alone predicts for exactly this reason — this
+    /// price is a genuine but partial model, not a claim of completeness.</para>
+    /// </summary>
+    public const double QualityDifferentialPerApiDegree = 0.007;
+
     public static Wells.InflowConditions Inflow { get; } = new(
         new Permeability(1.0e-13), new Length(20.0), new Area(2.0e5),
         new Length(0.108), new Viscosity(2.0e-3), new Pressure(10.0e6));
@@ -115,6 +133,29 @@ internal static class Defaults
         jumpScale: 0.27);
 
     /// <summary>
+    /// SDD-009 §7's finding-272 amendment — the one hedge this composition
+    /// ships, the same "one contract, not a ladder" shape
+    /// <see cref="OGSim.Company.TakeOrPayTerms"/> already has.
+    ///
+    /// <para>A year-long, one-standard-deviation collar around the shipped
+    /// price model's OWN long-run mean, using the volatility <see
+    /// cref="Market"/> is already built from (0.09 a month, log space) rather
+    /// than inventing a fresh band: annualised σ = 0.09·√12 ≈ 0.3118, so
+    /// floor = mean·e⁻σ ≈ mean·0.7322 and cap = mean·e⁺σ ≈ mean·1.3658.</para>
+    ///
+    /// <para>Half of each tick's own production is hedged — an ordinary
+    /// middle ground between full exposure and giving up all the upside a
+    /// full hedge would. Settlement is against the RAW market benchmark, not
+    /// design 08 §3.1's quality-adjusted realised price (SDD-009 §6's
+    /// finding-271 amendment): a financial hedge references the market a
+    /// company sells INTO, not the specific barrel's own grade.</para>
+    /// </summary>
+    public static OGSim.Company.HedgeTerms Hedge { get; } = new(
+        HedgedFraction: 0.5,
+        Floor: Money.RoundHalfEven(Economics.OilPricePerTonne.Cents * 0.7322),
+        Cap: Money.RoundHalfEven(Economics.OilPricePerTonne.Cents * 1.3658));
+
+    /// <summary>
     /// The development type-curve this composition ships (SDD-009 §4). Content
     /// in a finished game, like every other catalogue entry here.
     ///
@@ -155,7 +196,11 @@ internal static class Defaults
     /// What a cubic metre is worth to a lender after lifting it — the margin the
     /// loan is actually secured on, not the headline price.
     /// </summary>
-    private static Money Netback =>
+    /// <summary>What a cubic metre of oil is worth net of lifting cost, in
+    /// cents. Was `private`; widened to `internal` (SDD-011 §2's finding-277
+    /// amendment) so a rival's own rough prospect valuation can reuse the
+    /// SAME figure the lender's does rather than a second one.</summary>
+    internal static Money Netback =>
         Money.RoundHalfEven(
             (Economics.OilPricePerTonne.Cents - Economics.LiftingCostPerTonne.Cents)
             * SurfaceOilDensity.KgPerCubicMetre / 1000.0);
@@ -204,36 +249,59 @@ internal static class Defaults
     public const double CostDrift = 0.0008;
 
     /// <summary>
-    /// The catalogue, as content would carry it. ONE material, because the chain
-    /// this composition ships has one thing to move; the nine of
-    /// `content/materials/` arrive with R20c.9.
+    /// The catalogue, as content would carry it — all nine of
+    /// `content/materials/`, hardcoded here rather than read through it
+    /// (SDD-004 §6's amendment, finding 261). Oil, gas and water are what this
+    /// composition's own chain moves; the other six exist in the catalogue and
+    /// nowhere else — no completion, drive or facility produces carbon
+    /// dioxide, condensate, hydrogen sulphide, nitrogen, sales gas or sulphur,
+    /// so every stream this engine solves carries six ordinals that stay
+    /// exactly zero.
     ///
     /// <para>The PHASE is what makes this more than a name: `SplitAt` reads it to
     /// decide which leg of a separator a material leaves by, so "oil is a liquid
     /// at standard conditions" is the statement that sends every kilogram down
-    /// the liquid leg to the meter.</para>
+    /// the liquid leg to the meter. `Properties` stays empty for every entry,
+    /// the same as the three it replaces — nothing reads a material's own
+    /// properties today.</para>
     /// </summary>
     public static IReadOnlyList<(ContentId Id, PhaseAtStandardConditions Phase,
                                  IReadOnlyList<IProperty> Properties)> Materials { get; } =
     [
+        (new ContentId("carbon-dioxide"), PhaseAtStandardConditions.Gas, []),
+        (new ContentId("condensate"), PhaseAtStandardConditions.Liquid, []),
         (new ContentId("crude-oil"), PhaseAtStandardConditions.Liquid, []),
+        (new ContentId("hydrogen-sulphide"), PhaseAtStandardConditions.Gas, []),
         (new ContentId("natural-gas"), PhaseAtStandardConditions.Gas, []),
+        (new ContentId("nitrogen"), PhaseAtStandardConditions.Gas, []),
         (new ContentId("produced-water"), PhaseAtStandardConditions.Aqueous, []),
+        (new ContentId("sales-gas"), PhaseAtStandardConditions.Gas, []),
+        (new ContentId("sulphur"), PhaseAtStandardConditions.Solid, []),
     ];
 
     /// <summary>
     /// Ordinals are assigned by the CATALOGUE from the id-sorted list, never
-    /// here (SDD-004 §6) — "crude-oil" sorts before "natural-gas". Named so a
-    /// completion is built with the ordinal the catalogue chose rather than one
-    /// this file assumed.
+    /// here (SDD-004 §6) — DERIVED from `Materials` itself rather than
+    /// hand-typed, so a future widening cannot leave one of these three out
+    /// of sync with what the catalogue actually assigned (finding 261: the
+    /// bug §6's own text warns an implementer against committing "in week
+    /// two"). Widening moved oil from ordinal 0 to 2 and gas from 1 to 4;
+    /// nothing reads a raw literal instead of these three properties, which
+    /// is what makes the move invisible to every caller.
     /// </summary>
-    public static MaterialId OilOrdinal { get; } = new(0);
+    private static readonly MaterialCatalogue OrdinalCatalogue = new(Materials);
 
-    public static MaterialId GasOrdinal { get; } = new(1);
+    public static MaterialId OilOrdinal { get; } =
+        OrdinalCatalogue.Resolve(new ContentId("crude-oil")).Ordinal;
 
-    /// <summary>"crude-oil" &lt; "natural-gas" &lt; "produced-water" by ordinal
-    /// comparison, which is the sort the catalogue uses (SDD-004 §6).</summary>
-    public static MaterialId WaterOrdinal { get; } = new(2);
+    public static MaterialId GasOrdinal { get; } =
+        OrdinalCatalogue.Resolve(new ContentId("natural-gas")).Ordinal;
+
+    /// <summary>"carbon-dioxide" &lt; ... &lt; "produced-water" &lt; ... by
+    /// ordinal comparison, which is the sort the catalogue uses (SDD-004
+    /// §6) — water is no longer third, it is seventh (ordinal 6).</summary>
+    public static MaterialId WaterOrdinal { get; } =
+        OrdinalCatalogue.Resolve(new ContentId("produced-water")).Ordinal;
 
     /// <summary>
     /// Which materials a pump has to lift. Oil and water — gas comes up with
@@ -252,12 +320,13 @@ internal static class Defaults
         Fluid.GasSpecificGravity * PhysicalConstants.AirDensityAtStandardKgPerM3);
 
     /// <summary>
-    /// How many materials this composition's catalogue carries. One — oil —
-    /// until R20c.9 loads the nine of `content/materials/`. Stated once because
-    /// three places must agree on it: the completion's stream width, an
-    /// operation's mass report, and any zero composition either of them builds.
+    /// How many materials this composition's catalogue carries — nine, the
+    /// full width of `Materials` above (finding 261), not the three this
+    /// composition's own chain actually moves. Stated once because three
+    /// places must agree on it: the completion's stream width, an operation's
+    /// mass report, and any zero composition either of them builds.
     /// </summary>
-    public const int MaterialCount = 3;
+    public const int MaterialCount = 9;
 
     /// <summary>
     /// The company's one rig. **One**, deliberately: a rig drills a single well
@@ -394,6 +463,19 @@ internal static class Defaults
             // A volume, so multiplicative — and a structure that could hold a
             // NEGATIVE amount is not a belief anybody could act on.
             "structure-capacity" => BeliefSpace.Log,
+
+            // SDD-011 §3's finding-277 amendment — a rival's own disclosed
+            // result. Its OWN kind, not oil-in-place or structure-capacity:
+            // both of those are kinds `DrillWell.cs`'s own `IBeliefStore.
+            // ReKey` migrates from a prospect onto its compartment the
+            // moment the PLAYER drills it, and `ReKey` refuses to MERGE two
+            // beliefs about one kind (SDD-008 §4) — a third party writing
+            // either kind about a subject the player might independently
+            // come to hold a belief about (their own seismic survey, their
+            // own discovery) is a real collision, found the hard way by a
+            // full slow-suite run against the first draft of this amendment.
+            "rival-disclosure" => BeliefSpace.Log,
+
             _ => throw new ModelFault("SDD-008 §2", null,
                 $"no belief space is declared for property kind '{kind.Value}'"),
         };
@@ -468,6 +550,12 @@ internal static class Defaults
             // answers, and merging the two would let a big structure read as a
             // big discovery.
             "structure-capacity" => 0.10,
+
+            // SDD-011 §3's finding-277 amendment — the same floor a
+            // discovery well's own oil-in-place carries; a rival's result IS
+            // a real drilling result, just not the player's own.
+            "rival-disclosure" => 0.30,
+
             _ => throw new ModelFault("INV8", null,
                 $"no sigma floor is declared for property kind '{kind.Value}'"),
         };
@@ -544,62 +632,6 @@ internal static class Defaults
         // a survey vessel and its streamers.
         RequiresAccess: true,
 
-        Outcomes: SurveyOutcomes);
-
-    /// <summary>
-    /// RECONNAISSANCE over a block, and the cheapest thing a company can buy
-    /// (SDD-010 §4b's S1 amendment).
-    ///
-    /// <para>Priced against the two things it sits between. Next to a hole it is
-    /// almost free, which is what makes looking before drilling the obvious move
-    /// rather than a luxury; next to nothing it is real money, which is what
-    /// stops a company shooting the whole licence on the first turn and getting
-    /// the old bright map back for a rounding error. Sixteen blocks is most of a
-    /// year's exploration budget.</para>
-    ///
-    /// <para>NO RIG, like the 3-D survey it feeds: shot from the surface, so it
-    /// runs while the rig turns elsewhere. One month, because a decision a player
-    /// is waiting on should come back inside the season they asked it in.</para>
-    /// </summary>
-    public static ActivityTerms BlockSurveyTerms { get; } = new(
-        Template: new ContentId("seismic-2d"),
-        Cost: Money.FromMillions(0.8),
-        DurationTicks: 1,
-        Rig: null,
-        WeatherLimit: 5.5,   // the same streamers as the 3-D survey
-        RequiresAccess: true,
-
-        Outcomes: SurveyOutcomes);
-
-    /// <summary>
-    /// What a packaged plant costs to put on the ground (plans 22 §4, S2).
-    /// </summary>
-    /// <remarks>
-    /// <para>Priced as the biggest single commitment of the early game, and
-    /// deliberately: against a $50M opening balance it is most of what a company
-    /// has after a survey and a hole, so bringing a field on is a decision that
-    /// can be got wrong rather than a formality that follows a discovery.</para>
-    ///
-    /// <para>Less than the sum of its vessels, because it IS less — a skid
-    /// package is not eleven bespoke units, which is why a small field is
-    /// brought on this way. The individual installs above stay dearer per item
-    /// and buy capacity rather than existence.</para>
-    ///
-    /// <para>Four months: long enough that a company commits before it can be
-    /// sure of the price it will sell into, which is the risk a development
-    /// decision actually carries.</para>
-    /// </remarks>
-    public static ActivityTerms EarlyProductionFacilityTerms { get; } = new(
-        Template: new ContentId("install-early-production-facility"),
-        Cost: Money.FromMillions(22.0),
-        DurationTicks: 4,
-        Rig: null,
-        WeatherLimit: 5.0,   // barges, cranes and a lot of lifts
-        RequiresAccess: true,
-
-        // The table every install shares. A commissioning that fails costs the
-        // money and the months and leaves bare ground, which is the same shape
-        // as a dry hole and the reason this is a decision.
         Outcomes: SurveyOutcomes);
 
     /// <summary>
@@ -681,6 +713,18 @@ internal static class Defaults
     [
         new("company.cash", position => position.Cash.Cents),
         new("company.insolvent", position => position.Insolvent ? 1.0 : 0.0),
+
+        // SDD-014 §2's finding-267 amendment — what the company is worth, not
+        // only what it holds, and R11.6's own named prerequisite for a mechanic
+        // that defers revenue.
+        new("company.value", position => position.CompanyValue.Cents),
+
+        // SDD-014 §5a's finding-276 amendment — R13.10's last resort, the same
+        // "a fact a scenario CAN reference" shape company.insolvent above
+        // already has; the shipped scenario does not currently declare a
+        // Failure objective against either.
+        new("company.taken-over", position => position.TakenOver ? 1.0 : 0.0),
+
         new("field.wells", position => position.Wells),
         new("field.activitiesRunning", position => position.ActivitiesRunning),
         new("field.producedThisTick", position => position.ProducedThisTick.CubicMetres),
@@ -776,13 +820,6 @@ internal static class Defaults
         Deadline: new Tick(120));
 
 
-    /// <summary>The two starting states, declared once in
-    /// <see cref="StartingStates"/> where a host can reach them.</summary>
-    public static ContentId OpeningPosition => StartingStates.OpeningPosition;
-
-    /// <inheritdoc cref="OpeningPosition"/>
-    public static ContentId BareGround => StartingStates.BareGround;
-
     public static Temperature ReservoirTemperature { get; } = Temperature.FromCelsius(93.3);
 
     // ------------------------------------------------------- the surface chain
@@ -816,6 +853,14 @@ internal static class Defaults
     /// <summary>Where the custody spec gate's Reject leg goes (SDD-006 §7d,
     /// finding 252) — a permanent loss, accounted rather than silent.</summary>
     public static EntityId<IFlowElement> TheOffSpecSink { get; } = new(1_000_011);
+
+    /// <summary>Between the separator's gas leg and the gas plant (SDD-006
+    /// §3c, R9.1's own composition, finding 257) — the seventh socket.</summary>
+    public static EntityId<IFlowElement> TheCompressor { get; } = new(1_000_012);
+
+    /// <summary>Between the separator's liquid leg and the treater (SDD-006
+    /// §3d, R11.2's own composition, finding 259) — the eighth socket.</summary>
+    public static EntityId<IFlowElement> TheLiquidPumpStation { get; } = new(1_000_013);
 
     /// <summary>
     /// Where per-well gathering lines start numbering (SDD-006 §1c). Above the
@@ -925,6 +970,12 @@ internal static class Defaults
     /// flaring an emissions problem rather than merely a waste one.</summary>
     public const double FlareCombustionEfficiency = 0.98;
 
+    /// <summary>SDD-006 §3c's Z̄ — the average compressibility factor the
+    /// polytropic formula takes as a property of the stream a train is built
+    /// for, exactly as a liquid pump's ρ̄ is (§3d). 0.9 is a typical value for
+    /// associated gas across the pressure range this composition ships.</summary>
+    public const double GasCompressibilityFactor = 0.9;
+
 
 
 
@@ -1030,6 +1081,36 @@ internal static class Defaults
 
         Outcomes: SurveyOutcomes);
 
+    /// <summary>SDD-006 §3c's own capital item (R9.1's own composition,
+    /// finding 257) — a real compression train, priced against a gas plant
+    /// module rather than a vessel: it is heavier iron than a separator and
+    /// lighter than the plant it feeds.</summary>
+    public static ActivityTerms InstallCompressorTerms { get; } = new(
+        Template: new ContentId("install-compressor"),
+        Cost: Money.FromMillions(15.0),
+        DurationTicks: 4,
+        Rig: null,
+        WeatherLimit: 5.0,   // heavy lift
+        // a skid delivered and tied in.
+        RequiresAccess: true,
+
+        Outcomes: SurveyOutcomes);
+
+    /// <summary>SDD-006 §3d's own capital item (R11.2's own composition,
+    /// finding 259) — C11's own capex band prices a pump station one tier
+    /// below a compressor station ($$$ against $$$$), which is what its
+    /// cost is set against here.</summary>
+    public static ActivityTerms InstallLiquidPumpStationTerms { get; } = new(
+        Template: new ContentId("install-pump-station"),
+        Cost: Money.FromMillions(10.0),
+        DurationTicks: 3,
+        Rig: null,
+        WeatherLimit: 5.0,   // heavy lift
+        // a skid delivered and tied in.
+        RequiresAccess: true,
+
+        Outcomes: SurveyOutcomes);
+
     /// <summary>
     /// What an acid job costs and how long it takes (R10-V4). Cheap against a
     /// vessel and quick against a well — which is the point: it is the sort of
@@ -1071,6 +1152,62 @@ internal static class Defaults
     /// close enough to a physical floor to need calibrating one.
     /// </summary>
     public static double StimulationSkinReduction { get; } = 3.0;
+
+    /// <summary>
+    /// What fitting a lift method costs (R12b.2, finding 255). Same
+    /// wellsite-intervention shape as stimulation and remediating an
+    /// injector — no rig — priced as a real capital install, between an
+    /// acid job and a facility unit: a pump is more than a wireline job and
+    /// far less than a vessel. FOUR distinct templates, not one shared
+    /// across the four activities: `ActivityState` keys its catalogue by
+    /// `Template` in a dictionary, so a shared id would let the last one
+    /// registered silently replace the other three.
+    ///
+    /// <para>Costs differ by what the equipment actually is — a rod pump
+    /// and a PCP are close cousins (§6.2's own "the same relation"), an ESP
+    /// carries a cable, a downhole motor and a surface VSD, and gas lift
+    /// needs a surface interface to a compressed supply — first-pass
+    /// estimates, not calibrated against a fixture.</para>
+    /// </summary>
+    public static ActivityTerms InstallRodPumpTerms { get; } = new(
+        Template: new ContentId("install-rod-pump"),
+        Cost: Money.FromMillions(2.5),
+        DurationTicks: 1,
+        Rig: null,
+        WeatherLimit: 6.5,
+        RequiresAccess: false,
+
+        Outcomes: SurveyOutcomes);
+
+    public static ActivityTerms InstallPcpTerms { get; } = new(
+        Template: new ContentId("install-pcp"),
+        Cost: Money.FromMillions(2.7),
+        DurationTicks: 1,
+        Rig: null,
+        WeatherLimit: 6.5,
+        RequiresAccess: false,
+
+        Outcomes: SurveyOutcomes);
+
+    public static ActivityTerms InstallEspTerms { get; } = new(
+        Template: new ContentId("install-esp"),
+        Cost: Money.FromMillions(4.5),
+        DurationTicks: 1,
+        Rig: null,
+        WeatherLimit: 6.5,
+        RequiresAccess: false,
+
+        Outcomes: SurveyOutcomes);
+
+    public static ActivityTerms InstallGasLiftTerms { get; } = new(
+        Template: new ContentId("install-gas-lift"),
+        Cost: Money.FromMillions(3.2),
+        DurationTicks: 1,
+        Rig: null,
+        WeatherLimit: 6.5,
+        RequiresAccess: false,
+
+        Outcomes: SurveyOutcomes);
 
     /// <summary>
     /// A PLANNED OVERHAUL (SDD-012 §3). A month and rather less than a new
@@ -1394,9 +1531,134 @@ internal static class Defaults
 
     public const double ThreatRateAtFailure = 0.15;
 
-    public const double TopEventPoints = 25.0;
+    /// <summary>What a top event costs when every mitigating barrier held
+    /// (SDD-012 §4b's finding-263 amendment). Unchanged from this
+    /// composition's original flat cost, so nothing already tuned against it
+    /// moves.</summary>
+    public const double TopEventPointsMitigated = 25.0;
 
-    public const double CrewCompetency = 0.9;
+    /// <summary>What it costs when none did — three times the mitigated
+    /// figure, the same asymmetry already priced between planned and
+    /// emergency maintenance (`repair-equipment` at 3× `service-equipment`,
+    /// R20d.26.2): a consequence nothing stood against costs more than one
+    /// every defence somewhat blunted.</summary>
+    public const double TopEventPointsUnmitigated = 75.0;
+
+    /// <summary>
+    /// What a top event costs in real cash when every mitigating barrier held
+    /// (SDD-012 §4b's finding-273 amendment) — the same straight-line shape
+    /// <see cref="TopEventPointsMitigated"/> already prices in ESG points,
+    /// now in dollars. A well-contained loss of containment for a field this
+    /// size: cleanup, regulatory response, investigation and some downtime —
+    /// proportionate to the shipped scenario's own economics (opening cash
+    /// $50M, a $600M/decade target), not a real-world catastrophic outlier.
+    /// </summary>
+    public static Money TopEventLossMitigated { get; } = Money.FromMillions(2.0);
+
+    /// <summary>Three times the mitigated figure — the SAME asymmetry
+    /// <see cref="TopEventPointsUnmitigated"/> already uses, reused rather
+    /// than a second invented ratio.</summary>
+    public static Money TopEventLossUnmitigated { get; } = Money.FromMillions(6.0);
+
+    /// <summary>
+    /// SDD-009 §7's finding-273 amendment — the one insurance policy this
+    /// composition ships. Exposure is <see cref="TopEventLossUnmitigated"/>
+    /// itself: the worst this policy could ever have to pay, reused rather
+    /// than a third invented figure. 3% of exposure a year at a spotless
+    /// (100) ESG standing, rising to 12% at the worst (0) — the same
+    /// base-rate-plus-spread shape <see cref="Lender"/> already prices the
+    /// borrowing base with (8% base, up to 4% ESG spread), scaled for a
+    /// different risk. A $0.5M deductible (the company still carries a small
+    /// loss itself) and a limit equal to the full exposure (the worst top
+    /// event this policy could ever face is fully covered once the
+    /// deductible clears).
+    /// </summary>
+    public static OGSim.Company.InsuranceTerms Insurance { get; } = new(
+        Exposure: TopEventLossUnmitigated,
+        BaseRatePerYear: 0.03,
+        EsgRateSpread: 0.09,
+        Deductible: Money.FromMillions(0.5),
+        Limit: TopEventLossUnmitigated);
+
+    /// <summary>
+    /// SDD-011 §4's finding-275 amendment — R13.10's second restructuring
+    /// lever. A cumulative cap of 50%: past it the company has given up
+    /// operatorship in substance, which is a takeover by another name rather
+    /// than a sale (R13.10's third lever, its own finding). A 25% distress
+    /// discount off the DCF-priced fair value, inside the real 20-40% range
+    /// distressed oil and gas asset sales commonly trade at — confirmed with
+    /// Fahad before landing, the same gate every other invented number this
+    /// session has gone through.
+    /// </summary>
+    public static OGSim.Company.WorkingInterestTerms WorkingInterest { get; } = new(
+        MaxSellableFraction: 0.5,
+        DistressDiscount: 0.25);
+
+    /// <summary>An untrained crew's strength on the barrier's own [0, 1]
+    /// scale (SDD-007 §4.1's finding-265 amendment) — noticeably below the
+    /// flat 0.9 this composition charged every crew before there was a lever
+    /// to raise it, so "lean crewing is measurably less safe" (R12 §2.8) is
+    /// something a company starts owing rather than something a purchase
+    /// only ever improves on.</summary>
+    public const double CrewCompetencyUntrained = 0.75;
+
+    /// <summary>What training buys — better than the old flat figure, so the
+    /// investment is a genuine improvement and not merely a return to
+    /// baseline.</summary>
+    public const double CrewCompetencyTrained = 0.95;
+
+    /// <summary>An untrained crew's multiplier on an operation's base
+    /// duration, layered onto the outcome table's own grade rather than
+    /// replacing it (SDD-007 §4.1).</summary>
+    public const double CrewDurationFactorUntrained = 1.15;
+
+    /// <summary>What training buys on duration — faster than nominal,
+    /// because R12-V9 asks skill to reduce duration, not merely restore
+    /// it.</summary>
+    public const double CrewDurationFactorTrained = 0.95;
+
+    /// <summary>One-time, like a technology acquisition — comparable to a
+    /// facility's first upgrade rung.</summary>
+    public static Money CrewTrainingCost { get; } = Money.FromMillions(2.0);
+
+    /// <summary>
+    /// SDD-006 §7a.3's finding-268 amendment — a berth loads ONE standard
+    /// parcel at a time rather than draining continuously. Aframax class
+    /// (~600,000 bbl), a globally recognised mid-size crude parcel: 53% of
+    /// the shipped E1 tank (150,000 t), so a cargo and continuing production
+    /// both fit in it at once, and roughly 6.6 ticks of the shipped field's
+    /// own make to fill alone — meaningfully short of shipping every month
+    /// and meaningfully short of shipping once a year, the range §7a.1 asked
+    /// this decision to land in. A bigger export tier loads it faster
+    /// (<c>Berth.LoadingRate</c> already carries that decision); this stays
+    /// one fixed size regardless, because "ships come in standard parcels"
+    /// (§7a.1) is a statement about the parcel, not about the terminal.
+    /// </summary>
+    public static Mass CargoSize { get; } = new(80_000_000.0);
+
+    /// <summary>
+    /// SDD-006 §7a.4's finding-269 amendment. NOT the real-world charter-party
+    /// convention (~72 hours SHINC) — that assumes a shore tank farm and a
+    /// port pumping far faster than one field's own export line, and
+    /// transplanting it would make demurrage an unavoidable tax on every
+    /// cargo. Measured against this engine's own numbers instead: a full
+    /// cargo takes 46.3 days to clear at the base E1 tier (23.1 at E2, 11.6
+    /// at E3), so 60 days gives the base tier real headroom and demurrage
+    /// bites only once a field's own production has outgrown what the
+    /// fitted export tier can clear inside it.
+    /// </summary>
+    public const double CargoLaytimeDays = 60.0;
+
+    /// <summary>
+    /// SDD-006 §7a.4's finding-269 amendment. A fraction of the cargo's own
+    /// value per day rather than a flat dollar figure, because real
+    /// demurrage rates are market-set against whatever vessel is chartered
+    /// and have no fixed convention the way a tanker's deadweight class
+    /// does (<see cref="CargoSize"/>'s own reasoning). At the shipped
+    /// opening oil price this lands around $17,700/day — inside the range
+    /// real Aframax demurrage typically runs (roughly $15,000–$40,000/day).
+    /// </summary>
+    public const double DemurrageRateFraction = 0.0005;
 
     public const double ProcedureCompliance = 0.9;
 
@@ -1478,6 +1740,85 @@ internal static class Defaults
             // would name are R23's; this states plainly that naming it is not
             // the same as enforcing it.
             HseRegime: new ContentId("standard"));
+
+    /// <summary>
+    /// SDD-011 §2.1's finding-277 amendment — R16.4's roster, cycled
+    /// round-robin up to `WorldParameters.RivalCount`. Three archetypes, the
+    /// same "single hand-authored instance ahead of R20's content" precedent
+    /// this class already has for <see cref="LicenceTerms"/>: illustrative
+    /// game-balance figures, not industry-derived like most of this file's
+    /// other numbers, confirmed with Fahad before landing regardless (F-2).
+    /// </summary>
+    public static IReadOnlyList<OGSim.Company.RivalPersonality> Rivals { get; } =
+    [
+        // Bids ABOVE its own EMV and follows the tech frontier closely — the
+        // real, motivating competitor design 06 §6.2 wants.
+        new(new ContentId("aggressive-prospector"),
+            Aggressiveness: 1.3, TechLagTicks: 6, BudgetPerRound: Money.FromMillions(15.0)),
+
+        // Disciplined (bids under EMV) and AT the tech frontier — §2.1's own
+        // "leaders have small lags" — well-financed enough to act on most of
+        // what it believes.
+        new(new ContentId("cautious-major"),
+            Aggressiveness: 0.9, TechLagTicks: 0, BudgetPerRound: Money.FromMillions(40.0)),
+
+        // §2.1's own "laggards" — 18 ticks behind the frontier, and
+        // budget-capped tightly enough that it often cannot act on what it
+        // believes is worth pursuing.
+        new(new ContentId("under-financed-independent"),
+            Aggressiveness: 1.1, TechLagTicks: 18, BudgetPerRound: Money.FromMillions(5.0)),
+    ];
+
+    /// <summary>How many ticks between one rival exploration attempt and the
+    /// next, per rival — loosely longer than the player's own ~4-month
+    /// drilling timeline, since a rival's resolution is a cheaper, instant
+    /// abstraction (SDD-011 §2's finding-277 amendment) and should not
+    /// outpace the real thing.</summary>
+    public const int RivalExplorationCadenceTicks = 6;
+
+    /// <summary>A structure with no accumulation still has geometric
+    /// capacity a regional survey can see; a value of exactly zero has none
+    /// to seed a belief from at all — floored rather than skipped, so
+    /// `Rival.BidFor` still correctly prices it near-worthless instead of
+    /// silently never considering it.</summary>
+    public const double RivalMinimumCapacityCubicMetres = 1.0;
+
+    /// <summary>The regional sigma a rival's own structure-capacity belief
+    /// carries — the SAME order of magnitude `RegionalObservationModel`'s
+    /// own `("regional", "oil-in-place")` row already uses, reused rather
+    /// than a second invented figure.</summary>
+    public const double RivalCapacityBeliefSigma = 1.2;
+
+    /// <summary>What a rival's own discovery observation carries before
+    /// disclosure widens it — the SAME sigma the player's own discovery well
+    /// carries (`("discovery-well", "oil-in-place")`, reused rather than
+    /// invented a second time).</summary>
+    public const double RivalDiscoverySigma = 0.30;
+
+    /// <summary>How much wider a rival's result reads once it becomes public
+    /// data — "a press release, not their logs" (SDD-011 §3). Landing the
+    /// widened sigma at √(0.30² + 0.6²) ≈ 0.67: worse than the player's own
+    /// discovery well, sharper than a 2D seismic survey (0.6) — a rival's
+    /// real drilling result becoming public is qualitatively better
+    /// information than a survey shot over acreage that is not yours.
+    /// </summary>
+    public const double RivalDisclosureExtraSigma = 0.6;
+
+    /// <summary>SDD-011 §3's finding-277 amendment — the property kind a
+    /// rival's disclosed result carries. Its own kind, never
+    /// oil-in-place/structure-capacity, because `DrillWell.cs`'s own
+    /// `IBeliefStore.ReKey` migrates both of those from a prospect onto its
+    /// compartment the moment the player drills it, and refuses to merge
+    /// two beliefs about the same kind — a real collision found the hard
+    /// way by this amendment's own first draft.</summary>
+    public static readonly ContentId RivalDisclosureKind = new("rival-disclosure");
+
+    /// <summary>`Defaults.TypeCurve`'s own recovery factor (0.35), reused
+    /// rather than invented a second time — a rival's own rough valuation of
+    /// an undrilled structure's capacity applies the SAME assumption the
+    /// shipped development type-curve already prices reserves against.
+    /// </summary>
+    public const double RivalValueRecoveryFactor = 0.35;
 
     public static Environment.ClimateProfile Climate { get; } =
         new(new ContentId("temperate-offshore"),
@@ -1704,48 +2045,7 @@ public sealed record EngineSettings(
     /// <para>Order fixes override precedence — base content is
     /// <c>DeclaredOrder</c> 0 and a mod is higher (§7).</para>
     /// </summary>
-    IReadOnlyList<IContentSource> Content,
-
-    /// <summary>
-    /// What the company opens with (plans 22 §4, S2).
-    ///
-    /// <para><c>opening-position</c> starts it holding a commissioned plant, the
-    /// way every run did before this existed. <c>bare-ground</c> starts it with
-    /// a yard, a licence and a bank balance, and the processing train is a
-    /// construction project — which is the game 22 asks for.</para>
-    ///
-    /// <para><b>Composition-time, like <see cref="RealityProfile"/>, and for the
-    /// same reason:</b> it decides what gets registered before anything is
-    /// built, so it cannot be a decision taken later.</para>
-    ///
-    /// <para><b>The same name as <c>Scenario.StartingState</c> deliberately.</b>
-    /// That field describes exactly this — "a company's cash, its rigs, an
-    /// inherited field" — and is read by nothing today. When scenarios reach
-    /// composition it feeds this, and there is one concept rather than two
-    /// (law L5). Naming it something else now would guarantee two.</para>
-    ///
-    /// <para>Required, with no default: law L2. A default here would quietly
-    /// hand every unconsidered caller a free refinery.</para>
-    /// </summary>
-    ContentId StartingState,
-
-    /// <summary>
-    /// The rules the run is played under (plans 23).
-    ///
-    /// <para><c>realistic</c> is an operator working a field it holds;
-    /// <c>frontier</c> is a company on ground nobody has worked, which is the
-    /// Settlers position and needs different permissions — not different
-    /// physics.</para>
-    ///
-    /// <para><b>A third question, not a restatement of the other two.</b>
-    /// <see cref="RealityProfile"/> decides which model computes a thing;
-    /// <see cref="StartingState"/> decides what the company opens holding; this
-    /// decides what it may do. A bare-ground start under realistic rules is a
-    /// legitimate and very hard scenario.</para>
-    ///
-    /// <para>Required, with no default: law L2.</para>
-    /// </summary>
-    ContentId Rules)
+    IReadOnlyList<IContentSource> Content)
 {
     // Finding 131: the compiler compares a collection member by REFERENCE, so
     // two settings naming the same sources would differ. Element equality is
@@ -1759,14 +2059,12 @@ public sealed record EngineSettings(
         && MinimumLogLevel == other.MinimumLogLevel
         && FaultHandling == other.FaultHandling
         && RealityProfile == other.RealityProfile
-        && StartingState == other.StartingState
-        && Rules == other.Rules
         && Structural.Equal(Content, other.Content);
 
     public override int GetHashCode() =>
         HashCode.Combine(
             Epoch, WorldSeed, Retention, MinimumLogLevel, FaultHandling, RealityProfile,
-            StartingState, HashCode.Combine(Rules, Structural.HashOf(Content)));
+            Structural.HashOf(Content));
 }
 
 /// <summary>
@@ -1870,7 +2168,9 @@ public static class EngineBuilder
     private static (FacilityLadders Ladders,
                     IReadOnlyList<OGSim.Capabilities.TechnologyNode> Registry,
                     IReadOnlyList<OGSim.World.TerrainClassDefinition> TerrainClasses,
-                    OGSim.Company.TakeOrPayTerms TakeOrPay)? Ladders(
+                    OGSim.Company.TakeOrPayTerms TakeOrPay,
+                    OGSim.Wells.LiftTiers LiftTiers,
+                    IReadOnlyList<FluidSystemDefinition> FluidSystems)? Ladders(
         EngineSettings settings)
     {
         ContentLoadResult result = FacilityContent(settings);
@@ -1878,7 +2178,9 @@ public static class EngineBuilder
         return result is ContentLoaded loaded
             ? (FacilityLadders.From(loaded.Catalogues), Registry(loaded.Catalogues),
                loaded.Catalogues.Of<OGSim.World.TerrainClassDefinition>().All,
-               TakeOrPayFrom(loaded.Catalogues))
+               TakeOrPayFrom(loaded.Catalogues),
+               LiftTiersFrom(loaded.Catalogues),
+               loaded.Catalogues.Of<FluidSystemDefinition>().All)
             : null;
     }
 
@@ -1900,6 +2202,51 @@ public static class EngineBuilder
         return new OGSim.Company.TakeOrPayTerms(
             definition.CommittedVolume, definition.WindowMonths, definition.PenaltyRate);
     }
+
+    /// <summary>
+    /// SDD-003 §6.2's R12b.2 amendment (finding 255). Four pump tiers, the
+    /// same relationship <see cref="TakeOrPayFrom"/> has to the one sales
+    /// contract — each is installed once, not upgraded through a ladder this
+    /// composition has no second rung for yet.
+    /// </summary>
+    private static OGSim.Wells.LiftTiers LiftTiersFrom(ICatalogSet catalogues)
+    {
+        DisplacementPumpDefinition rod =
+            catalogues.Of<DisplacementPumpDefinition>()[new ContentId("rod-pump-a")];
+        DisplacementPumpDefinition pcp =
+            catalogues.Of<DisplacementPumpDefinition>()[new ContentId("pcp-a")];
+        EspDefinition esp = catalogues.Of<EspDefinition>()[new ContentId("esp-a")];
+        GasLiftDefinition gasLift =
+            catalogues.Of<GasLiftDefinition>()[new ContentId("gas-lift-a")];
+
+        return new OGSim.Wells.LiftTiers(
+            DisplacementPumpFrom(rod), DisplacementPumpFrom(pcp),
+            new OGSim.Wells.EspTier(
+                esp.Id, EnvelopeOf(esp.MinRate, esp.MaxRate, esp.MaxDepth, esp.MaxDeviationDegrees,
+                                    esp.MaxGasFraction, esp.MaxTemperature, esp.MaxSolidsFraction),
+                esp.HeadCurve, esp.Efficiency),
+            new OGSim.Wells.GasLiftTier(
+                gasLift.Id,
+                EnvelopeOf(gasLift.MinRate, gasLift.MaxRate, gasLift.MaxDepth,
+                           gasLift.MaxDeviationDegrees, gasLift.MaxGasFraction,
+                           gasLift.MaxTemperature, gasLift.MaxSolidsFraction),
+                gasLift.InjectionRate.CubicMetresPerSecond, gasLift.GasDensityKgPerM3));
+    }
+
+    private static OGSim.Wells.DisplacementPumpTier DisplacementPumpFrom(
+        DisplacementPumpDefinition definition) =>
+        new(definition.Id,
+            EnvelopeOf(definition.MinRate, definition.MaxRate, definition.MaxDepth,
+                       definition.MaxDeviationDegrees, definition.MaxGasFraction,
+                       definition.MaxTemperature, definition.MaxSolidsFraction),
+            definition.Displacement.CubicMetresPerSecond);
+
+    private static LiftEnvelope EnvelopeOf(
+        ReservoirRate minRate, ReservoirRate maxRate, Length maxDepth,
+        double maxDeviationDegrees, double maxGasFraction, Temperature maxTemperature,
+        double maxSolidsFraction) =>
+        new(minRate, maxRate, maxDepth, maxDeviationDegrees, maxGasFraction, maxTemperature,
+            maxSolidsFraction);
 
     /// <summary>
     /// The technology registry, as a graph (SDD-005 §2's R20d.10 amendment).
@@ -1940,7 +2287,7 @@ public static class EngineBuilder
     }
 
     /// <summary>
-    /// The six facility kinds and the technology registry over the host's
+    /// The seven facility kinds and the technology registry over the host's
     /// sources.
     ///
     /// <para>No plugin binding: a facility datasheet names no model, so the
@@ -1954,9 +2301,15 @@ public static class EngineBuilder
             [
                 new SeparatorContentKind(), new TankContentKind(), new TreaterContentKind(),
                 new GasPlantContentKind(), new ExportLineContentKind(), new ManifoldContentKind(),
+                new CompressorContentKind(), new PumpStationContentKind(),
                 new OGSim.Capabilities.TechnologyContentKind(),
                 new OGSim.World.TerrainClassContentKind(),
                 new TakeOrPayContentKind(),
+                new DisplacementPumpContentKind("rod-pump"),
+                new DisplacementPumpContentKind("pcp"),
+                new EspContentKind(),
+                new GasLiftContentKind(),
+                new FluidSystemContentKind(),
             ],
             new PluginRegistry())
             .LoadAll(settings.Content);
@@ -1967,23 +2320,24 @@ public static class EngineBuilder
         IReadOnlyList<OGSim.Capabilities.TechnologyNode> registry,
         IReadOnlyList<OGSim.World.TerrainClassDefinition> terrainClasses,
         OGSim.Company.TakeOrPayTerms takeOrPay,
-        ContentId startingState, RuleSet rules) =>
+        OGSim.Wells.LiftTiers liftTiers,
+        IReadOnlyList<FluidSystemDefinition> fluidSystems) =>
     [
         new SubsurfaceModule(),
         new WellsModule(),
         new FlowModule(),
-        new FacilitiesModule(ladders, startingState),
+        new FacilitiesModule(ladders),
         new OperationsModule(),
         new CompanyModule(),
         new InformationModule(),
-        new WorldModule(terrainClasses, Defaults.Climate.Id),
+        new WorldModule(terrainClasses, Defaults.Climate.Id, fluidSystems),
         new CapabilitiesModule(registry, Defaults.Eras, clock),
         new IntegrityModule(),
         new EnvironmentModule(Defaults.Climate),
         new HseModule(),
         new ObjectivesModule(),
-        new MaterialsModule(profile),
-        new FieldModule(ladders, takeOrPay, rules),
+        new MaterialsModule(profile, fluidSystems),
+        new FieldModule(ladders, takeOrPay, liftTiers, fluidSystems),
         new DiagnosticsModule(audit, clock, random),
     ];
 
@@ -2051,7 +2405,68 @@ public static class EngineBuilder
         ready.Engine.Provided.Resolve<Environment.WeatherState>()
             .SealGeneration([Defaults.ScaledClimate(world.ClimateSeverity)]);
 
+        // AND THE RIVAL ROSTER, THE SAME INSTANT (SDD-011 §2's finding-277
+        // amendment) — a rival needs prospects to explore, and nothing had
+        // placed any until the `Generate` call three lines above this one.
+        SealRivals(ready.Engine, world);
+
         return built;
+    }
+
+    /// <summary>
+    /// SDD-011 §2/§2.1/§3's finding-277 amendment: builds R16.4's rival
+    /// roster and seeds each rival's own belief store from truth, run at the
+    /// SAME instant world generation itself is sealed — a new game
+    /// (<see cref="CreateNew"/>) and every reload (<c>SaveGame.Load</c>,
+    /// which re-runs this same `Generate` call with the saved parameters)
+    /// alike, since rival beliefs are ephemeral and rebuilt deterministically
+    /// rather than persisted (`BeliefStore`'s own `IStateOwner` key is a
+    /// hardcoded literal; a second owned instance would throw under the
+    /// write-once-per-key law).
+    /// </summary>
+    internal static void SealRivals(Engine engine, WorldParameters world)
+    {
+        ArgumentNullException.ThrowIfNull(engine);
+        ArgumentNullException.ThrowIfNull(world);
+
+        RivalRoster roster = engine.Provided.Resolve<RivalRoster>();
+        WorldState worldState = engine.Provided.Resolve<WorldState>();
+        IAuditTrail audit = engine.Provided.Resolve<IAuditTrail>();
+        ISimulationClock clock = engine.Provided.Resolve<SimulationClock>();
+        IRandomSource random = engine.Provided.Resolve<IRandomSource>();
+
+        IReadOnlyList<EntityId<IProspect>> prospects = worldState.Prospects;
+        var rivals = new List<OGSim.Company.Rival>();
+
+        for (int i = 0; i < world.RivalCount; i++)
+        {
+            OGSim.Company.RivalPersonality personality = Defaults.Rivals[i % Defaults.Rivals.Count];
+
+            var beliefs = new OGSim.Information.BeliefStore(
+                audit, Defaults.SigmaFloorFor, () => clock.Date);
+
+            for (int p = 0; p < prospects.Count; p++)
+            {
+                ReservoirVolume capacity = worldState.CapacityOf(prospects[p]);
+
+                beliefs.Apply(new Observation(
+                    new EntityRef(EntityKind.Prospect, prospects[p].Value),
+                    Defaults.StructureCapacityKind,
+                    DetMath.Ln(System.Math.Max(
+                        capacity.CubicMetres, Defaults.RivalMinimumCapacityCubicMetres)),
+                    Defaults.RivalCapacityBeliefSigma,
+                    BeliefSpace.Log,
+                    Provenance.Analogue));
+            }
+
+            rivals.Add(new OGSim.Company.Rival(
+                new EntityId<OGSim.Company.ICompany>((ulong)(i + 1)),
+                personality,
+                beliefs,
+                random.Stream(StreamId.Market)));
+        }
+
+        roster.SealRoster(rivals);
     }
 
     /// <summary>Composes the shipped set.</summary>
@@ -2059,7 +2474,8 @@ public static class EngineBuilder
     {
         ArgumentNullException.ThrowIfNull(settings);
 
-        if (Ladders(settings) is not var (ladders, registry, terrainClasses, takeOrPay))
+        if (Ladders(settings) is not var (ladders, registry, terrainClasses, takeOrPay, liftTiers,
+                                           fluidSystems))
             return new BuildRefusedByContent(Failures(settings));
 
         var clock = new SimulationClock(settings.Epoch);
@@ -2069,8 +2485,7 @@ public static class EngineBuilder
             settings,
             ShippedModules(audit, clock, new RandomSource(settings.WorldSeed),
                            Defaults.ProfileNamed(settings.RealityProfile), ladders, registry,
-                           terrainClasses, takeOrPay, settings.StartingState,
-                           RuleSets.Named(settings.Rules)),
+                           terrainClasses, takeOrPay, liftTiers, fluidSystems),
             clock, audit);
     }
 
@@ -2092,7 +2507,8 @@ public static class EngineBuilder
     {
         ArgumentNullException.ThrowIfNull(settings);
 
-        if (Ladders(settings) is not var (ladders, registry, terrainClasses, takeOrPay))
+        if (Ladders(settings) is not var (ladders, registry, terrainClasses, takeOrPay, liftTiers,
+                                           fluidSystems))
             return new BuildRefusedByContent(Failures(settings));
 
         var clock = new SimulationClock(settings.Epoch);
@@ -2104,8 +2520,7 @@ public static class EngineBuilder
             settings,
             ShippedModules(audit, clock, new RandomSource(settings.WorldSeed),
                            Defaults.ProfileNamed(settings.RealityProfile), ladders, registry,
-                           terrainClasses, takeOrPay, settings.StartingState,
-                           RuleSets.Named(settings.Rules)),
+                           terrainClasses, takeOrPay, liftTiers, fluidSystems),
             clock, audit);
     }
 

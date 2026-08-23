@@ -168,6 +168,14 @@ public static class ScreenChrome
             CustomMinimumSize = size,
         };
 
+        ApplyAction(button, colour, size, fontSize);
+
+        return button;
+    }
+
+    public static void ApplyAction(Button button, Color colour, Vector2 size, int fontSize = 18)
+    {
+        button.CustomMinimumSize = size;
         button.AddThemeStyleboxOverride("normal", FlatBox(colour));
         button.AddThemeStyleboxOverride("hover", FlatBox(colour.Lightened(0.14f)));
         button.AddThemeStyleboxOverride("pressed", FlatBox(colour.Darkened(0.14f)));
@@ -178,8 +186,6 @@ public static class ScreenChrome
         button.AddThemeColorOverride("font_hover_color", Colors.White);
         button.AddThemeColorOverride("font_pressed_color", Cream);
         button.AddThemeColorOverride("font_disabled_color", new Color(1, 1, 1, 0.6f));
-
-        return button;
     }
 
     /// <summary>Kept for screens that ask the kit for a button by role.</summary>

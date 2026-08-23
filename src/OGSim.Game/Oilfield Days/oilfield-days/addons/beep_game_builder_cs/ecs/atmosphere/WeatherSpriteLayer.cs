@@ -66,7 +66,7 @@ namespace Beep.ECS
 
         public override void _Ready()
         {
-            TextureFilter = TextureFilterEnum.Nearest;
+            TextureFilter = TextureFilterEnum.LinearWithMipmaps;
             _rng = new RandomNumberGenerator { Seed = (ulong)Seed };
             Rebuild();
         }

@@ -22,6 +22,7 @@ namespace OilfieldDays.Ui;
 /// engine has no command that places a facility at a coordinate, so a build mode
 /// could draw a ghost and never put anything down.</para>
 /// </summary>
+[Tool]
 public sealed partial class IconRail : PanelContainer
 {
     private sealed record Stop(string Label, string Icon, string? Scene, string Note);
@@ -43,30 +44,26 @@ public sealed partial class IconRail : PanelContainer
     {
         AddThemeStyleboxOverride("panel", SlateChrome.PanelPlate(0));
 
-        var inset = new MarginContainer();
+        MarginContainer inset = RequireNamed<MarginContainer>(this, "RailInset");
         inset.AddThemeConstantOverride("margin_left", 8);
         inset.AddThemeConstantOverride("margin_right", 8);
         inset.AddThemeConstantOverride("margin_top", 10);
         inset.AddThemeConstantOverride("margin_bottom", 10);
-        AddChild(inset);
 
-        var column = new VBoxContainer();
+        VBoxContainer column = RequireNamed<VBoxContainer>(inset, "RailColumn");
         column.AddThemeConstantOverride("separation", 6);
-        inset.AddChild(column);
 
         for (int i = 0; i < Stops.Length; i++)
-            column.AddChild(Button(Stops[i], here: i == 0));
+            ConfigureButton(column, Stops[i], here: i == 0);
     }
 
-    private static Control Button(Stop stop, bool here)
+    private static void ConfigureButton(Container parent, Stop stop, bool here)
     {
-        var plate = new Button
-        {
-            CustomMinimumSize = new Vector2(78, 66),
-            TooltipText = stop.Note,
-            Disabled = !here && stop.Scene is null,
-            Flat = false,
-        };
+        Button plate = RequireNamed<Button>(parent, stop.Label + "Button");
+        plate.CustomMinimumSize = new Vector2(78, 66);
+        plate.TooltipText = stop.Note;
+        plate.Disabled = !here && stop.Scene is null;
+        plate.Flat = false;
 
         UiSurface.Role role = here ? UiSurface.Role.Warning : UiSurface.Role.Neutral;
 
@@ -76,36 +73,33 @@ public sealed partial class IconRail : PanelContainer
         plate.AddThemeStyleboxOverride("disabled", SlateChrome.FieldPlate());
         plate.AddThemeStyleboxOverride("focus", SlateChrome.Nothing);
 
-        var column = new VBoxContainer
-        {
-            MouseFilter = Control.MouseFilterEnum.Ignore,
-            Alignment = BoxContainer.AlignmentMode.Center,
-        };
-
+        VBoxContainer column = RequireNamed<VBoxContainer>(plate, "Content");
+        column.MouseFilter = Control.MouseFilterEnum.Ignore;
+        column.Alignment = BoxContainer.AlignmentMode.Center;
         SlateChrome.LayAcross(column, "plate-slate", extra: 0.0f);
         column.AddThemeConstantOverride("separation", 2);
-        plate.AddChild(column);
 
-        TextureRect icon = SlateChrome.Icon(stop.Icon, 30.0f);
+        TextureRect icon = RequireNamed<TextureRect>(column, "Icon");
+        icon.Name = "Icon";
+        icon.Texture = GD.Load<Texture2D>($"res://assets/icons/{stop.Icon}.png");
+        icon.ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize;
+        icon.StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered;
+        icon.CustomMinimumSize = new Vector2(30, 30);
+        icon.MouseFilter = Control.MouseFilterEnum.Ignore;
         icon.SizeFlagsHorizontal = SizeFlags.ShrinkCenter;
+        icon.Modulate = new Color(1.0f, 1.0f, 1.0f, stop.Scene is null && !here ? 0.32f : 1.0f);
 
-        if (stop.Scene is null && !here)
-            icon.Modulate = new Color(1.0f, 1.0f, 1.0f, 0.32f);
-
-        column.AddChild(icon);
-
-        Label label = SlateChrome.Line(
-            stop.Label,
-            12,
+        Label label = RequireNamed<Label>(column, "Label");
+        label.Text = stop.Label;
+        label.AddThemeFontSizeOverride("font_size", 12);
+        label.AddThemeColorOverride(
+            "font_color",
             here ? Color.FromHtml("2A1C06") : stop.Scene is null ? KitTheme.Muted.Darkened(0.25f) : KitTheme.Ink);
 
         label.HorizontalAlignment = HorizontalAlignment.Center;
-        column.AddChild(label);
 
-        if (stop.Scene is not null)
+        if (stop.Scene is not null && !Godot.Engine.IsEditorHint())
             plate.Pressed += () => SceneRouter.Instance.OpenOverlay(stop.Scene);
-
-        return plate;
     }
 
     private static string Plate(UiSurface.Role role) => role switch
@@ -114,4 +108,24 @@ public sealed partial class IconRail : PanelContainer
         UiSurface.Role.Info => "plate-blue",
         _ => "plate-slate",
     };
+
+    private static T? FindNamed<T>(Node at, string name) where T : Node
+    {
+        if (at is T typed && at.Name == name)
+            return typed;
+
+        foreach (Node child in at.GetChildren())
+        {
+            T? found = FindNamed<T>(child, name);
+
+            if (found is not null)
+                return found;
+        }
+
+        return null;
+    }
+
+    private static T RequireNamed<T>(Node at, string name) where T : Node =>
+        FindNamed<T>(at, name) ?? throw new InvalidOperationException(
+            $"{nameof(IconRail)} requires a design-time {typeof(T).Name} named '{name}' under {at.GetPath()}.");
 }

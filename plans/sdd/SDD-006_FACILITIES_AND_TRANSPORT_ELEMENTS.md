@@ -464,6 +464,121 @@ when the station is bought. Its constraint is `ConstraintKind.TotalCapacity`
 at the tier's rated flow and its `PowerDraw` is `W_shaft`, consumed by stage
 4's balance exactly as the compressor's is.
 
+> **R9.1 amendment (finding 257): the compressor was specified, tested and
+> composed nowhere.** §3c pinned the polytropic model at finding 115 and
+> `Compressor`/`CompressorTier` have shipped and passed MX6/R9-V1/R9-V2 since
+> — the same "real mechanism, joined to nothing" shape as findings 149, 200,
+> 207, 252, 253, 254, 255, and R20d.13's own row named it directly:
+> "`Compressor`'s heat derating (built, composed nowhere)". Wired as the
+> SEVENTH rung-based socket, joining the six R20c.9 already gave a ladder,
+> content and an install command — `SeparatorContentKind` through
+> `ManifoldContentKind`'s shared `FacilityContentKind<TDefinition>`/
+> `FacilityGate` base, not a parallel one-off mechanism.
+>
+> **Discharge moved onto the tier, and this is the one design decision this
+> join had to make.** §3c/§3d both say sizing a boosting element's discharge
+> is "the player's decision, made when the station is bought" — and the
+> precedent for where that decision lives already exists: `SeparatorTier.
+> OperatingPressure`. `CompressorTier` gains a `Discharge` field for the same
+> reason, rather than a free-form number threaded through
+> `InstallCompressorCommand` — no other install command in this composition
+> carries one, and inventing the first would be a second shape for one
+> decision every other socket already makes through its ladder.
+>
+> ```csharp
+> public sealed record CompressorTier(
+>     ContentId Id, MassRate RatedCapacity, double MaxStageRatio,
+>     double PolytropicExponent, double PolytropicEfficiency,
+>     double MolarMassKgPerMol, double DerateFractionPerKelvin,
+>     Temperature DerateReference,
+>     Pressure Discharge);   // joined the tier, R9.1
+> ```
+>
+> **Suction is NOT on the tier.** It is where the train sits in the network —
+> read once, at compose time, from the separator's own operating pressure —
+> and a bigger train fitted later does not move where it sits. `Compressor`
+> gained a `Fit(CompressorTier)` mirroring every other socket's, swapping the
+> tier alone; suction stays exactly what it was built against.
+>
+> **Rung 0 is a true no-op, not a phantom cost or a phantom bottleneck.**
+> Every other ladder's rung 0 is a zero — no plant, no treatment, no
+> capacity — because a missing separation or treating step means NOTHING
+> reaches downstream of it. A missing compressor means the opposite: gas
+> flows through UNBOOSTED, not blocked. Rung 0's own discharge equals the
+> suction it is built against (ratio 1: zero stages, zero stage work, zero
+> power drawn) rather than zero capacity, which would have made an unbought
+> compressor a `ConstraintKind.TotalCapacity` binding at zero — throttling a
+> field's gas to nothing before anyone had bought or refused to buy
+> anything.
+>
+> **Ahead of the plant, not instead of it.** `GasCapture` (R20d.17, finding
+> 172) has been the field's real sales point since it shipped — "the plant
+> IS the sales point, and gas leaves the field the moment it is processed."
+> R9 §2.1's own "there is no gas plant, each treating step is an independent
+> unit" is a genuinely different design for the same domain concept, and
+> reconciling the two by REPLACING the working, tested sales mechanism was
+> weighed and set aside: the compressor is composed ADDITIVELY, ahead of
+> `GasCapture` in the network (`separator → compressor → gas plant → flare`),
+> raising what reaches the existing sales point rather than replacing it.
+> Dehydration, sweetening and NGL extraction — `RemovalUnit` and
+> `NglExtractionPlant`, equally real and equally unwired — are named rather
+> than built in the same task: each carries its own version of this same
+> sizing and topology question (what a removal unit's reject leg connects
+> to, where NGL revenue is booked) and answering all three at once would be
+> guessing at three design forks instead of the one this task actually
+> settled.
+>
+> **Persisted the same way the other six sockets are** (§8b): `FacilitiesState`
+> carries the fitted tier's id, one string, exactly like the separator's.
+
+> **R11.2 amendment (finding 259): the liquid pump station, joined the same
+> way — built, tested, composed nowhere.** `LiquidPumpStation`/`PumpTier`
+> have shipped and passed R11-V6 since finding 246 pinned the model; the
+> gap this row itself already named: "Neither is composed into the live
+> network — both are built and tested in isolation, same gap the R8 audit
+> found for R9's gas-processing chain... joining either is that gap, not a
+> new one." R9.1 closed the compressor's half; this closes the pump's,
+> reusing the same eight-socket mechanism (`FacilityContentKind<TDefinition>`,
+> `FacilityGate`, `Rungs<TDef,TTier>`) rather than inventing a second one —
+> the eighth rung-based socket.
+>
+> **Discharge moves onto the tier and suction stays off it, for the same
+> reason §3c's compressor join gives**: `PumpTier` gains a `Discharge`
+> field, sized when the station is bought; suction is read once at compose
+> time from where the train sits in the network, and `Fit(PumpTier)`
+> swaps the tier alone.
+>
+> **Rung 0 is a true no-op, the same shape as the compressor's**: its own
+> discharge equals the suction it is built against, so specific work and
+> shaft power are both exactly zero — an unbought pump station passes the
+> liquid through unboosted rather than throttling it to nothing at a
+> phantom `ConstraintKind.TotalCapacity` of zero.
+>
+> **Placement — mirrors the compressor's, on the liquid leg's own
+> equivalent step.** C11's own text places a pump station "mid-line," and
+> this composition has no long-haul export pipeline modelled as an
+> `IFlowElement` to sit mid-line ON (`ExportTerminal` is not a network
+> node — SDD-006 §8b's `FacilitiesState.ExportState` comment says why: it
+> is owned separately, by the module that composes it, and a company's
+> export rate is read off it directly rather than solved through the
+> network). Inventing that pipeline is out of scope for a join. What IS
+> in scope, and physically the same decision the compressor made for gas,
+> is the step immediately after primary separation: gas got a booster
+> ahead of the plant it feeds (`separator → compressor → gas plant`); the
+> pump station takes the same slot on the oil leg, ahead of the treating
+> it feeds (`separator → pump station → treater`) — a separator commonly
+> operates below what downstream treating and export need, and boosting
+> right after the split is the standard surface-facility answer to that,
+> not a fabricated position.
+>
+> **Ahead of the treater, not instead of anything.** Nothing currently
+> occupies this slot — the oil leg ran `separator → treater` directly — so
+> this is a pure insertion with no working mechanism to reconcile against,
+> unlike the compressor's `GasCapture` conflict.
+>
+> **Persisted the same way**: `FacilitiesState` carries the fitted tier's
+> id.
+
 ## 4. Gas treating (dehydration · sweetening · NGL)
 
 ```text
@@ -504,6 +619,68 @@ player never sees. The split enters at one element, is consumed by that element,
 and the products leave as ordinary black-oil material streams — so nothing
 upstream or downstream gains a component field, and the boundary cannot leak by
 accident because there is no member on `MaterialStream` to leak through.
+
+> **R9.2 amendment (finding 260): dehydration was attempted as the ninth
+> socket, following R9.1's and R11.2's own shape, and found to be currently
+> inexpressible — not a wiring gap this time, a modelling one.** `RemovalUnit`
+> gained the same `Tier`/`Fit()` shape the compressor and the pump station
+> already carry (`RemovalUnitTier`: efficiency and by-product yield, no
+> discharge or capacity — a removal unit does not set a pressure), and the
+> placement question resolved the same way R9.1's did: after the compressor,
+> ahead of the plant, additive rather than reopening `GasCapture`'s own
+> conflict with R9 §2.1. A vent-not-burn destination for the reject leg was
+> designed too (a `VentSink`, reporting `DisposedMass.Vented` rather than
+> `Discharged` — the category that has summed into the conservation check
+> since `DisposedMass` was declared with no producer ever setting it above
+> zero). **None of it was composed**, because the target material makes the
+> whole mechanism a no-op on every field this engine can build.
+>
+> **Why: the black-oil fluid model gives water a fixed, deterministic phase,
+> and gas is never it.** `BlackOilModel.SplitAt` (SDD-005 §2, "there is no
+> compositional flash here, deliberately") assigns every material EXACTLY
+> `(1,0,0)`, `(0,1,0)` or `(0,0,1)` — gas, liquid or aqueous — by its
+> DECLARED standard-condition phase, with no equilibrium calculation and no
+> per-(P,T) redistribution. Water is declared `Aqueous`. `FixedEfficiencySeparationModel.SeparateAt`
+> (SDD-006 §2) then applies gas/liquid carry-over and water-into-liquid
+> carry-over PER MATERIAL, starting from that same fixed ideal split — there
+> is no term, anywhere in either stage, that ever moves aqueous mass into the
+> gas fraction. A dehydrator targeting the water ordinal therefore reads
+> `present = 0` on every tick of every field this composition can build,
+> regardless of tier, regardless of efficiency: `removed = 0 · efficiency`,
+> always. This is not a missing carry-over coefficient to tune — it is the
+> fluid model's own deliberate simplification (05 §2) working exactly as
+> specified, one layer below where a removal unit reads from.
+>
+> **Confirmed rather than assumed**: composed against `Undrilled()` +
+> `Produce()`, installed to its real tier, run five ticks — the vent sink's
+> own throughput read exactly zero, matching the trace above by hand. Reverted
+> rather than shipped, because a purchasable item that provably never has an
+> effect on the one field this engine ships is a stub wearing a fully-typed
+> class, not a finished mechanism (F-1's own standard: no member exists
+> without behaviour). `RemovalUnit`'s `Tier`/`Fit()` refactor is kept — it is
+> a genuine, self-contained improvement to a class that was already "built
+> and tested, composed nowhere" before this task touched it, and changes
+> nothing about what is or is not composed. `VentSink` is NOT kept: nothing
+> would consume it once the dehydrator does not compose, and an unconsumed
+> class introduced in this same change is the one case CLAUDE.md's own rule
+> says to remove rather than mark.
+>
+> **What would actually unblock this**: either the fluid model gains a real
+> water-in-gas term (a change to `BlackOilModel.SplitAt`'s own deliberate
+> simplification, SDD-005 §2 — bigger than this task, and a decision for
+> whoever owns that document to make deliberately rather than as a side
+> effect of a facilities join) or the target material is reconsidered
+> entirely. **Sweetening (R9.3) does not share this exact blocker** —
+> `hydrogen-sulphide` and `carbon-dioxide` are both declared `Gas` phase in
+> the shipped material catalogue (`content/materials/`) and so WOULD carry a
+> non-zero fraction into the gas leg once composed — but it has a different
+> one: `Defaults.Materials` currently wires up three of the catalogue's nine
+> materials (oil, gas, water), and acid gas is not one of them. Widening it
+> is already named, separately, as its own task ("Materials are next in that
+> arc... widening it changes every stream's width") rather than a follow-on
+> to either gas-processing socket. Composing a sweetener before that lands
+> would hit the identical always-zero failure this one did, for the same
+> underlying reason — the field simply does not carry the material yet.
 
 ## 5. Tank
 
@@ -790,6 +967,160 @@ into as well.
 4. `ConstraintKind.BerthOccupancy` emitted, and `LogisticsView` populated
    (finding 203's three dangling declarations, joined at the point where they
    finally have a source).
+
+### 7a.3 Step 2, built (finding 268) — and the prerequisite this section named was wrong
+
+**§7a.2's own "company-value prerequisite" does not hold up.** It reasoned from
+"a parcel-sized float sits permanently unsold" to "lifetime revenue is
+permanently short" to "cash alone mis-values a business holding one" — three
+plausible steps that were never checked against the WIRING. They are wrong at
+the first: `Modules.cs` connects `custody.Id, CustodyTransferPoint.OnSpecOutlet`
+**to** `tank.Id, Tank.Inlet` — the custody meter sits upstream of the tank, so
+`ProductionLoop.Delivered` (`RecordCustody`'s revenue trigger) is set at stage 5
+from the network solve, before `StoreAndExport` draws the tank at stage 7.
+**Revenue is recognised when oil reaches spec, not when a cargo departs, and a
+cargo sitting in the tank was never "unsold" in the ledger's sense** — it is
+already sold; it just has not yet left the yard. Cash and `company.value` both
+already count it as soon as it is metered.
+
+**What actually moves is `Tank.cs`'s own documented coupling** (R8-V5, FV5): a
+full tank throttles every completion feeding it pro-rata, and the throttle
+reaches the reservoir within the tick. A cargo-gated tank sits nearer capacity
+between liftings than a continuously-draining one, so it binds MORE OFTEN —
+fewer barrels are produced over the field's life, and fewer barrels ever reach
+the custody meter to be sold. §7a.1's own prediction list already named this
+("MOVES how often the tank binds and shuts wells in") as the mechanism; §7a.2
+diagnosed the SYMPTOM (revenue fell) and reached for the wrong CAUSE (deferred
+recognition) because the wiring was assumed rather than read. No `company.value`
+step, no inventory valuation, and no scenario recalibration is a precondition
+for step 2 — the fix, if the win condition genuinely needs one, is downstream
+of a real measurement against the shipped field, not upstream of any code.
+
+**Step 2, scoped narrowly.** Occupancy and cargo-sized lifting only — no
+laytime, no demurrage, no `ConstraintKind`/`LogisticsView` (steps 3 and 4 stay
+open, each its own task per this section's own ordering).
+
+```text
+CargoSize: ONE fixed content constant, not a per-tier ladder. §7a.1's own text
+  ("a fixed content size is the realistic answer... ships come in standard
+  parcels") asks for one size a field is measured against, not a size that
+  grows with the terminal a player buys — Berth.LoadingRate already carries
+  that decision (a bigger line fills the same cargo faster).
+  80,000 t (Aframax class — the recognised mid-size global crude-trading
+  parcel, ~600,000 bbl). Against the shipped field's own numbers (§7a.1):
+  53% of the E1 tank (150,000 t, so 70,000 t of genuine headroom sits above
+  a full cargo before the tank's own ullage constraint would ever reach the
+  reservoir, R8-V5) and ~6.6 ticks of the shipped field's own make
+  (12.1e6 kg/tick) to fill alone — meaningfully short of "ships every month"
+  and meaningfully short of "ships once a year", which is the range §7a.1
+  asked this decision to land in.
+Gate, not accumulator: nothing draws from the tank while `tank.Held <
+  CargoSize`. The first version of this amendment specified a separate
+  "mass loaded so far" counter that left the tank drawing continuously
+  regardless of readiness — measured, and reverted before landing (below) —
+  because oil drawn into that counter left `tank.Held` the moment it was
+  drawn, so the tank read as permanently near-empty and the counter was
+  invisible to everything else, including a save. THE TANK'S OWN HELD MASS
+  is the only state this needs: once it reaches CargoSize the berth clears
+  it at its own rate; below CargoSize nothing leaves. No second store, and
+  nothing for a save to launder (law L5) — `Tank.RestoreTo` already owns
+  what a reload has to get back.
+Load, once gated open: draw = min(Berth.LoadingRate · tick.Seconds,
+  tank.Held) each tick — uncapped by CargoSize itself, because the berth
+  clears whatever backlog exists at its own rate rather than metering out
+  exactly one parcel's worth and stopping mid-tick. `Tank.Draw` already
+  clamps to what is held.
+Depart / next cargo: implicit. The gate re-closes the moment `tank.Held`
+  drops back under CargoSize, and reopens once production has rebuilt it —
+  no day-count, no scheduled arrival, no partial-cargo state. Time pressure
+  on an unfinished cargo is what laytime (step 3) exists to add; this step
+  does not invent an early substitute for it.
+```
+
+**Measured, not assumed — and the first version of this amendment was wrong.**
+A draft that added a separate "cargo loaded so far" accumulator (drawing
+continuously toward it, departing on a reset) was implemented, built clean,
+and reproduced §7a.2's exact regression: `A_player_who_develops_the_field_wins`
+went `Met` → `Expired`. Traced rather than shrugged off — the tank held
+essentially nothing at every checkpoint (`stored≈0` from month 0 to 36 on a
+diagnostic run), because that draft drained the tank at the berth's rate every
+tick regardless of whether a cargo was anywhere near full, into a counter nothing
+else could see. It was the OLD continuous draw wearing a cargo-shaped
+disguise, not the rhythm §7a describes. **The gate-on-`tank.Held` version above
+replaced it before this finding shipped**, and against it: the full
+`Speed=Slow` composition suite (47/47) and the full fast gate (1152/1152) are
+both clean, `A_player_who_develops_the_field_wins` included, on the first
+complete run. Cumulative sold oil, tank rhythm and cash timing all still MOVE
+tick to tick exactly as §7a.1 predicted; none of the 29 slow tests that price
+a played field needed re-stating this time, because 70,000 t of headroom above
+one cargo is enough that the ullage constraint essentially never has to reach
+the reservoir over a normal run.
+
+### 7a.4 Step 3, built (finding 269) — laytime and demurrage, pinned rather than invented
+
+§7's own formula (top of this section) names the shape —
+`laytime = contracted days; demurrage = max(0, actualDays − laytime) · rate` —
+and pins neither number. Both were genuinely open, in the same way R16.5's
+inspection cadence and R17.4's ongoing technology costs are: a number with no
+derivation behind it is F-2's own violation, not a detail to fill in on the
+way past. **Confirmed with Fahad before landing** (an explicit decision this
+document alone could not make), grounded in what this composition already
+prices rather than invented at the call site:
+
+```text
+Laytime: 60 days (two ticks). NOT the real-world charter-party convention —
+  a real crude laytime (commonly ~72 hours SHINC) assumes a shore tank farm
+  and a port pumping far faster than one field's own export line, and
+  transplanting it would make demurrage an unavoidable tax on every cargo
+  regardless of what a player built (172/177's "cost with no response" shape,
+  found before it shipped rather than after). Measured against THIS engine's
+  own numbers instead: a full 80,000 t cargo takes 46.3 days to clear at the
+  base E1 tier's rate (23.1 at E2, 11.6 at E3, §7a.3's own table) — so 60
+  days gives the base tier real headroom under normal production, and
+  demurrage bites only once a field's OWN production has outgrown what the
+  fitted export tier can clear inside that window. That is the incentive
+  §7a's four-step order was always building toward: the export ladder is a
+  decision because underbuilding it now has a second cost beside a fuller
+  tank.
+Demurrage: 0.05% of the cargo's value per day beyond laytime — cargo value
+  = CargoSize × the CURRENT market oil price (MarketState.OilPrice, moving
+  with the game's own price cycle rather than a number frozen at the tier a
+  field shipped on). At the shipped opening price (~$443.53/t, ~$60.5/bbl)
+  that is ~$17,700/day — inside the range real Aframax demurrage typically
+  runs (roughly $15,000–$40,000/day, itself market-set and never a single
+  fixed figure, which is why the RATE is expressed as a fraction of the
+  cargo's own value rather than a flat dollar constant that would go stale
+  the first time the price moved).
+Accrual: tracked while a cargo is loading (`tank.Held` at or above
+  CargoSize, §7a.3's own gate) as active days, DAYS not ticks — a cargo that
+  spans two ticks accrues 60 days of active time across them, not two
+  ticks' worth of some other unit. Charged ONCE, the tick the tank finally
+  drops back under CargoSize (the cargo departs), against the total active
+  time that one loading episode took — never per-tick while still loading,
+  which would double-count an episode already measured whole.
+Persisted: active days so far, in ProductionLoop's own state block
+  ("field.flood", the same key §7a.3 reasoned about) — a save mid-overrun
+  that came back at zero would let a player launder demurrage by saving and
+  loading, the same class of exploit SDD-013 §4's covenant-clock carve-out
+  exists to close (finding 210).
+```
+
+**Where it posts.** `Account.Opex` debited, `Account.Cash` credited,
+`MovementCategory.Production` — the same shape the field's other variable
+costs already use (`FieldEconomics.LiftingCostPerTonne`), because demurrage
+is an operating cost the field incurred, not a financing or fiscal line.
+`AuditCategory.Financial`, itemised with the overrun in days, the same
+category the standing charge and lifting cost already post under (§8's
+"three lines a player can act on").
+
+**What this does not touch.** §7a.1's own list — cumulative sold oil, the
+tank's rhythm, the ullage constraint — is unmoved: demurrage is a cost
+computed AFTER a cargo has already cleared, never a second gate on the flow.
+Step 4 (`ConstraintKind.BerthOccupancy`, `LogisticsView`) stays open and
+turned out to need more than wiring once looked at directly: `LogisticsView.
+Nominations` names a `ContentId Grade`, and this engine has no crude-grade
+concept anywhere to fill it with, honestly or otherwise — a materially larger
+gap than this task's own scope, left named rather than guessed at.
 
 ## 7b. Export capacity — a socket, not a constant
 

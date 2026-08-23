@@ -63,6 +63,33 @@ public sealed record FieldEconomics(
     Money InjectionWaterCostPerCubicMetre);
 
 /// <summary>
+/// A composition-owned mirror of <see cref="OGSim.Facilities.SpecBreach"/>
+/// (SDD-017 §2's `FacilityView.SpecMargins` row, finding 280) — the same
+/// shape, kept out of the domain module so the read model never requires a
+/// host to reference one (`Layering_TheReadModelNamesNoDomainModule`).
+/// </summary>
+public sealed record SpecBreachView(SpecProperty Property, double Limit, double Measured)
+{
+    /// <summary>How far over — the number the player needs to size the fix.</summary>
+    public double Margin => Measured - Limit;
+}
+
+/// <summary>
+/// SDD-002 §8's finding-283 amendment (SDD-017 §2's `FacilityView.
+/// UnitUtilisation` row) — one of an element's own constraints, capacity
+/// against load, as the tick's last-solved segment left it (a ratio cannot
+/// be summed across segments the way <see cref="ChainElementView.Deferred"/>'s
+/// Mass can, so this is a snapshot, not an accumulation).
+/// </summary>
+public sealed record UtilisationView(ConstraintKind Kind, double Capacity, double Load)
+{
+    /// <summary>0 rather than NaN/Infinity when Capacity is 0 — no
+    /// meaningful reading is 0, the same convention
+    /// <see cref="ProductionLoop.WaterCut"/> already uses.</summary>
+    public double Ratio => Capacity > 0.0 ? Load / Capacity : 0.0;
+}
+
+/// <summary>
 /// One element of the chain, as a player watches it (SDD-017 §2).
 ///
 /// <para><b>Throughput is the flow and deferral is the jam</b>, and together
@@ -102,18 +129,35 @@ public sealed record ChainElementView(
 
     /// <summary>Whether it is out of service — the reason a row that used to
     /// carry the whole field's oil is suddenly carrying none.</summary>
-    bool Failed)
+    bool Failed,
+
+    /// <summary>SDD-017 §2's `FacilityView.SpecMargins` row (finding 280) —
+    /// what this element's own last pass failed, if anything. Empty for
+    /// every element but the one custody transfer point in this
+    /// composition, and empty there too on a tick that passed clean.
+    /// </summary>
+    IReadOnlyList<SpecBreachView> Breaches,
+
+    /// <summary>SDD-002 §8's finding-283 amendment (SDD-017 §2's
+    /// `FacilityView.UnitUtilisation` row) — how full each of this
+    /// element's own constraints is. Empty for an element with no capacity
+    /// constraint of its own (a custody transfer point), the same way it
+    /// is absent from <see cref="Deferred"/>.</summary>
+    IReadOnlyList<UtilisationView> Utilisation)
 {
     // Finding 131.
     public bool Equals(ChainElementView? other) =>
         other is not null && Element == other.Element && DisplayId == other.DisplayId
         && Throughput == other.Throughput
         && Condition == other.Condition && Failed == other.Failed
-        && Structural.Equal(Deferred, other.Deferred);
+        && Structural.Equal(Deferred, other.Deferred)
+        && Structural.Equal(Breaches, other.Breaches)
+        && Structural.Equal(Utilisation, other.Utilisation);
 
     public override int GetHashCode() =>
         HashCode.Combine(Element, DisplayId, Throughput, Condition, Failed,
-                         Structural.HashOf(Deferred));
+                         Structural.HashOf(Deferred), Structural.HashOf(Breaches),
+                         Structural.HashOf(Utilisation));
 
     /// <summary>Whether this element refused anything this tick — what a host
     /// highlights, and what "the chain is jammed here" means.</summary>
@@ -130,6 +174,7 @@ public sealed record ChainElementView(
 internal sealed class ChainElement(EntityId<IFlowElement> element)
 {
     private readonly List<(ConstraintKind Kind, Mass Deferred)> _deferred = [];
+    private readonly List<(ConstraintKind Kind, double Capacity, double Load)> _utilisation = [];
 
     public EntityId<IFlowElement> Element { get; } = element;
 
@@ -151,14 +196,34 @@ internal sealed class ChainElement(EntityId<IFlowElement> element)
         _deferred.Add((kind, deferred));
     }
 
+    /// <summary>SDD-002 §8's finding-283 amendment — the LAST segment to
+    /// touch this element replaces whatever an earlier one recorded, since
+    /// a ratio cannot be summed across segments the way <see cref="Refuse"/>'s
+    /// Mass can. The caller clears once per element per segment (not per
+    /// call), then appends every constraint that segment reported.</summary>
+    public void ClearUtilisation() => _utilisation.Clear();
+
+    public void AddUtilisation(ConstraintKind kind, double capacity, double load) =>
+        _utilisation.Add((kind, capacity, load));
+
     public ChainElementView Published(
-        Func<EntityId<IFlowElement>, string> nameOf, double? condition, bool failed) =>
-        new(new EntityRef(EntityKind.FlowElement, Element.Value),
+        Func<EntityId<IFlowElement>, string> nameOf, double? condition, bool failed,
+        IReadOnlyList<SpecBreachView> breaches)
+    {
+        var utilisation = new List<UtilisationView>(_utilisation.Count);
+        for (int i = 0; i < _utilisation.Count; i++)
+            utilisation.Add(new UtilisationView(
+                _utilisation[i].Kind, _utilisation[i].Capacity, _utilisation[i].Load));
+
+        return new(new EntityRef(EntityKind.FlowElement, Element.Value),
             nameOf(Element),
             new Mass(Throughput),
             [.. _deferred],
             condition,
-            failed);
+            failed,
+            breaches,
+            utilisation);
+    }
 }
 
 /// <summary>
@@ -217,6 +282,20 @@ internal sealed class ProductionLoop : IStateOwner
     // a tick that produced nothing cannot commit last month's volumes.
     private readonly Dictionary<EntityId<IReservoirCompartmentEntity>, double> _byCompartment = [];
 
+    // The quality-differential pricing term's reference table (SDD-009 §6's
+    // finding-271 amendment) — every fluid system this build's content
+    // declared, by id, resolved once at construction and never mutated.
+    private readonly IReadOnlyDictionary<ContentId, double> _apiGravityByFluidSystem;
+
+    // THE LAST SEGMENT'S CONVERGED STATE PER COMPLETION (SDD-017 §2's R21.6
+    // amendment) — what a read model reconstructs an operating point from.
+    // Overwritten every segment, so by the tick's own close this holds the
+    // final one; cleared at the same SolveFlow boundary `_byCompartment` is,
+    // so a completion absent from every segment this tick (never drilled far
+    // enough, or shut out of the whole month by an upstream failure) reports
+    // none rather than a stale month.
+    private readonly Dictionary<EntityId<ICompletion>, CompletionState> _lastSolved = [];
+
     // The chain, rebuilt each tick in the solver's topological order.
     private readonly List<ChainElement> _chain = [];
 
@@ -228,37 +307,30 @@ internal sealed class ProductionLoop : IStateOwner
     public string NameOf(EntityRef element) =>
         _names(new EntityId<IFlowElement>(element.Value));
 
+    /// <summary>
+    /// A well's converged state as of the last segment it solved this tick, or
+    /// <c>null</c> if it solved none (SDD-017 §2's R21.6 amendment). The loop
+    /// owns the solve, so this is the one door a read model reconstructs an
+    /// operating point through rather than a second copy of the same lookup.
+    /// </summary>
+    public CompletionState? LastSolvedStateOf(EntityId<ICompletion> well) =>
+        _lastSolved.TryGetValue(well, out CompletionState? state) ? state : null;
+
     private readonly OGSim.Integrity.AssetIntegrity _integrity;
 
-    /// <summary>
-    /// The plant, as the company has actually built it (plans 22 §4, S2).
-    /// </summary>
-    /// <remarks>
-    /// <para>This held five loose elements — tank, custody meter, gas plant,
-    /// disposal well and water intake — handed in beside the chain that already
-    /// owned them. Two owners for one fact is law L5, and it meant absence would
-    /// have had to be taught twice and could disagree.</para>
-    ///
-    /// <para>Reading them off the plant also makes the nullability honest: what
-    /// the company has built is a question with a changing answer, and a
-    /// constructor parameter is a promise that it never changes.</para>
-    /// </remarks>
-    private readonly SurfaceChain _plant;
-
-    private OGSim.Facilities.Tank? Tank => _plant.Tank;
-
-    private OGSim.Facilities.CustodyTransferPoint? Custody => _plant.Custody;
-
-    private OGSim.Facilities.GasCapture? GasPlant => _plant.GasPlant;
-
-    private OGSim.Wells.Injector? Disposal => _plant.Disposal;
-
-    private OGSim.Facilities.WaterIntake? Intake => _plant.Intake;
-
+    private readonly OGSim.Facilities.Tank _tank;
     private readonly OGSim.Facilities.ExportTerminal _terminal;
+    private readonly OGSim.Facilities.CustodyTransferPoint _custody;
 
     private OGSim.Kernel.Composition _stored;
     private Allocation _tankProvenance;
+
+    // SDD-006 §7a.4's finding-269 amendment — how many ACTIVE days the cargo
+    // now loading has taken, zero when the berth is idle. Persisted: a save
+    // mid-overrun that came back at zero would let a player launder
+    // demurrage by saving and loading (the same class SDD-013 §4's covenant
+    // clock carve-out exists to close, finding 210).
+    private double _cargoActiveDays;
 
     // What the field handled this tick, per material — what a lifting cost is
     // charged on, and the reason a watered-out field stops paying.
@@ -268,10 +340,14 @@ internal sealed class ProductionLoop : IStateOwner
     private readonly IPriceModel _prices;
     private readonly IObligationRegistry _obligations;
     private readonly ReservesBook _reserves;
+    private readonly OGSim.Facilities.GasCapture _chainGasPlant;
+    private readonly OGSim.Wells.Injector _disposal;
     private readonly Money _gasPrice;
 
     // Reset each tick by the plan that consumes it.
     private double _disposedThisTick;
+
+    private readonly OGSim.Facilities.WaterIntake _intake;
 
     // THE FLOOD, a tick behind (SDD-003 §3.1d's R20d.24b amendment). Both are
     // stage 5's answers and the intake is commanded before stage 5 runs, so the
@@ -292,6 +368,11 @@ internal sealed class ProductionLoop : IStateOwner
     private readonly IReadOnlyList<int> _liquidOrdinals;
     private readonly Func<bool> _isAbandoned;
 
+    // SDD-011 §4's finding-275 amendment — R13.10's second restructuring
+    // lever. Read for its own PartnerShare only; the loop never mutates it
+    // (SellWorkingInterestApplier is the one place a sale happens).
+    private readonly OGSim.Company.WorkingInterest _stake;
+
     public ProductionLoop(
         SubsurfaceState subsurface,
         WellsState wells,
@@ -309,14 +390,18 @@ internal sealed class ProductionLoop : IStateOwner
         // answer to, which is the whole reason this is a dependency rather than
         // a field.
         OGSim.Integrity.AssetIntegrity integrity,
-        SurfaceChain plant,
+        OGSim.Facilities.Tank tank,
         OGSim.Facilities.ExportTerminal terminal,
+        OGSim.Facilities.CustodyTransferPoint custody,
         IFiscalRegime regime,
         IPriceModel prices,
         IRandomStream priceStream,
         OGSim.Company.MarketState market,
         IObligationRegistry obligations,
         ReservesBook reserves,
+        OGSim.Facilities.GasCapture gasPlant,
+        OGSim.Wells.Injector disposal,
+        OGSim.Facilities.WaterIntake intake,
         Money gasPrice,
         IReadOnlyList<int> liquidOrdinals,
         Func<bool> isAbandoned,
@@ -324,7 +409,18 @@ internal sealed class ProductionLoop : IStateOwner
         Temperature reservoirTemperature,
         OGSim.Environment.WeatherState weather,
         Density surfaceDensity,
-        int materialCount)
+        int materialCount,
+
+        // The quality-differential pricing term's reference table (SDD-009
+        // §6's finding-271 amendment) — every fluid system this build's
+        // content declared, by id, so a compartment's own drawn grade can be
+        // priced without this loop needing to know how a `BlackOilModel`
+        // stores it.
+        IReadOnlyList<FluidSystemDefinition> fluidSystems,
+
+        // SDD-011 §4's finding-275 amendment — read every tick to split
+        // revenue and opex with a partner, never written here.
+        OGSim.Company.WorkingInterest stake)
     {
         ArgumentNullException.ThrowIfNull(subsurface);
         ArgumentNullException.ThrowIfNull(wells);
@@ -336,12 +432,16 @@ internal sealed class ProductionLoop : IStateOwner
         ArgumentNullException.ThrowIfNull(network);
         ArgumentNullException.ThrowIfNull(meteredPoints);
         ArgumentNullException.ThrowIfNull(names);
-        ArgumentNullException.ThrowIfNull(plant);
+        ArgumentNullException.ThrowIfNull(tank);
         ArgumentNullException.ThrowIfNull(terminal);
+        ArgumentNullException.ThrowIfNull(custody);
+        ArgumentNullException.ThrowIfNull(intake);
         ArgumentNullException.ThrowIfNull(regime);
         ArgumentNullException.ThrowIfNull(liquidOrdinals);
         ArgumentNullException.ThrowIfNull(isAbandoned);
         ArgumentNullException.ThrowIfNull(economics);
+        ArgumentNullException.ThrowIfNull(fluidSystems);
+        ArgumentNullException.ThrowIfNull(stake);
 
         _subsurface = subsurface;
         _wells = wells;
@@ -353,14 +453,18 @@ internal sealed class ProductionLoop : IStateOwner
         _network = network;
         _names = names;
         _integrity = integrity;
-        _plant = plant;
+        _tank = tank;
         _terminal = terminal;
+        _custody = custody;
         _regime = regime;
         _prices = prices;
         _priceStream = priceStream;
         _market = market;
         _obligations = obligations;
         _reserves = reserves;
+        _chainGasPlant = gasPlant;
+        _disposal = disposal;
+        _intake = intake;
         _gasPrice = gasPrice;
         _liquidOrdinals = liquidOrdinals;
         _isAbandoned = isAbandoned;
@@ -370,6 +474,12 @@ internal sealed class ProductionLoop : IStateOwner
         _weather = weather;
         _surfaceDensity = surfaceDensity;
         _materialCount = materialCount;
+        _stake = stake;
+
+        var apiGravityByFluidSystem = new Dictionary<ContentId, double>();
+        for (int i = 0; i < fluidSystems.Count; i++)
+            apiGravityByFluidSystem.Add(fluidSystems[i].Id, fluidSystems[i].ApiGravityDegrees);
+        _apiGravityByFluidSystem = apiGravityByFluidSystem;
 
         for (int i = 0; i < meteredPoints.Count; i++) _meters.Add(meteredPoints[i]);
 
@@ -451,7 +561,9 @@ internal sealed class ProductionLoop : IStateOwner
 
     public StateKey Key { get; } = new("field.flood");
 
-    public int SchemaVersion => 1;
+    /// <summary>2 (SDD-006 §7a.4's finding-269 amendment): the cargo now
+    /// loading's active days joined the block.</summary>
+    public int SchemaVersion => 2;
 
     /// <summary>Nothing has to be back before this is (SDD-013 §2b).</summary>
     public IReadOnlyList<StateKey> RestoreAfter => [];
@@ -463,6 +575,10 @@ internal sealed class ProductionLoop : IStateOwner
         writer.WriteDouble("voidage-replacement", VoidageReplacement);
         writer.WriteDouble("voidage-last-tick", _voidageLastTick);
         writer.WriteDouble("produced-water-last-tick", _producedWaterLastTick);
+
+        // THE CARGO NOW LOADING'S ACTIVE DAYS (SDD-006 §7a.4's finding-269
+        // amendment) — zero when the berth is idle between episodes.
+        writer.WriteDouble("cargo-active-days", _cargoActiveDays);
 
         // WHICH COMPARTMENTS THE FLOOD IS SPLIT BETWEEN, and in what proportion.
         // The fourth cross-tick field on this class and the one that made a
@@ -501,11 +617,7 @@ internal sealed class ProductionLoop : IStateOwner
         // however many years it had been used. It is written here rather than in
         // a block of its own because facilities own no state — the day they do,
         // this moves and the key goes with it (S013-9).
-        // Zero with no disposal well built, which is the truth rather than a
-        // placeholder: nothing has been injected because there is nowhere to
-        // inject it (plans 22 §4, S2).
-        writer.WriteDouble(
-            "disposal-injected", Disposal?.CumulativeInjected.CubicMetres ?? 0.0);
+        writer.WriteDouble("disposal-injected", _disposal.CumulativeInjected.CubicMetres);
 
         writer.WriteInt64("flood-share-count", _floodShares.Count);
 
@@ -526,6 +638,7 @@ internal sealed class ProductionLoop : IStateOwner
         VoidageReplacement = reader.ReadDouble("voidage-replacement");
         _voidageLastTick = reader.ReadDouble("voidage-last-tick");
         _producedWaterLastTick = reader.ReadDouble("produced-water-last-tick");
+        _cargoActiveDays = reader.ReadDouble("cargo-active-days");
 
         var materials = (int)reader.ReadInt64("delivered-count");
         var delivered = new double[materials];
@@ -539,12 +652,7 @@ internal sealed class ProductionLoop : IStateOwner
         CumulativeFlared = new Mass(reader.ReadDouble("cumulative-flared"));
         CumulativeProduced = new SurfaceVolume(reader.ReadDouble("cumulative-produced"));
 
-        // Read either way, so the cursor moves whether or not there is a well
-        // to tell. A reader that skipped the key on an unbuilt plant would put
-        // every field after it out by one.
-        double injected = reader.ReadDouble("disposal-injected");
-
-        Disposal?.RestoreTo(new ReservoirVolume(injected));
+        _disposal.RestoreTo(new ReservoirVolume(reader.ReadDouble("disposal-injected")));
 
         _floodShares.Clear();
 
@@ -596,12 +704,8 @@ internal sealed class ProductionLoop : IStateOwner
     /// </summary>
     private double Headroom()
     {
-        // NO WELL, NO ROOM. An unbuilt disposal well accepts nothing, so the
-        // flood gets nothing — which is the same answer the arithmetic gives for
-        // one that is full, and needs no special case downstream.
-        double accepts = Disposal?.Acceptance.CubicMetresPerSecond ?? 0.0;
-
-        double room = (accepts * TickSeconds) - _producedWaterLastTick;
+        double room =
+            (_disposal.Acceptance.CubicMetresPerSecond * TickSeconds) - _producedWaterLastTick;
 
         return room > 0.0 ? room : 0.0;
     }
@@ -639,7 +743,7 @@ internal sealed class ProductionLoop : IStateOwner
         // right answer rather than a special case.
         if (target > _reservoirRoom) target = _reservoirRoom;
 
-        Intake?.Command(new ReservoirRate(target / TickSeconds));
+        _intake.Command(new ReservoirRate(target / TickSeconds));
     }
 
     /// <summary>
@@ -684,11 +788,12 @@ internal sealed class ProductionLoop : IStateOwner
         CommandTheIntake();
 
         _byCompartment.Clear();
+        _lastSolved.Clear();
         _chain.Clear();
         _importedThisTick = 0.0;
         FlaredThisTick = new Mass(0.0);
         _stored = OGSim.Kernel.Composition.Zero(_materialCount);
-        Tank?.ForgetPromises();
+        _tank.ForgetPromises();
         Array.Clear(_handled);
         double[] delivered = new double[_materialCount];
 
@@ -782,7 +887,7 @@ internal sealed class ProductionLoop : IStateOwner
             // puts it back into the rock it came from (SDD-002 §9), and the
             // solve is the only place that knows how much the injector actually
             // took after its own injectivity limited it.
-            if (Disposal is not null && solution.Element == Disposal.Id)
+            if (solution.Element == _disposal.Id)
                 _disposedThisTick +=
                     converged.Disposed.Discharged.Total.KgPerSecond * seconds
                     / PhysicalConstants.WaterDensityKgPerM3;
@@ -793,7 +898,7 @@ internal sealed class ProductionLoop : IStateOwner
             // them: it is the only other thing feeding the injector, so what the
             // injector discharged less what the intake made is what the field
             // produced, by construction rather than by a second estimate.
-            if (Intake is not null && solution.Element == Intake.Id)
+            if (solution.Element == _intake.Id)
                 _importedThisTick +=
                     converged.Sourced.Total.KgPerSecond * seconds
                     / PhysicalConstants.WaterDensityKgPerM3;
@@ -854,6 +959,25 @@ internal sealed class ProductionLoop : IStateOwner
                 });
         }
 
+        // SDD-002 §8's finding-283 amendment: this segment's own utilisation
+        // REPLACES whatever an earlier segment recorded for the same
+        // element — a ratio cannot be summed across segments the way a
+        // Deferred Mass can (§8's own amendment states why). The first
+        // tuple for an element THIS segment clears its row; every one after
+        // appends, so an element mentioned twice by one segment (two bound
+        // constraints on the same vessel, R8-V2) is not clobbered by its
+        // own second entry.
+        var freshlyMeasured = new HashSet<EntityId<IFlowElement>>();
+        for (int i = 0; i < report.Utilisations.Count; i++)
+        {
+            (EntityId<IFlowElement> el, ConstraintKind kind, double capacity, double load) =
+                report.Utilisations[i];
+
+            ChainElement row = Flowing(el);
+            if (freshlyMeasured.Add(el)) row.ClearUtilisation();
+            row.AddUtilisation(kind, capacity, load);
+        }
+
         // WHAT THE FIELD HANDLED, from the completions' own sourced mass: every
         // barrel that came up the hole, whether it was sold, flared or disposed
         // of. That is what a lifting cost is charged on.
@@ -864,7 +988,7 @@ internal sealed class ProductionLoop : IStateOwner
             // a company twice — once at the water's own price and once for
             // producing something it bought — and would put sea water into the
             // number that says what the FIELD made.
-            if (Intake is not null && report.Solutions[i].Element == Intake.Id) continue;
+            if (report.Solutions[i].Element == _intake.Id) continue;
 
             OGSim.Kernel.Composition sourced = report.Solutions[i].Converged.Sourced;
 
@@ -875,13 +999,18 @@ internal sealed class ProductionLoop : IStateOwner
         for (int i = 0; i < report.CompletionStates.Count; i++)
         {
             CompletionState state = report.CompletionStates[i];
+            var well = new EntityId<ICompletion>(state.Completion.Value);
 
-            EntityId<IReservoirCompartmentEntity> compartment =
-                _wells.CompartmentOf(new EntityId<ICompletion>(state.Completion.Value));
+            EntityId<IReservoirCompartmentEntity> compartment = _wells.CompartmentOf(well);
 
             _byCompartment[compartment] =
                 _byCompartment.GetValueOrDefault(compartment)
                 + state.Rate.CubicMetresPerSecond * seconds;
+
+            // LAST WRITE WINS (SDD-017 §2's R21.6 amendment): segments run in
+            // order, so by the time the tick's last one has been accumulated
+            // this holds what the well was doing when the month closed.
+            _lastSolved[well] = state;
         }
 
         // What reached the meter. The custody point's ON-SPEC outlet only: its
@@ -920,11 +1049,8 @@ internal sealed class ProductionLoop : IStateOwner
             _tankProvenance = passed.Provenance;
 
             // And the tank is told, so the NEXT segment sees the room this one
-            // just took rather than the room the tick opened with — or nothing
-            // is told, because nothing is built. Oil that reaches here without a
-            // tank is caught where it would actually vanish, in StoreAndExport,
-            // rather than twice.
-            Tank?.Promise(new Mass(onSpec.Total.KgPerSecond * seconds));
+            // just took rather than the room the tick opened with.
+            _tank.Promise(new Mass(onSpec.Total.KgPerSecond * seconds));
         }
     }
 
@@ -969,10 +1095,31 @@ internal sealed class ProductionLoop : IStateOwner
             rows.Add(SolvedRow(element).Published(
                 _names,
                 _integrity.IsMonitored(element) ? _integrity.ConditionOf(element) : null,
-                _integrity.HasFailed(element)));
+                _integrity.HasFailed(element),
+                BreachesOf(ordered[i])));
         }
 
         return rows;
+    }
+
+    /// <summary>SDD-017 §2's `FacilityView.SpecMargins` row (finding 280) —
+    /// empty for every element but the one custody transfer point this
+    /// composition has, mirrored off its own <c>LastBreaches</c> rather
+    /// than exposing the domain type directly (`SpecBreachView`'s own
+    /// doc comment).</summary>
+    private static IReadOnlyList<SpecBreachView> BreachesOf(IFlowElement element)
+    {
+        if (element is not OGSim.Facilities.CustodyTransferPoint custody) return [];
+        if (custody.LastBreaches.Count == 0) return [];
+
+        var views = new List<SpecBreachView>(custody.LastBreaches.Count);
+        for (int i = 0; i < custody.LastBreaches.Count; i++)
+        {
+            OGSim.Facilities.SpecBreach breach = custody.LastBreaches[i];
+            views.Add(new SpecBreachView(breach.Property, breach.Limit, breach.Measured));
+        }
+
+        return views;
     }
 
     /// <summary>
@@ -1178,11 +1325,7 @@ internal sealed class ProductionLoop : IStateOwner
             // plugs it a little further, its injectivity falls, and remediation
             // is a decision a player eventually has to price. Nothing committed
             // to it before this, so it never aged.
-            // Headroom() is zero without a well built, so `injected` is zero and
-            // there is nothing to age. The call is guarded rather than the block
-            // because the accounting above is about water PRODUCED, which happens
-            // whether or not there is anywhere to put it.
-            Disposal?.Commit(injected);
+            _disposal.Commit(injected);
         }
 
         _production.Set(withdrawals);
@@ -1284,56 +1427,97 @@ internal sealed class ProductionLoop : IStateOwner
     /// would be satisfied by a fiction.</para>
     /// </summary>
     /// <summary>
-    /// Stage 6, after the solve: what reached the tank is held, and what the
-    /// export line contracts to take is lifted.
+    /// Stage 6, after the solve: what reached the tank is held, and a cargo
+    /// loads against it (SDD-006 §7a.3's finding-268 amendment).
     ///
-    /// <para>The two together are the buffer. A field producing below its export
-    /// rate never fills the tank and never notices it; one producing above fills
-    /// it, and when it is full the ullage constraint reaches back down the chain
-    /// and shuts wells in (R8-V5) — which is the moment a player has to decide
-    /// between more storage, more export and less production.</para>
+    /// <para>ONE CARGO AT A TIME, occupying the berth until it is full — a
+    /// schedule rather than the continuous draw this replaced. A field
+    /// producing below the berth's rate never assembles a cargo and never
+    /// notices the berth exists; one producing above it fills the tank
+    /// between departures, and when the tank is full the ullage constraint
+    /// reaches back down the chain and shuts wells in (R8-V5) MORE OFTEN
+    /// than a continuous draw ever did — which is the real lever this step
+    /// adds, not a change to when revenue is recognised (§7a.3 corrects
+    /// §7a.2 on exactly that point).</para>
+    ///
+    /// <para>THE GATE ITSELF NEEDS NO STATE OF ITS OWN. It reads
+    /// <c>tank.Held</c>, which the tank already owns and already persists —
+    /// a cargo in progress is oil still sitting in the tank, not a second
+    /// store of how much has left it (law L5). What laytime needs is
+    /// different: how many ACTIVE DAYS a loading episode has taken, which
+    /// the tank's own mass cannot answer, so that alone is tracked
+    /// (SDD-006 §7a.4's finding-269 amendment).</para>
     /// </summary>
-    public void StoreAndExport(Duration tick)
+    public void StoreAndExport(Tick tick, Duration duration)
     {
-        if (Tank is not OGSim.Facilities.Tank tank)
-        {
-            // A FIELD THAT HAS NOT BUILT STORAGE EXPORTS NOTHING, which is an
-            // ordinary state on the way up (plans 22 §4, S2) and not an error.
-            //
-            // OIL ARRIVING ANYWAY IS. The chain is downstream-closed, so a
-            // company with no tank should be shut in well before stage six —
-            // and mass reaching this line is mass about to disappear from the
-            // tick's conservation terms. That is worth a fault rather than a
-            // silent skip, and it is the one place the whole of S2 could have
-            // leaked (law L4).
-            if (_stored.Total.KgPerSecond > 0.0)
-            {
-                throw new InvariantFault("SDD-002 §3", null,
-                    "oil reached storage with no tank built; an unfinished chain has to " +
-                    "shut its wells in rather than produce into nothing");
-            }
-
-            Exported = new Mass(0.0);
-
-            return;
-        }
-
-        tank.Receive(_stored, _tankProvenance, tick);
+        _tank.Receive(_stored, _tankProvenance, duration);
 
         // Boil-off first, because oil that evaporated was never available to
         // lift. It is a conservation term, not a rounding: the tank reports it
         // and stage 9 will account it as fugitive emissions.
-        Tank?.VapourLossOver(tick);
+        _tank.VapourLossOver(duration);
 
-        // Asked of the TERMINAL each tick rather than held: a line laid this
-        // month must lift against its new capacity from this month
-        // (SDD-006 §7b). Through the berth (SDD-006 §7a's L5 decision, step
-        // 1, finding 251) — the same rate, read through the seam a schedule
-        // will eventually attach to.
-        MaterialInventory lifted = tank.Draw(
-            new Mass(_terminal.Berth.LoadingRate.KgPerSecond * tick.Seconds));
+        // ONE CARGO AT A TIME: nothing draws until the tank holds a full
+        // cargo's worth, then the berth clears it — at its own rate, so a
+        // very full tank still takes more than one tick — until the tank
+        // drops back under that line (SDD-006 §7a.3's finding-268 amendment).
+        // Through the berth (SDD-006 §7a's L5 decision, step 1, finding 251)
+        // — the same rate, read through the seam a schedule now attaches to.
+        bool cargoReady = _tank.Held.Total.Kilograms >= Defaults.CargoSize.Kilograms;
+
+        MaterialInventory lifted = cargoReady
+            ? _tank.Draw(new Mass(_terminal.Berth.LoadingRate.KgPerSecond * duration.Seconds))
+            : MaterialInventory.Empty(_materialCount);
 
         Exported = lifted.Total;
+
+        // LAYTIME (SDD-006 §7a.4's finding-269 amendment). Active days accrue
+        // for every tick a cargo occupies the berth, whether or not this is
+        // its first — a cargo that spans several ticks accrues DAYS across
+        // all of them, not one tick's worth of some other unit.
+        if (cargoReady) _cargoActiveDays += duration.Days;
+
+        // DEPARTED. The tank just dropped back under a full cargo, so the
+        // loading episode that started when it first crossed the line is
+        // over — charged ONCE here, against the whole episode, never per
+        // tick while still loading (which would double-count one overrun).
+        bool stillLoading = _tank.Held.Total.Kilograms >= Defaults.CargoSize.Kilograms;
+
+        if (cargoReady && !stillLoading)
+        {
+            ChargeDemurrageIfLate(tick);
+            _cargoActiveDays = 0.0;
+        }
+    }
+
+    /// <summary>
+    /// SDD-006 §7a.4's finding-269 amendment: <c>max(0, actualDays −
+    /// laytime) · rate</c>, §7's own formula, against numbers this
+    /// composition already prices rather than a figure invented at the call
+    /// site — <see cref="Defaults.CargoLaytimeDays"/> and
+    /// <see cref="Defaults.DemurrageRateFraction"/> name where both come from.
+    /// </summary>
+    private void ChargeDemurrageIfLate(Tick tick)
+    {
+        double overrunDays = _cargoActiveDays - Defaults.CargoLaytimeDays;
+        if (overrunDays <= 0.0) return;
+
+        Money cargoValue = Scale(_market.OilPrice, Defaults.CargoSize.Kilograms / KilogramsPerTonne);
+        Money demurrage = Scale(cargoValue, Defaults.DemurrageRateFraction * overrunDays);
+
+        if (demurrage <= Money.Zero) return;
+
+        _company.Ledger.Post(new Movement(
+            tick, Account.Opex, Account.Cash, demurrage,
+            MovementCategory.Production, Asset: null,
+            Cause: _audit.Record(
+                AuditCategory.Financial, subject: null, cause: null,
+                new Dictionary<string, AuditValue>(StringComparer.Ordinal)
+                {
+                    ["accrual"] = new("demurrage"),
+                    ["overrun-days"] = new(overrunDays.ToString(
+                        "F1", System.Globalization.CultureInfo.InvariantCulture)),
+                })));
     }
 
     /// <summary>
@@ -1344,13 +1528,16 @@ internal sealed class ProductionLoop : IStateOwner
     /// more thing to forget (law L5). Projected each tick like everything else
     /// the read model carries.</para>
     /// </summary>
-    /// <summary>
-    /// What is in the tank, or nothing at all when none is built — a field with
-    /// no storage holds no oil and has no ullage to fill.
-    /// </summary>
-    public StorageView Storage => Tank is OGSim.Facilities.Tank tank
-        ? new StorageView(tank.Held.Total, tank.Ullage)
-        : new StorageView(new Mass(0.0), new Mass(0.0));
+    public StorageView Storage => new(_tank.Held.Total, _tank.Ullage);
+
+    /// <summary>SDD-017 §2's `LogisticsView.Berths` row (finding 281) — the
+    /// current cargo's own active-day count, live, against the same laytime
+    /// <see cref="ChargeDemurrageIfLate"/> already reads. Zero active days
+    /// doubles as "nothing is loading" (law L5); no second flag says the
+    /// same thing twice.</summary>
+    public BerthView Berth => new(
+        _terminal.Berth.LoadingRate, _cargoActiveDays, Defaults.CargoLaytimeDays,
+        _cargoActiveDays > Defaults.CargoLaytimeDays);
 
     /// <summary>Everything this company has ever flared (SDD-012 §4).</summary>
     public Mass CumulativeFlared { get; private set; }
@@ -1414,12 +1601,7 @@ internal sealed class ProductionLoop : IStateOwner
     /// </summary>
     private void RecordRejection()
     {
-        // No meter, nothing measured, nothing to breach. A company without a
-        // custody point is not selling, so there is no specification to fail.
-        if (Custody is not OGSim.Facilities.CustodyTransferPoint custody)
-            return;
-
-        IReadOnlyList<OGSim.Facilities.SpecBreach> breaches = custody.LastBreaches;
+        IReadOnlyList<OGSim.Facilities.SpecBreach> breaches = _custody.LastBreaches;
         if (breaches.Count == 0) return;
 
         var data = new Dictionary<string, AuditValue>(StringComparer.Ordinal)
@@ -1441,7 +1623,7 @@ internal sealed class ProductionLoop : IStateOwner
 
         _audit.Record(
             AuditCategory.Rejection,
-            subject: new EntityRef(EntityKind.FlowElement, custody.Id.Value),
+            subject: new EntityRef(EntityKind.FlowElement, _custody.Id.Value),
             cause: null,
             data);
     }
@@ -1598,6 +1780,55 @@ internal sealed class ProductionLoop : IStateOwner
                 })));
     }
 
+    /// <summary>
+    /// The grade this tick's sale is priced against (SDD-009 §6's finding-271
+    /// amendment) — every producing compartment's own fluid system, weighted
+    /// by the same reservoir volume the material balance commit itself
+    /// charges each compartment (<c>_byCompartment</c>), so a field split
+    /// across two grades is not priced as though it were the bigger half
+    /// alone.
+    ///
+    /// <para>Walked over the COMPLETIONS in their own order, never over the
+    /// dictionary (rule D-5) — the same discipline <see
+    /// cref="PublishWithdrawals"/> already holds for the same reason: a hash
+    /// walk here would make one tick's realised price depend on hashing.</para>
+    /// </summary>
+    private double ProductionWeightedApiGravity()
+    {
+        IReadOnlyList<Completion> completions = _wells.Completions;
+        var seen = new HashSet<EntityId<IReservoirCompartmentEntity>>();
+
+        double weightedSum = 0.0;
+        double totalWeight = 0.0;
+
+        for (int i = 0; i < completions.Count; i++)
+        {
+            EntityId<IReservoirCompartmentEntity> compartment =
+                _wells.CompartmentOf(completions[i].CompletionId);
+
+            if (!seen.Add(compartment)) continue;
+            if (!_byCompartment.TryGetValue(compartment, out double reservoirVolume)) continue;
+            if (reservoirVolume <= 0.0) continue;
+
+            ContentId fluidSystem = _subsurface.TrueFluidSystemOf(compartment);
+
+            if (!_apiGravityByFluidSystem.TryGetValue(fluidSystem, out double apiGravity))
+                throw new ContentFault("SDD-009 §6", null,
+                    $"compartment {compartment.Value} names fluid system " +
+                    $"'{fluidSystem.Value}', which this build's content does not contain");
+
+            weightedSum += reservoirVolume * apiGravity;
+            totalWeight += reservoirVolume;
+        }
+
+        if (totalWeight <= 0.0)
+            throw new InvariantFault("SDD-009 §6", null,
+                "a sale is being priced this tick but no producing compartment contributed " +
+                "any withdrawal — there is nothing to weight a grade against");
+
+        return weightedSum / totalWeight;
+    }
+
     public void PostEconomics(Tick tick)
     {
         // PRICED OFF THE METER (SDD-009 §1) — not off what the wells produced.
@@ -1624,38 +1855,51 @@ internal sealed class ProductionLoop : IStateOwner
         // transfer that did not happen would be a fiction the ledger's own rule
         // exists to refuse.
         double gasSold =
-            (GasPlant?.Captured.Total.KgPerSecond ?? 0.0) * Duration.FromTicks(1.0).Seconds;
+            _chainGasPlant.Captured.Total.KgPerSecond * Duration.FromTicks(1.0).Seconds;
 
         if (gasSold > 0.0)
         {
             Money gas = Scale(_gasPrice, gasSold / KilogramsPerTonne);
 
             if (gas > Money.Zero)
-                _company.Ledger.Post(new Movement(
-                    tick, Account.Cash, Account.Revenue, gas,
-                    MovementCategory.Production, Asset: null,
-                    Cause: _audit.Record(
-                        AuditCategory.CustodyTransfer, subject: null, cause: null,
-                        new Dictionary<string, AuditValue>(StringComparer.Ordinal)
-                        {
-                            ["sales-gas-kg"] = new(gasSold.ToString(
-                                System.Globalization.CultureInfo.InvariantCulture)),
-                        })));
+                PostRevenueSplit(tick, gas, MovementCategory.Production, _audit.Record(
+                    AuditCategory.CustodyTransfer, subject: null, cause: null,
+                    new Dictionary<string, AuditValue>(StringComparer.Ordinal)
+                    {
+                        ["sales-gas-kg"] = new(gasSold.ToString(
+                            System.Globalization.CultureInfo.InvariantCulture)),
+                    }));
         }
 
         if (_sale is AuditId sale)
         {
-            Money gross = Scale(
-                _market.OilPrice, Delivered.Total.KgPerSecond / KilogramsPerTonne);
+            // DESIGN 08 §3.1's QUALITY DIFFERENTIAL, PRICED (SDD-009 §6's
+            // finding-271 amendment): Realised = Benchmark × (1 + rate ×
+            // (API − reference)). The reference is `Defaults.Fluid`'s own
+            // 35° API — the SAME grade the shipped benchmark price was
+            // already calibrated against (`Defaults.Economics`'s own "$377/m³
+            // ÷ 0.85 t/m³" comment), so a field that only ever produces the
+            // shipped default grade prices at exactly the bare benchmark,
+            // unchanged from before this amendment.
+            double qualityFactor = 1.0 + Defaults.QualityDifferentialPerApiDegree
+                * (ProductionWeightedApiGravity() - Defaults.Fluid.OilGravity.Degrees);
 
-            _company.Ledger.Post(new Movement(
-                tick, Account.Cash, Account.Revenue, gross,
-                MovementCategory.Production, Asset: null, Cause: sale));
+            Money gross = Scale(
+                _market.OilPrice, Delivered.Total.KgPerSecond / KilogramsPerTonne * qualityFactor);
+
+            PostRevenueSplit(tick, gross, MovementCategory.Production, sale);
 
             // THE STATE TAKES ITS SHARE (SDD-009 §3). A royalty on gross and a
             // tax on what is left after costs — the regime was composed at R16
             // and called by nobody, so a company kept every barrel's full price
             // and the fiscal terms of a licence meant nothing.
+            //
+            // ON THE FULL GROSS, NOT THE POST-SPLIT SHARE (SDD-011 §4's
+            // finding-275 amendment): royalty and tax are the LICENCE's own
+            // fiscal terms, assessed against the whole field regardless of any
+            // private working-interest split — the state taxes the ground, not
+            // the company's ownership structure, and the company (the licence
+            // holder) pays them in full.
             FiscalResult assessed = _regime.Assess(new FiscalInput(
                 GrossRevenue: gross,
                 RecoverableOpex: opex,
@@ -1693,9 +1937,63 @@ internal sealed class ProductionLoop : IStateOwner
                 ["injection-water"] = new(Format(costs.InjectionWater.Cents)),
             });
 
-        _company.Ledger.Post(new Movement(
-            tick, Account.Opex, Account.Cash, opex,
-            MovementCategory.Operating, Asset: null, Cause: operating));
+        PostCostSplit(tick, opex, MovementCategory.Operating, operating);
+    }
+
+    /// <summary>
+    /// SDD-011 §4's finding-275 amendment — a partner's share of revenue is
+    /// not the company's own, so only its net share posts as
+    /// <see cref="Account.Revenue"/>; the rest is cash collected on the
+    /// partner's behalf, a liability rather than income (law L5 — the
+    /// partner's economics are not this company's to report).
+    ///
+    /// <para>Applies to every revenue flow this stage posts, gas sales
+    /// included, not only the oil sale — a partner's interest is in the
+    /// field, not in one hydrocarbon stream. With no sale ever made,
+    /// <c>PartnerShare</c> is zero and this reduces to exactly the single
+    /// movement it replaces.</para>
+    /// </summary>
+    private void PostRevenueSplit(Tick tick, Money total, MovementCategory category, AuditId cause)
+    {
+        if (total <= Money.Zero) return;
+
+        double share = _stake.PartnerShare;
+        Money partnerCut = share > 0.0 ? Money.RoundHalfEven(total.Cents * share) : Money.Zero;
+        Money companyCut = total - partnerCut;
+
+        if (companyCut > Money.Zero)
+            _company.Ledger.Post(new Movement(
+                tick, Account.Cash, Account.Revenue, companyCut, category, Asset: null, Cause: cause));
+
+        if (partnerCut > Money.Zero)
+            _company.Ledger.Post(new Movement(
+                tick, Account.Cash, Account.PartnerPayable, partnerCut, category, Asset: null,
+                Cause: cause));
+    }
+
+    /// <summary>
+    /// The opex mirror of <see cref="PostRevenueSplit"/>: the partner's
+    /// share of the SAME cost bill reduces what the company owes them
+    /// (debiting <see cref="Account.PartnerPayable"/>) rather than being the
+    /// company's own expense. Demurrage stays out of scope — a logistics
+    /// penalty, not the field's own operating cost this amendment names.
+    /// </summary>
+    private void PostCostSplit(Tick tick, Money total, MovementCategory category, AuditId cause)
+    {
+        if (total <= Money.Zero) return;
+
+        double share = _stake.PartnerShare;
+        Money partnerCut = share > 0.0 ? Money.RoundHalfEven(total.Cents * share) : Money.Zero;
+        Money companyCut = total - partnerCut;
+
+        if (companyCut > Money.Zero)
+            _company.Ledger.Post(new Movement(
+                tick, Account.Opex, Account.Cash, companyCut, category, Asset: null, Cause: cause));
+
+        if (partnerCut > Money.Zero)
+            _company.Ledger.Post(new Movement(
+                tick, Account.PartnerPayable, Account.Cash, partnerCut, category, Asset: null,
+                Cause: cause));
     }
 
     /// <summary>
@@ -1849,6 +2147,15 @@ public sealed class FieldControl : IStateOwner
     private readonly GatheringLine _gatheringLine;
     private readonly WellDesign _design;
 
+    // THE OTHER HALF OF A MUTUAL DEPENDENCY (SDD-017 §2's R21.6 amendment):
+    // `ProductionLoop` already closes over THIS object (`() => field.
+    // IsAbandoned`) because it is built second, and a field needs the loop's
+    // own solve state, which does not exist yet when a field is built first.
+    // Composition breaks the cycle the same way it already does for the other
+    // direction — a forward reference assigned once the loop exists, invoked
+    // only much later, at read-model time.
+    private readonly Func<EntityId<ICompletion>, CompletionState?> _lastSolvedStateOf;
+
     private int _slotsTaken;
 
     internal FieldControl(
@@ -1860,7 +2167,8 @@ public sealed class FieldControl : IStateOwner
         ContentId abandonmentTemplate,
         WorldState world,
         GatheringLine gatheringLine,
-        WellDesign design)
+        WellDesign design,
+        Func<EntityId<ICompletion>, CompletionState?> lastSolvedStateOf)
     {
         _subsurface = subsurface;
         _wells = wells;
@@ -1871,6 +2179,7 @@ public sealed class FieldControl : IStateOwner
         _world = world;
         _gatheringLine = gatheringLine;
         _design = design;
+        _lastSolvedStateOf = lastSolvedStateOf;
     }
 
     /// <summary>
@@ -1884,16 +2193,6 @@ public sealed class FieldControl : IStateOwner
     public bool HasFreeSlot => _slotsTaken < _chain.Slots;
 
     public int FreeSlots => _chain.Slots - _slotsTaken;
-
-    /// <summary>
-    /// How many slots the header has at all — zero when none is built.
-    /// </summary>
-    /// <remarks>
-    /// Distinct from <see cref="HasFreeSlot"/> because the two have different
-    /// remedies: a full header is answered by a bigger one, and no header by
-    /// commissioning a facility (plans 22 §4).
-    /// </remarks>
-    public int Slots => _chain.Slots;
 
     public EntityId<IReservoirCompartmentEntity> AddCompartment(
         GeneratedCompartment generated,
@@ -1911,6 +2210,30 @@ public sealed class FieldControl : IStateOwner
             generated, permeability, netThickness, drainageArea,
             rockCompressibility, gasOilContact, oilWaterContact, wettability, drive,
             aquiferStrength, aquiferResponseTime);
+
+    /// <summary>A DRY-GAS compartment (SDD-003 §3.1b's finding-264 amendment)
+    /// — hand-declared, the same reason and the same way <see cref="AddCompartment"/>
+    /// hand-declares an oil one.</summary>
+    public EntityId<IReservoirCompartmentEntity> AddGasCompartment(
+        ReservoirVolume poreVolume,
+        double porosity,
+        double gasSaturation,
+        Pressure initialPressure,
+        Temperature reservoirTemperature,
+        Permeability permeability,
+        Length netThickness,
+        Area drainageArea,
+        double rockCompressibility,
+        Length gasWaterContact,
+        RelativePermeabilityCurve wettability,
+        ContentId drive,
+        ContentId fluidSystem,
+        double aquiferStrength,
+        Duration aquiferResponseTime) =>
+        _subsurface.CreateGas(
+            poreVolume, porosity, gasSaturation, initialPressure, reservoirTemperature,
+            permeability, netThickness, drainageArea, rockCompressibility, gasWaterContact,
+            wettability, drive, fluidSystem, aquiferStrength, aquiferResponseTime);
 
     /// <summary>
     /// Brings a completion online against a compartment and ties it into the
@@ -1991,104 +2314,12 @@ public sealed class FieldControl : IStateOwner
         ArgumentNullException.ThrowIfNull(completion);
 
         // A composition defect by the time it reaches here, not a player error:
-        // every drilling rule refuses a well when the header EXISTS and is full,
-        // so arriving with one means something bypassed the validator. A header
-        // that does not exist is a different case entirely — see below.
-        if (_chain.Manifold is not null && !HasFreeSlot)
+        // the drilling command refuses a well with no slot to tie into, so
+        // arriving with a full header means something bypassed the validator.
+        if (!HasFreeSlot)
             throw new InvariantFault("SDD-006 §1b", null,
                 $"the header has {_chain.Slots} slots and all are taken; a well with " +
                 "nowhere to tie in must be refused when it is ordered, not when it lands");
-
-        EntityId<ICompletion> opened = _wells.Open(completion, drains);
-
-        // UNCONDITIONAL, at creation (SDD-007 §6, design 02 §3.4): a well that
-        // is drilled will one day be plugged whatever else happens to it, and a
-        // company able to create one without the liability could walk away from
-        // the cost by never recording it.
-        _obligations.Register(
-            new EntityRef(EntityKind.Completion, opened.Value), _abandonmentTemplate);
-
-        // A WELL WITH NOWHERE TO GO IS SUSPENDED, NOT REFUSED (plans 23). This
-        // is what an exploration well IS: drilled, logged, and left shut in for
-        // as long as it takes to decide whether a facility is worth building.
-        // Refusing it would force a company to commit to a plant before it knew
-        // it had anything, which is the wrong order and the expensive one.
-        //
-        // SHUT IN with the choke the game already has, rather than a new state.
-        // It reports as ShutIn, which is what it is, and the read model needed
-        // nothing added to say so.
-        if (_chain.Manifold is null || _chain.Flowline is null)
-        {
-            completion.SetChoke(OGSim.Wells.ChokeSetting.Closed);
-            _waiting.Add((completion, drains));
-
-            return opened;
-        }
-
-        TieIn(completion, drains);
-
-        return opened;
-    }
-
-    /// <summary>Wells drilled before there was anywhere to send their production.</summary>
-    private readonly List<(Completion Well, EntityId<IReservoirCompartmentEntity> Drains)>
-        _waiting = [];
-
-    /// <summary>
-    /// Tie in every well that has been waiting for a plant.
-    /// </summary>
-    /// <remarks>
-    /// <para>Called when a facility is commissioned. A company that drilled three
-    /// wells on frontier acreage and then built a plant expects all three to come
-    /// on, and doing it here means the player does not have to re-order anything
-    /// they already paid for.</para>
-    ///
-    /// <para><b>The header can run out of slots.</b> Wells beyond it stay
-    /// waiting rather than being dropped — the remedy is a bigger header, and it
-    /// is the same remedy a fourth well would get.</para>
-    /// </remarks>
-    public void TieInWaiting()
-    {
-        if (_chain.Manifold is null || _chain.Flowline is null)
-            return;
-
-        var stillWaiting =
-            new List<(Completion Well, EntityId<IReservoirCompartmentEntity> Drains)>();
-
-        for (int i = 0; i < _waiting.Count; i++)
-        {
-            if (!HasFreeSlot)
-            {
-                stillWaiting.Add(_waiting[i]);
-
-                continue;
-            }
-
-            TieIn(_waiting[i].Well, _waiting[i].Drains);
-
-            // OPENED, because the only reason it was shut was that there was
-            // nowhere to flow. A player who wants it shut can shut it; a player
-            // who paid for a plant expects their wells to come on.
-            _waiting[i].Well.SetChoke(OGSim.Wells.ChokeSetting.Open);
-        }
-
-        _waiting.Clear();
-        _waiting.AddRange(stillWaiting);
-    }
-
-    /// <summary>
-    /// Run a well's gathering line to the header.
-    /// </summary>
-    private void TieIn(Completion completion, EntityId<IReservoirCompartmentEntity> drains)
-    {
-        if (_chain.Manifold is not OGSim.Facilities.Manifold header
-            || _chain.Flowline is not OGSim.Facilities.Pipeline flowline)
-        {
-            throw new InvariantFault("SDD-006 §1b", null,
-                "a well cannot be tied in before the header and the flowline that " +
-                "carries its production are built; a well with neither is suspended " +
-                "rather than tied in");
-        }
 
         // LAY THE LINE TO WHERE THE FIELD ACTUALLY IS (SDD-006 §7c.1). The
         // first well tied in is the moment a company commits to a location, and
@@ -2104,7 +2335,7 @@ public sealed class FieldControl : IStateOwner
             // the generator places structures on the same grid the coast is
             // drawn on — and a trunk of zero length has no hydraulics to solve.
             // A plant is still not built on top of the wellhead.
-            flowline.Route(flowline.Geometry with
+            _chain.Flowline.Route(_chain.Flowline.Geometry with
             {
                 PipeLength = toMarket.Metres > MinimumGatheringRun.Metres
                     ? toMarket
@@ -2118,6 +2349,15 @@ public sealed class FieldControl : IStateOwner
             // one.
             _world.HeaderAt(_world.PositionOf(_world.ProspectFor(drains)));
         }
+
+        EntityId<ICompletion> opened = _wells.Open(completion, drains);
+
+        // UNCONDITIONAL, at creation (SDD-007 §6, design 02 §3.4): a well that
+        // is drilled will one day be plugged whatever else happens to it, and a
+        // company able to create one without the liability could walk away from
+        // the cost by never recording it.
+        _obligations.Register(
+            new EntityRef(EntityKind.Completion, opened.Value), _abandonmentTemplate);
 
         // THE GATHERING LINE, design 04 stage 3's wellhead-to-manifold run
         // (SDD-006 §1c). As long as this well's field is from the header, so a
@@ -2144,9 +2384,10 @@ public sealed class FieldControl : IStateOwner
 
         _network.Connect(new FlowConnection(
             tieback.Id, PipelineOutlet,
-            header.Id, header.SlotAt(_slotsTaken)));
+            _chain.Manifold.Id, _chain.Manifold.SlotAt(_slotsTaken)));
 
         _slotsTaken++;
+        return opened;
     }
 
     /// <summary>A completion's one outlet: the wellhead.</summary>
@@ -2189,8 +2430,8 @@ public sealed class FieldControl : IStateOwner
     public bool IsAbandoned => _wells.Count > 0 && _abandoned.Count == _wells.Count;
 
     /// <summary>
-    /// Every well and its state (SDD-017 §2's R21.5 amendment) — the list a
-    /// well-level command is aimed with.
+    /// Every well and its state (SDD-017 §2's R21.5/R21.6 amendments) — the
+    /// list a well-level command is aimed with.
     ///
     /// <para>Walked in the order the wells were opened, so a host's list does
     /// not reshuffle between months (D-5). Production is deliberately absent
@@ -2198,6 +2439,12 @@ public sealed class FieldControl : IStateOwner
     /// split of the solve, and the loop totals the field — a number invented per
     /// well would be a plausible fiction, so the honest answer is the field's
     /// own total on the read model beside it.</para>
+    ///
+    /// <para>The operating point is RECONSTRUCTED against the last segment's
+    /// converged wellhead backpressure the loop retained, not cached from the
+    /// solve itself (law L5) — <c>null</c> where the loop retained nothing,
+    /// which is a well that did not solve this tick rather than one guessed
+    /// at.</para>
     /// </summary>
     public IReadOnlyList<WellStatusView> Wells()
     {
@@ -2208,12 +2455,21 @@ public sealed class FieldControl : IStateOwner
         {
             Completion well = completions[i];
 
+            OperatingPoint? point = _lastSolvedStateOf(well.CompletionId) is CompletionState state
+                ? well.SolveOperatingPoint(state.WellheadBackpressure)
+                : null;
+
+            IReadOnlyList<ContentId> installedTiers =
+                well.Lift is ILiftMethod lift ? [lift.InstalledTier] : [];
+
             rows.Add(new WellStatusView(
                 new EntityRef(EntityKind.Completion, well.CompletionId.Value),
                 "well-" + well.CompletionId.Value.ToString(
                     System.Globalization.CultureInfo.InvariantCulture),
                 StatusOf(well),
-                new SurfaceVolume(0.0)));
+                new SurfaceVolume(0.0),
+                point,
+                installedTiers));
         }
 
         return rows;
@@ -2353,12 +2609,7 @@ public sealed class FieldControl : IStateOwner
     public int SchemaVersion => 1;
 
     /// <summary>Nothing has to be back before this is (SDD-013 §2b).</summary>
-    /// <summary>
-    /// AFTER THE PLANT (plans 23). A well ties into a header, so the header has
-    /// to be back before the wells are reopened — otherwise every one of them
-    /// restores suspended, waiting for a facility that was already there.
-    /// </summary>
-    public IReadOnlyList<StateKey> RestoreAfter => [new StateKey("facilities.units")];
+    public IReadOnlyList<StateKey> RestoreAfter => [];
 
     public void Capture(IStateWriter writer)
     {
@@ -2662,7 +2913,7 @@ internal sealed class CustodyStage(ProductionLoop loop) : ITickStage
         // Store, lift, then record. Custody is metered on the way INTO storage,
         // so what is recorded is what the meter passed — and the lifting is what
         // makes room for next month rather than a second transfer.
-        loop.StoreAndExport(Duration.FromTicks(1.0));
+        loop.StoreAndExport(context.Tick, Duration.FromTicks(1.0));
         loop.RecordCustody();
     }
 }

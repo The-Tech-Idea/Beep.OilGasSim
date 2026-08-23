@@ -155,6 +155,65 @@ parameters declared in content**, not technology effects — [07](../design/07_T
 untouched: a crew is not a tech node. Recorded here because the two rules look
 similar enough that an implementer (or reviewer) would conflate them.
 
+> **Amendment (finding 265) — R12.7's own row named the model as
+> undeclared, and it stayed that way through R23's whole bow-tie build.**
+> `Barrier.StrengthGiven` has taken a `crewCompetency` argument since R23.1
+> and `ThreatStage` has supplied it every tick since — as
+> `Defaults.CrewCompetency = 0.9`, a bare literal with no rationale and no
+> lever, the same shape findings 233/249/261/262 already found for a
+> compressor's ambient input, a top event's cost, a material catalogue and a
+> reserve's own value. `OperationScheduler.Draw`'s `durationFactor` term
+> reads no crew input at all — the OTHER half R12-V9 asks for ("higher skill
+> reduces duration and risk by the declared amount") has never existed.
+>
+> **Scoped to a company-wide COMPETENCY LEVEL, not a per-discipline skill
+> system.** `ResourceNeeds.Crew` already names which disciplines an
+> operation needs and how many; grading each discipline separately is a
+> materially larger feature this amendment does not attempt. One scalar,
+> raised once, is what "declared in content" and R12-V9's singular "the
+> declared amount" actually ask for.
+>
+> ```csharp
+> // OGSim.Company — a company fact, the same layer EsgStanding and Bank live
+> // at, not a per-operation one.
+> public sealed class CrewState : IStateOwner
+> {
+>     public CrewState(
+>         double baseCompetency, double trainedCompetency,
+>         double baseDurationFactor, double trainedDurationFactor,
+>         Money trainingCost);
+>
+>     public double Competency { get; }        // feeds Barrier.StrengthGiven,
+>                                               // replacing Defaults.CrewCompetency
+>     public double DurationFactor { get; }     // feeds OperationScheduler.Draw,
+>                                               // multiplying spec.BaseDurationDays
+>                                               // alongside the outcome table's own
+>                                               // factor — an ADDITIONAL term, not a
+>                                               // replacement for the stochastic grade
+>     public bool Trained { get; }
+>     public Money TrainingCost { get; }
+>     public void Train();                      // one-way, like a technology acquisition
+> }
+> ```
+>
+> **A ONE-TIME INVESTMENT, not a per-operation lever.** §4.1's "declared in
+> content" already rules out an invented technology multiplier; it does not
+> by itself say whether a player trains once or tunes continuously. A
+> continuous dial (mirroring `SetVoidageReplacementCommand`) would need a
+> cost curve nothing pins; a one-way step (mirroring how a technology
+> acquisition is bought once and held) needs only the two named amounts
+> above, which is the smaller commitment and the one this amendment makes.
+> **Expensed, not capitalised** (SDD-009 §1's own distinction for a vessel
+> being PP&E): training buys a permanently better crew, but unlike a vessel
+> it is not a balance-sheet asset in the accounting this engine follows, so
+> it posts `Account.Opex`/`MovementCategory.Operating` rather than
+> `Capex_PPE`/`Development`.
+>
+> **`ProcedureCompliance` is untouched and stays a bare literal.** SDD-012
+> §4b's own arithmetic block already names its real source — "open-findings
+> backlog (content map)" — which is R16.5's regulator, not R12's crew; fixing
+> one placeholder is not licence to guess at the other's blocker.
+
 ## 5. Completion
 
 Completion **day** within the tick = the day cumulative active days reach
