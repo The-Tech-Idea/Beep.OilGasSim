@@ -263,3 +263,47 @@ discovery actually takes, with the destination now measured to be worth
 reaching. The $72M derivation above assumed a loss-making well; that
 assumption is gone, and re-striking the figure is a design decision, not an
 engineering one.
+
+### The balance sweep (same day) — the decision's own numbers
+
+Five opening balances × the six seeds, `--mode=days --months=120`, the
+auto-player unchanged (drill floor 25%, reserve = a hole and a year plus
+the plant). First checked that the WORLDS are fine: every seed generates
+12–22 structures, all inside the block grid, all discoverable by shooting
+— so nothing below is world generation.
+
+| Opening | 1 | 2 | 3 | 4 | 5 | 11 |
+|---|---|---|---|---|---|---|
+| $72M  | dead 50 | dead 29 | dead 38 | dead 46 | dead 37 | dead 35 |
+| $90M  | dead 48 | dead 93 (1.03M m³!) | dead 56 | dead 60 | dead 61 | dead 38 |
+| $110M | dead 75 | **SOLVENT, +$37.6M, 2.09M m³** | dead 60 | dead 72 | dead 55 | dead 56 |
+| $130M | dead 86 | **+$57.6M** | dead 88 | dead 84 | dead 64 | dead 71 (0.49M m³) |
+| $150M | dead 77 | **+$77.6M** | dead 79 | dead 71 | dead 96 | dead 105 (1.34M m³) |
+
+What the anatomy says (seed 1 read month by month): ~16 months of 2-D at
+~$1.2M/month all-in, one 3-D, then **four dry holes in a row at 19–24%**
+(~36% chance of that streak — unlucky but ordinary), $6.8M left, below the
+plant reserve, and a year's slow bleed. Seeds 3/4/5 are the same story.
+That is §8's own arithmetic — "a discovery costs about six holes; six
+holes plus a plant costs more than the company opens with" — measured
+again with the revenue defect gone.
+
+Two distinct problems, two lever sets:
+
+1. **The early gauntlet** (seeds 1/3/4/5, and 2/11 at $72M): best
+   prospects sit at ~20–25% POS, a hole is ~$8M, and the budget affords
+   four or five — about half of all runs die on the streak. Levers:
+   opening balance, hole/survey prices, or PROSPECT QUALITY (richness /
+   maturity / §3's cheap-shallow-vs-dear-deep blocks, which raise POS
+   rather than the purse).
+2. **The auto-player's late game** (seed 2 at $90M with a million m³
+   lifted, seed 11 at $150M with 1.34M): a PAYING field can still be
+   spent into insolvency by relentless reinvestment — the policy has no
+   restraint on debottlenecking ($45M export expansions) or marginal
+   holes. A measurement bound of the instrument's policy, not necessarily
+   of the game: a human can hold cash where the auto-player will not.
+
+Under this policy the survival threshold sits between $90M and $110M for
+a seed that finds oil. **Which lever to pull — balance, prices, prospect
+quality, or accepting a brutal wildcatter opening — is the design call
+this log leaves to Fahad**, now with nothing unmeasured underneath it.
