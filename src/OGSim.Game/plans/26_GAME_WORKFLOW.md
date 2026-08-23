@@ -307,3 +307,44 @@ Under this policy the survival threshold sits between $90M and $110M for
 a seed that finds oil. **Which lever to pull — balance, prices, prospect
 quality, or accepting a brutal wildcatter opening — is the design call
 this log leaves to Fahad**, now with nothing unmeasured underneath it.
+
+### Condemned structures (2026-08-23, finding 286) — the sweep's third problem, and it was an engine defect
+
+The table above hid a systematic anomaly the two named problems could not
+explain: seeds 3 and 4 generate **four and five real accumulations** —
+the richest boards in the set — and died at every balance tried, while
+seed 2 lived on one. Read directly off the engine: a structure drilled
+dry stayed on the board at its re-priced odds, often still the best
+number showing, so the auto-player drilled it again — and **every
+re-drill counted the same source evidence against the play again**,
+collapsing sibling odds on evidence from one hole. Rich boards died OF
+their riches: more structures meant more chances to enter the loop. (The
+Godot client had already measured the same thing as GC-1: one prospect
+drilled three times, POS climbing 0.23 → 0.32 → 0.40.)
+
+The engine fix (finding 286): a completed dry hole **condemns** its
+structure — off the board, `reject.prospect-condemned` on a second hole,
+persisted in the save (schema v4). A mechanically lost job condemns
+nothing; a drilled discovery stays listed (infill is appraisal, and both
+clients pick infill wells off the list). SDD-010 §4b carries the rule;
+`S1V5` pins all three faces.
+
+Re-measured, same policy, same seeds:
+
+| Opening | 1 | 2 | 3 | 4 | 5 | 11 |
+|---|---|---|---|---|---|---|
+| $72M post-286 | dead 50 | dead 29 | dead 28 | dead 46 | dead 37 | dead 35 |
+| $150M post-286 | dead 71 | **+$77.6M, 2.09M m³** | dead 92 (5 wells, 0.28M m³) | **SOLVENT, +$311.3M, 7 wells, 4.46M m³** | dead 83 | dead 105 (7 wells, 1.34M m³) |
+
+**Seed 4 is the fix measured**: dead at month 71 pre-286, the best
+outcome in any cell post-286 — $311M is the rich board finally allowed
+to be rich. Seed 3 now dies as a five-well PRODUCING field at $-0.0M —
+problem 2's late-game overspend, no longer the zero-producer death.
+Seeds 2 and 11 are unchanged to the cubic metre (their runs never
+re-drilled), which is the fix behaving as a fix rather than a rebalance.
+At $72M nothing moves: the early gauntlet (problem 1) is untouched,
+because condemnation cannot make four holes affordable on a $72M purse.
+
+The two REMAINING problems are exactly the two the previous section
+named, now with clean numbers under them; the third is closed. The
+design call on the levers stays with Fahad.

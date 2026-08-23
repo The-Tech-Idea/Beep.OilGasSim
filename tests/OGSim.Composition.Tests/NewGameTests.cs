@@ -244,6 +244,115 @@ public sealed class NewGameTests
     }
 
     /// <summary>
+    /// A STRUCTURE DRILLED DRY IS SETTLED (finding 286): it leaves the board, a
+    /// second hole into it is refused by name, and a reload remembers all of it.
+    /// </summary>
+    /// <remarks>
+    /// <para>Before this, a condemned structure stayed listed at its re-priced
+    /// odds — often still the best-looking thing on the licence — so every
+    /// client re-drilled proven-empty rock, and each re-drill counted the same
+    /// source evidence against the play again. The ledger probe measured the
+    /// consequence: basins with four and five real accumulations dying with
+    /// zero producers at every opening balance tried (plans 26 §6).</para>
+    ///
+    /// <para>Truth in this engine is fixed at generation (SDD-010 §4b): a trap
+    /// the charge never reached is empty forever, so "drilled and found empty"
+    /// is a settled fact the way "already been shot" is — the S1V4 refusal
+    /// above, one rung down the exploration ladder. Walked across seeds because
+    /// the outcome table can lose the JOB mechanically, which teaches nothing
+    /// about the rock and correctly condemns nothing.</para>
+    /// </remarks>
+    [Fact]
+    public void S1V5_a_structure_drilled_dry_leaves_the_board_and_refuses_a_second_hole()
+    {
+        for (ulong seed = 1UL; seed < 60UL; seed++)
+        {
+            Engine engine = Surveyed(NewGame(seed));
+            WorldState world = WorldOf(engine);
+
+            EntityId<IProspect>? dry = null;
+
+            for (int i = 0; i < world.Prospects.Count && dry is null; i++)
+                if (world.Beneath(world.Prospects[i]) is null) dry = world.Prospects[i];
+
+            if (dry is null) continue;          // every trap charged: try another basin
+
+            engine.Pipeline.AdvanceTick();
+
+            var target = new EntityRef(EntityKind.Prospect, dry.Value.Value);
+
+            bool Listed(Engine on)
+            {
+                IReadOnlyList<ProspectView> offered = on.ReadModel!.Prospects;
+
+                for (int i = 0; i < offered.Count; i++)
+                    if (offered[i].Prospect == target) return true;
+
+                return false;
+            }
+
+            Assert.True(Listed(engine), "a surveyed structure must start on the board");
+
+            // A BARREN basin under the realistic rule set refuses all work
+            // (`OperatingSubjectRule` — an operator works a field it already
+            // has, and a basin the charge missed entirely gave it none), so a
+            // seed whose drill is refused is walked past rather than asserted
+            // on: this test is about what a COMPLETED dry hole settles.
+            if (engine.Commands.Submit(
+                    new DrillWellCommand(dry.Value, new Length(2000.0))) is not Accepted)
+                continue;
+
+            for (var month = 0; month < 12; month++) engine.Pipeline.AdvanceTick();
+
+            // The job was lost mechanically — the rock was never reached, and a
+            // structure nobody has seen the bottom of must NOT be condemned.
+            // That non-condemnation is itself asserted before walking on.
+            if (Listed(engine))
+            {
+                Assert.False(world.Condemned(dry.Value),
+                    "a mechanically lost hole condemned a structure it never reached");
+
+                continue;
+            }
+
+            // OFF THE BOARD, and settled in truth.
+            Assert.True(world.Condemned(dry.Value));
+
+            // A SECOND HOLE IS REFUSED BY NAME.
+            var refused = Assert.IsType<Rejected>(
+                engine.Commands.Submit(new DrillWellCommand(dry.Value, new Length(2000.0))));
+
+            Assert.Contains(refused.Reasons,
+                reason => reason.LocId == "$loc:reject.prospect-condemned");
+
+            // AND A RELOAD REMEMBERS — a ghost prospect must not come back.
+            var container = new MemoryStream();
+            SaveGame.Write(engine, seed, container);
+            container.Position = 0;
+
+            Engine restored = Assert.IsType<Built>(
+                SaveGame.Load(container, Fixture.Settings())).Engine;
+
+            restored.Pipeline.AdvanceTick();
+
+            Assert.True(WorldOf(restored).Condemned(dry.Value));
+            Assert.False(Listed(restored),
+                "a reload put a condemned structure back on the board");
+
+            var refusedAgain = Assert.IsType<Rejected>(
+                restored.Commands.Submit(new DrillWellCommand(dry.Value, new Length(2000.0))));
+
+            Assert.Contains(refusedAgain.Reasons,
+                reason => reason.LocId == "$loc:reject.prospect-condemned");
+
+            return;
+        }
+
+        Assert.Fail("sixty basins never completed a dry hole; either every trap charged " +
+            "or a drilled-dry structure is not leaving the board");
+    }
+
+    /// <summary>
     /// The seed itself, because a SAVE needs it — <see cref="SaveGame.Write"/> is
     /// told which world it is writing, and a test that walked seeds and kept only
     /// the engine could not say.
@@ -954,19 +1063,33 @@ public sealed class NewGameTests
             if (sibling < 0) continue;
 
             double was = before[sibling].ProbabilityOfSuccess;
+            EntityRef siblingRef = before[sibling].Prospect;
 
             Assert.IsType<Accepted>(
                 engine.Commands.Submit(new DrillWellCommand(target, new Length(2000.0))));
 
             for (var month = 0; month < 12; month++) engine.Pipeline.AdvanceTick();
 
+            // BY IDENTITY, not by position: the dry hole condemns its structure
+            // off the board (finding 286), so the list is one shorter than it
+            // was and an index into last year's reading lands on a different
+            // prospect.
+            ProspectView? now = null;
+
+            IReadOnlyList<ProspectView> after = engine.ReadModel!.Prospects;
+
+            for (int i = 0; i < after.Count; i++)
+                if (after[i].Prospect == siblingRef) { now = after[i]; break; }
+
+            Assert.NotNull(now);       // the sibling itself was never drilled
+
             // The hole may have been lost mechanically rather than drilled — that
             // teaches nothing and is a different outcome. Walk on if so.
-            if (engine.ReadModel!.Prospects[sibling].ProbabilityOfSuccess == was) continue;
+            if (now.ProbabilityOfSuccess == was) continue;
 
             Assert.Equal(0, engine.ReadModel!.Wells);
 
-            Assert.True(engine.ReadModel!.Prospects[sibling].ProbabilityOfSuccess < was,
+            Assert.True(now.ProbabilityOfSuccess < was,
                 "a dry hole made the rest of its play look BETTER");
 
             return;

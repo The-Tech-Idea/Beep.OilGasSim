@@ -114,6 +114,40 @@ public sealed class WorldState : IStateOwner
     /// <summary>The blocks already shot. A DECISION, so the save carries it.</summary>
     private readonly List<ulong> _shot = [];
 
+    /// <summary>The structures drilled and found EMPTY (finding 286). A
+    /// decision's own history like <see cref="_shot"/>, so the save carries
+    /// it — a reload that forgot would put ghost prospects back on the
+    /// board.</summary>
+    private readonly List<ulong> _dry = [];
+
+    /// <summary>
+    /// A dry hole settles this structure forever (finding 286).
+    /// </summary>
+    /// <remarks>
+    /// <para>This engine's truth is fixed at generation: a trap the charge
+    /// never reached is empty, permanently, and the first hole into it says so
+    /// definitively. Before this, the condemned structure stayed on the board
+    /// at its re-priced odds — often still the best-looking thing on the
+    /// licence — so every client re-drilled proven-empty rock, and each
+    /// re-drill re-counted the same source evidence against the play
+    /// (SDD-008 §4's diagnosis, delivered twice for one fact). The measured
+    /// consequence was plans 26 §6's own table: seeds with four and five real
+    /// accumulations dying with zero producers at every opening balance up to
+    /// $150M.</para>
+    ///
+    /// <para>It is the Settlers idiom exactly (plans 22): a geologist's
+    /// "nothing here" flag stays on the map. The refusal lives in
+    /// <c>DrillWellActivity</c>; the board removal in the projection; this is
+    /// the one owner of the fact (law L5).</para>
+    /// </remarks>
+    internal void Condemn(EntityId<IProspect> prospect)
+    {
+        if (!Condemned(prospect)) _dry.Add(prospect.Value);
+    }
+
+    /// <summary>Whether this structure has been drilled and found empty.</summary>
+    public bool Condemned(EntityId<IProspect> prospect) => _dry.Contains(prospect.Value);
+
     /// <summary>
     /// Remember what a survey would tell the company about this structure, and
     /// keep it until one does.
@@ -328,10 +362,12 @@ public sealed class WorldState : IStateOwner
     public StateKey Key { get; } = new("world.decisions");
 
     /// <summary>
-    /// Three since the S1 amendment: a save now carries which blocks have been
-    /// shot, and a version 2 file cannot answer that question.
+    /// Three since the S1 amendment (which blocks have been shot); four since
+    /// finding 286 — a save now also carries which structures were drilled and
+    /// found empty, and a version 3 file cannot answer that question: a reload
+    /// would put ghost prospects back on the board.
     /// </summary>
-    public int SchemaVersion => 3;
+    public int SchemaVersion => 4;
 
     /// <summary>Nothing has to be back before this is — the world is one of
     /// the two the FIELD is measured against (SDD-013 §2b).</summary>
@@ -395,6 +431,18 @@ public sealed class WorldState : IStateOwner
             writer.WriteInt64(
                 "shot." + i.ToString("D4", System.Globalization.CultureInfo.InvariantCulture),
                 (long)_shot[i]);
+        }
+
+        // AND WHICH STRUCTURES WERE DRILLED DRY (finding 286) — the same shape
+        // for the same reason: history of decisions, unrecoverable from a
+        // regeneration.
+        writer.WriteInt64("dry", _dry.Count);
+
+        for (int i = 0; i < _dry.Count; i++)
+        {
+            writer.WriteInt64(
+                "dry." + i.ToString("D4", System.Globalization.CultureInfo.InvariantCulture),
+                (long)_dry[i]);
         }
 
         for (int i = _generated; i < _prospects.Count; i++)
@@ -564,6 +612,16 @@ public sealed class WorldState : IStateOwner
         {
             _shot.Add((ulong)reader.ReadInt64(
                 "shot." + i.ToString("D4", System.Globalization.CultureInfo.InvariantCulture)));
+        }
+
+        _dry.Clear();
+
+        long dry = reader.ReadInt64("dry");
+
+        for (long i = 0; i < dry; i++)
+        {
+            _dry.Add((ulong)reader.ReadInt64(
+                "dry." + i.ToString("D4", System.Globalization.CultureInfo.InvariantCulture)));
         }
 
         long placed = reader.ReadInt64("placed");

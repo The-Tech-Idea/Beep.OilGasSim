@@ -269,6 +269,38 @@ public sealed record WorldParameters(
 > integrity there will be more failure modes to tell apart, and the diagnosis
 > becomes a field on the handoff rather than a single mapping.
 
+### A dry hole settles its structure
+
+> **Amendment (finding 286; the Godot client's GC-1).** Truth is fixed at
+> generation: a trap the charge never reached is empty forever, so a completed
+> dry hole answers its structure's question permanently. The engine now says so
+> in all three places a client can look:
+>
+> - **The structure is CONDEMNED** (`WorldState.Condemn`, drilling's dry branch
+>   only). A second `DrillWellCommand` into it is refused by name
+>   (`reject.prospect-condemned`), the way an already-shot block refuses a
+>   second pass — one rung down the same exploration ladder.
+> - **It leaves the board.** The read model's `Prospects` list and the per-block
+>   structure counts skip condemned structures; the block's own `Surveyed` flag
+>   keeps the ground reading as looked-at. This is the Settlers geologist's
+>   "nothing here" flag (plans 22), permanent on the map. A drilled DISCOVERY
+>   stays listed — a second well into a found structure is appraisal, and both
+>   shipped clients pick infill wells off the list.
+> - **The save remembers** (state schema v4 adds the condemned list). A reload
+>   must not resurrect a ghost prospect.
+>
+> A hole the outcome table lost MECHANICALLY condemns nothing: the rock was
+> never reached, and nothing was learned about it (finding 169's boundary,
+> unchanged). Pinned by S1V5.
+>
+> Before this, a condemned structure stayed listed at its re-priced odds —
+> often still the best-looking thing on the licence — so every client
+> re-drilled proven-empty rock, and **each re-drill re-counted the same source
+> evidence against the play**, driving sibling odds toward zero on evidence
+> from one hole. The ledger probe measured the consequence: basins with four
+> and five real accumulations dying with zero producers at every opening
+> balance tried (plans 26 §6).
+
 ### The map starts dark
 
 > **S1 amendment (plans 22 §3).** The paragraph above says regional gravity and

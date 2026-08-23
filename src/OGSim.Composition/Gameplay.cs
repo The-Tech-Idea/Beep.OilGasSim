@@ -327,8 +327,14 @@ public sealed record FieldReadModel(
     IReadOnlyList<WellStatusView> Wellbores,
 
     /// <summary>
-    /// Every structure the world placed that the company has not drilled, with
-    /// what it believes about each (SDD-017 §2's R20d.7 amendment).
+    /// Every structure the company knows of that has not been CONDEMNED —
+    /// drilled and found empty — with what it believes about each (SDD-017 §2's
+    /// R20d.7 amendment; finding 286, which is the Godot client's GC-1 settled).
+    ///
+    /// <para>A drilled DISCOVERY stays listed deliberately: a second well into a
+    /// found structure is appraisal and development, and both clients pick their
+    /// next infill well off this list. What leaves is proven-empty rock, whose
+    /// question is answered forever.</para>
     ///
     /// <para>Empty for a hand-built field, which is correct rather than missing:
     /// a prospect is something a world GENERATED and a scenario that placed its
@@ -727,6 +733,13 @@ internal sealed class FieldProjection(
 
             if (!risks.Knows(at)) continue;
 
+            // A structure drilled and found empty is off the board (finding
+            // 286): its truth is settled, a further hole into it is refused,
+            // and a prospect list is "where might oil be" — proven-empty rock
+            // is not an answer to that question. The block's own Surveyed flag
+            // keeps the ground reading as looked-at.
+            if (world.Condemned(prospects[i])) continue;
+
             OGSim.Information.ProspectRisk risk = risks.Of(at);
 
             seen.Add(new ProspectView(
@@ -800,6 +813,12 @@ internal sealed class FieldProjection(
         for (int i = 0; i < prospects.Count; i++)
         {
             if (!risks.Knows(new EntityRef(EntityKind.Prospect, prospects[i].Value)))
+                continue;
+
+            // Counted the way the board counts (finding 286): a condemned
+            // structure is off both, so the block's number and the prospect
+            // list a player cross-references it against cannot disagree.
+            if (world.Condemned(prospects[i]))
                 continue;
 
             Coordinate at = world.PositionOf(prospects[i]);

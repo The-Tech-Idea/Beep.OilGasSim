@@ -91,6 +91,18 @@ internal sealed class DrillWellActivity(
             reasons.Add(new RejectionReason(
                 "$loc:reject.invalid-depth", "a well must have a positive depth"));
 
+        // A STRUCTURE DRILLED DRY IS SETTLED (finding 286). This engine's
+        // truth is fixed at generation — a trap the charge never reached is
+        // empty forever — so a second hole into it cannot find anything the
+        // first did not, and would re-count the same source evidence against
+        // the play a second time. Refused by name, the way an already-shot
+        // block refuses a second pass.
+        if (world.Condemned(command.Target))
+            reasons.Add(new RejectionReason(
+                "$loc:reject.prospect-condemned",
+                "this structure was drilled and found empty; a second hole into it " +
+                "cannot find anything the first did not"));
+
         // WHERE A WELL MAY GO, asked of the rule set the run is played under
         // (plans 23). An operator drills into a plant that can take the
         // production; a frontier company drills to find out whether a plant is
@@ -154,6 +166,11 @@ internal sealed class DrillWellActivity(
             // drawing on the same system. That is the whole of "the play died",
             // and it is the moment exploration stops being a formality.
             if (risks.Knows(prospect)) risks.Drilled(prospect, PosFactor.Source, present: false);
+
+            // AND THE STRUCTURE ITSELF IS SETTLED (finding 286): it leaves the
+            // board, refuses a second hole, and the save remembers — the
+            // Settlers geologist's "nothing here" flag, permanent on the map.
+            world.Condemn(target);
 
             return;
         }
