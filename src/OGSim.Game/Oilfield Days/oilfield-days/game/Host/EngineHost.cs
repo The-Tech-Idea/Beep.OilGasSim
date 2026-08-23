@@ -169,7 +169,19 @@ public sealed partial class EngineHost : Node
 
             // The host reads the files; the engine reads no disk (SDD-004 §7).
             // Content that will not load is a refusal to start, not a warning.
-            Content: [content]);
+            Content: [content],
+
+            // BARE GROUND (plans 22 §4, S2). A yard, a licence and a bank
+            // balance — the processing train is something the company builds,
+            // and until it does, a well has nowhere to flow. This is the line
+            // that stops the game handing a player a refinery on day one.
+            StartingState: StartingStates.BareGround,
+
+            // FRONTIER RULES (plans 23). A company out on ground nobody has
+            // worked may survey and drill before it holds a reservoir — which
+            // an operator may not, and correctly so. This is the line that used
+            // to be a deleted check in the engine.
+            Rules: RuleSets.Frontier.Id);
 
         var world = new WorldParameters(
             new ContentId(draft.WorldTemplate),
@@ -345,7 +357,18 @@ public sealed partial class EngineHost : Node
             MinimumLogLevel: LogLevel.Warning,
             FaultHandling: FaultHandling.Resilient,
             RealityProfile: new ContentId(slot.Draft.RealityProfile),
-            Content: [content]);
+            Content: [content],
+
+            // BARE GROUND, as a new game opens (plans 22 §4). Composition builds
+            // no plant either way here — the save restores whatever the company
+            // had actually built by the month it was written.
+            StartingState: StartingStates.BareGround,
+
+            // FRONTIER RULES (plans 23). A company out on ground nobody has
+            // worked may survey and drill before it holds a reservoir — which
+            // an operator may not, and correctly so. This is the line that used
+            // to be a deleted check in the engine.
+            Rules: RuleSets.Frontier.Id);
 
         using var source = new System.IO.MemoryStream(bytes, writable: false);
 

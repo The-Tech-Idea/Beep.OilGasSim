@@ -39,7 +39,7 @@ public enum EntityKind
 {
     Well, Wellbore, Completion, Perforation, Compartment, Reservoir, Field,
     Facility, FacilityUnit, Pipeline, Tank, Berth, Cargo, CustodyPoint,
-    Licence, Company, Operation, Rig, Prospect, Play, Basin, Settlement,
+    Licence, Company, Operation, Rig, Prospect, Play, Basin, Block, Settlement,
     FlowElement, Objective, Barrier, Threat
 }
 

@@ -560,7 +560,9 @@ internal sealed class ActivityOrders(
     ActivityState activities,
     SimulationClock clock,
     OGSim.Environment.WeatherState weather,
-    OGSim.Capabilities.CapabilityState capabilities)
+    OGSim.Capabilities.CapabilityState capabilities,
+    IWorkSubjectRule subject,
+    FieldControl field)
 {
     /// <summary>
     /// Every reason this order cannot be given, not the first. A player told only
@@ -577,6 +579,21 @@ internal sealed class ActivityOrders(
                 "$loc:reject.insufficient-cash",
                 $"{template.Value} costs {activity.Terms.Cost.Cents} cents and the company " +
                 $"holds {company.Ledger.Cash.Cents}"));
+
+        // IS THERE ANYTHING HERE TO WORK ON (plans 23). Asked of the rule set
+        // the run is played under rather than decided here: an operator with no
+        // reservoir has nothing to do, and a frontier company with none has the
+        // whole game ahead of it. This check used to be inline and true for
+        // everyone, which is why GC-4 could only be fixed by deleting it.
+        IReadOnlyList<RejectionReason> nothing = subject.Refusals(field);
+
+        if (nothing.Count > 0)
+        {
+            reasons.AddRange(nothing);
+
+            // The scheduler's own target check would repeat this in its words.
+            return reasons;
+        }
 
         // NO SHARED TARGET CHECK. This asked whether the FIELD held a compartment
         // and refused everything when it did not — "there is nothing here to work

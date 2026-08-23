@@ -25,11 +25,25 @@ public sealed class ChainTests
     /// below is stated, not generated — so walking it is walking the DICE while
     /// the field stays the same one (finding 184).
     /// </summary>
+    /// <summary>
+    /// The same declared field, on a company that has built nothing and is
+    /// playing under frontier rules (plans 22 §4, plans 23).
+    /// </summary>
+    /// <remarks>
+    /// The reservoir is there; the plant is not. That is the position a frontier
+    /// company is in the month after a discovery, and the one the drilling rule
+    /// exists to serve.
+    /// </remarks>
+    private static (Engine Engine, EntityId<IReservoirCompartmentEntity> Target) BareField() =>
+        Undrilled(settings: Fixture.Settings(
+            startingState: StartingStates.BareGround,
+            rules: RuleSets.Frontier.Id));
+
     private static (Engine Engine, EntityId<IReservoirCompartmentEntity> Target) Undrilled(
-        ulong seed = 20260806UL)
+        ulong seed = 20260806UL, EngineSettings? settings = null)
     {
         Built built = Assert.IsType<Built>(EngineBuilder.Build(
-            Fixture.Settings() with { WorldSeed = seed }));
+            (settings ?? Fixture.Settings()) with { WorldSeed = seed }));
 
         EntityId<IReservoirCompartmentEntity> target =
             built.Engine.Provided.Resolve<FieldControl>().AddCompartment(
@@ -1102,7 +1116,8 @@ public sealed class ChainTests
         // metre plugs it a little further, and nothing committed to it at all
         // before this.
         Assert.True(
-            engine.Provided.Resolve<SurfaceChain>().Disposal.CumulativeInjected.CubicMetres > 0.0,
+            Fixture.Built(engine.Provided.Resolve<SurfaceChain>().Disposal, "water disposal")
+                .CumulativeInjected.CubicMetres > 0.0,
             "thirty years of water production and the disposal well never took a drop");
 
         Assert.True(cumulative > 0.0, "the field produced nothing to inject");
@@ -1189,7 +1204,8 @@ public sealed class ChainTests
         (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled();
         Produce(engine, target);
 
-        OGSim.Wells.Injector disposal = engine.Provided.Resolve<SurfaceChain>().Disposal;
+        OGSim.Wells.Injector disposal = Fixture.Built(
+            engine.Provided.Resolve<SurfaceChain>().Disposal, "water disposal");
 
         // A clean well has nothing to clear, and is told so rather than invoiced.
         Assert.IsType<Rejected>(engine.Commands.Submit(new RemediateInjectorCommand()));
@@ -1299,7 +1315,8 @@ public sealed class ChainTests
         (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled();
         Produce(engine, target);
 
-        OGSim.Facilities.Manifold header = engine.Provided.Resolve<SurfaceChain>().Manifold;
+        OGSim.Facilities.Manifold header = Fixture.Built(
+            engine.Provided.Resolve<SurfaceChain>().Manifold, "manifold");
 
         int before = header.Slots;
 
@@ -1339,7 +1356,8 @@ public sealed class ChainTests
         (Engine engine, EntityId<IReservoirCompartmentEntity> target) = Undrilled();
         Produce(engine, target);
 
-        OGSim.Facilities.Tank tank = engine.Provided.Resolve<SurfaceChain>().Tank;
+        OGSim.Facilities.Tank tank = Fixture.Built(
+            engine.Provided.Resolve<SurfaceChain>().Tank, "tank");
 
         Mass before = tank.Tier.Capacity;
 
@@ -2241,6 +2259,214 @@ public sealed class ChainTests
         }
 
         return (recovered, engine.Provided.Resolve<CompanyState>().Ledger.Cash, bought);
+    }
+
+    /// <summary>
+    /// A company that has not built anything, on ground nobody has worked —
+    /// which is how a game now opens (plans 22 §4, plans 23).
+    /// </summary>
+    /// <remarks>
+    /// <b>Both settings, because they answer different questions.</b>
+    /// <c>bare-ground</c> says the company owns no plant; <c>frontier</c> says
+    /// it is allowed to act anyway. Under <c>realistic</c> rules this same
+    /// company can do nothing at all — an operator with no reservoir has nothing
+    /// to work on — and that is correct rather than a bug, which is the whole
+    /// reason the two are separate.
+    /// </remarks>
+    private static Engine BareGround() =>
+        Assert.IsType<Built>(EngineBuilder.Build(Fixture.Settings(
+            startingState: StartingStates.BareGround,
+            rules: RuleSets.Frontier.Id))).Engine;
+
+    /// <summary>
+    /// AN EXPLORATION WELL DOES NOT NEED A REFINERY FIRST (plans 23).
+    /// </summary>
+    /// <remarks>
+    /// <para>The rule S2 broke without meaning to. "A well needs somewhere to
+    /// tie in" is right for an operator and inverts the real sequence for a
+    /// company still looking: you drill, you log, you suspend, and you build a
+    /// facility once you know you have something worth building one for.</para>
+    ///
+    /// <para>Under <c>realistic</c> the same order is refused, and correctly —
+    /// that company has a plant to plan around.</para>
+    /// </remarks>
+    [Fact]
+    public void RulesV2_a_frontier_company_may_drill_before_it_has_a_plant()
+    {
+        (Engine engine, EntityId<IReservoirCompartmentEntity> compartment) = BareField();
+
+        Assert.Equal(0, engine.Provided.Resolve<FieldControl>().Slots);
+
+        Assert.IsType<Accepted>(engine.Commands.Submit(
+            new DrillWellCommand(Structure(engine, compartment), new Length(2000.0))));
+    }
+
+    /// <summary>
+    /// AND THE WELL WAITS, SHUT IN, UNTIL THERE IS SOMEWHERE TO SEND IT.
+    /// </summary>
+    /// <remarks>
+    /// <para>The other half of RulesV2, and the half that stops it being a hole
+    /// in the simulation: a suspended well is not producing into nowhere. It is
+    /// shut in — using the choke the game already had, so it reports as
+    /// <c>ShutIn</c> and needed nothing added to the read model to say so — and
+    /// it comes on when a facility is commissioned.</para>
+    ///
+    /// <para>A player who paid for a plant should not have to re-order the holes
+    /// they already paid for.</para>
+    /// </remarks>
+    [Fact]
+    public void RulesV3_a_suspended_well_comes_on_when_the_facility_is_commissioned()
+    {
+        (Engine engine, EntityId<IReservoirCompartmentEntity> compartment) = BareField();
+
+        Assert.IsType<Accepted>(engine.Commands.Submit(
+            new DrillWellCommand(Structure(engine, compartment), new Length(2000.0))));
+
+        for (var tick = 0; tick < 8; tick++) engine.Pipeline.AdvanceTick();
+
+        // Drilled, and going nowhere.
+        Assert.NotEmpty(engine.ReadModel!.Wellbores);
+        Assert.All(engine.ReadModel!.Wellbores,
+                   well => Assert.Equal(WellStatus.ShutIn, well.Status));
+
+        Assert.IsType<Accepted>(engine.Commands.Submit(
+            new InstallEarlyProductionFacilityCommand()));
+
+        for (var tick = 0; tick < 8; tick++) engine.Pipeline.AdvanceTick();
+
+        Assert.Contains(engine.ReadModel!.Wellbores,
+                        well => well.Status != WellStatus.ShutIn);
+    }
+
+    /// <summary>
+    /// THE SAME COMPANY, TWO RULE SETS, TWO ANSWERS (plans 23).
+    /// </summary>
+    /// <remarks>
+    /// <para>The acceptance for the whole mode. One company, identical in every
+    /// other respect — same seed, same content, same empty ground — and what it
+    /// is permitted to do differs because of the rules it is played under.</para>
+    ///
+    /// <para><b>Neither answer is a bug.</b> An operator with no reservoir has
+    /// nothing to build a facility for, and refusing is right. A company on
+    /// frontier acreage has the whole game in front of it, and refusing would
+    /// end it before the first move. GC-4 could only be "fixed" by deleting the
+    /// rule because there was nowhere for the second answer to live.</para>
+    /// </remarks>
+    [Fact]
+    public void RulesV1_the_same_bare_company_is_refused_by_one_rule_set_and_not_the_other()
+    {
+        Engine operating = Assert.IsType<Built>(EngineBuilder.Build(Fixture.Settings(
+            startingState: StartingStates.BareGround,
+            rules: RuleSets.Realistic.Id))).Engine;
+
+        var refused = Assert.IsType<Rejected>(operating.Commands.Submit(
+            new InstallEarlyProductionFacilityCommand()));
+
+        Assert.Contains(refused.Reasons, reason =>
+            reason.Detail.Contains("nothing here to work on", StringComparison.Ordinal));
+
+        Assert.IsType<Accepted>(BareGround().Commands.Submit(
+            new InstallEarlyProductionFacilityCommand()));
+    }
+
+    /// <summary>
+    /// A NEW GAME OWNS NO PLANT.
+    /// </summary>
+    /// <remarks>
+    /// The chain read model is built from what is REGISTERED, so an empty one is
+    /// not a view that has been suppressed — it is the honest report of a
+    /// company that holds a licence, a yard and a bank balance. Every run before
+    /// S2 opened holding a complete processing train because
+    /// <c>Modules.Compose</c> said so, and nobody had decided it.
+    /// </remarks>
+    [Fact]
+    public void S2V2_a_company_on_bare_ground_has_no_chain_at_all()
+    {
+        Engine engine = BareGround();
+
+        engine.Pipeline.AdvanceTick();
+
+        Assert.Empty(engine.ReadModel!.Chain);
+        Assert.Equal(0.0, engine.ReadModel!.ProducedThisTick.CubicMetres);
+    }
+
+    /// <summary>
+    /// AN UPGRADE ON BARE GROUND POINTS AT THE FACILITY.
+    /// </summary>
+    /// <remarks>
+    /// The refusal has to name the remedy. "There is no separator" is true and
+    /// leaves a player hunting for a separator to buy; what they need to know is
+    /// that vessels arrive with the facility and are enlarged afterwards.
+    /// </remarks>
+    [Fact]
+    public void S2V3_an_upgrade_on_bare_ground_names_the_facility_as_the_remedy()
+    {
+        Engine engine = BareGround();
+
+        var refused = Assert.IsType<Rejected>(
+            engine.Commands.Submit(new InstallSeparatorCommand()));
+
+        Assert.Contains(refused.Reasons, reason => reason.Detail.Contains(
+            "early production facility", StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// COMMISSIONING A FACILITY PUTS THE CHAIN UP.
+    /// </summary>
+    /// <remarks>
+    /// The other half of S2V2, and the reason it is one purchase: the separator
+    /// has three outlets and each needs a destination, so a company buying
+    /// vessels one at a time would see nothing until the tenth. One order, one
+    /// train, and a field that can flow.
+    /// </remarks>
+    [Fact]
+    public void S2V4_commissioning_a_facility_puts_the_whole_train_up()
+    {
+        Engine engine = BareGround();
+
+        engine.Pipeline.AdvanceTick();
+
+        Assert.Empty(engine.ReadModel!.Chain);
+        Assert.IsType<Accepted>(
+            engine.Commands.Submit(new InstallEarlyProductionFacilityCommand()));
+
+        for (var tick = 0; tick < 6; tick++) engine.Pipeline.AdvanceTick();
+
+        Assert.NotEmpty(engine.ReadModel!.Chain);
+
+        SurfaceChain plant = engine.Provided.Resolve<SurfaceChain>();
+
+        Assert.NotNull(plant.Manifold);
+        Assert.NotNull(plant.Separator);
+        Assert.NotNull(plant.Tank);
+        Assert.NotNull(plant.Custody);
+    }
+
+    /// <summary>
+    /// A FIELD GETS ONE PLANT (plans 22 §4, S2 step 3).
+    /// </summary>
+    /// <remarks>
+    /// <para>The shipped scenario still commissions a facility at composition,
+    /// so a company ordering one is a company asking for a second — and the
+    /// refusal has to say the useful thing rather than the true one. "You
+    /// already have a plant" is true and useless; what a player needs to know is
+    /// that capacity is bought a vessel at a time from here.</para>
+    ///
+    /// <para>It also guards the id space. <c>Commission</c> registers eleven
+    /// element ids, and a second pass would hand the network ids it has already
+    /// seen — which <c>Add</c> refuses mid-tick rather than at the order.</para>
+    /// </remarks>
+    [Fact]
+    public void S2V1_a_field_that_already_has_a_plant_refuses_a_second_facility()
+    {
+        Built built = Assert.IsType<Built>(EngineBuilder.Build(Fixture.Settings()));
+        Engine engine = built.Engine;
+
+        var refused = Assert.IsType<Rejected>(
+            engine.Commands.Submit(new InstallEarlyProductionFacilityCommand()));
+
+        Assert.Contains(refused.Reasons, reason =>
+            reason.Detail.Contains("one vessel at a time", StringComparison.Ordinal));
     }
 
     /// <summary>

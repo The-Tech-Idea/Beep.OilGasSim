@@ -214,7 +214,9 @@ internal sealed class FlowModule() : EngineModule(Declare(
 
 // ---------------------------------------------------------------- facilities
 
-internal sealed class FacilitiesModule(FacilityLadders ladders) : EngineModule(Declare(
+internal sealed class FacilitiesModule(
+    FacilityLadders ladders,
+    ContentId startingState) : EngineModule(Declare(
     "facilities",
 
     // The chain, as the elements every barrel crosses between the wellhead and
@@ -231,6 +233,11 @@ internal sealed class FacilitiesModule(FacilityLadders ladders) : EngineModule(D
         // would have to load from somewhere, and law L2 gives no dependency a
         // default.
         typeof(FacilityLadders),
+
+        // WHAT ERECTS A PLANT (plans 22 §4, S2 step 3). Declared like every
+        // other contract this module hands out, so the activity that pays for a
+        // facility can ask for it rather than build a second one of its own.
+        typeof(PlantBuilder),
     ],
     requires: [typeof(IFluidPropertyModel), typeof(IFlowElementRegistry)],
     ownsState: ["facilities.units"],
@@ -248,181 +255,47 @@ internal sealed class FacilitiesModule(FacilityLadders ladders) : EngineModule(D
 
         IFlowElementRegistry network = composition.Require<IFlowElementRegistry>();
 
-        var manifold = new OGSim.Facilities.Manifold(
-            Defaults.TheManifold, ladders.Manifold[0], Defaults.MaterialCount);
-
-        var separator = new OGSim.Facilities.Separator(
-            Defaults.TheSeparator, ladders.Separator[0], separation,
-            composition.Require<IFluidPropertyModel>(), Defaults.MaterialCount);
-
-        var custody = new OGSim.Facilities.CustodyTransferPoint(
-            Defaults.TheCustodyPoint, Defaults.SalesSpec, Defaults.MaterialCount,
-            Defaults.MeasureStream);
-
-        // THE GAS LEG GOES TO A FLARE. An E1 field with no gas infrastructure
-        // burns its associated gas, which is both the historical answer and the
-        // one the ESG mechanics are built to make expensive later (design 13).
-        // What it is NOT is an unconnected port: mass leaving the network at one
-        // would vanish from the tick's conservation terms silently, and a flare
-        // accounts for it — combusted and unburnt, both reported as Disposed.
-        var treater = new OGSim.Facilities.Treater(
-            Defaults.TheTreater, ladders.Treater[0],
-            Defaults.WaterOrdinal, Defaults.MaterialCount);
-
-        var gasPlant = new OGSim.Facilities.GasCapture(
-            Defaults.TheGasPlant, ladders.GasPlant[0], Defaults.MaterialCount);
-
-        // WHERE A REJECTED STREAM GOES (SDD-006 §7d, finding 252). Custody's
-        // Reject port satisfies network-build's "a spec gate must declare a
-        // Reject outlet" check on its own; without a sink connected to it, a
-        // rejected stream would be read by nothing and vanish from the tick's
-        // conservation terms the way the flare exists precisely to stop gas
-        // from doing.
-        var offSpecSink = new OGSim.Facilities.OffSpecSink(
-            Defaults.TheOffSpecSink, Defaults.MaterialCount);
-
-        var flare = new OGSim.Facilities.Flare(
-            Defaults.TheFlare, Defaults.FlareCapacity, Defaults.FlareCombustionEfficiency,
-            Defaults.MaterialCount);
-
-        // THE WATER LEG GOES TO A DISPOSAL WELL. Its Injectivity constraint is
-        // read by the solver and nowhere else (SDD-003 §3.1d's R20d.4
-        // amendment), so this is what lets a watered-out field be throttled by
-        // disposal and by nothing upstream at all — and the plugging term makes
-        // that worse every year.
-        var disposal = new OGSim.Wells.Injector(
-            Defaults.TheDisposalWell, Defaults.Disposal,
-            Defaults.WaterOrdinal.Ordinal, Defaults.MaterialCount);
-
-        // AND SOMEWHERE TO BUY WATER FROM (R20d.24, SDD-003 §3.1d). Reinjecting
-        // produced water is disposal that happens to help; a WATERFLOOD needs
-        // water the field did not make, and imported water has to cross the
-        // network like everything else or stage 6 would be creating mass. It
-        // ships commanded at nothing — a field floods when a player says so.
-        var intake = new OGSim.Facilities.WaterIntake(
-            Defaults.TheWaterIntake, Defaults.WaterOrdinal, Defaults.MaterialCount,
-
-            // Sea water is nobody's production. It never reaches a custody meter
-            // — the injector discharges every kilogram — but an allocation must
-            // name an owner, so it carries the field's, exactly as the empty
-            // tank's opening provenance does.
-            Allocation.FromSingle(new EntityRef(EntityKind.Compartment, 1)),
-            Defaults.DisposalPressure,
-            Defaults.SurfaceAmbient);
-
-        // THE GATHERING LINE. Without it a header's downstream demand is the
-        // vessel's set point and nothing else, so commingling has no
-        // consequence: two wells on one header would not feel each other at all.
-        // With it, throughput costs pressure and the trap in design 04 §5 stage
-        // 3 is arithmetic rather than a description.
-        var flowline = new OGSim.Facilities.Pipeline(
-            Defaults.TheFlowline, Defaults.Flowline, Defaults.FlowlineRating,
-            new ContentId("flowline-6in"),
-            composition.Require<IHydraulicModel>(),
+        // THE PLANT IS ERECTED BY THE THING THAT KNOWS HOW (plans 22 §4, S2
+        // step 3). This was sixty lines of construction inline, which was fine
+        // while composition was the only thing that ever built a chain — and
+        // wrong the moment a player can commission one mid-game. One builder,
+        // two callers: this, and the activity a company pays for.
+        var works = new PlantBuilder(
+            ladders,
+            separation,
             composition.Require<IFluidPropertyModel>(),
-            Defaults.SurfaceOilDensity, Defaults.MaterialCount);
+            composition.Require<IHydraulicModel>(),
+            network);
 
-        network.Add(manifold);
-        network.Add(flowline);
-        network.Add(separator);
-        network.Add(custody);
-        network.Add(treater);
-        network.Add(gasPlant);
-        network.Add(flare);
-        network.Add(offSpecSink);
-        // Set once, not refreshed: a DISPOSAL well injects into a disposal
-        // formation, not into the producing compartment. Its acceptance
-        // therefore depends on that formation's pressure and the pump's, neither
-        // of which the field's own depletion moves — which is also why it does
-        // not support the reservoir, and why injection-for-pressure is a
-        // separate mechanic (SDD-003 §3.1d's R20d.4 amendment).
-        disposal.SetInjectionConditions(
-            Defaults.DisposalFormationPressure, Defaults.DisposalPressure);
+        var chain = new SurfaceChain();
 
-        // STORAGE, after the meter. The oil is metered on its way in — pipeline
-        // export metering, a real arrangement — and the tank is what lets a
-        // field produce above its export rate for a while instead of being
-        // throttled the moment it does.
-        var tank = new OGSim.Facilities.Tank(
-            Defaults.TheTank, ladders.Tank[0], Defaults.MaterialCount,
-            MaterialInventory.Empty(Defaults.MaterialCount),
+        // WHAT THE COMPANY OPENS WITH, and the whole of S2's behaviour change
+        // (plans 22 §4). A refinery on the first day was never a decision
+        // anybody took — it was this line, unconditional, standing in for a
+        // scenario that had no way to say otherwise.
+        //
+        // AN UNKNOWN VALUE IS A REFUSAL rather than a default. Composition is
+        // all-or-nothing (design 03 §3), and guessing here would hand a
+        // misspelled scenario a free plant and call it a starting position.
+        if (startingState == Defaults.OpeningPosition)
+        {
+            works.Commission(chain);
+        }
+        else if (startingState != Defaults.BareGround)
+        {
+            throw new InvariantFault("SDD-001 §9", null,
+                $"'{startingState.Value}' is not a starting state this build knows; " +
+                $"it declares '{Defaults.OpeningPosition.Value}' and " +
+                $"'{Defaults.BareGround.Value}'");
+        }
 
-            // Empty tanks hold nobody's oil, and an allocation must name at
-            // least one compartment — so the opening provenance names the field
-            // and is replaced by the first receipt's blend.
-            Allocation.FromSingle(new EntityRef(EntityKind.Compartment, 1)));
-
-        network.Add(disposal);
-        network.Add(intake);
-        network.Add(tank);
-
-        network.Connect(new FlowConnection(
-            manifold.Id, OGSim.Facilities.Manifold.Outlet,
-            flowline.Id, OGSim.Facilities.Pipeline.Inlet));
-
-        network.Connect(new FlowConnection(
-            flowline.Id, OGSim.Facilities.Pipeline.Outlet,
-            separator.Id, OGSim.Facilities.Separator.Inlet));
-
-        // The LIQUID leg to the meter, the GAS leg to the flare. The water leg
-        // stays unconnected and carries nothing: there is no water material yet,
-        // so the split puts nothing in it (R20d.4). It is piped the day there is
-        // water to put down it, rather than now to an element that would receive
-        // zero for a decade.
-        // THE OIL LEG GOES THROUGH TREATING (SDD-006 §2). The treater ships
-        // taking nothing out, so a young field is unaffected; it earns its place
-        // when the water cut rises far enough to put the stream off spec.
-        network.Connect(new FlowConnection(
-            separator.Id, OGSim.Facilities.Separator.LiquidOutlet,
-            treater.Id, OGSim.Facilities.Treater.Inlet));
-
-        network.Connect(new FlowConnection(
-            treater.Id, OGSim.Facilities.Treater.Outlet,
-            custody.Id, OGSim.Facilities.CustodyTransferPoint.Inlet));
-
-        // THE GAS LEG NOW HAS A CHOICE (finding 172). It ran straight to the
-        // flare, so a company charged for flaring could do nothing about it but
-        // produce less oil — a tax rather than a decision. The plant ships at
-        // capacity ZERO, which is a field with no gas handling: everything still
-        // burns until somebody buys one.
-        network.Connect(new FlowConnection(
-            separator.Id, OGSim.Facilities.Separator.GasOutlet,
-            gasPlant.Id, OGSim.Facilities.GasCapture.Inlet));
-
-        network.Connect(new FlowConnection(
-            gasPlant.Id, OGSim.Facilities.GasCapture.RejectOutlet,
-            flare.Id, OGSim.Facilities.Flare.Inlet));
-
-        network.Connect(new FlowConnection(
-            separator.Id, OGSim.Facilities.Separator.WaterOutlet,
-            disposal.Id, OGSim.Wells.Injector.Inlet));
-
-        // THE FLOOD JOINS ON ITS OWN PORT. One edge per port is §6's rule, and
-        // it is what makes commingling declared here rather than emergent: the
-        // two streams meet inside the well, share one injectivity, and are told
-        // apart at stage 6 by which element made them.
-        network.Connect(new FlowConnection(
-            intake.Id, OGSim.Facilities.WaterIntake.Outlet,
-            disposal.Id, OGSim.Wells.Injector.ImportInlet));
-
-        network.Connect(new FlowConnection(
-            custody.Id, OGSim.Facilities.CustodyTransferPoint.OnSpecOutlet,
-            tank.Id, OGSim.Facilities.Tank.Inlet));
-
-        // AND WHAT FAILS THE SPEC GOES TO THE SINK, not nowhere (finding 252).
-        network.Connect(new FlowConnection(
-            custody.Id, OGSim.Facilities.CustodyTransferPoint.RejectOutlet,
-            offSpecSink.Id, OGSim.Facilities.OffSpecSink.Inlet));
-
-        var chain = new SurfaceChain(
-            manifold, flowline, separator, custody, treater, gasPlant, flare,
-            disposal, intake, tank, offSpecSink);
+        composition.Provide(works);
 
         // OWNED AS WELL AS PROVIDED (SDD-006 §8b). Six sockets carry a fitted
         // tier and facilities registered no owner, so a reload returned the
         // equipment a company started with and kept the money it had spent
         // (finding 197).
-        composition.Own(new FacilitiesState(chain, ladders));
+        composition.Own(new FacilitiesState(chain, ladders, works));
 
         composition.Provide(ladders);
         composition.Provide(chain);
@@ -438,24 +311,202 @@ internal sealed class FacilitiesModule(FacilityLadders ladders) : EngineModule(D
 /// the loop above it. The module that BUILT the meter says which one it is;
 /// nothing downstream infers it from a type.</para>
 /// </summary>
-internal sealed record SurfaceChain(
-    OGSim.Facilities.Manifold Manifold,
-    OGSim.Facilities.Pipeline Flowline,
-    OGSim.Facilities.Separator Separator,
-    OGSim.Facilities.CustodyTransferPoint Custody,
-    OGSim.Facilities.Treater Treater,
-    OGSim.Facilities.GasCapture GasPlant,
-    OGSim.Facilities.Flare Flare,
-    OGSim.Wells.Injector Disposal,
-    OGSim.Facilities.WaterIntake Intake,
-    OGSim.Facilities.Tank Tank,
-    OGSim.Facilities.OffSpecSink OffSpecSink)
+/// <summary>
+/// The surface plant: what the company has actually built.
+/// </summary>
+/// <remarks>
+/// <para><b>Every element is optional, and that is the whole of S2</b> (plans 22
+/// §4). This was an eleven-field record composed whole before the game started,
+/// which said — in the only place that could say it — that a company begins
+/// owning a complete processing train. It does not; it begins with a yard and a
+/// bank balance, and the train is a construction project.</para>
+///
+/// <para><b>Nullable rather than a throwing accessor.</b> A property that threw
+/// when absent would move the failure to run time and leave every reader looking
+/// correct; nullable makes the compiler name every place that assumed a plant
+/// existed, which is exactly the list this phase has to work through.</para>
+///
+/// <para>The verb is <c>Install</c> and not <c>Fit</c>: an element already
+/// <c>Fit</c>s a TIER onto itself, and one word for two concepts is the naming
+/// law's first rule (19 §N1). A separator is installed once and fitted many
+/// times.</para>
+/// </remarks>
+internal sealed class SurfaceChain
 {
-    /// <summary>Where a well ties in, and how many can. One list rather than a
-    /// count, so a caller cannot forget which port a slot index means.</summary>
-    public int Slots => Manifold.Slots;
+    public OGSim.Facilities.Manifold? Manifold { get; private set; }
 
-    public IReadOnlyList<EntityId<IFlowElement>> MeteredPoints => [Custody.Id];
+    public OGSim.Facilities.Pipeline? Flowline { get; private set; }
+
+    public OGSim.Facilities.Separator? Separator { get; private set; }
+
+    public OGSim.Facilities.CustodyTransferPoint? Custody { get; private set; }
+
+    public OGSim.Facilities.Treater? Treater { get; private set; }
+
+    public OGSim.Facilities.GasCapture? GasPlant { get; private set; }
+
+    public OGSim.Facilities.Flare? Flare { get; private set; }
+
+    public OGSim.Wells.Injector? Disposal { get; private set; }
+
+    public OGSim.Facilities.WaterIntake? Intake { get; private set; }
+
+    public OGSim.Facilities.Tank? Tank { get; private set; }
+
+    public OGSim.Facilities.OffSpecSink? OffSpecSink { get; private set; }
+
+    // ONE OVERLOAD PER ELEMENT TYPE, so a caller cannot install a separator into
+    // the tank slot. The types are all distinct, which is what makes this safe
+    // where a string key or an enum would not be.
+    public void Install(OGSim.Facilities.Manifold built) => Manifold = built;
+
+    public void Install(OGSim.Facilities.Pipeline built) => Flowline = built;
+
+    public void Install(OGSim.Facilities.Separator built) => Separator = built;
+
+    public void Install(OGSim.Facilities.CustodyTransferPoint built) => Custody = built;
+
+    public void Install(OGSim.Facilities.Treater built) => Treater = built;
+
+    public void Install(OGSim.Facilities.GasCapture built) => GasPlant = built;
+
+    public void Install(OGSim.Facilities.Flare built) => Flare = built;
+
+    public void Install(OGSim.Wells.Injector built) => Disposal = built;
+
+    public void Install(OGSim.Facilities.WaterIntake built) => Intake = built;
+
+    public void Install(OGSim.Facilities.Tank built) => Tank = built;
+
+    public void Install(OGSim.Facilities.OffSpecSink built) => OffSpecSink = built;
+
+    /// <summary>
+    /// Connect whatever can now be connected.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>The chain's shape is a fact about the chain, so it lives here</b>
+    /// rather than being typed out at the one place that used to build the whole
+    /// thing at once. A plant assembled a piece at a time has to be wired a piece
+    /// at a time, and in any order the player chooses to build in.</para>
+    ///
+    /// <para><b>Each edge is made exactly once, when its SECOND end appears.</b>
+    /// <c>Connect</c> appends without checking, and one edge per port is SDD-002
+    /// §6's rule — so a second call for the same pair would quietly double it and
+    /// the solver would see a port feeding two of the same thing. The flags are
+    /// what make calling this after every install safe.</para>
+    ///
+    /// <para>Declared in the order the original composition connected them, so a
+    /// plant built all at once produces a byte-identical topology to the one that
+    /// was hand-wired.</para>
+    /// </remarks>
+    public void Wire(IFlowElementRegistry network)
+    {
+        ArgumentNullException.ThrowIfNull(network);
+
+        Edge(network, 0, Manifold?.Id, OGSim.Facilities.Manifold.Outlet,
+             Flowline?.Id, OGSim.Facilities.Pipeline.Inlet);
+
+        Edge(network, 1, Flowline?.Id, OGSim.Facilities.Pipeline.Outlet,
+             Separator?.Id, OGSim.Facilities.Separator.Inlet);
+
+        // THE OIL LEG GOES THROUGH TREATING (SDD-006 §2). The treater ships
+        // taking nothing out, so a young field is unaffected; it earns its place
+        // when the water cut rises far enough to put the stream off spec.
+        Edge(network, 2, Separator?.Id, OGSim.Facilities.Separator.LiquidOutlet,
+             Treater?.Id, OGSim.Facilities.Treater.Inlet);
+
+        Edge(network, 3, Treater?.Id, OGSim.Facilities.Treater.Outlet,
+             Custody?.Id, OGSim.Facilities.CustodyTransferPoint.Inlet);
+
+        // THE GAS LEG HAS A CHOICE (finding 172). It ran straight to the flare,
+        // so a company charged for flaring could do nothing about it but produce
+        // less oil — a tax rather than a decision. The plant ships at capacity
+        // ZERO, which is a field with no gas handling: everything still burns
+        // until somebody buys one.
+        Edge(network, 4, Separator?.Id, OGSim.Facilities.Separator.GasOutlet,
+             GasPlant?.Id, OGSim.Facilities.GasCapture.Inlet);
+
+        Edge(network, 5, GasPlant?.Id, OGSim.Facilities.GasCapture.RejectOutlet,
+             Flare?.Id, OGSim.Facilities.Flare.Inlet);
+
+        Edge(network, 6, Separator?.Id, OGSim.Facilities.Separator.WaterOutlet,
+             Disposal?.Id, OGSim.Wells.Injector.Inlet);
+
+        // THE FLOOD JOINS ON ITS OWN PORT. One edge per port is §6's rule, and
+        // it is what makes commingling declared rather than emergent: the two
+        // streams meet inside the well, share one injectivity, and are told
+        // apart at stage 6 by which element made them.
+        Edge(network, 7, Intake?.Id, OGSim.Facilities.WaterIntake.Outlet,
+             Disposal?.Id, OGSim.Wells.Injector.ImportInlet);
+
+        Edge(network, 8, Custody?.Id, OGSim.Facilities.CustodyTransferPoint.OnSpecOutlet,
+             Tank?.Id, OGSim.Facilities.Tank.Inlet);
+
+        // AND WHAT FAILS THE SPEC GOES TO THE SINK, not nowhere (finding 252).
+        Edge(network, 9, Custody?.Id, OGSim.Facilities.CustodyTransferPoint.RejectOutlet,
+             OffSpecSink?.Id, OGSim.Facilities.OffSpecSink.Inlet);
+    }
+
+    /// <summary>How many edges the chain has when it is whole.</summary>
+    private const int EdgeCount = 10;
+
+    private readonly bool[] _wired = new bool[EdgeCount];
+
+    private void Edge(
+        IFlowElementRegistry network,
+        int edge,
+        EntityId<IFlowElement>? from,
+        PortId fromPort,
+        EntityId<IFlowElement>? to,
+        PortId toPort)
+    {
+        if (_wired[edge]) return;
+
+        // BOTH ENDS OR NEITHER. An element whose neighbour has not been built is
+        // simply not joined yet; it gets its edge the month the other one lands.
+        if (from is not EntityId<IFlowElement> tail || to is not EntityId<IFlowElement> head)
+            return;
+
+        network.Connect(new FlowConnection(tail, fromPort, head, toPort));
+        _wired[edge] = true;
+    }
+
+    /// <summary>
+    /// The field itself, as an activity aims at it.
+    /// </summary>
+    /// <remarks>
+    /// What an order names when there is no element to name. Commissioning a
+    /// facility aims here because none of its vessels exist yet; an upgrade aims
+    /// here only when it is about to be refused for the same reason.
+    /// </remarks>
+    public static EntityRef TheField { get; } = new(EntityKind.Field, 1);
+
+    /// <summary>
+    /// Why an upgrade cannot be bought on bare ground.
+    /// </summary>
+    /// <remarks>
+    /// It names the remedy rather than the problem. "There is no separator" is
+    /// true and leaves a player looking for a separator to buy; what they need
+    /// to know is that vessels come with the facility, and are enlarged after
+    /// it (plans 22 §4).
+    /// </remarks>
+    public static RejectionReason NothingToUpgrade(string named) => new(
+        "$loc:reject.no-plant",
+        $"there is no {named} here to enlarge; a field is brought on by commissioning " +
+        "an early production facility, and its vessels are upgraded after that");
+
+    /// <summary>
+    /// Where a well ties in, and how many can.
+    /// </summary>
+    /// <remarks>
+    /// Zero without a manifold, which is the truth rather than a fallback: there
+    /// is nowhere to tie a well in until a header is built, and the refusal a
+    /// player reads comes from this being honestly zero.
+    /// </remarks>
+    public int Slots => Manifold?.Slots ?? 0;
+
+    public IReadOnlyList<EntityId<IFlowElement>> MeteredPoints =>
+        Custody is null ? [] : [Custody.Id];
 
     /// <summary>
     /// What to call an element on screen.
@@ -469,17 +520,17 @@ internal sealed record SurfaceChain(
     /// </summary>
     public string NameOf(EntityId<IFlowElement> element)
     {
-        if (element == Manifold.Id) return "manifold";
-        if (element == Flowline.Id) return "flowline";
-        if (element == Separator.Id) return "separator";
-        if (element == Custody.Id) return "custody-meter";
-        if (element == Treater.Id) return "treater";
-        if (element == GasPlant.Id) return "gas-plant";
-        if (element == Flare.Id) return "flare";
-        if (element == Disposal.Id) return "water-disposal";
-        if (element == Intake.Id) return "water-intake";
-        if (element == Tank.Id) return "tank";
-        if (element == OffSpecSink.Id) return "off-spec-sink";
+        if (Manifold is not null && element == Manifold.Id) return "manifold";
+        if (Flowline is not null && element == Flowline.Id) return "flowline";
+        if (Separator is not null && element == Separator.Id) return "separator";
+        if (Custody is not null && element == Custody.Id) return "custody-meter";
+        if (Treater is not null && element == Treater.Id) return "treater";
+        if (GasPlant is not null && element == GasPlant.Id) return "gas-plant";
+        if (Flare is not null && element == Flare.Id) return "flare";
+        if (Disposal is not null && element == Disposal.Id) return "water-disposal";
+        if (Intake is not null && element == Intake.Id) return "water-intake";
+        if (Tank is not null && element == Tank.Id) return "tank";
+        if (OffSpecSink is not null && element == OffSpecSink.Id) return "off-spec-sink";
 
         // A gathering line, numbered by the well it serves (SDD-006 §1c). Named
         // rather than left to the well-N fallback because a player watching the
@@ -754,7 +805,9 @@ internal sealed class TakeOrPayStage(
 /// because a failed solve must commit nothing.</para>
 /// </summary>
 internal sealed class FieldModule(
-    FacilityLadders ladders, OGSim.Company.TakeOrPayTerms takeOrPay) : EngineModule(Declare(
+    FacilityLadders ladders,
+    OGSim.Company.TakeOrPayTerms takeOrPay,
+    RuleSet rules) : EngineModule(Declare(
     "field",
     provides:
     [
@@ -771,6 +824,12 @@ internal sealed class FieldModule(
         typeof(OGSim.Subsurface.SubsurfaceState),
         typeof(OGSim.Wells.WellsState),
         typeof(OGSim.Company.CompanyState),
+
+        // WHAT ERECTS A PLANT (plans 22 §4, S2). Declared because the manifest
+        // is the composer's ordering graph: resolving it in code alone leaves
+        // the edge out, and the facilities module could compose after the field
+        // that asks it for a builder.
+        typeof(PlantBuilder),
 
         // The weather stage 3 loses days to (SDD-016 §3). Declared as well as
         // required, because the manifest is what the composer ORDERS modules by:
@@ -870,6 +929,8 @@ internal sealed class FieldModule(
         typeof(WirelineLogCommand),
         typeof(CutCoreCommand),
         typeof(SeismicSurveyCommand),
+        typeof(SurveyBlockCommand),
+        typeof(InstallEarlyProductionFacilityCommand),
         typeof(InstallSeparatorCommand),
         typeof(ExpandExportCommand),
         typeof(InstallGasPlantCommand),
@@ -950,9 +1011,8 @@ internal sealed class FieldModule(
             chain.MeteredPoints,
             chain.NameOf,
             composition.Require<OGSim.Integrity.AssetIntegrity>(),
-            chain.Tank,
+            chain,
             terminal,
-            chain.Custody,
             composition.Require<IFiscalRegime>(),
 
             // The market, and the ONE stream it may draw from (SDD-009 §6). The
@@ -963,9 +1023,6 @@ internal sealed class FieldModule(
             composition.Require<OGSim.Company.MarketState>(),
             obligations,
             composition.Require<ReservesBook>(),
-            chain.GasPlant,
-            chain.Disposal,
-            chain.Intake,
             Defaults.GasPricePerTonne,
             Defaults.LiquidOrdinals,
             () => field.IsAbandoned,
@@ -1079,7 +1136,8 @@ internal sealed class FieldModule(
                 composition.Require<WorldState>(),
                 composition.Require<IBeliefStore>(),
                 subsurface, door,
-                composition.Require<OGSim.Company.Licence>()),
+                composition.Require<OGSim.Company.Licence>(),
+                rules.Drilling),
 
             new WellTestActivity(
                 Defaults.WellTestTerms, Defaults.WellTestSource,
@@ -1101,11 +1159,28 @@ internal sealed class FieldModule(
                 Defaults.StructureCapacityKind, composition.Require<WorldState>(),
                 composition.Require<OGSim.Information.ProspectRisks>(), door),
 
+            // FIND, then firm up (SDD-010 §4b's S1 amendment). The survey above
+            // sharpens a structure the company has already found; this one is
+            // how it finds any at all.
+            new SurveyBlockActivity(
+                Defaults.BlockSurveyTerms, composition.Require<WorldState>(),
+                composition.Require<OGSim.Information.ProspectRisks>()),
+
+            // THE VERB THAT STARTS A FIELD (plans 22 §4, S2 step 3). Every
+            // install below adds capacity to a plant that exists; this is the
+            // one that makes there be a plant, and it is aimed at the field
+            // rather than at any element because none of them exist yet.
+            new InstallEarlyProductionFacilityActivity(
+                Defaults.EarlyProductionFacilityTerms,
+                chain,
+                composition.Require<PlantBuilder>(),
+                field),
+
             // The verb that answers a bottleneck (R12b.8). It could not exist
             // until the chain was wired: an installed vessel would have been
             // paid for and bypassed (finding 153).
             new InstallSeparatorActivity(
-                Defaults.InstallSeparatorTerms, chain.Separator, ladders.Separator, ladders, capabilities, eras, gate, effects),
+                Defaults.InstallSeparatorTerms, chain, ladders.Separator, ladders, capabilities, eras, gate, effects),
 
             // THE FIELD'S LAST CEILING (R20d.8). Debottleneck everything upstream
             // and a field still sells only what the export line takes — which is
@@ -1117,7 +1192,7 @@ internal sealed class FieldModule(
             // company charged for flaring could only respond by producing less
             // oil, which is a tax rather than a decision.
             new InstallGasPlantActivity(
-                Defaults.InstallGasPlantTerms, chain.GasPlant, ladders.GasPlant, ladders, capabilities, eras, gate, effects),
+                Defaults.InstallGasPlantTerms, chain, ladders.GasPlant, ladders, capabilities, eras, gate, effects),
 
             // THE ANSWER TO A BROKEN ANYTHING (SDD-012 §3). Stage 4 now takes
             // equipment out of the network and the route law shuts in whatever
@@ -1150,7 +1225,7 @@ internal sealed class FieldModule(
             // plugging real and left no way to clear it, which is a decline the
             // player watches rather than a decision they take.
             new RemediateInjectorActivity(
-                Defaults.RemediateInjectorTerms, chain.Disposal),
+                Defaults.RemediateInjectorTerms, chain),
 
             // A WELL DRILLED CLEAN CAN STILL BE MADE BETTER (R12b.7, finding
             // 253). Every completion opens at zero skin, so this is a genuine
@@ -1163,19 +1238,19 @@ internal sealed class FieldModule(
             // has to be installed first" has been the reason a well is turned
             // away since R12b, and nothing could install one.
             new InstallManifoldActivity(
-                Defaults.InstallManifoldTerms, chain.Manifold, ladders.Manifold, ladders, capabilities, eras, gate, effects),
+                Defaults.InstallManifoldTerms, chain, ladders.Manifold, ladders, capabilities, eras, gate, effects),
 
             // THE THIRD ANSWER TO A FULL TANK. Stage 6 offers "more storage,
             // more export and less production"; the other two shipped and this
             // did not.
             new InstallTankActivity(
-                Defaults.InstallTankTerms, chain.Tank, ladders.Tank, ladders, capabilities, eras, gate, effects),
+                Defaults.InstallTankTerms, chain, ladders.Tank, ladders, capabilities, eras, gate, effects),
 
             // THE ANSWER TO WET OIL (finding 173). A field that waters out sells
             // a stream the meter turns away, and without this that is a tax on
             // getting old rather than a decision.
             new InstallTreaterActivity(
-                Defaults.InstallTreaterTerms, chain.Treater, ladders.Treater, ladders, capabilities, eras, gate, effects),
+                Defaults.InstallTreaterTerms, chain, ladders.Treater, ladders, capabilities, eras, gate, effects),
 
             // The ENDING (R12b.10). Finding 153's other reason is gone too: opex
             // scales with the liquid lifted, so a watered-out well genuinely
@@ -1243,7 +1318,14 @@ internal sealed class FieldModule(
             company, composition.Require<OGSim.Company.MarketState>(), activities,
             composition.Require<SimulationClock>(),
             composition.Require<OGSim.Environment.WeatherState>(),
-            composition.Require<OGSim.Capabilities.CapabilityState>());
+            composition.Require<OGSim.Capabilities.CapabilityState>(),
+
+            // WHAT THE RUN IS PLAYED UNDER (plans 23). The subject rule is the
+            // one GC-4 was about: an operator has a field to work on and a
+            // frontier company is out to find one, and both are correct under
+            // their own rules.
+            rules.WorkSubject,
+            field);
 
         for (int i = 0; i < activities.Catalogue.Count; i++)
             activities.Catalogue[i].Register(composition, orders);

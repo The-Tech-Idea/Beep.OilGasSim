@@ -64,8 +64,22 @@ public sealed class GodotContentSource : IContentSource
         return source;
     }
 
-    /// <summary>The folders whose kinds the engine registers today.</summary>
-    private static readonly string[] Loadable = { "facilities", "technologies" };
+    /// <summary>
+    /// The folders whose kinds the engine registers today.
+    /// </summary>
+    /// <remarks>
+    /// <b>This list tracks <c>EngineBuilder</c>, and drifting from it is a hard
+    /// stop rather than a degraded start.</b> The engine grew
+    /// <c>TerrainClassContentKind</c> and <c>TakeOrPayContentKind</c> without the
+    /// host following, and the whole game refused to boot on a content fault
+    /// naming one missing definition "in a catalogue of 0" — which is the loader
+    /// working exactly as designed. When a content kind is registered engine-side,
+    /// its folder is added here in the same change.
+    /// </remarks>
+    private static readonly string[] Loadable =
+    {
+        "contracts", "facilities", "technologies", "terrain-classes",
+    };
 
     /// <summary>How many files were found. Zero means the engine will refuse to start.</summary>
     public int Count => _files.Count;

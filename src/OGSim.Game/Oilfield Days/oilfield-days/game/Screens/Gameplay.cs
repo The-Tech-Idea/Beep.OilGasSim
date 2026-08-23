@@ -182,6 +182,11 @@ public sealed partial class Gameplay : Node2D
         AddChild(_camera);
         _camera.Frame(_world.Extent, _world.PlantSite);
 
+        // --zoom was parsed and never read, so every dev screenshot came back at
+        // the default step no matter what was asked for.
+        if (DevOptions.Zoom is float pinned)
+            _camera.Pin(pinned);
+
         EngineHost.Instance.SnapshotChanged += OnSnapshot;
         EngineHost.Instance.TickFaulted += OnFault;
         SimulationController.Instance.SpeedChanged += OnSpeedChanged;
@@ -647,6 +652,17 @@ public sealed partial class Gameplay : Node2D
             && _pickedWell is null
             && at.DistanceTo(_world.PlantSite) <= Reach * 1.6f;
 
+        // LAST, because a block covers everything. A licence block is the whole
+        // ground rather than a thing standing on it, so testing it any earlier
+        // would answer every click in the basin with "the acreage" and nothing
+        // on the map would ever be selectable again.
+        _pickedBlock = _pickedUnit is null
+            && _pickedElement is null
+            && _pickedProspect is null
+            && _pickedWell is null
+            && !_pickedPlant
+            ? _world.BlockAt(at)
+            : null;
 
         UpdateContext(snapshot);
     }
@@ -689,12 +705,18 @@ public sealed partial class Gameplay : Node2D
             return;
         }
 
+        BlockView? block = _pickedBlock;
+
         if (plant == _atPlant
             && prospect?.Prospect == _prospect?.Prospect
-            && well?.Well == _well?.Well)
+            && well?.Well == _well?.Well
+            && block?.Block == _block?.Block
+            && block?.Surveyed == _block?.Surveyed)
         {
             return;
         }
+
+        _block = block;
 
         _atPlant = plant;
         _prospect = prospect;
@@ -720,12 +742,24 @@ public sealed partial class Gameplay : Node2D
             _bar.ShowWell(well, MeasurableCompartments(snapshot));
             _selection.ShowWell(well);
         }
+        else if (block is not null)
+        {
+            // The crew is sent to the middle of the block, because a block is
+            // ground rather than a point and its centre is the only place on it
+            // that means anything without picking one.
+            _bar.SiteAt = BasinWorld.ToWorld(block.Centre);
+            _bar.ShowBlock(block);
+            _selection.ShowNothing();
+        }
         else
         {
             _bar.ShowNothing();
             _selection.ShowNothing();
         }
     }
+
+    private BlockView? _pickedBlock;
+    private BlockView? _block;
 
     /// <summary>
     /// The compartments a downhole measurement can be aimed at.

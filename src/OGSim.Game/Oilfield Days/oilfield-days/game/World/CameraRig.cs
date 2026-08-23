@@ -57,6 +57,21 @@ public sealed partial class CameraRig : Camera2D
         Apply();
     }
 
+    /// <summary>
+    /// Pin the view at an exact zoom, off the ladder of steps.
+    /// </summary>
+    /// <remarks>
+    /// For looking at the whole licence at once, which the steps deliberately do
+    /// not reach: the shipped ladder stops where the art stops being worth
+    /// drawing, and a basin-wide frame is a development view rather than a
+    /// playable one.
+    /// </remarks>
+    public void Pin(float zoom)
+    {
+        Zoom = new Vector2(zoom, zoom);
+        Clamp();
+    }
+
     /// <summary>Centre on something and keep it centred until the view is moved.</summary>
     public void Follow(Node2D what)
     {

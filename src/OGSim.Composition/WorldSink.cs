@@ -95,12 +95,141 @@ public sealed class WorldState : IStateOwner
         _at.Add(at);
         _capacity.Add(capacity);
         _subtlety.Add(subtlety);
+        _play.Add(null);
+        _trap.Add(0.0);
 
         return prospect;
     }
 
     private readonly List<ReservoirVolume> _capacity = [];
     private readonly List<DetectClass> _subtlety = [];
+
+    // WHAT A SURVEY WOULD SAY, held until one is shot (SDD-010 §4b's S1
+    // amendment). Null play means the structure was never charted — a
+    // scenario-declared field, which carried no exploration risk to begin with
+    // and is not something a survey can find.
+    private readonly List<ContentId?> _play = [];
+    private readonly List<double> _trap = [];
+
+    /// <summary>The blocks already shot. A DECISION, so the save carries it.</summary>
+    private readonly List<ulong> _shot = [];
+
+    /// <summary>
+    /// Remember what a survey would tell the company about this structure, and
+    /// keep it until one does.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>The map starts dark.</b> Generation places every closed
+    /// structure whether or not charge reached it, and the company used to be
+    /// handed the risk on all of them before it had spent a penny — so the
+    /// exploration game opened with its answers printed on it. What a structure
+    /// IS stays truth; what the company THINKS of it is now bought.</para>
+    ///
+    /// <para>Nothing here hides anything by itself. <c>Prospects()</c> already
+    /// publishes only what the risk store knows, so deferring one
+    /// <c>Register</c> call is the entire mechanism.</para>
+    /// </remarks>
+    internal void Chart(EntityId<IProspect> prospect, ContentId play, double trapConfidence)
+    {
+        int index = _prospects.IndexOf(prospect);
+
+        if (index < 0)
+            return;
+
+        _play[index] = play;
+        _trap[index] = trapConfidence;
+    }
+
+    // ------------------------------------------------------------ the blocks
+
+    /// <summary>How many blocks the licence is cut into along each side.</summary>
+    /// <remarks>
+    /// Fixed rather than scaled with the basin: a licence is divided into a
+    /// stated number of blocks, and the map a company is handed does not change
+    /// shape because the ground under it is wider. Sixteen of them at the
+    /// shipped survey price is a real fraction of an opening balance, which is
+    /// what makes "where do I look first" a decision rather than a formality.
+    /// </remarks>
+    private const int BlocksPerSide = 4;
+
+    /// <summary>
+    /// How many blocks the licence has, or none before generation has run — the
+    /// same answer, and for the same reason, as <see cref="View"/>.
+    /// </summary>
+    public int BlockCount => _surface is null ? 0 : BlocksPerSide * BlocksPerSide;
+
+    /// <summary>The block at an index, numbered from one like every other id.</summary>
+    public EntityId<IBlock> BlockAt(int index) => new((ulong)(index + 1));
+
+    /// <summary>How wide one block is, derived from the ground rather than
+    /// stored beside it (law L5).</summary>
+    public Length BlockWidth => new(Span(_surface?.Terrain.Elevation.Width ?? 0) / BlocksPerSide);
+
+    /// <summary>How tall one block is.</summary>
+    public Length BlockHeight => new(Span(_surface?.Terrain.Elevation.Height ?? 0) / BlocksPerSide);
+
+    private double Span(int cells) =>
+        _surface is null ? 0.0 : cells * _surface.Terrain.Elevation.CellSize.Metres;
+
+    /// <summary>Where the middle of a block is.</summary>
+    public Coordinate CentreOf(EntityId<IBlock> block)
+    {
+        int index = (int)block.Value - 1;
+
+        return new Coordinate(
+            ((index % BlocksPerSide) + 0.5) * BlockWidth.Metres,
+            ((index / BlocksPerSide) + 0.5) * BlockHeight.Metres);
+    }
+
+    /// <summary>Whether this block has already been shot.</summary>
+    public bool WasShot(EntityId<IBlock> block) => _shot.Contains(block.Value);
+
+    /// <summary>
+    /// Shoot a block: every structure inside it becomes known.
+    /// </summary>
+    /// <remarks>
+    /// <para>Registering the risk is what makes a structure appear in the read
+    /// model, which is why the map going dark cost one deferred call rather than
+    /// a visibility system laid over the top of one.</para>
+    ///
+    /// <para><b>Finding nothing is a result.</b> A block over barren ground
+    /// returns zero and the company has still bought something worth having:
+    /// where not to look next. The block is marked shot either way.</para>
+    /// </remarks>
+    internal void Shoot(EntityId<IBlock> block, OGSim.Information.ProspectRisks risks)
+    {
+        ArgumentNullException.ThrowIfNull(risks);
+
+        if (WasShot(block))
+            return;
+
+        _shot.Add(block.Value);
+
+        Coordinate centre = CentreOf(block);
+        double halfWide = BlockWidth.Metres * 0.5;
+        double halfTall = BlockHeight.Metres * 0.5;
+        double left = centre.X - halfWide;
+        double right = centre.X + halfWide;
+        double bottom = centre.Y - halfTall;
+        double top = centre.Y + halfTall;
+
+        for (int i = 0; i < _prospects.Count; i++)
+        {
+            // A structure with no play was declared by a scenario rather than
+            // generated. It never carried exploration risk, so there is nothing
+            // here for a survey to hand over.
+            if (_play[i] is not ContentId play)
+                continue;
+
+            if (_at[i].X < left || _at[i].X >= right) continue;
+            if (_at[i].Y < bottom || _at[i].Y >= top) continue;
+
+            risks.Register(
+                new EntityRef(EntityKind.Prospect, _prospects[i].Value),
+                play,
+                _trap[i]);
+        }
+    }
 
     /// <summary>
     /// What a structure could hold — TRUTH, and what a survey measures. Every
@@ -198,7 +327,11 @@ public sealed class WorldState : IStateOwner
 
     public StateKey Key { get; } = new("world.decisions");
 
-    public int SchemaVersion => 2;
+    /// <summary>
+    /// Three since the S1 amendment: a save now carries which blocks have been
+    /// shot, and a version 2 file cannot answer that question.
+    /// </summary>
+    public int SchemaVersion => 3;
 
     /// <summary>Nothing has to be back before this is — the world is one of
     /// the two the FIELD is measured against (SDD-013 §2b).</summary>
@@ -249,6 +382,19 @@ public sealed class WorldState : IStateOwner
             // inserted into the enum, and a save would open a game in the wrong
             // technological age with every field still present.
             writer.WriteString("gen-era", EraName(from.StartEra));
+        }
+
+        // WHICH BLOCKS HAVE BEEN SHOT (SDD-010 §4b's S1 amendment). A decision
+        // and not a function of the seed, so unlike the generated prospects
+        // below it cannot be recovered by regenerating — a save without it
+        // would reopen with the map dark again and the money already spent.
+        writer.WriteInt64("shot", _shot.Count);
+
+        for (int i = 0; i < _shot.Count; i++)
+        {
+            writer.WriteInt64(
+                "shot." + i.ToString("D4", System.Globalization.CultureInfo.InvariantCulture),
+                (long)_shot[i]);
         }
 
         for (int i = _generated; i < _prospects.Count; i++)
@@ -406,6 +552,19 @@ public sealed class WorldState : IStateOwner
                 $"the save was generated with {generated} prospects and this engine " +
                 $"regenerated {_generated}; the world would be restored onto a basin that " +
                 "is not the one it was played on");
+
+        // Cleared first: a restore onto an engine that has already generated
+        // must replace what is there rather than add to it, and a block shot
+        // twice would be counted twice.
+        _shot.Clear();
+
+        long shot = reader.ReadInt64("shot");
+
+        for (long i = 0; i < shot; i++)
+        {
+            _shot.Add((ulong)reader.ReadInt64(
+                "shot." + i.ToString("D4", System.Globalization.CultureInfo.InvariantCulture)));
+        }
 
         long placed = reader.ReadInt64("placed");
 
@@ -580,8 +739,11 @@ public sealed class WorldSink : IWorldSink
         // expressed: a four-way dome is nearly certainly there, a stratigraphic
         // pinch-out is an interpretation. That is what a detect class means,
         // said as risk rather than only as visibility.
-        _risks.Register(
-            new EntityRef(EntityKind.Prospect, prospect.Value),
+        // CHARTED, NOT TOLD (SDD-010 §4b's S1 amendment). The company does not
+        // know this structure is here until it shoots the block it sits in; the
+        // world keeps what a survey would say until one is.
+        _world.Chart(
+            prospect,
             accumulation.Play,
             Defaults.TrapConfidenceOf(accumulation.Subtlety));
 

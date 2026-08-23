@@ -1,0 +1,12 @@
+{
+  "kind": "terrain-class",
+  "id": "swamp",
+  "formation": { "heightBand": ["low"], "slopeBand": ["flat"], "climateBands": ["wet"] },
+  "constructionCostFactor": 2.8,
+  "transportCostFactor": 4.5,
+  "buildable": "piled-only",
+  "rigAccess": "marsh/barge",
+  "seismicOps": "swamp buggy crew",
+  "settlementWeight": 0.05,
+  "arableWeight": 0.1
+}

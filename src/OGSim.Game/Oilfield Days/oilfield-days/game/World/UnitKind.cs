@@ -14,7 +14,16 @@ namespace OilfieldDays.World;
 public enum JobKind
 {
     None,
+
+    /// <summary>Shoot 3-D over a structure already found — sharpen it.</summary>
     Survey,
+
+    /// <summary>Shoot 2-D over a block of the licence — find structures at all.</summary>
+    SurveyBlock,
+
+    /// <summary>Put up the early production facility a field is brought on with.</summary>
+    Commission,
+
     Drill,
     WellTest,
     WirelineLog,

@@ -26,6 +26,7 @@ These six cause the most confusion and are pinned first.
 | **Reservoir** | The rock volume holding an accumulation | "field", "pool", "the whole asset" | `IReservoir` |
 | **Compartment** | A hydraulically connected volume — **the unit pressure is simulated on** | *(rarely distinguished)* | `IReservoirCompartment` |
 | **Facility** | A site and container. **Owns no process behaviour** | "a processing plant" | `IFacility` |
+| **Early production facility** | A packaged, skid-mounted plant that brings a field on before a permanent one is built. The minimum train: header, flowline, separator, treating, metering, storage, gas and water handling | "an EPF" | `PlantBuilder` |
 
 ---
 
@@ -37,9 +38,10 @@ These six cause the most confusion and are pinned first.
 | **API gravity** | Density scale: `141.5/SG − 131.5`. Higher is lighter and usually worth more. **Nonlinear — never average two API values** |
 | **Aquifer** | A water body connected to a reservoir, providing pressure support and eventually water |
 | **Basin** | A sedimentary region; the largest exploration unit |
+| **Block** | A parcel of licensed acreage, and the unit exploration is bought in. A basin is divided into blocks; a company shoots one and learns what closures it holds |
 | **Bubble point (`Pb`)** | The pressure at which gas begins to come out of solution. **The most consequential number in a reservoir** |
 | **Charge** | Whether hydrocarbons actually migrated into a trap |
-| **Compartmentalisation** | A reservoir divided into pressure-isolated blocks. Usually discovered from data, not known in advance |
+| **Compartmentalisation** | A reservoir divided into pressure-isolated compartments. Usually discovered from data, not known in advance |
 | **Condensate** | Light liquid that drops out of gas as pressure falls |
 | **Contact** | The surface between fluids: gas-oil contact, oil-water contact. Moves during production |
 | **Drive mechanism** | How a reservoir maintains pressure as fluid is withdrawn. Determines recovery factor |

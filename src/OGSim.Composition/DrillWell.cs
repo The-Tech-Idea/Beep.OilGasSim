@@ -51,7 +51,8 @@ internal sealed class DrillWellActivity(
     IBeliefStore beliefs,
     OGSim.Subsurface.SubsurfaceState subsurface,
     ObservationDoor door,
-    OGSim.Company.Licence licence) : Activity<DrillWellCommand>(terms)
+    OGSim.Company.Licence licence,
+    IDrillingRule rule) : Activity<DrillWellCommand>(terms)
 {
     /// <summary>A well is PP&amp;E: the money buys something the company still
     /// owns next month (SDD-009 §1).</summary>
@@ -91,15 +92,13 @@ internal sealed class DrillWellActivity(
             reasons.Add(new RejectionReason(
                 "$loc:reject.invalid-depth", "a well must have a positive depth"));
 
-        // A well needs somewhere to tie in (SDD-006 §1b). Checked HERE, before
-        // the money moves: the header is full or it is not, and a player told so
-        // after four months of rig time has been charged for a hole that could
-        // never have produced.
-        if (!field.HasFreeSlot)
-            reasons.Add(new RejectionReason(
-                "$loc:reject.no-manifold-slot",
-                "every slot on the manifold is taken; a well with nowhere to tie in " +
-                "cannot flow, and a bigger header has to be installed first"));
+        // WHERE A WELL MAY GO, asked of the rule set the run is played under
+        // (plans 23). An operator drills into a plant that can take the
+        // production; a frontier company drills to find out whether a plant is
+        // worth building, and its well waits shut in until one is. Checked
+        // BEFORE the money moves either way — a player told after four months of
+        // rig time has been charged for a hole that could never have produced.
+        reasons.AddRange(rule.Refusals(field));
 
         // A LOST LICENCE REFUSES FURTHER DRILLING (SDD-011 §1's R20d.9
         // amendment). Nothing already producing stops — this is checked at

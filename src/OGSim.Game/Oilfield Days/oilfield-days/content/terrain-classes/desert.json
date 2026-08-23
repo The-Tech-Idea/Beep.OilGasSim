@@ -1,0 +1,12 @@
+{
+  "kind": "terrain-class",
+  "id": "desert",
+  "formation": { "heightBand": ["low", "mid"], "slopeBand": ["flat"], "climateBands": ["arid"] },
+  "constructionCostFactor": 1.2,
+  "transportCostFactor": 1.3,
+  "buildable": "yes",
+  "rigAccess": "standard + water logistics",
+  "seismicOps": "standard crew",
+  "settlementWeight": 0.05,
+  "arableWeight": 0.0
+}

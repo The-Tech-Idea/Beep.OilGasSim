@@ -22,7 +22,7 @@ public partial class VehicleUnit : Unit
         {
             Name = "Art",
             Texture = kind.Art,
-            TextureFilter = CanvasItem.TextureFilterEnum.Nearest,
+            TextureFilter = CanvasItem.TextureFilterEnum.LinearWithMipmaps,
         };
 
         Fit(kind.Art, kind.DrawHeight, frames: 1);

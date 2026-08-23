@@ -31,6 +31,24 @@ internal sealed class TestModule(
 internal static class Fixture
 {
     /// <summary>
+    /// An element this test needs the plant to have built.
+    /// </summary>
+    /// <remarks>
+    /// A plant's elements became optional with S2 (plans 22 §4). A test about
+    /// what a separator DOES is entitled to one, and should fail saying it is
+    /// missing rather than throw a null reference three lines later — which is
+    /// the difference between a diagnosis and a puzzle.
+    /// </remarks>
+    internal static T Built<T>(T? element, string named)
+        where T : class
+    {
+        Assert.True(element is not null,
+            $"this test needs a {named} and the plant has none built");
+
+        return element!;
+    }
+
+    /// <summary>
     /// Run months the way a company runs them: fixing what breaks.
     ///
     /// <para>Since R20d.22 equipment ages and fails, and the route law shuts in
@@ -77,7 +95,8 @@ internal static class Fixture
     /// </summary>
     public static EngineSettings Settings(
         FaultHandling handling = FaultHandling.Strict, string profile = "simulation",
-        ulong seed = 20260806UL, IReadOnlyList<IContentSource>? content = null) =>
+        ulong seed = 20260806UL, IReadOnlyList<IContentSource>? content = null,
+        ContentId? startingState = null, ContentId? rules = null) =>
         new(new GameDate(1965, 1),
             WorldSeed: seed,
             new AuditRetention(DetailWindowTicks: 12),
@@ -85,7 +104,19 @@ internal static class Fixture
             LogLevel.Info,
             handling,
             new ContentId(profile),
-            content ?? [ShippedContent()]);
+            content ?? [ShippedContent()],
+
+            // A COMMISSIONED PLANT, because these tests are about what a field
+            // DOES (plans 22 §4, S2 step 4). The shipped game opens on bare
+            // ground; a test about water cut is entitled to a separator without
+            // having to build one first, and this is the one place that says so
+            // for all of them.
+            startingState ?? Defaults.OpeningPosition,
+
+            // REALISTIC, because that is what these tests are: an operator
+            // working a field it holds (plans 23). The game runs at `frontier`;
+            // a test that wants those rules asks for them by name.
+            rules ?? RuleSets.Realistic.Id);
 
     /// <summary>
     /// The repository's own <c>content/</c>, read from disk — which is what a
@@ -264,7 +295,7 @@ public sealed class ShippedSetTests
         IReadOnlyList<IModule> modules = EngineBuilder.ShippedModules(
             audit, new SimulationClock(new GameDate(1965, 1)), new RandomSource(1UL),
             Defaults.Simulation, Fixture.Ladders(), Fixture.Registry(), Fixture.TerrainClasses(),
-            Fixture.TakeOrPay());
+            Fixture.TakeOrPay(), Defaults.OpeningPosition, RuleSets.Realistic);
 
         var provided = new HashSet<Type>();
         foreach (IModule module in modules)
@@ -292,7 +323,7 @@ public sealed class ShippedSetTests
         var reversed = new List<IModule>(EngineBuilder.ShippedModules(
             audit, new SimulationClock(new GameDate(1965, 1)), new RandomSource(1UL),
             Defaults.Simulation, Fixture.Ladders(), Fixture.Registry(), Fixture.TerrainClasses(),
-            Fixture.TakeOrPay()));
+            Fixture.TakeOrPay(), Defaults.OpeningPosition, RuleSets.Realistic));
         reversed.Reverse();
 
         Built forward = Assert.IsType<Built>(EngineBuilder.Build(Fixture.Settings()));
@@ -823,7 +854,8 @@ public sealed class AccessWindowTests
 
         var modules = new List<IModule>(EngineBuilder.ShippedModules(
             audit, clock, new RandomSource(20260806UL), Defaults.Simulation,
-            Fixture.Ladders(), Fixture.Registry(), Fixture.TerrainClasses(), Fixture.TakeOrPay()));
+            Fixture.Ladders(), Fixture.Registry(), Fixture.TerrainClasses(), Fixture.TakeOrPay(),
+            Defaults.OpeningPosition, RuleSets.Realistic));
 
         for (int i = 0; i < modules.Count; i++)
             if (modules[i] is EnvironmentModule)

@@ -25,8 +25,11 @@ public sealed record RemediateInjectorCommand() : Command(Subject: null);
 
 internal sealed class RemediateInjectorActivity(
     ActivityTerms terms,
-    OGSim.Wells.Injector injector) : Activity<RemediateInjectorCommand>(terms)
+    SurfaceChain chain) : Activity<RemediateInjectorCommand>(terms)
 {
+    /// <summary>The well this unplugs, or null on ground with no plant.</summary>
+    private OGSim.Wells.Injector? Unit => chain.Disposal;
+
     /// <summary>
     /// NO. The money buys back a capability the well already had — it restores
     /// what plugging took, and a company cannot improve its balance sheet by
@@ -41,10 +44,15 @@ internal sealed class RemediateInjectorActivity(
     public override bool OnePerTarget => true;
 
     public override (EntityRef Target, Length Depth) Aim(RemediateInjectorCommand command) =>
-        (new EntityRef(EntityKind.FlowElement, injector.Id.Value), NoDepth);
+        Unit is OGSim.Wells.Injector injector
+            ? (new EntityRef(EntityKind.FlowElement, injector.Id.Value), NoDepth)
+            : (SurfaceChain.TheField, NoDepth);
 
     public override IReadOnlyList<RejectionReason> OwnRefusals(RemediateInjectorCommand command)
     {
+        if (Unit is not OGSim.Wells.Injector injector)
+            return [SurfaceChain.NothingToUpgrade("disposal well")];
+
         // NOTHING TO CLEAR. Refused rather than run for the money: a clean well
         // acidised is a month and a bill for no change at all, and a player who
         // ordered one deserves to be told rather than invoiced.
@@ -68,6 +76,7 @@ internal sealed class RemediateInjectorActivity(
         // decision rather than a formality — the same shape as a dry hole.
         if (!done.Succeeded) return;
 
-        injector.Remediate();
+        // Gone by completion only if a save restored onto a plant without one.
+        Unit?.Remediate();
     }
 }

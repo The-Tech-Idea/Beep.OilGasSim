@@ -27,7 +27,7 @@ public partial class CrewUnit : Unit
         {
             Name = "Art",
             Texture = kind.Art,
-            TextureFilter = CanvasItem.TextureFilterEnum.Nearest,
+            TextureFilter = CanvasItem.TextureFilterEnum.LinearWithMipmaps,
         };
 
         if (kind.Art is not null)

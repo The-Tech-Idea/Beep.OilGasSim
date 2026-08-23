@@ -44,6 +44,15 @@ this is its client-side counterpart and is referenced from it.
 | C13 | **The supplied animation strips are in use** — a flare that burns and pumps that turn, switched by `Throughput > 0 && !Failed` | half the art had never been copied into the project |
 | C11 | **Stage A: selection is a click** — a structure, a well, a chain element or the plant, and the actions follow the selection | proximity was the input method when the player was a vehicle |
 
+## Game rules are a mode
+
+[23_GAME_RULES_MODE.md](23_GAME_RULES_MODE.md). OGSim is built for realistic
+scenarios; this game needs different **rules**, not different physics. A
+contested rule is a contract with two implementations and the run composes one
+set — never an `if (mode == …)` (design 03 §3.2). Seam built; GC-4's rule is the
+first mover and is **restored** rather than deleted. Drilling is next and waits
+on suspended wells.
+
 ## Next — the Settlers-shaped game
 
 **The client redesign is done and it was not enough.** A player directs a company
@@ -53,7 +62,7 @@ structure at month one, so the only verbs are upgrade and drill. The plan is
 
 | Phase | What | Status | Size |
 |---|---|---|---|
-| **S1** | The map goes dark — risk registered on discovery, not generation; an area survey finds structures | ⬜ | medium |
+| **S1** | The map goes dark — risk registered on discovery, not generation; a block survey finds structures | ✅ — the licence is cut into 16 blocks, `seismic-2d` shoots one, and a new game knows of no structure at all. The area became an ENTITY rather than a coordinate and a radius, which is what let it be built at all (SDD-007 §5 gives an activity one `EntityRef`). `S1V1`–`S1V4` pin it; no existing test broke | medium |
 | **S2** | The plant starts empty — `SurfaceChain` becomes a set, Install creates rather than upgrades | ⬜ | large |
 | **S3** | Connections laid by the player — flowlines between built elements | ❌ | blocked on G-02 |
 | **S4** | The yard extends — more crews, more sheds | ❌ | blocked on G-13 |

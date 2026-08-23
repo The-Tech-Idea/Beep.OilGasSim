@@ -36,7 +36,7 @@ public sealed record InstallSeparatorCommand() : Command(Subject: null);
 
 internal sealed class InstallSeparatorActivity(
     ActivityTerms terms,
-    OGSim.Facilities.Separator separator,
+    SurfaceChain chain,
     IReadOnlyList<OGSim.Facilities.SeparatorTier> ladder,
     FacilityLadders ladders,
     OGSim.Capabilities.CapabilityState capabilities,
@@ -44,6 +44,9 @@ internal sealed class InstallSeparatorActivity(
     IGatingValidator gate,
     IEffectState effects) : Activity<InstallSeparatorCommand>(terms)
 {
+    /// <summary>The vessel this enlarges, or null on ground with no plant.</summary>
+    private OGSim.Facilities.Separator? Unit => chain.Separator;
+
     /// <summary>A vessel is PP&amp;E: the money buys something the company still
     /// owns next month (SDD-009 §1).</summary>
     /// <summary>A rung on the surface ladder (finding 225).</summary>
@@ -58,11 +61,16 @@ internal sealed class InstallSeparatorActivity(
     public override bool OnePerTarget => true;
 
     public override (EntityRef Target, Length Depth) Aim(InstallSeparatorCommand command) =>
-        (new EntityRef(EntityKind.FlowElement, separator.Id.Value), NoDepth);
+        Unit is OGSim.Facilities.Separator separator
+            ? (new EntityRef(EntityKind.FlowElement, separator.Id.Value), NoDepth)
+            : (SurfaceChain.TheField, NoDepth);
 
     public override IReadOnlyList<RejectionReason> OwnRefusals(InstallSeparatorCommand command)
     {
-        if (NextRung() is { } next) return RungGate.Buyable(next.Id, ladders, capabilities, eras, gate, effects);
+        if (Unit is not OGSim.Facilities.Separator separator)
+            return [SurfaceChain.NothingToUpgrade("separator")];
+
+        if (NextRung(separator) is { } next) return RungGate.Buyable(next.Id, ladders, capabilities, eras, gate, effects);
 
         return
         [
@@ -86,7 +94,12 @@ internal sealed class InstallSeparatorActivity(
         // after another one has to fit the rung above wherever the field
         // actually got to, not the rung above where it was when this was
         // ordered.
-        if (NextRung() is OGSim.Facilities.SeparatorTier next) separator.Fit(next);
+        // The vessel can be gone by completion in only one way — a save
+        // restored onto a plant that never had one — and fitting a rung to
+        // nothing is worse than doing nothing.
+        if (Unit is not OGSim.Facilities.Separator separator) return;
+
+        if (NextRung(separator) is OGSim.Facilities.SeparatorTier next) separator.Fit(next);
     }
 
     /// <summary>
@@ -97,7 +110,7 @@ internal sealed class InstallSeparatorActivity(
     /// and a bigger-is-later rule would silently reorder a ladder whose rungs
     /// trade capacity against something else.</para>
     /// </summary>
-    private OGSim.Facilities.SeparatorTier? NextRung()
+    private OGSim.Facilities.SeparatorTier? NextRung(OGSim.Facilities.Separator separator)
     {
         for (int i = 0; i < ladder.Count - 1; i++)
             if (ladder[i].Id == separator.Tier.Id) return ladder[i + 1];
@@ -118,7 +131,7 @@ public sealed record InstallGasPlantCommand() : Command(Subject: null);
 
 internal sealed class InstallGasPlantActivity(
     ActivityTerms terms,
-    OGSim.Facilities.GasCapture plant,
+    SurfaceChain chain,
     IReadOnlyList<OGSim.Facilities.GasPlantTier> ladder,
     FacilityLadders ladders,
     OGSim.Capabilities.CapabilityState capabilities,
@@ -126,6 +139,9 @@ internal sealed class InstallGasPlantActivity(
     IGatingValidator gate,
     IEffectState effects) : Activity<InstallGasPlantCommand>(terms)
 {
+    /// <summary>The vessel this enlarges, or null on ground with no plant.</summary>
+    private OGSim.Facilities.GasCapture? Unit => chain.GasPlant;
+
     /// <summary>A plant is PP&amp;E (SDD-009 §1) — and it now depreciates by the
     /// barrel like everything else the company owns.</summary>
     /// <summary>A rung on the surface ladder (finding 225).</summary>
@@ -136,11 +152,16 @@ internal sealed class InstallGasPlantActivity(
     public override bool OnePerTarget => true;
 
     public override (EntityRef Target, Length Depth) Aim(InstallGasPlantCommand command) =>
-        (new EntityRef(EntityKind.FlowElement, plant.Id.Value), NoDepth);
+        Unit is OGSim.Facilities.GasCapture plant
+            ? (new EntityRef(EntityKind.FlowElement, plant.Id.Value), NoDepth)
+            : (SurfaceChain.TheField, NoDepth);
 
     public override IReadOnlyList<RejectionReason> OwnRefusals(InstallGasPlantCommand command)
     {
-        if (NextRung() is { } next) return RungGate.Buyable(next.Id, ladders, capabilities, eras, gate, effects);
+        if (Unit is not OGSim.Facilities.GasCapture plant)
+            return [SurfaceChain.NothingToUpgrade("gas plant")];
+
+        if (NextRung(plant) is { } next) return RungGate.Buyable(next.Id, ladders, capabilities, eras, gate, effects);
 
         return
         [
@@ -157,12 +178,17 @@ internal sealed class InstallGasPlantActivity(
 
         if (!done.Succeeded) return;
 
-        if (NextRung() is OGSim.Facilities.GasPlantTier next) plant.Fit(next);
+        // The vessel can be gone by completion in only one way — a save
+        // restored onto a plant that never had one — and fitting a rung to
+        // nothing is worse than doing nothing.
+        if (Unit is not OGSim.Facilities.GasCapture plant) return;
+
+        if (NextRung(plant) is OGSim.Facilities.GasPlantTier next) plant.Fit(next);
     }
 
     /// <summary>The rung above what is fitted, in the ladder's declared order
     /// (D-5).</summary>
-    private OGSim.Facilities.GasPlantTier? NextRung()
+    private OGSim.Facilities.GasPlantTier? NextRung(OGSim.Facilities.GasCapture plant)
     {
         for (int i = 0; i < ladder.Count - 1; i++)
             if (ladder[i].Id == plant.Tier.Id) return ladder[i + 1];
@@ -184,7 +210,7 @@ public sealed record InstallManifoldCommand() : Command(Subject: null);
 
 internal sealed class InstallManifoldActivity(
     ActivityTerms terms,
-    OGSim.Facilities.Manifold header,
+    SurfaceChain chain,
     IReadOnlyList<OGSim.Facilities.ManifoldTier> ladder,
     FacilityLadders ladders,
     OGSim.Capabilities.CapabilityState capabilities,
@@ -192,6 +218,9 @@ internal sealed class InstallManifoldActivity(
     IGatingValidator gate,
     IEffectState effects) : Activity<InstallManifoldCommand>(terms)
 {
+    /// <summary>The vessel this enlarges, or null on ground with no plant.</summary>
+    private OGSim.Facilities.Manifold? Unit => chain.Manifold;
+
     /// <summary>Steel on a site: PP&amp;E (SDD-009 §1).</summary>
     /// <summary>A rung on the surface ladder (finding 225).</summary>
     public override MovementCategory Spend => MovementCategory.Development;
@@ -201,11 +230,16 @@ internal sealed class InstallManifoldActivity(
     public override bool OnePerTarget => true;
 
     public override (EntityRef Target, Length Depth) Aim(InstallManifoldCommand command) =>
-        (new EntityRef(EntityKind.FlowElement, header.Id.Value), NoDepth);
+        Unit is OGSim.Facilities.Manifold header
+            ? (new EntityRef(EntityKind.FlowElement, header.Id.Value), NoDepth)
+            : (SurfaceChain.TheField, NoDepth);
 
     public override IReadOnlyList<RejectionReason> OwnRefusals(InstallManifoldCommand command)
     {
-        if (NextRung() is { } next) return RungGate.Buyable(next.Id, ladders, capabilities, eras, gate, effects);
+        if (Unit is not OGSim.Facilities.Manifold header)
+            return [SurfaceChain.NothingToUpgrade("header")];
+
+        if (NextRung(header) is { } next) return RungGate.Buyable(next.Id, ladders, capabilities, eras, gate, effects);
 
         return
         [
@@ -222,12 +256,17 @@ internal sealed class InstallManifoldActivity(
 
         if (!done.Succeeded) return;
 
-        if (NextRung() is OGSim.Facilities.ManifoldTier next) header.Fit(next);
+        // The vessel can be gone by completion in only one way — a save
+        // restored onto a plant that never had one — and fitting a rung to
+        // nothing is worse than doing nothing.
+        if (Unit is not OGSim.Facilities.Manifold header) return;
+
+        if (NextRung(header) is OGSim.Facilities.ManifoldTier next) header.Fit(next);
     }
 
     /// <summary>The rung above what is fitted, in the ladder's declared order
     /// (D-5).</summary>
-    private OGSim.Facilities.ManifoldTier? NextRung()
+    private OGSim.Facilities.ManifoldTier? NextRung(OGSim.Facilities.Manifold header)
     {
         for (int i = 0; i < ladder.Count - 1; i++)
             if (ladder[i].Id == header.Tier.Id) return ladder[i + 1];
@@ -252,7 +291,7 @@ public sealed record InstallTankCommand() : Command(Subject: null);
 
 internal sealed class InstallTankActivity(
     ActivityTerms terms,
-    OGSim.Facilities.Tank tank,
+    SurfaceChain chain,
     IReadOnlyList<OGSim.Facilities.TankTier> ladder,
     FacilityLadders ladders,
     OGSim.Capabilities.CapabilityState capabilities,
@@ -260,6 +299,9 @@ internal sealed class InstallTankActivity(
     IGatingValidator gate,
     IEffectState effects) : Activity<InstallTankCommand>(terms)
 {
+    /// <summary>The vessel this enlarges, or null on ground with no plant.</summary>
+    private OGSim.Facilities.Tank? Unit => chain.Tank;
+
     /// <summary>Civil work a company still owns next month: PP&amp;E
     /// (SDD-009 §1).</summary>
     /// <summary>A rung on the surface ladder (finding 225).</summary>
@@ -270,11 +312,16 @@ internal sealed class InstallTankActivity(
     public override bool OnePerTarget => true;
 
     public override (EntityRef Target, Length Depth) Aim(InstallTankCommand command) =>
-        (new EntityRef(EntityKind.FlowElement, tank.Id.Value), NoDepth);
+        Unit is OGSim.Facilities.Tank tank
+            ? (new EntityRef(EntityKind.FlowElement, tank.Id.Value), NoDepth)
+            : (SurfaceChain.TheField, NoDepth);
 
     public override IReadOnlyList<RejectionReason> OwnRefusals(InstallTankCommand command)
     {
-        if (NextRung() is { } next) return RungGate.Buyable(next.Id, ladders, capabilities, eras, gate, effects);
+        if (Unit is not OGSim.Facilities.Tank tank)
+            return [SurfaceChain.NothingToUpgrade("tank")];
+
+        if (NextRung(tank) is { } next) return RungGate.Buyable(next.Id, ladders, capabilities, eras, gate, effects);
 
         return
         [
@@ -291,12 +338,17 @@ internal sealed class InstallTankActivity(
 
         if (!done.Succeeded) return;
 
-        if (NextRung() is OGSim.Facilities.TankTier next) tank.Fit(next);
+        // The vessel can be gone by completion in only one way — a save
+        // restored onto a plant that never had one — and fitting a rung to
+        // nothing is worse than doing nothing.
+        if (Unit is not OGSim.Facilities.Tank tank) return;
+
+        if (NextRung(tank) is OGSim.Facilities.TankTier next) tank.Fit(next);
     }
 
     /// <summary>The rung above what is fitted, in the ladder's declared order
     /// (D-5).</summary>
-    private OGSim.Facilities.TankTier? NextRung()
+    private OGSim.Facilities.TankTier? NextRung(OGSim.Facilities.Tank tank)
     {
         for (int i = 0; i < ladder.Count - 1; i++)
             if (ladder[i].Id == tank.Tier.Id) return ladder[i + 1];
@@ -317,7 +369,7 @@ public sealed record InstallTreaterCommand() : Command(Subject: null);
 
 internal sealed class InstallTreaterActivity(
     ActivityTerms terms,
-    OGSim.Facilities.Treater treater,
+    SurfaceChain chain,
     IReadOnlyList<OGSim.Facilities.TreaterTier> ladder,
     FacilityLadders ladders,
     OGSim.Capabilities.CapabilityState capabilities,
@@ -325,6 +377,9 @@ internal sealed class InstallTreaterActivity(
     IGatingValidator gate,
     IEffectState effects) : Activity<InstallTreaterCommand>(terms)
 {
+    /// <summary>The vessel this enlarges, or null on ground with no plant.</summary>
+    private OGSim.Facilities.Treater? Unit => chain.Treater;
+
     /// <summary>A rung on the surface ladder (finding 225).</summary>
     public override MovementCategory Spend => MovementCategory.Development;
 
@@ -333,11 +388,16 @@ internal sealed class InstallTreaterActivity(
     public override bool OnePerTarget => true;
 
     public override (EntityRef Target, Length Depth) Aim(InstallTreaterCommand command) =>
-        (new EntityRef(EntityKind.FlowElement, treater.Id.Value), NoDepth);
+        Unit is OGSim.Facilities.Treater treater
+            ? (new EntityRef(EntityKind.FlowElement, treater.Id.Value), NoDepth)
+            : (SurfaceChain.TheField, NoDepth);
 
     public override IReadOnlyList<RejectionReason> OwnRefusals(InstallTreaterCommand command)
     {
-        if (NextRung() is { } next) return RungGate.Buyable(next.Id, ladders, capabilities, eras, gate, effects);
+        if (Unit is not OGSim.Facilities.Treater treater)
+            return [SurfaceChain.NothingToUpgrade("treater")];
+
+        if (NextRung(treater) is { } next) return RungGate.Buyable(next.Id, ladders, capabilities, eras, gate, effects);
 
         return
         [
@@ -354,10 +414,15 @@ internal sealed class InstallTreaterActivity(
 
         if (!done.Succeeded) return;
 
-        if (NextRung() is OGSim.Facilities.TreaterTier next) treater.Fit(next);
+        // The vessel can be gone by completion in only one way — a save
+        // restored onto a plant that never had one — and fitting a rung to
+        // nothing is worse than doing nothing.
+        if (Unit is not OGSim.Facilities.Treater treater) return;
+
+        if (NextRung(treater) is OGSim.Facilities.TreaterTier next) treater.Fit(next);
     }
 
-    private OGSim.Facilities.TreaterTier? NextRung()
+    private OGSim.Facilities.TreaterTier? NextRung(OGSim.Facilities.Treater treater)
     {
         for (int i = 0; i < ladder.Count - 1; i++)
             if (ladder[i].Id == treater.Tier.Id) return ladder[i + 1];

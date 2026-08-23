@@ -275,6 +275,8 @@ public sealed partial class Dispatcher : Node2D
     private Command? Build(JobKind job, ulong subject, FieldReadModel? snapshot) => job switch
     {
         JobKind.Survey => new SeismicSurveyCommand(new EntityId<IProspect>(subject)),
+        JobKind.SurveyBlock => new SurveyBlockCommand(new EntityId<IBlock>(subject)),
+        JobKind.Commission => new InstallEarlyProductionFacilityCommand(),
         JobKind.Drill => new DrillWellCommand(new EntityId<IProspect>(subject), new Length(2000.0)),
         JobKind.WellTest => Compartment(snapshot) is EntityId<IReservoirCompartmentEntity> t
             ? new WellTestCommand(t)

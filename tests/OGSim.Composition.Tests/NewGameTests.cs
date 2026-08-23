@@ -60,7 +60,188 @@ public sealed class NewGameTests
     /// mean these tests silently stop asking their question the first time step 6
     /// is tuned.
     /// </summary>
-    private static Engine BasinWithSeveralProspects() => NewGame(SeedOfBasinWithSeveralProspects());
+    private static Engine BasinWithSeveralProspects() =>
+        Surveyed(NewGame(SeedOfBasinWithSeveralProspects()));
+
+    /// <summary>
+    /// A basin whose licence has been shot end to end.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>The map starts dark (SDD-010 §4b's S1 amendment), and none of
+    /// the tests using this are about that.</b> They ask what a company does
+    /// with structures it has already found — which odds it drills, how a dry
+    /// hole re-prices the rest of its play, whether borrowing develops it
+    /// faster. Every one of them needs a board to choose from, and an unshot
+    /// basin gives them an empty one.</para>
+    ///
+    /// <para><b>Shot directly rather than by submitting sixteen orders.</b> The
+    /// commands would spend a fifth of the opening balance and sixteen months
+    /// before the test began, moving every number these tests measure for a
+    /// reason unrelated to what they assert. This is the engine's own method
+    /// against the engine's own state — the world really is surveyed, and a save
+    /// taken here carries that as it would any other.</para>
+    /// </remarks>
+    private static Engine Surveyed(Engine engine)
+    {
+        WorldState world = WorldOf(engine);
+        var risks = engine.Provided.Resolve<OGSim.Information.ProspectRisks>();
+
+        for (int i = 0; i < world.BlockCount; i++)
+            world.Shoot(world.BlockAt(i), risks);
+
+        return engine;
+    }
+
+    /// <summary>
+    /// Which block a structure sits in.
+    /// </summary>
+    /// <remarks>
+    /// It throws rather than returning nothing, and that is load-bearing: a
+    /// structure outside every block would be one no survey could ever find, so
+    /// this doubles as the check that the grid actually covers the ground the
+    /// generator places things on.
+    /// </remarks>
+    private static EntityId<IBlock> BlockHolding(WorldState world, EntityId<IProspect> prospect)
+    {
+        Coordinate at = world.PositionOf(prospect);
+        double halfWide = world.BlockWidth.Metres * 0.5;
+        double halfTall = world.BlockHeight.Metres * 0.5;
+
+        for (int i = 0; i < world.BlockCount; i++)
+        {
+            EntityId<IBlock> block = world.BlockAt(i);
+            Coordinate centre = world.CentreOf(block);
+
+            if (at.X >= centre.X - halfWide && at.X < centre.X + halfWide
+                && at.Y >= centre.Y - halfTall && at.Y < centre.Y + halfTall)
+                return block;
+        }
+
+        throw new InvalidOperationException(
+            $"a structure at ({at.X}, {at.Y}) sits outside every block on the licence, " +
+            "so no survey could ever find it");
+    }
+
+    /// <summary>
+    /// THE MAP STARTS DARK (SDD-010 §4b's S1 amendment).
+    /// </summary>
+    /// <remarks>
+    /// Asserted from both sides deliberately. The world really did place
+    /// structures — so this cannot pass by generation having failed — and the
+    /// company knows of none of them. That gap is the exploration game: before
+    /// this, every structure was handed over as the world was built, and the
+    /// opening question was never "where do I look" but only "which of these
+    /// known odds do I drill".
+    /// </remarks>
+    [Fact]
+    public void S1V1_a_new_game_is_told_nothing_about_the_ground_it_holds()
+    {
+        Engine engine = NewGame(SeedOfBasinWithSeveralProspects());
+        engine.Pipeline.AdvanceTick();
+
+        Assert.NotEmpty(WorldOf(engine).Prospects);
+        Assert.Empty(engine.ReadModel!.Prospects);
+    }
+
+    /// <summary>
+    /// A SHOT BLOCK GIVES UP WHAT IS UNDER IT AND NOTHING ELSE.
+    /// </summary>
+    /// <remarks>
+    /// The second half is the half that matters. A survey that revealed the
+    /// whole basin would be the old bright map bought once, and the block a
+    /// player chose would carry no meaning.
+    /// </remarks>
+    [Fact]
+    public void S1V2_shooting_a_block_finds_the_structures_inside_it_and_no_others()
+    {
+        Engine engine = NewGame(SeedOfBasinWithSeveralProspects());
+        WorldState world = WorldOf(engine);
+
+        engine.Pipeline.AdvanceTick();
+
+        EntityId<IBlock> block = BlockHolding(world, world.Prospects[0]);
+
+        Assert.IsType<Accepted>(engine.Commands.Submit(new SurveyBlockCommand(block)));
+
+        for (var tick = 0; tick < 3; tick++) engine.Pipeline.AdvanceTick();
+
+        IReadOnlyList<ProspectView> found = engine.ReadModel!.Prospects;
+
+        Assert.NotEmpty(found);
+
+        Coordinate centre = world.CentreOf(block);
+        double halfWide = world.BlockWidth.Metres * 0.5;
+        double halfTall = world.BlockHeight.Metres * 0.5;
+
+        for (int i = 0; i < found.Count; i++)
+        {
+            Assert.InRange(found[i].At.X, centre.X - halfWide, centre.X + halfWide);
+            Assert.InRange(found[i].At.Y, centre.Y - halfTall, centre.Y + halfTall);
+        }
+    }
+
+    /// <summary>
+    /// GROUND KNOWN TO BE EMPTY IS SOMETHING THE COMPANY BOUGHT.
+    /// </summary>
+    /// <remarks>
+    /// A block that finds nothing must still come back SURVEYED. If it did not,
+    /// barren ground would look identical to ground nobody had looked at, and a
+    /// company would pay to rule out the same acreage over and over — which is
+    /// the opposite of what a dry survey is worth.
+    /// </remarks>
+    [Fact]
+    public void S1V3_a_block_over_barren_ground_is_a_result_and_says_so()
+    {
+        Engine engine = NewGame(SeedOfBasinWithSeveralProspects());
+        WorldState world = WorldOf(engine);
+
+        engine.Pipeline.AdvanceTick();
+
+        var held = new List<ulong>();
+
+        for (int i = 0; i < world.Prospects.Count; i++)
+            held.Add(BlockHolding(world, world.Prospects[i]).Value);
+
+        EntityId<IBlock>? barren = null;
+
+        for (int i = 0; i < world.BlockCount && barren is null; i++)
+            if (!held.Contains(world.BlockAt(i).Value)) barren = world.BlockAt(i);
+
+        Assert.NotNull(barren);
+        Assert.IsType<Accepted>(engine.Commands.Submit(new SurveyBlockCommand(barren.Value)));
+
+        for (var tick = 0; tick < 3; tick++) engine.Pipeline.AdvanceTick();
+
+        Assert.Empty(engine.ReadModel!.Prospects);
+
+        BlockView shot = engine.ReadModel!.Blocks.Single(b => b.Block.Value == barren.Value.Value);
+
+        Assert.True(shot.Surveyed, "a block that found nothing still has to read as looked at");
+        Assert.Equal(0, shot.Structures);
+    }
+
+    /// <summary>
+    /// A BLOCK IS NOT WORTH SHOOTING TWICE, and the engine says why.
+    /// </summary>
+    [Fact]
+    public void S1V4_a_block_already_shot_refuses_a_second_pass()
+    {
+        Engine engine = NewGame(SeedOfBasinWithSeveralProspects());
+        WorldState world = WorldOf(engine);
+
+        engine.Pipeline.AdvanceTick();
+
+        EntityId<IBlock> block = BlockHolding(world, world.Prospects[0]);
+
+        Assert.IsType<Accepted>(engine.Commands.Submit(new SurveyBlockCommand(block)));
+
+        for (var tick = 0; tick < 3; tick++) engine.Pipeline.AdvanceTick();
+
+        var refused = Assert.IsType<Rejected>(engine.Commands.Submit(new SurveyBlockCommand(block)));
+
+        Assert.Contains(refused.Reasons, reason => reason.Detail.Contains(
+            "already been shot", StringComparison.Ordinal));
+    }
 
     /// <summary>
     /// The seed itself, because a SAVE needs it — <see cref="SaveGame.Write"/> is
@@ -476,7 +657,8 @@ public sealed class NewGameTests
 
         field.Drill(reservoir, new Length(2000.0));
 
-        Assert.Equal(expected.Metres, chain.Flowline.PipeLength.Metres, precision: 6);
+        Assert.Equal(expected.Metres,
+            Fixture.Built(chain.Flowline, "flowline").PipeLength.Metres, precision: 6);
     }
 
     /// <summary>
@@ -496,7 +678,7 @@ public sealed class NewGameTests
 
         field.Drill(first, new Length(2000.0));
 
-        Length laid = chain.Flowline.PipeLength;
+        Length laid = Fixture.Built(chain.Flowline, "flowline").PipeLength;
 
         // A well on a DIFFERENT discovery — the case that would move the line if
         // anything were going to.
@@ -505,7 +687,7 @@ public sealed class NewGameTests
 
         field.Drill(elsewhere, new Length(2000.0));
 
-        Assert.Equal(laid.Metres, chain.Flowline.PipeLength.Metres, precision: 6);
+        Assert.Equal(laid.Metres, Fixture.Built(chain.Flowline, "flowline").PipeLength.Metres, precision: 6);
     }
 
     /// <summary>
@@ -567,7 +749,7 @@ public sealed class NewGameTests
 
         for (ulong seed = 1UL; seed < 20UL && odds.Count < 2; seed++)
         {
-            Engine engine = NewGame(seed);
+            Engine engine = Surveyed(NewGame(seed));
             engine.Pipeline.AdvanceTick();
 
             IReadOnlyList<ProspectView> offered = engine.ReadModel!.Prospects;
@@ -598,7 +780,7 @@ public sealed class NewGameTests
         // the only shape in which both halves of the claim can be checked.
         for (ulong seed = 1UL; seed < 60UL; seed++)
         {
-            Engine engine = NewGame(seed);
+            Engine engine = Surveyed(NewGame(seed));
             engine.Pipeline.AdvanceTick();
 
             IReadOnlyList<ProspectView> before = engine.ReadModel!.Prospects;
@@ -649,7 +831,7 @@ public sealed class NewGameTests
     {
         for (ulong seed = 1UL; seed < 60UL; seed++)
         {
-            Engine engine = NewGame(seed);
+            Engine engine = Surveyed(NewGame(seed));
             engine.Pipeline.AdvanceTick();
 
             IReadOnlyList<ProspectView> before = engine.ReadModel!.Prospects;
@@ -725,7 +907,7 @@ public sealed class NewGameTests
     {
         for (ulong seed = 1UL; seed < 60UL; seed++)
         {
-            Engine engine = NewGame(seed);
+            Engine engine = Surveyed(NewGame(seed));
             WorldState world = WorldOf(engine);
 
             var empty = -1;
@@ -1030,7 +1212,7 @@ public sealed class NewGameTests
         // every best-odds prospect held oil would be a genuine surprise.
         for (ulong seed = 1UL; seed < 7UL; seed++)
         {
-            DrillingSeason season = new Explorer(NewGame(seed), drillAbove: 0.0, wellTarget: 2, buildBelow: double.MaxValue, borrows: false)
+            DrillingSeason season = new Explorer(Surveyed(NewGame(seed)), drillAbove: 0.0, wellTarget: 2, buildBelow: double.MaxValue, borrows: false)
                 .Play(months: 60);
 
             dry += season.DryHoles;
@@ -1094,7 +1276,7 @@ public sealed class NewGameTests
     }
 
     private static Money Earned(ulong seed, double buildBelow, bool borrows = false) =>
-        new Explorer(NewGame(seed), drillAbove: 0.0, wellTarget: 2, buildBelow, borrows)
+        new Explorer(Surveyed(NewGame(seed)), drillAbove: 0.0, wellTarget: 2, buildBelow, borrows)
             .Play(months: 84)
             .Cash;
 
@@ -1474,7 +1656,7 @@ public sealed class NewGameTests
     {
         for (ulong seed = 1UL; seed < 60UL; seed++)
         {
-            Engine engine = NewGame(seed);
+            Engine engine = Surveyed(NewGame(seed));
             WorldState world = WorldOf(engine);
 
             var charged = -1;

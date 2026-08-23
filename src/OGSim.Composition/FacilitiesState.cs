@@ -23,12 +23,18 @@ using OGSim.Kernel;
 
 namespace OGSim.Composition;
 
-internal sealed class FacilitiesState(SurfaceChain chain, FacilityLadders ladders)
-    : IStateOwner
+internal sealed class FacilitiesState(
+    SurfaceChain chain,
+    FacilityLadders ladders,
+    PlantBuilder works) : IStateOwner
 {
     public StateKey Key { get; } = new("facilities.units");
 
-    public int SchemaVersion => 1;
+    /// <summary>
+    /// Two since S2: a save carries WHICH elements were built, not only what
+    /// tier each of a fixed eleven holds (plans 22 §4).
+    /// </summary>
+    public int SchemaVersion => 2;
 
     /// <summary>Nothing has to be back before this is (SDD-013 §2b).</summary>
     public IReadOnlyList<StateKey> RestoreAfter => [];
@@ -37,35 +43,52 @@ internal sealed class FacilitiesState(SurfaceChain chain, FacilityLadders ladder
     {
         ArgumentNullException.ThrowIfNull(writer);
 
-        // THE FITTED RUNG IS THE PURCHASE (SDD-006 §0c's refit). The socket keeps
-        // its identity across an upgrade and what is fitted into it changes, so
-        // the tier's id is the whole of what a save has to carry about it.
-        writer.WriteString("manifold-tier", chain.Manifold.Tier.Id.Value);
-        writer.WriteString("separator-tier", chain.Separator.Tier.Id.Value);
-        writer.WriteString("tank-tier", chain.Tank.Tier.Id.Value);
-        writer.WriteString("gas-plant-tier", chain.GasPlant.Tier.Id.Value);
-        writer.WriteString("treater-tier", chain.Treater.Tier.Id.Value);
+        // WHAT THE COMPANY HAS BUILT, not what tier a fixed socket holds
+        // (plans 22 §4, S2). This save assumed eleven elements existed because
+        // composition always made them; a plant assembled a piece at a time has
+        // to carry which pieces are there, or a reload hands back a refinery
+        // the company never bought.
+        //
+        // A FLAG PER ELEMENT, on the pattern world.decisions already uses for
+        // its header: a sentinel tier id would make some legitimate catalogue
+        // entry unusable the day content named one that way.
+        Socket(writer, "manifold", chain.Manifold?.Tier.Id.Value);
+        Socket(writer, "separator", chain.Separator?.Tier.Id.Value);
+        Socket(writer, "tank", chain.Tank?.Tier.Id.Value);
+        Socket(writer, "gas-plant", chain.GasPlant?.Tier.Id.Value);
+        Socket(writer, "treater", chain.Treater?.Tier.Id.Value);
 
         // WHAT THE CHAIN IS HOLDING, as distinct from what it IS. A line
-        // restored empty delivers its first month's oil out of nowhere (§6's V7
-        // term), and an intake restored at zero stops buying the water a flood
-        // was ordered to put back.
-        Inventory(writer, "linefill", chain.Flowline.Linefill);
+        // restored empty delivers its first month of oil out of nowhere (§6's
+        // V7 term), and an intake restored at zero stops buying the water a
+        // flood was ordered to put back.
+        writer.WriteInt64("flowline-built", chain.Flowline is null ? 0L : 1L);
 
-        writer.WriteDouble("intake-commanded", chain.Intake.Commanded.CubicMetresPerSecond);
+        if (chain.Flowline is OGSim.Facilities.Pipeline flowline)
+            Inventory(writer, "linefill", flowline.Linefill);
 
-        // THE TANK'S CONTENTS — oil the company owns, and the ullage every
-        // export decision is taken against. Its PROVENANCE travels with it,
-        // because a barrel is credited to the compartment it came from and a
-        // restored blend that had forgotten whose oil it was would allocate the
-        // next sale to the wrong reservoir.
-        Inventory(writer, "tank-held", chain.Tank.Held);
+        writer.WriteInt64("intake-built", chain.Intake is null ? 0L : 1L);
 
-        writer.WriteInt64("tank-shares", chain.Tank.Provenance.Shares.Length);
+        if (chain.Intake is OGSim.Facilities.WaterIntake intake)
+            writer.WriteDouble("intake-commanded", intake.Commanded.CubicMetresPerSecond);
 
-        for (int i = 0; i < chain.Tank.Provenance.Shares.Length; i++)
+        // THE TANK CONTENTS - oil the company owns, and the ullage every export
+        // decision is taken against. PROVENANCE travels with it, because a
+        // barrel is credited to the compartment it came from and a restored
+        // blend that had forgotten whose oil it was would allocate the next sale
+        // to the wrong reservoir.
+        writer.WriteInt64("tank-contents-built", chain.Tank is null ? 0L : 1L);
+
+        if (chain.Tank is not OGSim.Facilities.Tank tank)
+            return;
+
+        Inventory(writer, "tank-held", tank.Held);
+
+        writer.WriteInt64("tank-shares", tank.Provenance.Shares.Length);
+
+        for (int i = 0; i < tank.Provenance.Shares.Length; i++)
         {
-            (EntityRef compartment, double fraction) = chain.Tank.Provenance.Shares[i];
+            (EntityRef compartment, double fraction) = tank.Provenance.Shares[i];
             string at = Ordinal("tank-share", i);
 
             writer.WriteInt64(at + ".kind", (long)compartment.Kind);
@@ -74,33 +97,83 @@ internal sealed class FacilitiesState(SurfaceChain chain, FacilityLadders ladder
         }
     }
 
+    /// <summary>
+    /// One socket: whether it was built, and what is fitted into it.
+    /// </summary>
+    /// <remarks>
+    /// THE FITTED RUNG IS THE PURCHASE (SDD-006 §0c's refit). The socket keeps
+    /// its identity across an upgrade and what is fitted into it changes, so the
+    /// tier id is the whole of what a save has to carry about one that exists.
+    /// </remarks>
+    private static void Socket(IStateWriter writer, string what, string? tier)
+    {
+        writer.WriteInt64(what + "-built", tier is null ? 0L : 1L);
+
+        if (tier is not null)
+            writer.WriteString(what + "-tier", tier);
+    }
+
     public void Restore(IStateReader reader)
     {
         ArgumentNullException.ThrowIfNull(reader);
 
-        chain.Manifold.Fit(
-            Rung(ladders.Manifold, reader.ReadString("manifold-tier"), "manifold",
-                 tier => tier.Id));
+        // ERECT WHAT THE SAVE SAYS WAS BUILT (plans 22 §4, S2 step 4). A game
+        // that opened on bare ground and commissioned a facility is reloaded
+        // into a composition that built nothing, so the plant has to be put up
+        // before any tier can be fitted into it.
+        //
+        // Keyed on the manifold because commissioning is all-or-nothing: the
+        // early production facility is the only thing that creates elements, so
+        // a save with a header has the whole train.
+        if (Built(reader, "manifold") && !PlantBuilder.Standing(chain))
+            works.Commission(chain);
 
-        chain.Separator.Fit(
-            Rung(ladders.Separator, reader.ReadString("separator-tier"), "separator",
-                 tier => tier.Id));
+        if (Built(reader, "manifold"))
+        {
+            Present(chain.Manifold, "manifold").Fit(
+                Rung(ladders.Manifold, reader.ReadString("manifold-tier"), "manifold",
+                     tier => tier.Id));
+        }
 
-        chain.Tank.Fit(
-            Rung(ladders.Tank, reader.ReadString("tank-tier"), "tank",
-                 tier => tier.Id));
+        if (Built(reader, "separator"))
+        {
+            Present(chain.Separator, "separator").Fit(
+                Rung(ladders.Separator, reader.ReadString("separator-tier"), "separator",
+                     tier => tier.Id));
+        }
 
-        chain.GasPlant.Fit(
-            Rung(ladders.GasPlant, reader.ReadString("gas-plant-tier"), "gas plant",
-                 tier => tier.Id));
+        if (Built(reader, "tank"))
+        {
+            Present(chain.Tank, "tank").Fit(
+                Rung(ladders.Tank, reader.ReadString("tank-tier"), "tank",
+                     tier => tier.Id));
+        }
 
-        chain.Treater.Fit(
-            Rung(ladders.Treater, reader.ReadString("treater-tier"), "treater",
-                 tier => tier.Id));
+        if (Built(reader, "gas-plant"))
+        {
+            Present(chain.GasPlant, "gas plant").Fit(
+                Rung(ladders.GasPlant, reader.ReadString("gas-plant-tier"), "gas plant",
+                     tier => tier.Id));
+        }
 
-        chain.Flowline.CommitLinefill(Inventory(reader, "linefill"));
+        if (Built(reader, "treater"))
+        {
+            Present(chain.Treater, "treater").Fit(
+                Rung(ladders.Treater, reader.ReadString("treater-tier"), "treater",
+                     tier => tier.Id));
+        }
 
-        chain.Intake.Command(new ReservoirRate(reader.ReadDouble("intake-commanded")));
+        if (Built(reader, "flowline"))
+            Present(chain.Flowline, "flowline").CommitLinefill(Inventory(reader, "linefill"));
+
+        if (Built(reader, "intake"))
+        {
+            Present(chain.Intake, "water intake").Command(
+                new ReservoirRate(reader.ReadDouble("intake-commanded")));
+        }
+
+        if (!Built(reader, "tank-contents"))
+            return;
 
         var shares =
             System.Collections.Immutable.ImmutableArray.CreateBuilder<(EntityRef, double)>();
@@ -118,9 +191,30 @@ internal sealed class FacilitiesState(SurfaceChain chain, FacilityLadders ladder
                 reader.ReadDouble(at + ".fraction")));
         }
 
-        chain.Tank.RestoreTo(
+        Present(chain.Tank, "tank").RestoreTo(
             Inventory(reader, "tank-held"), Allocation.Validated(shares.ToImmutable()));
     }
+
+    private static bool Built(IStateReader reader, string what) =>
+        reader.ReadInt64(what + "-built") != 0L;
+
+    /// <summary>
+    /// The element a save says was built.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>A refusal for what commissioning cannot explain.</b> A save
+    /// describing a plant is now erected before this runs, so the only way to
+    /// reach here is a save whose elements do not agree with each other — a
+    /// separator recorded without the header that comes in the same package.
+    /// That is a corrupt file rather than a smaller field, and restoring half
+    /// of it would be worse than refusing.</para>
+    /// </remarks>
+    private static T Present<T>(T? element, string named)
+        where T : class
+        =>
+        element ?? throw new SaveDataFault("SDD-013 §2b", null,
+            $"the save says a {named} was built and this plant has none; " +
+            "restoring a field smaller than the one that was saved would lose it");
 
     /// <summary>
     /// An inventory, ordinal by ordinal.

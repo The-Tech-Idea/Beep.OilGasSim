@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://8y4v52s8xp5k"
-path="res://.godot/imported/grasstileset2.png-8a12960a17ee913ba43883181f2b1bf4.ctex"
+uid="uid://btfgm041vp11q"
+path="res://.godot/imported/grayplane1.png-1a309c7a7e5d6892850a52d0355fdeff.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/tilesets/grasstileset2.png"
-dest_files=["res://.godot/imported/grasstileset2.png-8a12960a17ee913ba43883181f2b1bf4.ctex"]
+source_file="res://assets/tilesets/flat17/grayplane1.png"
+dest_files=["res://.godot/imported/grayplane1.png-1a309c7a7e5d6892850a52d0355fdeff.ctex"]
 
 [params]
 
