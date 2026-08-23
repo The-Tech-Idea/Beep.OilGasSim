@@ -122,7 +122,15 @@ public sealed partial class BasinWorld : Node2D
         // reach every structure without crossing the whole field.
         PlantSite = TileCentre(PlantTile());
 
-        _backdrop = new PainterlyTerrainLayer { Name = "PainterlyTerrain", ZIndex = -90 };
+        _backdrop = new PainterlyTerrainLayer
+        {
+            Name = "PainterlyTerrain",
+            RenderZIndex = -90,
+            GenerateOnReady = false,
+            PixelsPerTile = 10,
+            SmoothingPasses = 0,
+            GrainStrength = 0.035f,
+        };
         AddChild(_backdrop);
 
         // These atlas layers are still built as diagnostic/source layers, but
@@ -351,6 +359,7 @@ public sealed partial class BasinWorld : Node2D
     private void PaintGround(IReadOnlyList<ProspectView> prospects)
     {
         _ground.Fill(new Rect2I(0, 0, _tiles, _tiles), TerrainKind.Grass);
+        _terrain.ClearLeveling();
 
         Vector2I plant = PlantTile();
 

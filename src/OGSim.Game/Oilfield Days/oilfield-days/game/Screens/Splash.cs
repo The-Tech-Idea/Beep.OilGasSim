@@ -30,43 +30,54 @@ public sealed partial class Splash : Control
 	private ColorRect _veil = null!;
 	private double _elapsed;
 	private bool _leaving;
+	private bool _ready;
 
 	public override void _Ready()
 	{
-		SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
+		try
+		{
+			SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
 
-		var ground = RequireNode<ColorRect>("Ground");
-		ground.Color = KitTheme.Void;
-		ground.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
+			var ground = RequireNode<ColorRect>("Ground");
+			ground.Color = KitTheme.Void;
+			ground.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
 
-		var art = RequireNode<TextureRect>("Art");
-		art.Texture ??= GD.Load<Texture2D>(SlateChrome.SplashPath);
-		art.ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize;
-		art.StretchMode = TextureRect.StretchModeEnum.KeepAspectCovered;
-		art.MouseFilter = MouseFilterEnum.Ignore;
-		art.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
+			var art = RequireNode<TextureRect>("Art");
+			art.Texture ??= GD.Load<Texture2D>(SlateChrome.SplashPath);
+			art.ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize;
+			art.StretchMode = TextureRect.StretchModeEnum.KeepAspectCovered;
+			art.MouseFilter = MouseFilterEnum.Ignore;
+			art.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
 
-		Label credit = RequireNode<Label>("Credit");
-		credit.Text = "Powered by OGSim";
-		AnchorBottomCenter(credit, -90, -70, 90, -44);
-		credit.AddThemeFontSizeOverride("font_size", 18);
-		credit.AddThemeColorOverride("font_color", KitTheme.Ink);
-		credit.AddThemeColorOverride("font_shadow_color", new Color(0.0f, 0.0f, 0.0f, 0.9f));
-		credit.AddThemeConstantOverride("shadow_outline_size", 8);
+			Label credit = RequireNode<Label>("Credit");
+			credit.Text = "Powered by OGSim";
+			AnchorBottomCenter(credit, -90, -90, 90, -44);
+			credit.AddThemeFontSizeOverride("font_size", 18);
+			credit.AddThemeColorOverride("font_color", KitTheme.Ink);
+			credit.AddThemeColorOverride("font_shadow_color", new Color(0.0f, 0.0f, 0.0f, 0.9f));
+			credit.AddThemeConstantOverride("shadow_outline_size", 8);
 
-		Label skip = RequireNode<Label>("Skip");
-		skip.Text = "press any key";
-		AnchorBottomCenter(skip, -45, -40, 45, -18);
-		skip.AddThemeFontSizeOverride("font_size", 14);
-		skip.AddThemeColorOverride("font_color", KitTheme.Muted);
-		skip.AddThemeColorOverride("font_shadow_color", new Color(0.0f, 0.0f, 0.0f, 0.9f));
-		skip.AddThemeConstantOverride("shadow_outline_size", 8);
+			Label skip = RequireNode<Label>("Skip");
+			skip.Text = "press any key";
+			AnchorBottomCenter(skip, -45, -40, 45, -18);
+			skip.AddThemeFontSizeOverride("font_size", 14);
+			skip.AddThemeColorOverride("font_color", KitTheme.Muted);
+			skip.AddThemeColorOverride("font_shadow_color", new Color(0.0f, 0.0f, 0.0f, 0.9f));
+			skip.AddThemeConstantOverride("shadow_outline_size", 8);
 
-		_veil = RequireNode<ColorRect>("Veil");
-		_veil.Color = new Color(0.0f, 0.0f, 0.0f, 0.0f);
-		_veil.MouseFilter = MouseFilterEnum.Ignore;
-		_veil.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
+			_veil = RequireNode<ColorRect>("Veil");
+			_veil.Color = new Color(0.0f, 0.0f, 0.0f, 0.0f);
+			_veil.MouseFilter = MouseFilterEnum.Ignore;
+			_veil.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
 
+			_ready = true;
+		}
+		catch (Exception ex)
+		{
+			SetProcess(false);
+			SetProcessUnhandledInput(false);
+			GD.PushError(ex.Message);
+		}
 	}
 
 	public override void _UnhandledInput(InputEvent @event)
@@ -77,7 +88,7 @@ public sealed partial class Splash : Control
 
 	public override void _Process(double delta)
 	{
-		if (Godot.Engine.IsEditorHint())
+		if (!_ready || Godot.Engine.IsEditorHint())
 			return;
 
 		_elapsed += delta;

@@ -453,6 +453,16 @@ public sealed class ChainTests
         ChainElementView jammed = Assert.Single(engine.ReadModel!.Bottlenecks);
         Assert.Equal("separator", jammed.DisplayId);
 
+        // SDD-002 §8's finding-283 amendment: the SAME jam shows how full
+        // the separator's own bound constraint is, not only that it
+        // refused something — over 100%, since this is the genuinely
+        // violated case Deferred was already measured from.
+        ConstraintKind boundKind = jammed.Deferred[0].Kind;
+        UtilisationView utilisation = Assert.Single(
+            jammed.Utilisation, u => u.Kind == boundKind);
+        Assert.True(utilisation.Ratio > 1.0,
+            $"the separator is refusing production but its own utilisation reads {utilisation.Ratio}");
+
         double capped = engine.ReadModel.ProducedThisTick.CubicMetres;
 
         // Buy the next rung. No rig — construction is not the drilling crew.
@@ -468,6 +478,16 @@ public sealed class ChainTests
 
         Assert.DoesNotContain(engine.ReadModel.Bottlenecks,
             element => element.DisplayId == "separator");
+
+        // AND THE SAME UTILISATION HEALED. The refit did not merely stop the
+        // refusal from being reported — the ratio it is measured from
+        // genuinely dropped back under 1.
+        ChainElementView refitted = Assert.Single(
+            engine.ReadModel.Chain, element => element.DisplayId == "separator");
+        UtilisationView healed = Assert.Single(
+            refitted.Utilisation, u => u.Kind == boundKind);
+        Assert.True(healed.Ratio <= 1.0,
+            $"the refitted separator still reads {healed.Ratio} utilisation on {boundKind}");
     }
 
     /// <summary>

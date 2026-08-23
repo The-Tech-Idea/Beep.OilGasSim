@@ -161,6 +161,14 @@ public sealed record SolveReport(
     IReadOnlyList<ElementSolution> Solutions,
     IReadOnlyList<CompletionState> CompletionStates,
     IReadOnlyList<(EntityId<IFlowElement> Element, ConstraintKind Kind, Mass Deferred)> Deferrals,
+
+    /// <summary>SDD-002 §8's finding-283 amendment — every constraint the
+    /// attribution pass evaluated, not only the ones that bound. The same
+    /// walk that builds <see cref="Deferrals"/>; empty for an element with
+    /// no capacity constraint of its own (a custody transfer point), the
+    /// same way it is absent from Deferrals.</summary>
+    IReadOnlyList<(EntityId<IFlowElement> Element, ConstraintKind Kind, double Capacity, double Load)> Utilisations,
+
     IReadOnlyList<ForcedShutIn> ForcedShutIns,
     int OuterIterations)
 {
@@ -170,12 +178,13 @@ public sealed record SolveReport(
         && Structural.Equal(Solutions, other.Solutions)
         && Structural.Equal(CompletionStates, other.CompletionStates)
         && Structural.Equal(Deferrals, other.Deferrals)
+        && Structural.Equal(Utilisations, other.Utilisations)
         && Structural.Equal(ForcedShutIns, other.ForcedShutIns);
 
     public override int GetHashCode() =>
         HashCode.Combine(OuterIterations, Structural.HashOf(Solutions),
             Structural.HashOf(CompletionStates), Structural.HashOf(Deferrals),
-            Structural.HashOf(ForcedShutIns));
+            Structural.HashOf(Utilisations), Structural.HashOf(ForcedShutIns));
 }
 
 /// <summary>

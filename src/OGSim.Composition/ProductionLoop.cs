@@ -75,6 +75,21 @@ public sealed record SpecBreachView(SpecProperty Property, double Limit, double 
 }
 
 /// <summary>
+/// SDD-002 §8's finding-283 amendment (SDD-017 §2's `FacilityView.
+/// UnitUtilisation` row) — one of an element's own constraints, capacity
+/// against load, as the tick's last-solved segment left it (a ratio cannot
+/// be summed across segments the way <see cref="ChainElementView.Deferred"/>'s
+/// Mass can, so this is a snapshot, not an accumulation).
+/// </summary>
+public sealed record UtilisationView(ConstraintKind Kind, double Capacity, double Load)
+{
+    /// <summary>0 rather than NaN/Infinity when Capacity is 0 — no
+    /// meaningful reading is 0, the same convention
+    /// <see cref="ProductionLoop.WaterCut"/> already uses.</summary>
+    public double Ratio => Capacity > 0.0 ? Load / Capacity : 0.0;
+}
+
+/// <summary>
 /// One element of the chain, as a player watches it (SDD-017 §2).
 ///
 /// <para><b>Throughput is the flow and deferral is the jam</b>, and together
@@ -121,7 +136,14 @@ public sealed record ChainElementView(
     /// every element but the one custody transfer point in this
     /// composition, and empty there too on a tick that passed clean.
     /// </summary>
-    IReadOnlyList<SpecBreachView> Breaches)
+    IReadOnlyList<SpecBreachView> Breaches,
+
+    /// <summary>SDD-002 §8's finding-283 amendment (SDD-017 §2's
+    /// `FacilityView.UnitUtilisation` row) — how full each of this
+    /// element's own constraints is. Empty for an element with no capacity
+    /// constraint of its own (a custody transfer point), the same way it
+    /// is absent from <see cref="Deferred"/>.</summary>
+    IReadOnlyList<UtilisationView> Utilisation)
 {
     // Finding 131.
     public bool Equals(ChainElementView? other) =>
@@ -129,11 +151,13 @@ public sealed record ChainElementView(
         && Throughput == other.Throughput
         && Condition == other.Condition && Failed == other.Failed
         && Structural.Equal(Deferred, other.Deferred)
-        && Structural.Equal(Breaches, other.Breaches);
+        && Structural.Equal(Breaches, other.Breaches)
+        && Structural.Equal(Utilisation, other.Utilisation);
 
     public override int GetHashCode() =>
         HashCode.Combine(Element, DisplayId, Throughput, Condition, Failed,
-                         Structural.HashOf(Deferred), Structural.HashOf(Breaches));
+                         Structural.HashOf(Deferred), Structural.HashOf(Breaches),
+                         Structural.HashOf(Utilisation));
 
     /// <summary>Whether this element refused anything this tick — what a host
     /// highlights, and what "the chain is jammed here" means.</summary>
@@ -150,6 +174,7 @@ public sealed record ChainElementView(
 internal sealed class ChainElement(EntityId<IFlowElement> element)
 {
     private readonly List<(ConstraintKind Kind, Mass Deferred)> _deferred = [];
+    private readonly List<(ConstraintKind Kind, double Capacity, double Load)> _utilisation = [];
 
     public EntityId<IFlowElement> Element { get; } = element;
 
@@ -171,16 +196,34 @@ internal sealed class ChainElement(EntityId<IFlowElement> element)
         _deferred.Add((kind, deferred));
     }
 
+    /// <summary>SDD-002 §8's finding-283 amendment — the LAST segment to
+    /// touch this element replaces whatever an earlier one recorded, since
+    /// a ratio cannot be summed across segments the way <see cref="Refuse"/>'s
+    /// Mass can. The caller clears once per element per segment (not per
+    /// call), then appends every constraint that segment reported.</summary>
+    public void ClearUtilisation() => _utilisation.Clear();
+
+    public void AddUtilisation(ConstraintKind kind, double capacity, double load) =>
+        _utilisation.Add((kind, capacity, load));
+
     public ChainElementView Published(
         Func<EntityId<IFlowElement>, string> nameOf, double? condition, bool failed,
-        IReadOnlyList<SpecBreachView> breaches) =>
-        new(new EntityRef(EntityKind.FlowElement, Element.Value),
+        IReadOnlyList<SpecBreachView> breaches)
+    {
+        var utilisation = new List<UtilisationView>(_utilisation.Count);
+        for (int i = 0; i < _utilisation.Count; i++)
+            utilisation.Add(new UtilisationView(
+                _utilisation[i].Kind, _utilisation[i].Capacity, _utilisation[i].Load));
+
+        return new(new EntityRef(EntityKind.FlowElement, Element.Value),
             nameOf(Element),
             new Mass(Throughput),
             [.. _deferred],
             condition,
             failed,
-            breaches);
+            breaches,
+            utilisation);
+    }
 }
 
 /// <summary>
@@ -914,6 +957,25 @@ internal sealed class ProductionLoop : IStateOwner
                     ["deferred-kg"] = new(Format(report.Deferrals[i].Deferred.Kilograms)),
                     ["segment-seconds"] = new(Format(seconds)),
                 });
+        }
+
+        // SDD-002 §8's finding-283 amendment: this segment's own utilisation
+        // REPLACES whatever an earlier segment recorded for the same
+        // element — a ratio cannot be summed across segments the way a
+        // Deferred Mass can (§8's own amendment states why). The first
+        // tuple for an element THIS segment clears its row; every one after
+        // appends, so an element mentioned twice by one segment (two bound
+        // constraints on the same vessel, R8-V2) is not clobbered by its
+        // own second entry.
+        var freshlyMeasured = new HashSet<EntityId<IFlowElement>>();
+        for (int i = 0; i < report.Utilisations.Count; i++)
+        {
+            (EntityId<IFlowElement> el, ConstraintKind kind, double capacity, double load) =
+                report.Utilisations[i];
+
+            ChainElement row = Flowing(el);
+            if (freshlyMeasured.Add(el)) row.ClearUtilisation();
+            row.AddUtilisation(kind, capacity, load);
         }
 
         // WHAT THE FIELD HANDLED, from the completions' own sourced mass: every

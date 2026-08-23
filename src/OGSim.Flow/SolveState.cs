@@ -42,11 +42,15 @@ internal sealed class SolveState
 
         Solutions = [];
         Deferrals = [];
+        Utilisations = [];
     }
 
     public List<ElementSolution> Solutions { get; }
 
     public List<(EntityId<IFlowElement> Element, ConstraintKind Kind, Mass Deferred)> Deferrals { get; }
+
+    /// <summary>SDD-002 §8's finding-283 amendment.</summary>
+    public List<(EntityId<IFlowElement> Element, ConstraintKind Kind, double Capacity, double Load)> Utilisations { get; }
 
     public double WorstResidual { get; private set; }
 
@@ -244,6 +248,7 @@ internal sealed class SolveState
     public void AttributeDeferrals(FlowNetwork network, SegmentContext segment)
     {
         Deferrals.Clear();
+        Utilisations.Clear();
 
         var uncapped = new Dictionary<EntityId<IFlowElement>, TransformResult>();
         double seconds = segment.DurationDays * 86_400.0;
@@ -272,6 +277,18 @@ internal sealed class SolveState
             for (int c = 0; c < constraints.Count; c++)
             {
                 ConstraintEvaluation constraint = constraints[c];
+
+                // SDD-002 §8's finding-283 amendment: every constraint this
+                // element reports, not only the ones that bound — the same
+                // walk Deferrals is built from, one line added rather than
+                // a second pass.
+                // SDD-002 §8's finding-283 amendment: every constraint this
+                // element reports, not only the ones that bound — the same
+                // walk Deferrals is built from, one line added rather than
+                // a second pass.
+                Utilisations.Add((element.Id, constraint.Kind,
+                    constraint.Capacity, constraint.Load));
+
                 if (constraint.Load <= constraint.Capacity) continue;
 
                 RecordDeferral(element.Id, constraint.Kind,

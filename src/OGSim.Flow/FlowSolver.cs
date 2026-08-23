@@ -284,6 +284,7 @@ public sealed class FlowSolver : IFlowSolver
         new(state.Solutions,
             state.CompletionStates(),
             state.Deferrals,
+            state.Utilisations,
             forcedShutIns,
             outcome.Iterations);
 
