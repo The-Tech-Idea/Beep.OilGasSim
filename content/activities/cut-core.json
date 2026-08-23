@@ -1,0 +1,12 @@
+{
+  "kind": "activity",
+  "id": "cut-core",
+  "name": "$loc:activity.cut-core",
+  "group": "evaluation",
+  "costMillions": 0.9,
+  "durationTurns": 1,
+  "weatherLimit": 6.0,
+  "requiresAccess": true,
+  "note": "Rock in your hand. The sharpest reading available and the slowest to take.",
+  "develops": true
+}

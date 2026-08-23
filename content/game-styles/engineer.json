@@ -1,0 +1,13 @@
+{
+  "kind": "game-style",
+  "id": "engineer",
+  "activities": [
+    "*"
+  ],
+  "equipment": [
+    "*"
+  ],
+  "technologies": [
+    "*"
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "kind": "equipment",
+  "id": "pump-manifold-trailer",
+  "name": "$loc:equipment.pump-manifold-trailer",
+  "group": "construction",
+  "costMillions": 1.2,
+  "buildTurns": 1,
+  "note": "Portable pumping for a construction spread."
+}

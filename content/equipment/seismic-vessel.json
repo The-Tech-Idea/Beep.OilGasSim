@@ -1,0 +1,9 @@
+{
+  "kind": "equipment",
+  "id": "seismic-vessel",
+  "name": "$loc:equipment.seismic-vessel",
+  "group": "exploration",
+  "costMillions": 6.0,
+  "buildTurns": 2,
+  "note": "A 3-D spread. Sees a closure the 2-D grid only hinted at."
+}

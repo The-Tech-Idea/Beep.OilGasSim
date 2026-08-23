@@ -1,0 +1,12 @@
+{
+  "kind": "activity",
+  "id": "install-early-production-facility",
+  "name": "$loc:activity.install-early-production-facility",
+  "group": "surface",
+  "costMillions": 22.0,
+  "durationTurns": 4,
+  "weatherLimit": 5.0,
+  "requiresAccess": true,
+  "note": "The whole train as one purchase. Nine separate buys with no oil until the ninth is a shopping list, not a decision.",
+  "develops": true
+}

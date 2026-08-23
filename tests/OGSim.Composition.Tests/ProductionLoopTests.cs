@@ -379,7 +379,7 @@ public sealed class ProductionLoopTests
     public void A_cargo_does_not_lift_below_a_full_parcel()
     {
         (Engine engine, _) = Field();
-        var tank = engine.Provided.Resolve<SurfaceChain>().Tank;
+        var tank = Fixture.Built(engine.Provided.Resolve<SurfaceChain>().Tank, "tank");
 
         var kilograms = new double[Defaults.MaterialCount];
         kilograms[Defaults.OilOrdinal.Ordinal] = 40_000_000.0;
@@ -394,9 +394,9 @@ public sealed class ProductionLoopTests
 
         // The threshold itself: whatever this tick's own well cleared, the
         // gate stays shut below a full parcel.
-        Assert.True(held < Defaults.CargoSize.Kilograms,
+        Assert.True(held < Fixture.Ladders().Export[0].Parcel.Kilograms,
             $"the tank drew a cargo before it was full: held={held} against " +
-            $"a {Defaults.CargoSize.Kilograms} kg cargo");
+            $"a {Fixture.Ladders().Export[0].Parcel.Kilograms} kg cargo");
 
         // AND held did not fall below the seed: a wrongly-open gate would draw
         // at the berth's rate (tens of millions of kg) regardless of this
@@ -413,10 +413,10 @@ public sealed class ProductionLoopTests
     public void A_full_cargo_lifts_at_the_berths_rate()
     {
         (Engine engine, _) = Field();
-        var tank = engine.Provided.Resolve<SurfaceChain>().Tank;
+        var tank = Fixture.Built(engine.Provided.Resolve<SurfaceChain>().Tank, "tank");
 
         var kilograms = new double[Defaults.MaterialCount];
-        kilograms[Defaults.OilOrdinal.Ordinal] = Defaults.CargoSize.Kilograms + 1_000_000.0;
+        kilograms[Defaults.OilOrdinal.Ordinal] = Fixture.Ladders().Export[0].Parcel.Kilograms + 1_000_000.0;
 
         tank.RestoreTo(
             MaterialInventory.Of(kilograms),
@@ -444,12 +444,12 @@ public sealed class ProductionLoopTests
     public void A_cargo_that_clears_within_laytime_is_not_charged_demurrage()
     {
         (Engine engine, _) = Field();
-        var tank = engine.Provided.Resolve<SurfaceChain>().Tank;
+        var tank = Fixture.Built(engine.Provided.Resolve<SurfaceChain>().Tank, "tank");
 
         // Just over the line: at the shipped E1 rate (20 kg/s, 51.84e6
         // kg/tick) this clears inside the first tick, nowhere near 60 days.
         var kilograms = new double[Defaults.MaterialCount];
-        kilograms[Defaults.OilOrdinal.Ordinal] = Defaults.CargoSize.Kilograms + 1_000_000.0;
+        kilograms[Defaults.OilOrdinal.Ordinal] = Fixture.Ladders().Export[0].Parcel.Kilograms + 1_000_000.0;
 
         tank.RestoreTo(
             MaterialInventory.Of(kilograms),
@@ -476,7 +476,7 @@ public sealed class ProductionLoopTests
     public void An_overrunning_cargo_is_charged_demurrage()
     {
         (Engine engine, _) = Field();
-        var tank = engine.Provided.Resolve<SurfaceChain>().Tank;
+        var tank = Fixture.Built(engine.Provided.Resolve<SurfaceChain>().Tank, "tank");
 
         // Sized so the E1 berth (51.84e6 kg/tick) needs several ticks —
         // 180+ days — to clear it, comfortably past the 60-day laytime.
@@ -491,7 +491,7 @@ public sealed class ProductionLoopTests
         var sawLate = false;
 
         while (engine.ReadModel is null
-               || engine.ReadModel.Storage.Held.Kilograms >= Defaults.CargoSize.Kilograms)
+               || engine.ReadModel.Storage.Held.Kilograms >= Fixture.Ladders().Export[0].Parcel.Kilograms)
         {
             engine.Pipeline.AdvanceTick();
             ticks++;

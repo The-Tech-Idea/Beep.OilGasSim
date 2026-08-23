@@ -1,0 +1,9 @@
+{
+  "kind": "equipment",
+  "id": "main-operations-building",
+  "name": "$loc:equipment.main-operations-building",
+  "group": "yard",
+  "costMillions": 3.0,
+  "buildTurns": 2,
+  "note": "Where the field is run from. Nothing else on the yard is authorised without it."
+}

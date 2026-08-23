@@ -1,0 +1,9 @@
+{
+  "kind": "equipment",
+  "id": "maintenance-workshop",
+  "name": "$loc:equipment.maintenance-workshop",
+  "group": "yard",
+  "costMillions": 2.2,
+  "buildTurns": 2,
+  "note": "Where broken things are fixed instead of replaced."
+}

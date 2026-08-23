@@ -1,0 +1,9 @@
+{
+  "kind": "equipment",
+  "id": "produced-water-pond",
+  "name": "$loc:equipment.produced-water-pond",
+  "group": "process",
+  "costMillions": 1.5,
+  "buildTurns": 2,
+  "note": "Holds what the separator takes out."
+}

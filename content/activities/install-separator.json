@@ -1,0 +1,12 @@
+{
+  "kind": "activity",
+  "id": "install-separator",
+  "name": "$loc:activity.install-separator",
+  "group": "surface",
+  "costMillions": 6.0,
+  "durationTurns": 3,
+  "weatherLimit": 5.0,
+  "requiresAccess": true,
+  "note": "More throughput through the first vessel every barrel crosses.",
+  "develops": true
+}

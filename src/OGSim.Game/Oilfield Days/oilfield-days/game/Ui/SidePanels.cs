@@ -28,9 +28,6 @@ public sealed partial class SidePanels : PanelContainer
     /// <summary>How many months of production the trend keeps.</summary>
     private const int Window = 36;
 
-    /// <summary>The shipped scenario's deadline, in months.</summary>
-    private const int DeadlineMonths = 120;
-
     private VBoxContainer _objectives = null!;
     private VBoxContainer _alerts = null!;
     private VBoxContainer _reserves = null!;
@@ -236,13 +233,18 @@ public sealed partial class SidePanels : PanelContainer
         if (progress.Objectives.Count == 0)
             _objectives.AddChild(Caption(_objectiveCaptionTemplate, "the scenario sets no objectives"));
 
-        // The deadline is the scenario's too, and reads next to what it bounds.
-        int left = Mathf.Max(0, DeadlineMonths - snapshot.Tick.Value);
+        // THE DEADLINE IS THE SCENARIO'S AND IS READ FROM IT. This panel used
+        // to keep its own copy of the month count, which would have quietly
+        // counted down to the wrong month the first time a scenario moved its
+        // deadline — the same defect the goal figure had (law L5).
+        int left = progress.Deadline is Tick ends
+            ? Mathf.Max(0, ends.Value - snapshot.Tick.Value)
+            : 0;
 
         _objectives.AddChild(InfoRow(
             _objectiveRowTemplate,
             "Time left",
-            $"{left / 12}y {left % 12}m",
+            progress.Deadline is null ? "no deadline" : $"{left / 12}y {left % 12}m",
             left <= 12 ? UiSurface.Role.Danger : UiSurface.Role.Info));
 
         _objectives.AddChild(InfoRow(

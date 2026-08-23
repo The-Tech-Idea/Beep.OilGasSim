@@ -97,7 +97,16 @@ public sealed partial class EngineHost : Node
     /// </remarks>
     public sealed record NewGameDraft(
         ulong Seed,
-        string RealityProfile,
+        /// <summary>
+        /// Which game mode this run is composed at (plans 23 §4).
+        /// </summary>
+        /// <remarks>
+        /// It used to be a reality profile, which was one of the three axes a
+        /// mode sets — so the draft owned a third of the answer and the host
+        /// owned the other two, and a save could record one without the others.
+        /// A mode is the whole answer and is what a save has to carry.
+        /// </remarks>
+        string Mode,
         string WorldTemplate,
         int Cells,
         double LandFraction,
@@ -145,7 +154,14 @@ public sealed partial class EngineHost : Node
         Snapshot = null;
         _engine = null;
 
+        IGameStyle style = GameStyles.Named(new ContentId(draft.Mode));
+
         GodotContentSource content = GodotContentSource.Shipped();
+
+        // THE STYLE'S OWN DEPARTURES IN VALUES (SDD-004 §7): its overlay at
+        // order 1 replaces base entries wholesale — the coaster parcel among
+        // them. Null when the style ships none.
+        GodotContentSource? overlay = GodotContentSource.StyleOverrides(style.Id);
         GD.Print($"[content] {content.Count} files read from res://content");
 
         if (content.Count == 0)
@@ -158,30 +174,25 @@ public sealed partial class EngineHost : Node
             return false;
         }
 
-        var settings = new EngineSettings(
+        // THIS RUN IS ONE NAMED STYLE (plans 25). The axes are written by
+        // `Compose` — the one place they are written together — so this path
+        // and the load path below cannot drift apart; the fields named here
+        // exist because the record requires them, and Compose overwrites them.
+        EngineSettings settings = style.Compose(new EngineSettings(
             Epoch: new GameDate(draft.StartYear, 1),
             WorldSeed: draft.Seed,
             Retention: new AuditRetention(DetailWindowTicks: 120),
             LogSink: new GodotLogSink(),
             MinimumLogLevel: LogLevel.Warning,
             FaultHandling: FaultHandling.Resilient,
-            RealityProfile: new ContentId(draft.RealityProfile),
+            RealityProfile: style.RealityProfile,
+            StartingState: style.StartingState,
+            Rules: style.Rules,
+            Style: style.Id,
 
             // The host reads the files; the engine reads no disk (SDD-004 §7).
             // Content that will not load is a refusal to start, not a warning.
-            Content: [content],
-
-            // BARE GROUND (plans 22 §4, S2). A yard, a licence and a bank
-            // balance — the processing train is something the company builds,
-            // and until it does, a well has nowhere to flow. This is the line
-            // that stops the game handing a player a refinery on day one.
-            StartingState: StartingStates.BareGround,
-
-            // FRONTIER RULES (plans 23). A company out on ground nobody has
-            // worked may survey and drill before it holds a reservoir — which
-            // an operator may not, and correctly so. This is the line that used
-            // to be a deleted check in the engine.
-            Rules: RuleSets.Frontier.Id);
+            Content: overlay is { } styled ? [content, styled] : [content]));
 
         var world = new WorldParameters(
             new ContentId(draft.WorldTemplate),
@@ -340,7 +351,14 @@ public sealed partial class EngineHost : Node
             return false;
         }
 
+        IGameStyle style = GameStyles.Named(new ContentId(slot.Draft.Mode));
+
         GodotContentSource content = GodotContentSource.Shipped();
+
+        // THE STYLE'S OWN DEPARTURES IN VALUES (SDD-004 §7): its overlay at
+        // order 1 replaces base entries wholesale — the coaster parcel among
+        // them. Null when the style ships none.
+        GodotContentSource? overlay = GodotContentSource.StyleOverrides(style.Id);
 
         if (content.Count == 0)
         {
@@ -349,26 +367,22 @@ public sealed partial class EngineHost : Node
             return false;
         }
 
-        var settings = new EngineSettings(
+        // THE STYLE THE SAVE WAS PLAYED IN, read back off the save (plans 25).
+        // The same `Compose` as the new-game path, so a reload cannot quietly
+        // change what the player is allowed to do.
+        EngineSettings settings = style.Compose(new EngineSettings(
             Epoch: new GameDate(slot.Draft.StartYear, 1),
             WorldSeed: slot.Draft.Seed,
             Retention: new AuditRetention(DetailWindowTicks: 120),
             LogSink: new GodotLogSink(),
             MinimumLogLevel: LogLevel.Warning,
             FaultHandling: FaultHandling.Resilient,
-            RealityProfile: new ContentId(slot.Draft.RealityProfile),
-            Content: [content],
+            RealityProfile: style.RealityProfile,
+            StartingState: style.StartingState,
+            Rules: style.Rules,
+            Style: style.Id,
 
-            // BARE GROUND, as a new game opens (plans 22 §4). Composition builds
-            // no plant either way here — the save restores whatever the company
-            // had actually built by the month it was written.
-            StartingState: StartingStates.BareGround,
-
-            // FRONTIER RULES (plans 23). A company out on ground nobody has
-            // worked may survey and drill before it holds a reservoir — which
-            // an operator may not, and correctly so. This is the line that used
-            // to be a deleted check in the engine.
-            Rules: RuleSets.Frontier.Id);
+            Content: overlay is { } styled ? [content, styled] : [content]));
 
         using var source = new System.IO.MemoryStream(bytes, writable: false);
 

@@ -1,0 +1,12 @@
+{
+  "kind": "activity",
+  "id": "install-gas-plant",
+  "name": "$loc:activity.install-gas-plant",
+  "group": "surface",
+  "costMillions": 18.0,
+  "durationTurns": 5,
+  "weatherLimit": 5.0,
+  "requiresAccess": true,
+  "note": "Stop burning the gas and start selling it. Also the ESG answer.",
+  "develops": true
+}

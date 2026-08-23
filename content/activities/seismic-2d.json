@@ -1,0 +1,12 @@
+{
+  "kind": "activity",
+  "id": "seismic-2d",
+  "name": "$loc:activity.seismic-2d",
+  "group": "exploration",
+  "costMillions": 0.8,
+  "durationTurns": 1,
+  "weatherLimit": 5.5,
+  "requiresAccess": true,
+  "note": "Shoot a dark block. Finds structures; tells you nothing about what is in them.",
+  "develops": true
+}

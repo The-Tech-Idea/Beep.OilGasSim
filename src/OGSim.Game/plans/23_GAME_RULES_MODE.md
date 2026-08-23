@@ -107,6 +107,39 @@ what it may do from there. A run on bare ground under `realistic` rules is a
 legitimate and very hard scenario — and it is currently the accidental one the
 game ships.
 
+### Amended 2026-08-23 — the three axes need a name, and the name is the product
+
+Three independent axes is the right structure and the wrong thing to hand a
+host. Nothing said which combinations were *products*, so every caller picked
+three ids and hoped they were consistent — and two of them (the new-game path
+and the load path in `EngineHost`) spelled the same three out twice, which is
+one drift away from a saved game reloading under different rules than it was
+played under.
+
+A **game mode** is a named point in that space. It owns no new fact: it writes
+the three axes and nothing else, so `EngineSettings` stays the single owner of
+what the engine was composed with (law L5). What it adds is a name, a premise,
+and a closed set — the same shape `RealityProfile` and `RuleSet` already have,
+including refusing an id it does not know.
+
+Two are shipped, and they are the two products:
+
+| Mode | Reality | Starting state | Rules | The game |
+|---|---|---|---|---|
+| `days` | `arcade` | `bare-ground` | `frontier` | **Oilfield Days** — build the plant, forgiving rules |
+| `engineer` | `simulation` | `opening-position` | `realistic` | **Oilfield Engineer** — the field as it actually behaves |
+
+They are not easy and hard. They ask different questions. *Days* starts you with
+nothing built and lets you drill on acreage that has no plant yet, because the
+game is about building one — the well waits, shut in, until there is somewhere
+to send it. *Engineer* starts you holding a commissioned train and refuses a
+well with no tie-in slot, because that is what an operating company faces and
+the remedy is a bigger header, not a dispensation.
+
+The physics underneath is the same engine, the same fourteen stages, the same
+eighteen commands and the same read model. That is the whole point: a mode
+selects models, it does not fork behaviour.
+
 ---
 
 ## 5. What it costs

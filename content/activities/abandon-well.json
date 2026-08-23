@@ -1,0 +1,12 @@
+{
+  "kind": "activity",
+  "id": "abandon-well",
+  "name": "$loc:activity.abandon-well",
+  "group": "end-of-life",
+  "costMillions": 3.0,
+  "durationTurns": 2,
+  "weatherLimit": 6.0,
+  "requiresAccess": true,
+  "note": "The bill that was registered the day you drilled it. Plugging the last well closes the field.",
+  "develops": false
+}

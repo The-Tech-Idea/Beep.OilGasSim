@@ -1,0 +1,12 @@
+{
+  "kind": "activity",
+  "id": "install-monitoring",
+  "name": "$loc:activity.install-monitoring",
+  "group": "maintenance",
+  "costMillions": 0.2,
+  "durationTurns": 1,
+  "weatherLimit": 8.0,
+  "requiresAccess": true,
+  "note": "The cheapest purchase in the game. Without it you cannot see condition, so you cannot service.",
+  "develops": true
+}

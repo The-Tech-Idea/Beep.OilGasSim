@@ -51,7 +51,6 @@ internal sealed class DrillWellActivity(
     IBeliefStore beliefs,
     OGSim.Subsurface.SubsurfaceState subsurface,
     ObservationDoor door,
-    OGSim.Company.Licence licence,
     IDrillingRule rule) : Activity<DrillWellCommand>(terms)
 {
     /// <summary>A well is PP&amp;E: the money buys something the company still
@@ -102,23 +101,15 @@ internal sealed class DrillWellActivity(
 
         // A LOST LICENCE REFUSES FURTHER DRILLING (SDD-011 §1's R20d.9
         // amendment). Nothing already producing stops — this is checked at
-        // ORDER time, not at the wells themselves, because design 02 §3.4's
-        // diagram routes every terminal state through `Abandoned` and a
-        // licence loss is not one of its edges into it.
+        // TENURE IS NOT THIS ACTIVITY'S BUSINESS. The licence check used to sit
+        // here, which made drilling the one verb of thirty-one that knew about
+        // it — so a company that had forfeited its acreage could still order a
+        // separator onto it. It lives in `ActivityOrders` now, with every other
+        // refusal that applies to any activity.
         //
-        // TWO REASONS, NOT ONE (SDD-011 §1's R16 amendment, finding 254). A
-        // company that met every commitment and simply ran out of term broke
-        // no promise, and telling it otherwise would be a fabrication this
-        // project's own standards forbid.
-        if (!licence.IsLive)
-            reasons.Add(licence.LossReason == OGSim.Company.LicenceLossReason.Expired
-                ? new RejectionReason(
-                    "$loc:reject.licence-expired",
-                    "the licence's term has ended; no further development is possible here")
-                : new RejectionReason(
-                    "$loc:reject.licence-lost",
-                    "the licence's work commitment went unmet and the bond was " +
-                    "forfeited; no further development is possible here"));
+        // The licence is still held here, and for the one thing that IS this
+        // activity's business: recording the well that discharges a work
+        // commitment (see Complete).
 
         return reasons;
     }
@@ -176,7 +167,10 @@ internal sealed class DrillWellActivity(
         // above) delivers nothing. Matched by CONTENT ID — `Terms.Template` is
         // the same id `CommitmentItem.Kind` names — the same convention a
         // facility rung's `requiresTech` matches a registry node's id by.
-        licence.RecordDelivery(Terms.Template, 1.0);
+        // THE DELIVERY IS RECORDED BY THE FIELD, where a well comes into
+        // existence — so a well placed by a scenario or by world generation
+        // discharges the commitment too, which it manifestly should and used
+        // not to.
 
         // AND THE HOLE ITSELF TELLS THE COMPANY WHAT IT FOUND. A discovery
         // well penetrates the column, logs it and samples the rock, so a company

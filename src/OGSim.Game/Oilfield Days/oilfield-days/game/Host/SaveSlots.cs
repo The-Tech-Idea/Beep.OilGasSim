@@ -118,7 +118,7 @@ public static class SaveSlots
         var record = new Godot.Collections.Dictionary
         {
             { "seed", draft.Seed.ToString(CultureInfo.InvariantCulture) },
-            { "profile", draft.RealityProfile },
+            { "mode", draft.Mode },
             { "template", draft.WorldTemplate },
             { "cells", draft.Cells },
             { "land", draft.LandFraction },
@@ -182,7 +182,7 @@ public static class SaveSlots
 
         var draft = new EngineHost.NewGameDraft(
             Seed: seed,
-            RealityProfile: Text(record, "profile"),
+            Mode: Text(record, "mode"),
             WorldTemplate: Text(record, "template"),
             Cells: (int)Number(record, "cells"),
             LandFraction: Number(record, "land"),

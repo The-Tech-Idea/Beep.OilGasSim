@@ -1,0 +1,12 @@
+{
+  "kind": "activity",
+  "id": "drill-development-well",
+  "name": "$loc:activity.drill-development-well",
+  "group": "drilling",
+  "costMillions": 8.0,
+  "durationTurns": 4,
+  "weatherLimit": 6.0,
+  "requiresAccess": true,
+  "note": "The bet. A dry hole re-prices every prospect on the same play.",
+  "develops": true
+}

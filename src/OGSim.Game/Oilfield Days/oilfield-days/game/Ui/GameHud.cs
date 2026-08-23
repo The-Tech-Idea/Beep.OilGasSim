@@ -26,10 +26,6 @@ namespace OilfieldDays.Ui;
 [Tool]
 public sealed partial class GameHud : CanvasLayer
 {
-    /// <summary>The shipped scenario's target and deadline (EngineBuilder.FirstField).</summary>
-    private const double TargetDollars = 600_000_000.0;
-    private const int DeadlineMonths = 120;
-
     private static readonly string[] Seasons = { "Spring", "Summer", "Autumn", "Winter" };
 
     private Label _prompt = null!;

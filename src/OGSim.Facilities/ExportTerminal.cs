@@ -15,7 +15,7 @@ using OGSim.Kernel;
 namespace OGSim.Facilities;
 
 /// <summary>What an export line contracts to take (SDD-006 §7b).</summary>
-public sealed record ExportTier(ContentId Id, MassRate Offtake);
+public sealed record ExportTier(ContentId Id, MassRate Offtake, Mass Parcel);
 
 /// <summary>
 /// SDD-006 §7a's L5 decision, step 1 (finding 251): the berth carries the

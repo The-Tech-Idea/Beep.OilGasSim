@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>OGSim.Engineer</RootNamespace>
+    <AssemblyName>OGSim.Engineer</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Oilfield Engineer is a CLIENT, on the far side of the engine boundary,
+         and plays through the published surface exactly as the Godot host does:
+         a read model to look at, a command bus to act on. Composition is the
+         only reference it is allowed; a reference to a domain module would be
+         this project reaching past the surface it exists to exercise. -->
+    <ProjectReference Include="..\OGSim.Composition\OGSim.Composition.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="OGSim.Engineer.Tests" />
+  </ItemGroup>
+
+</Project>

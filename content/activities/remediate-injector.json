@@ -1,0 +1,12 @@
+{
+  "kind": "activity",
+  "id": "remediate-injector",
+  "name": "$loc:activity.remediate-injector",
+  "group": "intervention",
+  "costMillions": 1.2,
+  "durationTurns": 1,
+  "weatherLimit": 6.5,
+  "requiresAccess": false,
+  "note": "Unplugs the disposal well. Ignore it and a watered-out field throttles itself.",
+  "develops": false
+}

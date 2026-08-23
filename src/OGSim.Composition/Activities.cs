@@ -61,6 +61,25 @@ public sealed record ActivityTerms(
     /// </summary>
     bool RequiresAccess,
 
+    /// <summary>
+    /// Whether this work DEVELOPS the field — creates standing kit, opens a
+    /// hole, or buys new subsurface information — as against maintaining or
+    /// closing what already exists.
+    ///
+    /// <para>This is the fact tenure gates on. SDD-011 §1's R16 amendment says
+    /// what expiry means in its own words: <i>"no further development is
+    /// possible here"</i> — and an operator whose term has run out still
+    /// repairs what stands and still abandons what must be abandoned; a field
+    /// that could not be kept safe or closed after expiry would be a trap, not
+    /// a rule. Measured before this fact existed: the tenure check refused
+    /// every monthly repair after month 480, and the field died of its first
+    /// unrepairable failure within five years of its licence expiring.</para>
+    ///
+    /// <para>Required, with no default, for the reason its neighbours are: a
+    /// default would answer for every template that never chose.</para>
+    /// </summary>
+    bool Develops,
+
     OutcomeTable Outcomes)
 {
     /// <summary>
@@ -562,7 +581,18 @@ internal sealed class ActivityOrders(
     OGSim.Environment.WeatherState weather,
     OGSim.Capabilities.CapabilityState capabilities,
     IWorkSubjectRule subject,
-    FieldControl field)
+    FieldControl field,
+
+    // WHETHER THE COMPANY STILL HOLDS THE GROUND (SDD-011 §1's R16 amendment).
+    // Read here and nowhere else: tenure is not drilling's business, and it was
+    // drilling's business right up until it turned out to gate everything.
+    OGSim.Company.Licence licence,
+
+    // AND WHETHER TENURE GOVERNS AT ALL (plans 27 §3). A build whose style
+    // carries no licence mechanic is not gated by the neutral licence it was
+    // handed so the read model stays whole — the check is absent, not
+    // vacuously true against terms no run can breach.
+    bool tenureGoverns)
 {
     /// <summary>
     /// Every reason this order cannot be given, not the first. A player told only
@@ -573,6 +603,31 @@ internal sealed class ActivityOrders(
     {
         IActivity activity = activities.Of(template);
         var reasons = new List<RejectionReason>();
+
+        // NO TENURE, NO WORK — for every activity, not for drilling alone.
+        //
+        // This lived in `DrillWellActivity.OwnRefusals`, which meant one verb
+        // knew about licences and the other thirty did not: a company that had
+        // forfeited its acreage could still order a separator onto it. Tenure
+        // gates ACTIVITY, so it belongs in the one place activities are
+        // validated, beside cash, weather, access and the work-subject rule.
+        //
+        // TWO REASONS, NOT ONE (finding 254). A company that met every
+        // commitment and simply ran out of term broke no promise, and telling
+        // it otherwise would be a fabrication this project's standards forbid.
+        // ONLY WHAT DEVELOPS (SDD-011 §1's R16 amendment, in its own words:
+        // "no further development is possible here"). Repair, service,
+        // remediation and abandonment are how a field is kept safe and closed
+        // lawfully, and an expired licence does not excuse either.
+        if (tenureGoverns && activity.Terms.Develops && !licence.IsLive)
+            reasons.Add(licence.LossReason == OGSim.Company.LicenceLossReason.Expired
+                ? new RejectionReason(
+                    "$loc:reject.licence-expired",
+                    "the licence's term has ended; no further development is possible here")
+                : new RejectionReason(
+                    "$loc:reject.licence-lost",
+                    "the licence's work commitment went unmet and the bond was " +
+                    "forfeited; no further development is possible here"));
 
         if (company.Ledger.Cash < market.Quoted(activity.Terms.Cost))
             reasons.Add(new RejectionReason(

@@ -1,0 +1,9 @@
+{
+  "kind": "equipment",
+  "id": "hazardous-material-cabinet",
+  "name": "$loc:equipment.hazardous-material-cabinet",
+  "group": "safety",
+  "costMillions": 0.1,
+  "buildTurns": 1,
+  "note": "Where the chemicals are allowed to live."
+}

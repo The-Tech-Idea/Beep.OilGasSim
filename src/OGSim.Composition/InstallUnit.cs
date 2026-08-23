@@ -445,7 +445,7 @@ public sealed record InstallCompressorCommand() : Command(Subject: null);
 
 internal sealed class InstallCompressorActivity(
     ActivityTerms terms,
-    OGSim.Facilities.Compressor compressor,
+    SurfaceChain chain,
     IReadOnlyList<OGSim.Facilities.CompressorTier> ladder,
     FacilityLadders ladders,
     OGSim.Capabilities.CapabilityState capabilities,
@@ -453,6 +453,9 @@ internal sealed class InstallCompressorActivity(
     IGatingValidator gate,
     IEffectState effects) : Activity<InstallCompressorCommand>(terms)
 {
+    /// <summary>The train this enlarges, or null on ground with no plant.</summary>
+    private OGSim.Facilities.Compressor? Unit => chain.Compressor;
+
     /// <summary>A rung on the surface ladder (finding 225).</summary>
     public override MovementCategory Spend => MovementCategory.Development;
 
@@ -461,11 +464,16 @@ internal sealed class InstallCompressorActivity(
     public override bool OnePerTarget => true;
 
     public override (EntityRef Target, Length Depth) Aim(InstallCompressorCommand command) =>
-        (new EntityRef(EntityKind.FlowElement, compressor.Id.Value), NoDepth);
+        Unit is OGSim.Facilities.Compressor compressor
+            ? (new EntityRef(EntityKind.FlowElement, compressor.Id.Value), NoDepth)
+            : (SurfaceChain.TheField, NoDepth);
 
     public override IReadOnlyList<RejectionReason> OwnRefusals(InstallCompressorCommand command)
     {
-        if (NextRung() is { } next) return RungGate.Buyable(next.Id, ladders, capabilities, eras, gate, effects);
+        if (Unit is not OGSim.Facilities.Compressor compressor)
+            return [SurfaceChain.NothingToUpgrade("compressor")];
+
+        if (NextRung(compressor) is { } next) return RungGate.Buyable(next.Id, ladders, capabilities, eras, gate, effects);
 
         return
         [
@@ -482,10 +490,15 @@ internal sealed class InstallCompressorActivity(
 
         if (!done.Succeeded) return;
 
-        if (NextRung() is OGSim.Facilities.CompressorTier next) compressor.Fit(next);
+        // The train can be gone by completion in only one way — a save
+        // restored onto a plant that never had one — and fitting a rung to
+        // nothing is worse than doing nothing.
+        if (Unit is not OGSim.Facilities.Compressor compressor) return;
+
+        if (NextRung(compressor) is OGSim.Facilities.CompressorTier next) compressor.Fit(next);
     }
 
-    private OGSim.Facilities.CompressorTier? NextRung()
+    private OGSim.Facilities.CompressorTier? NextRung(OGSim.Facilities.Compressor compressor)
     {
         for (int i = 0; i < ladder.Count - 1; i++)
             if (ladder[i].Id == compressor.Tier.Id) return ladder[i + 1];
@@ -506,7 +519,7 @@ public sealed record InstallLiquidPumpStationCommand() : Command(Subject: null);
 
 internal sealed class InstallLiquidPumpStationActivity(
     ActivityTerms terms,
-    OGSim.Facilities.LiquidPumpStation pumpStation,
+    SurfaceChain chain,
     IReadOnlyList<OGSim.Facilities.PumpTier> ladder,
     FacilityLadders ladders,
     OGSim.Capabilities.CapabilityState capabilities,
@@ -514,6 +527,9 @@ internal sealed class InstallLiquidPumpStationActivity(
     IGatingValidator gate,
     IEffectState effects) : Activity<InstallLiquidPumpStationCommand>(terms)
 {
+    /// <summary>The station this enlarges, or null on ground with no plant.</summary>
+    private OGSim.Facilities.LiquidPumpStation? Unit => chain.PumpStation;
+
     /// <summary>A rung on the surface ladder (finding 225).</summary>
     public override MovementCategory Spend => MovementCategory.Development;
 
@@ -522,11 +538,16 @@ internal sealed class InstallLiquidPumpStationActivity(
     public override bool OnePerTarget => true;
 
     public override (EntityRef Target, Length Depth) Aim(InstallLiquidPumpStationCommand command) =>
-        (new EntityRef(EntityKind.FlowElement, pumpStation.Id.Value), NoDepth);
+        Unit is OGSim.Facilities.LiquidPumpStation pumpStation
+            ? (new EntityRef(EntityKind.FlowElement, pumpStation.Id.Value), NoDepth)
+            : (SurfaceChain.TheField, NoDepth);
 
     public override IReadOnlyList<RejectionReason> OwnRefusals(InstallLiquidPumpStationCommand command)
     {
-        if (NextRung() is { } next) return RungGate.Buyable(next.Id, ladders, capabilities, eras, gate, effects);
+        if (Unit is not OGSim.Facilities.LiquidPumpStation pumpStation)
+            return [SurfaceChain.NothingToUpgrade("pump station")];
+
+        if (NextRung(pumpStation) is { } next) return RungGate.Buyable(next.Id, ladders, capabilities, eras, gate, effects);
 
         return
         [
@@ -543,10 +564,14 @@ internal sealed class InstallLiquidPumpStationActivity(
 
         if (!done.Succeeded) return;
 
-        if (NextRung() is OGSim.Facilities.PumpTier next) pumpStation.Fit(next);
+        // As above: the only way it is gone by completion is a save restored
+        // onto a plant that never had one.
+        if (Unit is not OGSim.Facilities.LiquidPumpStation pumpStation) return;
+
+        if (NextRung(pumpStation) is OGSim.Facilities.PumpTier next) pumpStation.Fit(next);
     }
 
-    private OGSim.Facilities.PumpTier? NextRung()
+    private OGSim.Facilities.PumpTier? NextRung(OGSim.Facilities.LiquidPumpStation pumpStation)
     {
         for (int i = 0; i < ladder.Count - 1; i++)
             if (ladder[i].Id == pumpStation.Tier.Id) return ladder[i + 1];

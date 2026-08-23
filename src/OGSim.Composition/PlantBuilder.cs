@@ -105,8 +105,34 @@ internal sealed class PlantBuilder
             Defaults.TheTreater, _ladders.Treater[0],
             Defaults.WaterOrdinal, Defaults.MaterialCount);
 
+        // AHEAD OF THE TREATER, ON THE OIL LEG (SDD-006 §3d, R11.2's own
+        // composition, finding 259) — the compressor's own shape, reused: a
+        // separator commonly operates below what downstream treating and
+        // export need, and boosting right after the split is the standard
+        // surface-facility answer. Suction is read live from the separator
+        // this station sits behind, matching the compressor's own pattern;
+        // rung 0's own discharge matches that same pressure, so an unbought
+        // station is a true no-op rather than a phantom capacity constraint.
+        var pumpStation = new OGSim.Facilities.LiquidPumpStation(
+            Defaults.TheLiquidPumpStation, _ladders.PumpStation[0],
+            separator.Tier.OperatingPressure, Defaults.SurfaceOilDensity, Defaults.MaterialCount);
+
         var gasPlant = new OGSim.Facilities.GasCapture(
             Defaults.TheGasPlant, _ladders.GasPlant[0], Defaults.MaterialCount);
+
+        // AHEAD OF THE PLANT, NOT INSTEAD OF IT (SDD-006 §3c, R9.1's own
+        // composition, finding 257). `GasCapture` already IS the field's sales
+        // point (R20d.17) — this raises what reaches it. Suction is read live
+        // from the separator this train sits behind, exactly as a liquid pump
+        // station's ρ̄ is a property of the stream it was built for (§3d);
+        // rung 0's own discharge matches that same pressure, so an unbought
+        // train is a true no-op — ratio 1, zero stages worth of work, zero
+        // power drawn — rather than a phantom cost or, worse, a phantom
+        // capacity constraint throttling gas to zero before anyone has bought
+        // anything.
+        var compressor = new OGSim.Facilities.Compressor(
+            Defaults.TheCompressor, _ladders.Compressor[0], separator.Tier.OperatingPressure,
+            Defaults.GasCompressibilityFactor, Defaults.MaterialCount);
 
         // WHERE A REJECTED STREAM GOES (SDD-006 §7d, finding 252). Custody's
         // Reject port satisfies network-build's "a spec gate must declare a
@@ -163,6 +189,8 @@ internal sealed class PlantBuilder
         _network.Add(separator);
         _network.Add(custody);
         _network.Add(treater);
+        _network.Add(pumpStation);
+        _network.Add(compressor);
         _network.Add(gasPlant);
         _network.Add(flare);
         _network.Add(offSpecSink);
@@ -193,9 +221,8 @@ internal sealed class PlantBuilder
         _network.Add(tank);
 
         // INSTALLED ONE AT A TIME, because that is what the plant now is. The
-        // shipped scenario still starts complete; S2 step 4 is where this list
-        // shortens to whatever the scenario declares, and the eleven calls below
-        // become eleven things a company builds (plans 22 §4).
+        // shipped scenario still starts complete; a scenario that declares bare
+        // ground gets none of this until a company pays for it (plans 22 §4).
         plant.Install(manifold);
         plant.Install(flowline);
         plant.Install(separator);
@@ -207,6 +234,8 @@ internal sealed class PlantBuilder
         plant.Install(intake);
         plant.Install(tank);
         plant.Install(offSpecSink);
+        plant.Install(pumpStation);
+        plant.Install(compressor);
 
         // AND WIRED FROM WHAT IS THERE. The ten edges used to be typed out here,
         // which was fine while composition built the whole chain in one go and

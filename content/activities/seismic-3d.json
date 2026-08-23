@@ -1,0 +1,12 @@
+{
+  "kind": "activity",
+  "id": "seismic-3d",
+  "name": "$loc:activity.seismic-3d",
+  "group": "exploration",
+  "costMillions": 2.5,
+  "durationTurns": 2,
+  "weatherLimit": 5.5,
+  "requiresAccess": true,
+  "note": "Sharpens trap and reservoir on a structure you already found. The last thing you buy before a hole.",
+  "develops": true
+}

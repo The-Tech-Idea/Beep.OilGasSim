@@ -1,0 +1,9 @@
+{
+  "kind": "equipment",
+  "id": "workover-rig",
+  "name": "$loc:equipment.workover-rig",
+  "group": "wells",
+  "costMillions": 3.5,
+  "buildTurns": 2,
+  "note": "A rig makes holes; this is for everything you do to one afterwards."
+}

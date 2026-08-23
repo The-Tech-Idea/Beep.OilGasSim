@@ -1,0 +1,9 @@
+{
+  "kind": "equipment",
+  "id": "crude-oil-storage-tank",
+  "name": "$loc:equipment.crude-oil-storage-tank",
+  "group": "export",
+  "costMillions": 7.0,
+  "buildTurns": 4,
+  "note": "A tank farm, with the vapour caught instead of vented."
+}

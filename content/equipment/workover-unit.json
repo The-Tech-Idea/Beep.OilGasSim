@@ -1,0 +1,9 @@
+{
+  "kind": "equipment",
+  "id": "workover-unit",
+  "name": "$loc:equipment.workover-unit",
+  "group": "wells",
+  "costMillions": 6.0,
+  "buildTurns": 2,
+  "note": "The smaller rig that re-enters what the big one drilled: pumps, valves, plugs."
+}

@@ -1,0 +1,9 @@
+{
+  "kind": "equipment",
+  "id": "three-phase-separator",
+  "name": "$loc:equipment.three-phase-separator",
+  "group": "process",
+  "costMillions": 6.0,
+  "buildTurns": 3,
+  "note": "Oil, gas and water, split three ways."
+}

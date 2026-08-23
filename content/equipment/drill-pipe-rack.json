@@ -1,0 +1,9 @@
+{
+  "kind": "equipment",
+  "id": "drill-pipe-rack",
+  "name": "$loc:equipment.drill-pipe-rack",
+  "group": "drilling",
+  "costMillions": 0.4,
+  "buildTurns": 1,
+  "note": "Pipe, stacked and counted."
+}

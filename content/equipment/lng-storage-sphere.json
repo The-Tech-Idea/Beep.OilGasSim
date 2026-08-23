@@ -1,0 +1,9 @@
+{
+  "kind": "equipment",
+  "id": "lng-storage-sphere",
+  "name": "$loc:equipment.lng-storage-sphere",
+  "group": "export",
+  "costMillions": 14.0,
+  "buildTurns": 6,
+  "note": "The end of the gas chain, and the most expensive thing on the yard."
+}

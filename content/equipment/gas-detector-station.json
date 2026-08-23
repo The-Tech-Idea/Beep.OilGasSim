@@ -1,0 +1,9 @@
+{
+  "kind": "equipment",
+  "id": "gas-detector-station",
+  "name": "$loc:equipment.gas-detector-station",
+  "group": "safety",
+  "costMillions": 0.4,
+  "buildTurns": 1,
+  "note": "Finds the leak before the flare does."
+}

@@ -1,0 +1,9 @@
+{
+  "kind": "equipment",
+  "id": "oil-containment-boom",
+  "name": "$loc:equipment.oil-containment-boom",
+  "group": "safety",
+  "costMillions": 0.5,
+  "buildTurns": 1,
+  "note": "Keeps a spill inside the pad."
+}

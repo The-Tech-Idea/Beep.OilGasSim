@@ -1,0 +1,9 @@
+{
+  "kind": "equipment",
+  "id": "distillation-column",
+  "name": "$loc:equipment.distillation-column",
+  "group": "process",
+  "costMillions": 9.0,
+  "buildTurns": 5,
+  "note": "Splits the NGLs out. The most valuable thing you can do to a gas stream."
+}

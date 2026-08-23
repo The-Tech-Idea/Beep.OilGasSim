@@ -27,6 +27,8 @@ this is its client-side counterpart and is referenced from it.
 | C1 | Engine in process — Godot 4.7.1 loads net10 `OGSim.Composition` | settles plan 02 §1; no bridge process |
 | C2 | Host-supplied content — `IContentSource` over `res://content` | 80 files; a bad sheet refuses the engine by name |
 | C3 | Seeded New Game with world knobs onto `WorldParameters` | mockup 5; land fraction means what it says |
+| C3b | New Game walks the mockup's five steps — mode, world setup, company, review, generate | was one page painting a fixed breadcrumb; the plates now say which step the player is on, BACK steps back rather than quitting, and forward is refused by name (`--stage=` opens any of them) |
+| C20 | The game is a NAMED MODE, and there are two — `days` and `engineer` (plans 23 §4) | the three axes were spelled out twice in `EngineHost`; the draft now carries a mode id, the sidecar records it, and `--mode=` runs this client at the other one |
 | C4 | Surface-only preview — the real `BasinWorld` in a `SubViewport` | §7A.4; no subsurface to leak |
 | C5 | All 18 engine commands on the dispatch board | was 9; repair was the missing one that made the game unwinnable |
 | C6 | Save / load — `SaveGame` payload plus a host sidecar | G-10 closed |
@@ -63,7 +65,7 @@ structure at month one, so the only verbs are upgrade and drill. The plan is
 | Phase | What | Status | Size |
 |---|---|---|---|
 | **S1** | The map goes dark — risk registered on discovery, not generation; a block survey finds structures | ✅ — the licence is cut into 16 blocks, `seismic-2d` shoots one, and a new game knows of no structure at all. The area became an ENTITY rather than a coordinate and a radius, which is what let it be built at all (SDD-007 §5 gives an activity one `EntityRef`). `S1V1`–`S1V4` pin it; no existing test broke | medium |
-| **S2** | The plant starts empty — `SurfaceChain` becomes a set, Install creates rather than upgrades | ⬜ | large |
+| **S2** | The plant starts empty — `SurfaceChain` becomes a set, Install creates rather than upgrades | ✅ — `SurfaceChain` is a mutable set of thirteen optional elements; `PlantBuilder` erects one and `InstallEarlyProductionFacilityCommand` is what a company pays for. A well drilled with nowhere to go waits shut in and ties in when the plant lands. `S2V1`–`S2V4` and `RulesV1`–`RulesV3` pin it | large |
 | **S3** | Connections laid by the player — flowlines between built elements | ❌ | blocked on G-02 |
 | **S4** | The yard extends — more crews, more sheds | ❌ | blocked on G-13 |
 
@@ -86,6 +88,27 @@ How they are built: [21 — game code patterns](21_GAME_CODE_PATTERNS.md).
 
 ---
 
+## Next — mechanics are optional
+
+The Days re-balance is **blocked on a design question**, and measuring before it
+is answered measures a game nobody intends to ship:
+[24 — mechanics are optional](24_MECHANICS_ARE_OPTIONAL.md).
+
+Measured 2026-08-23 at a raised opening balance, the game's own auto-player over
+seed 11: six dry holes by year five, then `the licence's work commitment went
+unmet and the bond was forfeited` at month 60 — and five years left to run with
+no development possible. The licence deadline was reasoned about against a KNOWN
+field; S1 made the map dark and nobody re-read the note. A Settlers-shaped
+builder should not have a licence mechanic at all.
+
+| Step | What | Status |
+|---|---|---|
+| **M1** | `MechanicSet` as a fourth axis on `GameMode`; both presets declared | ✅ — five optional mechanics named; Days holds none of them, Engineer holds all. A set names what is ON, so a mechanic added later is off in every preset that predates it |
+| **M2** | Neutral models, licence first | ◐ — **licence done.** A build with the mechanic off holds a licence that cannot be lost rather than holding none, so `DrillWellActivity` and the read model never learn which game they are in. `GM6`/`GM7` pin it. Working-interest sale, takeover, insurance and demurrage remain |
+| **M3** | The save records the mechanic set | ⬜ |
+| **M4** | New Game step 1 offers presets, then per-mechanic switches | ⬜ |
+| **M5** | Re-balance Days against the game it is meant to be | ⬜ |
+
 ## Blocked ❌ — and what would unblock it
 
 | Gap | What it stops | What would close it |
@@ -106,6 +129,9 @@ How they are built: [21 — game code patterns](21_GAME_CODE_PATTERNS.md).
 | **GC-2 — FIXED** | **A restored engine has no read model until a tick runs.** `FieldReadModel` is published at Close, so `Load` advanced one month and a loaded game resumed on the month after the one it was saved on. `SaveGame.Load` now runs Close's two stages once, immediately after restore (engine finding 266) — a loaded game's read model is the month it was saved in, not the one after. | closed |
 | **GC-4 — FIXED** | **A world could generate that was unplayable from month one.** On 2 of 12 seeds tested (5 and 6, at 24 km) every activity is refused with `reject.no-target` — *"there is nothing here to work on"* — for the whole ten years. The cause is in `Activities.Refusals`: the check is `field.CompartmentCount == 0`, a FIELD condition, while `FieldReadModel.Prospects` was at the same moment publishing **11 and 12 structures** with probabilities of success attached. So the read model advertises targets the command layer will not accept, and a player can select a structure, order a hole, and be told there is nothing there — every month, for a decade, with no way to tell it is terminal. The auto-played run reports a tidy `Expired` at $1.7M and looks exactly like a balance result. | open, engine's call |
 | GC-3 | **The shipped scenario is winnable, and brutal.** Measured on eight seeds at 24 km with one policy: **1 Met** (seed 1, $594.0M, 15 holes, 8 wells), **1 Expired** (seed 3, $134.4M), **4 insolvent** before month 55 (seeds 2, 4, 7, 8 — each after three dry holes), and **2 dead worlds** (see GC-4). So the target is reachable but the run is decided early: on every seed that failed, the company was broke inside five years having drilled three holes and found nothing. What the numbers say is not that $600M is too high — it is that **there is no recovery from an unlucky opening**, because $50M buys about three holes and a dry one returns nothing to fund the next. | open, design question |
+
+| **GC-5 — FIXED** | **The read model published whether an objective was MET and never what it ASKED FOR.** So every screen that told the player the goal kept its own copy of the figure — and six of them in this client still said `$600M` after the scenario moved to `$360M`: the menu, the New Game card, the gameplay doc, the HUD, the results sheet and the auto-player's report. The game stated one target and scored against another (law L5). `ScenarioProgress` now carries `Goals` (`ObjectiveGoal`: objective, metric, comparison, target) and `Deadline`, so a host reads both. `Host/Goal.cs` is the only place in this client that formats them, and screens with no engine running — the menu, the setup card — state no figure at all rather than one they cannot check. | closed |
+| **GC-6 — FIXED** | **A licence work commitment made more than half of all runs unwinnable by month 60.** `Defaults.LicenceTerms` defends its 60-month deadline on the grounds that the field is `DeclareKnownField`d from tick zero — which S1 made false. With a dark map, year one ends with no prospects visible at all, and at the shipped exploration prior a company gets three or four real attempts and needs about five. Seed 11 at a raised balance: six dry holes, licence lost at month 60, five years left with no development possible. Not fixed by loosening the licence — **Oilfield Days has no licence mechanic** (plans 24), and holds one that cannot be lost so nothing reading it learns which game it is in. | closed |
 
 ---
 

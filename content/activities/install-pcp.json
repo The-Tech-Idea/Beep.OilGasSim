@@ -1,0 +1,12 @@
+{
+  "kind": "activity",
+  "id": "install-pcp",
+  "name": "$loc:activity.install-pcp",
+  "group": "lift",
+  "costMillions": 2.7,
+  "durationTurns": 1,
+  "weatherLimit": 6.5,
+  "requiresAccess": false,
+  "note": "For heavy oil and sand. Hates gas.",
+  "develops": true
+}

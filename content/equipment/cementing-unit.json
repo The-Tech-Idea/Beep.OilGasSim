@@ -1,0 +1,9 @@
+{
+  "kind": "equipment",
+  "id": "cementing-unit",
+  "name": "$loc:equipment.cementing-unit",
+  "group": "drilling",
+  "costMillions": 1.9,
+  "buildTurns": 2,
+  "note": "Casing is not set without it, and a well is not a well until it is."
+}

@@ -17,6 +17,7 @@
     <Project Path="src/OGSim.Objectives/OGSim.Objectives.csproj" />
     <Project Path="src/OGSim.Composition/OGSim.Composition.csproj" />
     <Project Path="src/OGSim.ReferenceClient/OGSim.ReferenceClient.csproj" />
+    <Project Path="src/OGSim.Engineer/OGSim.Engineer.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/OGSim.Contracts.Tests/OGSim.Contracts.Tests.csproj" />
@@ -36,5 +37,6 @@
     <Project Path="tests/OGSim.Persistence.Tests/OGSim.Persistence.Tests.csproj" />
     <Project Path="tests/OGSim.Objectives.Tests/OGSim.Objectives.Tests.csproj" />
     <Project Path="tests/OGSim.Composition.Tests/OGSim.Composition.Tests.csproj" />
+    <Project Path="tests/OGSim.Engineer.Tests/OGSim.Engineer.Tests.csproj" />
   </Folder>
 </Solution>

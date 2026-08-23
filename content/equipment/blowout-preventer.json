@@ -1,0 +1,9 @@
+{
+  "kind": "equipment",
+  "id": "blowout-preventer",
+  "name": "$loc:equipment.blowout-preventer",
+  "group": "drilling",
+  "costMillions": 2.9,
+  "buildTurns": 2,
+  "note": "The one piece nobody drills without."
+}

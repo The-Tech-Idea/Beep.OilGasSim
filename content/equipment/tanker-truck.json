@@ -1,0 +1,9 @@
+{
+  "kind": "equipment",
+  "id": "tanker-truck",
+  "name": "$loc:equipment.tanker-truck",
+  "group": "export",
+  "costMillions": 0.5,
+  "buildTurns": 1,
+  "note": "One load at a time."
+}

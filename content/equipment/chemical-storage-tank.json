@@ -1,0 +1,9 @@
+{
+  "kind": "equipment",
+  "id": "chemical-storage-tank",
+  "name": "$loc:equipment.chemical-storage-tank",
+  "group": "utilities",
+  "costMillions": 0.8,
+  "buildTurns": 1,
+  "note": "Inhibitor, demulsifier, biocide."
+}

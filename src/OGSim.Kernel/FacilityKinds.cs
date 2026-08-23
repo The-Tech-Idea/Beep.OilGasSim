@@ -79,7 +79,13 @@ public sealed record GasPlantDefinition(
 
 public sealed record ExportLineDefinition(
     ContentId Id, ContentId? RequiresTech, Era AvailableFromEra, int Rung,
-    double OfftakeKgPerSecond)
+    double OfftakeKgPerSecond,
+
+    /// <summary>The parcel this rung sells in — nothing loads until the tank
+    /// holds one, so this is the field's revenue granularity. A trunk sells
+    /// tanker lots; a first spur can sell coaster lots (plans 26 §6's
+    /// measurement: at 80,000 t one well's first sale was five years away).</summary>
+    double ParcelSizeKilograms)
     : FacilityUnitDefinition(Id, RequiresTech, AvailableFromEra, Rung);
 
 public sealed record ManifoldDefinition(
@@ -323,7 +329,8 @@ public sealed class ExportLineContentKind : FacilityContentKind<ExportLineDefini
 
         return new ExportLineDefinition(
             gate.Id, gate.RequiresTech, gate.AvailableFromEra, gate.Rung,
-            SeparatorContentKind.Si(element, "offtake", Dimension.MassRate));
+            SeparatorContentKind.Si(element, "offtake", Dimension.MassRate),
+            SeparatorContentKind.Si(element, "parcelSize", Dimension.Mass));
     }
 
     protected override IEnumerable<string> DatasheetProblems(ExportLineDefinition unit)
@@ -331,6 +338,9 @@ public sealed class ExportLineContentKind : FacilityContentKind<ExportLineDefini
         // A line that takes nothing is a field with no route to market, which is
         // a state this engine reaches by an outage and never by content.
         if (unit.OfftakeKgPerSecond <= 0.0) yield return "offtake must be positive";
+
+        if (unit.ParcelSizeKilograms <= 0.0)
+            yield return "parcelSize must be positive; a zero parcel would load every tick";
     }
 }
 

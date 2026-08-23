@@ -1,0 +1,9 @@
+{
+  "kind": "equipment",
+  "id": "drilling-rig-derrick",
+  "name": "$loc:equipment.drilling-rig-derrick",
+  "group": "drilling",
+  "costMillions": 12.0,
+  "buildTurns": 3,
+  "note": "The rig. The whole game waits on this one and on everything it needs first."
+}

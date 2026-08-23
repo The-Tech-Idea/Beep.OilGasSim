@@ -107,6 +107,45 @@ public sealed record Objective(
     bool Visible);
 
 /// <summary>
+/// What an objective actually ASKS FOR, published so a host can say it.
+/// </summary>
+/// <remarks>
+/// <para><b>Without this a host cannot state the goal.</b> The read model
+/// carried whether an objective was met and nothing about what it wanted, so
+/// every screen that told the player the target held its own copy of the
+/// number — and six of them in the Godot client were still saying $600M after
+/// the scenario moved to $360M. The game was telling a player one figure and
+/// scoring them against another (law L5: one owner per fact).</para>
+///
+/// <para><b>Only the shape that HAS a target.</b> An objective reading
+/// <c>Compare(Metric, op, Const)</c> has one and it is published; anything else
+/// — a <c>Never</c>, a compound — publishes none rather than inventing one.
+/// Absence is the honest answer for a goal that is not a threshold.</para>
+///
+/// <para>The METRIC travels with it because a target is meaningless without
+/// knowing what it measures: 360,000,000 is a sum of money or a volume or a
+/// count depending entirely on the path beside it.</para>
+/// </remarks>
+public sealed record ObjectiveGoal(
+    ContentId Objective,
+    ReadModelPath Metric,
+    CompareOp Op,
+    double Target)
+{
+    /// <summary>
+    /// The goal this objective states, or none when it does not state one.
+    /// </summary>
+    public static ObjectiveGoal? Of(Objective objective)
+    {
+        ArgumentNullException.ThrowIfNull(objective);
+
+        return objective.Condition is Compare(Metric metric, var op, Const target)
+            ? new ObjectiveGoal(objective.Id, metric.Path, op, target.Value)
+            : null;
+    }
+}
+
+/// <summary>
 /// The sealed position an objective is evaluated against (SDD-014 §5a):
 /// read-model values by PATH, the collections an <see cref="Aggregate"/>
 /// quantifies over, and the tick's events. Nothing else.

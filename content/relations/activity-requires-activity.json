@@ -1,0 +1,102 @@
+{
+  "kind": "relation",
+  "edge": "activity-requires-activity",
+  "edges": [
+    {
+      "from": "abandon-well",
+      "to": "drill-development-well"
+    },
+    {
+      "from": "cut-core",
+      "to": "drill-development-well"
+    },
+    {
+      "from": "drill-development-well",
+      "to": "seismic-2d"
+    },
+    {
+      "from": "expand-export",
+      "to": "install-early-production-facility"
+    },
+    {
+      "from": "install-compressor",
+      "to": "install-gas-plant"
+    },
+    {
+      "from": "install-early-production-facility",
+      "to": "drill-development-well"
+    },
+    {
+      "from": "install-esp",
+      "to": "drill-development-well"
+    },
+    {
+      "from": "install-gas-lift",
+      "to": "install-gas-plant"
+    },
+    {
+      "from": "install-gas-plant",
+      "to": "install-early-production-facility"
+    },
+    {
+      "from": "install-manifold",
+      "to": "install-early-production-facility"
+    },
+    {
+      "from": "install-monitoring",
+      "to": "install-early-production-facility"
+    },
+    {
+      "from": "install-pcp",
+      "to": "drill-development-well"
+    },
+    {
+      "from": "install-pump-station",
+      "to": "install-early-production-facility"
+    },
+    {
+      "from": "install-rod-pump",
+      "to": "drill-development-well"
+    },
+    {
+      "from": "install-separator",
+      "to": "install-early-production-facility"
+    },
+    {
+      "from": "install-tank",
+      "to": "install-early-production-facility"
+    },
+    {
+      "from": "install-treater",
+      "to": "install-early-production-facility"
+    },
+    {
+      "from": "remediate-injector",
+      "to": "install-early-production-facility"
+    },
+    {
+      "from": "repair-equipment",
+      "to": "install-early-production-facility"
+    },
+    {
+      "from": "seismic-3d",
+      "to": "seismic-2d"
+    },
+    {
+      "from": "service-equipment",
+      "to": "install-monitoring"
+    },
+    {
+      "from": "stimulate-well",
+      "to": "drill-development-well"
+    },
+    {
+      "from": "well-test-buildup",
+      "to": "drill-development-well"
+    },
+    {
+      "from": "wireline-log",
+      "to": "drill-development-well"
+    }
+  ]
+}

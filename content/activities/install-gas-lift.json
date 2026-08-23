@@ -1,0 +1,12 @@
+{
+  "kind": "activity",
+  "id": "install-gas-lift",
+  "name": "$loc:activity.install-gas-lift",
+  "group": "lift",
+  "costMillions": 3.2,
+  "durationTurns": 1,
+  "weatherLimit": 6.5,
+  "requiresAccess": false,
+  "note": "Needs gas to give away, so it needs the plant first. Tolerant of everything that kills an ESP.",
+  "develops": true
+}

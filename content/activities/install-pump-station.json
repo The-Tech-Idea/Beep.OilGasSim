@@ -1,0 +1,12 @@
+{
+  "kind": "activity",
+  "id": "install-pump-station",
+  "name": "$loc:activity.install-pump-station",
+  "group": "surface",
+  "costMillions": 10.0,
+  "durationTurns": 3,
+  "weatherLimit": 5.0,
+  "requiresAccess": true,
+  "note": "The oil leg's version of the compressor.",
+  "develops": true
+}

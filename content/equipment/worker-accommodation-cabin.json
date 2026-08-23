@@ -1,0 +1,9 @@
+{
+  "kind": "equipment",
+  "id": "worker-accommodation-cabin",
+  "name": "$loc:equipment.worker-accommodation-cabin",
+  "group": "yard",
+  "costMillions": 1.2,
+  "buildTurns": 2,
+  "note": "Crews sleep on site or they lose half a shift to the road."
+}

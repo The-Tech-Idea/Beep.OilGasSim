@@ -1,0 +1,12 @@
+{
+  "kind": "activity",
+  "id": "install-tank",
+  "name": "$loc:activity.install-tank",
+  "group": "surface",
+  "costMillions": 7.0,
+  "durationTurns": 6,
+  "weatherLimit": 5.0,
+  "requiresAccess": true,
+  "note": "Headroom between cargoes. A full tank shuts wells in.",
+  "develops": true
+}

@@ -1,0 +1,9 @@
+{
+  "kind": "equipment",
+  "id": "pipeline-manifold",
+  "name": "$loc:equipment.pipeline-manifold",
+  "group": "export",
+  "costMillions": 2.8,
+  "buildTurns": 2,
+  "note": "Where the export line starts."
+}

@@ -1,0 +1,9 @@
+{
+  "kind": "equipment",
+  "id": "frac-tank",
+  "name": "$loc:equipment.frac-tank",
+  "group": "wells",
+  "costMillions": 0.5,
+  "buildTurns": 1,
+  "note": "Holds the fluid an intervention needs."
+}

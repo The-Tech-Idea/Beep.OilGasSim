@@ -1,0 +1,9 @@
+{
+  "kind": "equipment",
+  "id": "separator-vessel",
+  "name": "$loc:equipment.separator-vessel",
+  "group": "process",
+  "costMillions": 3.0,
+  "buildTurns": 2,
+  "note": "Two-phase. The first vessel every barrel crosses."
+}

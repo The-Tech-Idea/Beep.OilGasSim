@@ -708,7 +708,9 @@ public sealed class ChainTests
 
         Produce(engine, target);
 
-        Assert.Equal(Defaults.AbandonWellTerms.Cost, obligations.EstimatedCost(well));
+        Assert.Equal(
+            Defaults.AbandonWellTerms(Fixture.Activities()).Cost,
+            obligations.EstimatedCost(well));
     }
 
     /// <summary>
@@ -727,7 +729,7 @@ public sealed class ChainTests
         engine.Pipeline.AdvanceTick();
 
         Assert.Equal(
-            Defaults.AbandonWellTerms.Cost,
+            Defaults.AbandonWellTerms(Fixture.Activities()).Cost,
             engine.Provided.Resolve<IObligationRegistry>()
                   .EstimatedCost(new EntityRef(EntityKind.Completion, 1)));
     }
@@ -1538,9 +1540,12 @@ public sealed class ChainTests
 
         // RUNG 0 IS A TRUE NO-OP: ratio 1, discharge equal to the suction it
         // was built against, zero stages worth of work.
-        Assert.Equal(new ContentId("compressor-none"), chain.Compressor.Tier.Id);
-        Assert.Equal(1, chain.Compressor.Stages);
-        Assert.Equal(chain.Separator.Tier.OperatingPressure, chain.Compressor.Tier.Discharge);
+        var compressor = Fixture.Built(chain.Compressor, "compressor");
+        var separator = Fixture.Built(chain.Separator, "separator");
+
+        Assert.Equal(new ContentId("compressor-none"), compressor.Tier.Id);
+        Assert.Equal(1, compressor.Stages);
+        Assert.Equal(separator.Tier.OperatingPressure, compressor.Tier.Discharge);
 
         Assert.IsType<Accepted>(engine.Commands.Submit(new InstallCompressorCommand()));
 
@@ -1549,13 +1554,14 @@ public sealed class ChainTests
         // four-tick install past five ticks on a grade worse than the best.
         for (var month = 0; month < 6; month++) engine.Pipeline.AdvanceTick();
 
-        Assert.Equal(new ContentId("compressor-e1"), chain.Compressor.Tier.Id);
-        Assert.True(chain.Compressor.Tier.Discharge.Pascals > chain.Separator.Tier.OperatingPressure.Pascals,
+        Assert.Equal(new ContentId("compressor-e1"), compressor.Tier.Id);
+        Assert.True(compressor.Tier.Discharge.Pascals > separator.Tier.OperatingPressure.Pascals,
             "a real train should discharge above the separator it draws from");
 
         // AND WHAT REACHED THE PLANT WAS ACTUALLY BOOSTED — the compressor's
         // own outlet stream, read straight off the chain a player watches.
-        ChainElementView row = Row(engine, new EntityRef(EntityKind.FlowElement, chain.Compressor.Id.Value));
+        ChainElementView row = Row(
+            engine, new EntityRef(EntityKind.FlowElement, compressor.Id.Value));
         Assert.True(row.Throughput.Kilograms > 0.0,
             "the compressor should have something to compress on a producing field");
 
@@ -1584,7 +1590,8 @@ public sealed class ChainTests
         for (var month = 0; month < 6; month++) engine.Pipeline.AdvanceTick();
 
         SurfaceChain before = engine.Provided.Resolve<SurfaceChain>();
-        Assert.Equal(new ContentId("compressor-e1"), before.Compressor.Tier.Id);
+        Assert.Equal(new ContentId("compressor-e1"),
+                     Fixture.Built(before.Compressor, "compressor").Tier.Id);
 
         var container = new MemoryStream();
         SaveGame.Write(engine, seed, container);
@@ -1593,7 +1600,8 @@ public sealed class ChainTests
         Built reloaded = Assert.IsType<Built>(SaveGame.Load(container, Fixture.Settings()));
         SurfaceChain after = reloaded.Engine.Provided.Resolve<SurfaceChain>();
 
-        Assert.Equal(new ContentId("compressor-e1"), after.Compressor.Tier.Id);
+        Assert.Equal(new ContentId("compressor-e1"),
+                     Fixture.Built(after.Compressor, "compressor").Tier.Id);
     }
 
     // ------------------------------------------------------- the crew
@@ -1649,11 +1657,13 @@ public sealed class ChainTests
             trained.Pipeline.AdvanceTick();
 
             if (untrainedTick < 0
-                && untrained.Provided.Resolve<SurfaceChain>().Compressor.Tier.Id != none)
+                && Fixture.Built(untrained.Provided.Resolve<SurfaceChain>().Compressor,
+                                 "compressor").Tier.Id != none)
                 untrainedTick = month;
 
             if (trainedTick < 0
-                && trained.Provided.Resolve<SurfaceChain>().Compressor.Tier.Id != none)
+                && Fixture.Built(trained.Provided.Resolve<SurfaceChain>().Compressor,
+                                 "compressor").Tier.Id != none)
                 trainedTick = month;
         }
 
@@ -1718,8 +1728,10 @@ public sealed class ChainTests
         Produce(engine, target);
 
         SurfaceChain chain = engine.Provided.Resolve<SurfaceChain>();
-        var compressorRef = new EntityRef(EntityKind.FlowElement, chain.Compressor.Id.Value);
-        var separatorRef = new EntityRef(EntityKind.FlowElement, chain.Separator.Id.Value);
+        var compressorRef = new EntityRef(
+            EntityKind.FlowElement, Fixture.Built(chain.Compressor, "compressor").Id.Value);
+        var separatorRef = new EntityRef(
+            EntityKind.FlowElement, Fixture.Built(chain.Separator, "separator").Id.Value);
 
         // THE SEPARATOR'S OWN THROUGHPUT, not the custody meter's: the meter
         // only shows what crossed it, and this single-well field with no
@@ -2931,7 +2943,22 @@ public sealed class ChainTests
         Assert.IsType<Accepted>(engine.Commands.Submit(
             new InstallEarlyProductionFacilityCommand()));
 
-        for (var tick = 0; tick < 8; tick++) engine.Pipeline.AdvanceTick();
+        // RUN UNTIL IT STANDS, rather than for a month count picked today. A
+        // commissioning is four ticks of work, weather-limited at 5 m/s and
+        // stretched by whatever the crew's competency costs (SDD-007 §4.1's
+        // finding-265 amendment) — so the calendar length is a consequence of
+        // other rules and will move again when they do. What this test is
+        // about is what happens WHEN the plant lands, not how long it took.
+        for (var tick = 0; tick < 24; tick++)
+        {
+            engine.Pipeline.AdvanceTick();
+
+            if (PlantBuilder.Standing(engine.Provided.Resolve<SurfaceChain>()))
+                break;
+        }
+
+        Assert.True(PlantBuilder.Standing(engine.Provided.Resolve<SurfaceChain>()),
+                    "two years is long enough to commission a facility");
 
         Assert.Contains(engine.ReadModel!.Wellbores,
                         well => well.Status != WellStatus.ShutIn);

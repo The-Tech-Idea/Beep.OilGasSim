@@ -30,6 +30,34 @@ each — which is why this mapping is worth making rather than borrowing a mood.
 The fourth is the one that makes Settlers *Settlers*, and it is the one OGSim is
 closest to already.
 
+### Amended 2026-08-23 — the genre is wider than Settlers
+
+The target was widened: **Settlers, Factorio, Foundation and that family**, not
+Settlers alone. Each contributes something the others do not, and taken together
+they say what Oilfield Days is aiming at more precisely than "a base builder"
+ever could.
+
+| Reference | What it contributes | Where OGSim stands |
+|---|---|---|
+| **Settlers** | A dark map, prospecting, buildings that do nothing until fed | S1 ✅, S2 ✅ |
+| **Factorio** | **Throughput and ratios.** The chain is not "built or not" — it is balanced or bottlenecked, and reading WHERE it is throttled is the skill | ✅ the engine already computes this: `ChainElementView` carries throughput, deferred mass and the constraint kind. It is the strongest hand this game holds |
+| **Factorio** | **The player routes it.** Belts and pipes are placed, not implied | ❌ **S3**, blocked on G-02 |
+| **Foundation** | **Organic placement.** No rigid grid; you site things where the ground suits them | ❌ G-02/G-14 again — a facility has no coordinate |
+| **All three** | **Scaling up is the arc.** The mid-game is "make it bigger and keep it fed", not "wait" | ~ the ladders exist; the reason to climb them is throughput, which is Factorio's answer |
+
+**What this changes.** S3 was filed as "large, blocked, later". Under this
+reading it is not an extra — **it is the fourth row of the table above, and the
+genre's defining verb.** A production-chain builder in which the chain routes
+itself is the one thing on this list that cannot be called the genre.
+
+It stays blocked on the same gap (G-02: a facility has no coordinate, so nothing
+can be placed or routed between). What changes is its priority once the
+mechanic set is settled: it moves ahead of polish, not behind it.
+
+**What this does not change.** Nothing is removed from the plan and nothing in
+§6 is invalidated. S1 and S2 are the Settlers half and are built; this names the
+Factorio half and says where it lives.
+
 ---
 
 ## 2. The starting position
@@ -641,6 +669,32 @@ So: S1 has moved the balance and the number is not yet meaningful. Re-balancing
 waits on a better auto-player, and on S2 — which will move it again.
 
 ---
+
+### Confirmed from the other side — 2026-08-23, by Oilfield Engineer
+
+`src/OGSim.Engineer` composes the same engine at `GameModes.Days` and walks the
+production and workflow cycle with an operator's policy: fix, widen, build,
+drill, appraise, explore, holding back a reserve for what it has still to buy.
+It reaches the same wall from a completely different direction.
+
+```
+engineer  120 months   $50.0M -> $131.5M   8 wells   5,263,801 m3
+days       26 months   $50.0M -> -$0.3M    0 wells           0 m3   INSOLVENT
+```
+
+Days drills three holes at 17-19% and is finished. Two things worth recording
+that the Godot auto-player could not show:
+
+1. **Richness does not help.** A prolific basin moves VOLUMES, not the chance of
+   a closure, so the same three dry holes come up at any setting. The lever is
+   POS or money, and nothing else.
+2. **The cycle is not the problem.** Handed a discovery, the same code
+   commissions a facility and produces through it (`EN4`). Days fails between
+   the first survey and the first discovery, and nowhere else.
+
+The recommendation is unchanged: settle or drop S3/S4, then re-balance once —
+now with two instruments rather than one, and `dotnet run --project
+src/OGSim.Engineer -- --mode=days` is the faster of them.
 
 ## 9. Decisions needed before S1 starts
 

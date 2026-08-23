@@ -1,0 +1,9 @@
+{
+  "kind": "equipment",
+  "id": "metering-station",
+  "name": "$loc:equipment.metering-station",
+  "group": "process",
+  "costMillions": 2.3,
+  "buildTurns": 2,
+  "note": "Custody transfer. Nothing is revenue until it crosses this."
+}

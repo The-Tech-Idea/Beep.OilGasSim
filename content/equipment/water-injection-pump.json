@@ -1,0 +1,9 @@
+{
+  "kind": "equipment",
+  "id": "water-injection-pump",
+  "name": "$loc:equipment.water-injection-pump",
+  "group": "wells",
+  "costMillions": 2.2,
+  "buildTurns": 2,
+  "note": "Pushes water back in to hold the pressure up."
+}

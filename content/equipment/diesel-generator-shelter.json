@@ -1,0 +1,9 @@
+{
+  "kind": "equipment",
+  "id": "diesel-generator-shelter",
+  "name": "$loc:equipment.diesel-generator-shelter",
+  "group": "utilities",
+  "costMillions": 1.4,
+  "buildTurns": 2,
+  "note": "Power before there is a grid."
+}

@@ -1,0 +1,58 @@
+{
+  "kind": "relation",
+  "edge": "activity-needs-tech",
+  "edges": [
+    {
+      "from": "drill-development-well",
+      "to": "rotary-drilling"
+    },
+    {
+      "from": "expand-export",
+      "to": "high-strength-linepipe"
+    },
+    {
+      "from": "install-compressor",
+      "to": "reciprocating-compression"
+    },
+    {
+      "from": "install-esp",
+      "to": "esp"
+    },
+    {
+      "from": "install-gas-lift",
+      "to": "gas-lift"
+    },
+    {
+      "from": "install-gas-plant",
+      "to": "glycol-dehydration"
+    },
+    {
+      "from": "install-monitoring",
+      "to": "condition-monitoring"
+    },
+    {
+      "from": "install-pcp",
+      "to": "pcp"
+    },
+    {
+      "from": "install-rod-pump",
+      "to": "rod-pump"
+    },
+    {
+      "from": "install-separator",
+      "to": "3-phase-separation"
+    },
+    {
+      "from": "remediate-injector",
+      "to": "scale-management"
+    },
+    {
+      "from": "seismic-2d",
+      "to": "2-d-seismic"
+    },
+    {
+      "from": "seismic-3d",
+      "to": "3-d-seismic"
+    }
+  ]
+}

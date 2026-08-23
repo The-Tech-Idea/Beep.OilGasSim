@@ -1,0 +1,9 @@
+{
+  "kind": "equipment",
+  "id": "dehydration-unit",
+  "name": "$loc:equipment.dehydration-unit",
+  "group": "process",
+  "costMillions": 4.2,
+  "buildTurns": 3,
+  "note": "Dries the gas to sales spec."
+}

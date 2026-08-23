@@ -1,0 +1,12 @@
+{
+  "kind": "activity",
+  "id": "stimulate-well",
+  "name": "$loc:activity.stimulate-well",
+  "group": "intervention",
+  "costMillions": 1.8,
+  "durationTurns": 1,
+  "weatherLimit": 6.5,
+  "requiresAccess": false,
+  "note": "Acid on the skin the water left behind. Cheap, quick, and it comes back.",
+  "develops": true
+}

@@ -64,6 +64,21 @@ public sealed class GodotContentSource : IContentSource
         return source;
     }
 
+    /// <summary>
+    /// This product's style overlay — `content/styles/{id}/` at order 1, so an
+    /// entry there REPLACES the base entry wholesale (SDD-004 §7). Null when
+    /// the style ships no departures.
+    /// </summary>
+    public static GodotContentSource? StyleOverrides(ContentId style)
+    {
+        var source = new GodotContentSource("style:" + style.Value, 1);
+
+        foreach (string folder in Loadable)
+            source.ReadFolder($"{Root}/styles/{style.Value}/{folder}", folder + "/");
+
+        return source.Count == 0 ? null : source;
+    }
+
     /// <summary>The folders whose kinds the engine registers today.</summary>
     private static readonly string[] Loadable =
     {
@@ -73,6 +88,13 @@ public sealed class GodotContentSource : IContentSource
         "contracts",
         "wells",
         "fluid-systems",
+
+        // The game catalogues (plans 28), same set as RepositoryContent.
+        "activities",
+        "equipment",
+        "relations",
+        "game-styles",
+        "starting-states",
     };
 
     /// <summary>How many files were found. Zero means the engine will refuse to start.</summary>

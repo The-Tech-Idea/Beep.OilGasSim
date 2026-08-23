@@ -16,7 +16,8 @@ namespace OilfieldDays;
 ///
 /// <para>It exists to answer a question the build cannot answer by looking at
 /// screens — <b>is the run winnable, and by how much?</b> The scenario asks for
-/// $600M inside ten years, and until something plays the whole ten years nobody
+/// the scenario's target inside ten years, and until something plays the whole
+/// ten years nobody
 /// knows whether that target is generous, brutal, or unreachable.</para>
 ///
 /// <para><b>It is not an AI and it is not the game.</b> It submits the same
@@ -181,7 +182,7 @@ public static class DevAutoPlayer
             return;
 
         GD.Print($"[play] FINISHED month {final.Tick.Value}: " +
-                 $"${final.Cash.Cents / 100.0 / 1e6:N1}M of $600M, outcome {final.Outcome}" +
+                 $"{Goal.Line(final)}, outcome {final.Outcome}" +
                  (final.Insolvent ? " (BROKE)" : string.Empty));
 
         GD.Print($"[play] {shot} blocks shot, {(commissioned ? "a facility" : "NO facility")}, " +

@@ -1,0 +1,12 @@
+{
+  "kind": "activity",
+  "id": "well-test-buildup",
+  "name": "$loc:activity.well-test-buildup",
+  "group": "evaluation",
+  "costMillions": 0.4,
+  "durationTurns": 1,
+  "weatherLimit": 7.5,
+  "requiresAccess": false,
+  "note": "Shut it in and watch the pressure come back. Sharpens permeability and pressure.",
+  "develops": true
+}

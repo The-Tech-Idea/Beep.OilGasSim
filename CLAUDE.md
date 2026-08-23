@@ -9,16 +9,59 @@ exploration → appraisal → development → production → processing → tran
 export. It is a turn-based engine (one tick = one month) with real-time-with-pause gameplay; the engine is headless and a host renders it.
 
 The repository is **design-first**: `plans/` holds ~90 documents settled before
-code and is still authoritative. **The engine now runs.** Seventeen projects under
-`src/` compose into a playable field — a world is generated, prospects are
-drilled, a chain of surface equipment moves the fluid, a market moves under it, a
-bank lends against reserves, equipment wears out and breaks, and two headless
-clients play the whole arc through `ReadModel` + `Commands` alone. 1137 tests
-across seventeen suites, 0 warnings.
+code and is still authoritative. **The engine now runs, and ships as two games.**
+Eighteen projects under `src/` compose into a playable field — a world is
+generated, prospects are drilled, a chain of surface equipment moves the fluid, a
+market moves under it, a bank lends against reserves, equipment wears out and
+breaks — and the whole arc is played through `ReadModel` + `Commands` alone by a
+Godot client (**Oilfield Days**), a console client (**Oilfield Engineer**) and
+two headless reference clients. 1287 tests across eighteen suites, 0 warnings.
 
 Treat counts in prose as stale until they are re-checked. The project is expected to evolve and some historical notes in this file are intentionally superseded by the live plan and the codebase itself.
 
 The previous engine in this repo's history (`OGGame.Core`, `Game/`, `Documentation/`) is not an input: it is not referenced, ported, or consulted.
+
+## Two products, one engine
+
+The goal is a single production-and-workflow-cycle engine that ships as **two
+games**, not one game with a difficulty slider:
+
+| Product | Mode id | Composed at | Where it lives |
+|---|---|---|---|
+| **Oilfield Days** | `days` | arcade · bare-ground · frontier | `src/OGSim.Game` — the Godot client |
+| **Oilfield Engineer** | `engineer` | simulation · opening-position · realistic | `src/OGSim.Engineer` — a console client |
+
+Both are `GameStyles.Days` / `GameStyles.Engineer` in `src/OGSim.Composition/GameStyles.cs`
+(one `IGameStyle` interface, no per-style engine classes). A style writes the
+three axes below plus its `StyleTerms`, and `EngineSettings` stays the single
+owner of what the engine was composed with. Which *mechanics* a build carries
+is the `DependencyManager` (`src/OGSim.Composition/DependencyManager.cs`,
+plans 27): presence and value resolved once from the style's terms, the
+starting state and the profile — modules ask it and never decide.
+
+```bash
+dotnet run --project src/OGSim.Engineer -- --months=120 --seed=7
+dotnet run --project src/OGSim.Engineer -- --mode=days      # the other product, same client
+```
+
+Design law 03 §3.2 governs how the two differ: *a mode is a different set of
+registered models, not a set of `if (mode == …)` branches.* There are three
+independent composition-time axes, all chosen in `EngineSettings`:
+
+- **`RealityProfile`** — *fidelity*: which physics model fills a `ModelSlot`
+- **`StartingState`** (`StartingStates.cs`) — what the player opens holding
+  (`OpeningPosition` vs `BareGround`)
+- **`Rules`** (`Rules.cs`, `RuleSets.Realistic` / `RuleSets.Frontier`) — what the
+  player may *do*: `IWorkSubjectRule`, `IDrillingRule`
+
+Never make the realistic rules laxer to make the game playable — that is what
+`RuleSets.Frontier` is for. See `src/OGSim.Game/plans/23_GAME_RULES_MODE.md` §4.
+
+`GameStyleTests` (GS1–GS7) pins that the two styles differ on all three axes,
+that the same hole is allowed in one product and refused in the other, and
+which mechanics each style carries (`Tenure`/`Banking` absent in Days);
+`WorkflowCycleTests` (EN1–EN3) pins that the operator's cycle runs a decade at
+`engineer` and turns a profit.
 
 ## Commands
 
@@ -80,7 +123,8 @@ The general project layout is:
 - `OGSim.Objectives`: objective evaluation
 - `OGSim.Composition`: layer 4 composition, engine builder, read-model projection, scenario wiring, and production loop
 - `OGSim.ReferenceClient`: a headless client outside the engine, which is used to validate the published surface
-- `OGSim.Game`: the Godot host, outside the engine and outside the solution
+- `OGSim.Engineer`: **Oilfield Engineer** — the realistic product; a console client that walks the production and workflow cycle at `GameModes.Engineer`
+- `OGSim.Game`: **Oilfield Days** — the Godot host, outside the engine and outside the solution, composed at `GameModes.Days`
 
 There is no shared `Common` / `Utils` project; if a second module needs a type, it should be a kernel type or a design smell.
 
@@ -144,6 +188,26 @@ Naming (19 §N1–N7):
 - industry terms beat invented terms (`Perforation`, not `ReservoirConnection`)
 - a new term enters the glossary before it enters code
 
+**Dynamic and plug-and-play — no static numbers, anywhere:**
+- **A value is owned once and read, never copied.** If a screen, a client or a
+  second module needs a figure the engine decides, it reads it through the
+  published surface. It does not restate it. Six screens in the Godot client
+  said the goal was `$600M` while the scenario scored `$360M` — the game told
+  the player one number and judged them by another (law L5).
+- **A number a designer would want to change is content**, not a literal. Costs,
+  durations, targets, opening balances, priors and ladders belong in `content/`
+  or in a `Defaults` member that names and justifies itself — never inline at a
+  call site, and never in a host.
+- **A capability is an interface with an implementation plugged in at
+  composition time.** Rebalancing is a content edit; new behaviour is a new
+  plugin plus the JSON naming it. A `switch` on a mode, a profile or a rule set
+  is the defect this rule exists to prevent (design 03 §3.2).
+- **If the surface cannot supply it, the surface is incomplete** — that is a
+  finding to fix, not a licence to hardcode. `ObjectiveGoal` exists because the
+  read model published whether an objective was met and never what it asked for.
+- F-2 states the engine half of this: no numeric literal in simulation code
+  except `0` and `1`. The rule above extends it to hosts, clients and tools.
+
 Also binding:
 - no external packages in engine assemblies
 - `InternalsVisibleTo` only to a module's own test assembly, declared in the project file
@@ -156,7 +220,36 @@ Also binding:
 - Comments explain why and cite the design docs by section.
 - Verification-suite IDs appear verbatim in test names.
 - Commits follow `R<phase>.<task>: <what> (<tests before> -> <after>)`.
+- **This repo has more than one writer.** Large `updated` commits land here from
+  another session working on a tree snapshot that may predate your work; on
+  2026-08-23 one such commit (489 files) reverted a whole workstream in
+  `Modules.cs`, `ProductionLoop.cs`, and `FacilitiesState.cs` while leaving its
+  new files orphaned, so the solution did not build. Before starting and before
+  committing, run `git log --oneline -5` and `dotnet build OGSim.slnx`; if HEAD
+  does not build, find the reverting commit before writing anything new.
 - The Godot host never edits the engine; engine state is read-only from the host, mutations go through commands, and ticks are the only source of time.
 - **A stub, fallback, default dependency, or swallowed exception is never the answer.** If a phase appears to need one, that is a design gap; reopen the design document instead of working around it.
+
+### Godot addons are vendored twice — always write both
+
+`src/OGSim.Game/Oilfield Days/oilfield-days/addons/` is a **copy** of the canonical
+addons at `C:/Users/f_ald/source/repos/The-Tech-Idea/Beep.Godot/addons/`
+(`beep_game_builder_cs`, `beep_ui`, `godot_mcp`). Any change to an addon file must
+land in **both** trees in the same piece of work — a fix made only in the game
+copy is lost the next time the addon is refreshed, and a fix made only in
+`Beep.Godot` never reaches the game.
+
+Compare them with line endings ignored, or the real drift is buried:
+
+```bash
+A="C:/Users/f_ald/source/repos/The-Tech-Idea/Beep.Godot/addons"
+B="C:/Users/f_ald/source/repos/The-Tech-Idea/Beep.OilGasSim/src/OGSim.Game/Oilfield Days/oilfield-days/addons"
+diff -r --strip-trailing-cr -q "$A" "$B" | grep -v '\.uid$'
+```
+
+`Beep.Godot` is CRLF and the game copy is LF, so a plain `diff -r` reports ~1080
+`.import` files as differing when they are byte-identical apart from line endings.
+Never sync `.import`, `.uid`, or `.translation` files: Godot regenerates those per
+project, and they legitimately differ.
 
 Known divergences from the written standards are acceptable to leave alone until the relevant phase lands, but they should not be mistaken for the canonical rule set. Current examples include project-specific platform settings and the fact that the Godot host sits outside the engine solution while still being included in the broader repo source corpus.

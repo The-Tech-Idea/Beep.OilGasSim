@@ -1,0 +1,9 @@
+{
+  "kind": "equipment",
+  "id": "helipad-platform",
+  "name": "$loc:equipment.helipad-platform",
+  "group": "yard",
+  "costMillions": 2.8,
+  "buildTurns": 3,
+  "note": "The only way in when the road closes."
+}

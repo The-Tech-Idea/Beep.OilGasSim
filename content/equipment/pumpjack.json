@@ -1,0 +1,9 @@
+{
+  "kind": "equipment",
+  "id": "pumpjack",
+  "name": "$loc:equipment.pumpjack",
+  "group": "wells",
+  "costMillions": 0.8,
+  "buildTurns": 1,
+  "note": "The beam pump itself. What install-rod-pump puts on a well."
+}

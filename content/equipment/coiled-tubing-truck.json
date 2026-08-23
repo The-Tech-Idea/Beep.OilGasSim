@@ -1,0 +1,9 @@
+{
+  "kind": "equipment",
+  "id": "coiled-tubing-truck",
+  "name": "$loc:equipment.coiled-tubing-truck",
+  "group": "wells",
+  "costMillions": 2.4,
+  "buildTurns": 2,
+  "note": "Intervention without killing the well first."
+}

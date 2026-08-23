@@ -118,6 +118,61 @@ custom_minimum_size = Vector2(430, 0)
 layout_mode = 2
 theme_override_constants/separation = 8
 
+[node name="ModeGroup" type="PanelContainer" parent="Page/Body/SettingsScroll/SettingsColumn"]
+custom_minimum_size = Vector2(430, 0)
+layout_mode = 2
+
+[node name="Content" type="VBoxContainer" parent="Page/Body/SettingsScroll/SettingsColumn/ModeGroup"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Header" type="Label" parent="Page/Body/SettingsScroll/SettingsColumn/ModeGroup/Content"]
+layout_mode = 2
+text = "GAME MODE"
+horizontal_alignment = 1
+
+[node name="Items" type="VBoxContainer" parent="Page/Body/SettingsScroll/SettingsColumn/ModeGroup/Content"]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="ModeField" type="HBoxContainer" parent="Page/Body/SettingsScroll/SettingsColumn/ModeGroup/Content"]
+custom_minimum_size = Vector2(0, 22)
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Icon" type="TextureRect" parent="Page/Body/SettingsScroll/SettingsColumn/ModeGroup/Content/ModeField"]
+custom_minimum_size = Vector2(20, 20)
+layout_mode = 2
+texture = ExtResource("7_mode")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="Caption" type="Label" parent="Page/Body/SettingsScroll/SettingsColumn/ModeGroup/Content/ModeField"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Game mode"
+vertical_alignment = 1
+
+[node name="ModeChoice" type="OptionButton" parent="Page/Body/SettingsScroll/SettingsColumn/ModeGroup/Content"]
+custom_minimum_size = Vector2(370, 46)
+layout_mode = 2
+selected = 0
+item_count = 4
+popup/item_0/text = "Campaign"
+popup/item_0/id = 0
+popup/item_1/text = "Scenario   (not yet)"
+popup/item_1/id = 1
+popup/item_2/text = "Sandbox   (not yet)"
+popup/item_2/id = 2
+popup/item_3/text = "Challenge   (not yet)"
+popup/item_3/id = 3
+
+[node name="ModeNote" type="Label" parent="Page/Body/SettingsScroll/SettingsColumn/ModeGroup/Content"]
+custom_minimum_size = Vector2(180, 0)
+layout_mode = 2
+size_flags_horizontal = 3
+autowrap_mode = 3
+
 [node name="CompanyGroup" type="PanelContainer" parent="Page/Body/SettingsScroll/SettingsColumn"]
 custom_minimum_size = Vector2(430, 0)
 layout_mode = 2
@@ -153,44 +208,6 @@ vertical_alignment = 1
 custom_minimum_size = Vector2(370, 46)
 layout_mode = 2
 text = "Beep Energy Co."
-
-[node name="ModeField" type="HBoxContainer" parent="Page/Body/SettingsScroll/SettingsColumn/CompanyGroup/Content"]
-custom_minimum_size = Vector2(0, 22)
-layout_mode = 2
-theme_override_constants/separation = 8
-
-[node name="Icon" type="TextureRect" parent="Page/Body/SettingsScroll/SettingsColumn/CompanyGroup/Content/ModeField"]
-custom_minimum_size = Vector2(20, 20)
-layout_mode = 2
-texture = ExtResource("7_mode")
-expand_mode = 1
-stretch_mode = 5
-
-[node name="Caption" type="Label" parent="Page/Body/SettingsScroll/SettingsColumn/CompanyGroup/Content/ModeField"]
-layout_mode = 2
-size_flags_horizontal = 3
-text = "Game mode"
-vertical_alignment = 1
-
-[node name="ModeChoice" type="OptionButton" parent="Page/Body/SettingsScroll/SettingsColumn/CompanyGroup/Content"]
-custom_minimum_size = Vector2(370, 46)
-layout_mode = 2
-selected = 0
-item_count = 4
-popup/item_0/text = "Campaign"
-popup/item_0/id = 0
-popup/item_1/text = "Scenario   (not yet)"
-popup/item_1/id = 1
-popup/item_2/text = "Sandbox   (not yet)"
-popup/item_2/id = 2
-popup/item_3/text = "Challenge   (not yet)"
-popup/item_3/id = 3
-
-[node name="ModeNote" type="Label" parent="Page/Body/SettingsScroll/SettingsColumn/CompanyGroup/Content"]
-custom_minimum_size = Vector2(180, 0)
-layout_mode = 2
-size_flags_horizontal = 3
-autowrap_mode = 3
 
 [node name="StartingCapital" type="HBoxContainer" parent="Page/Body/SettingsScroll/SettingsColumn/CompanyGroup/Content"]
 custom_minimum_size = Vector2(0, 26)
@@ -406,6 +423,52 @@ custom_minimum_size = Vector2(180, 0)
 layout_mode = 2
 size_flags_horizontal = 3
 text = "The same seed always builds the same world. Share it to play the one someone else played."
+autowrap_mode = 3
+
+[node name="ReviewGroup" type="PanelContainer" parent="Page/Body/SettingsScroll/SettingsColumn"]
+custom_minimum_size = Vector2(430, 0)
+layout_mode = 2
+
+[node name="Content" type="VBoxContainer" parent="Page/Body/SettingsScroll/SettingsColumn/ReviewGroup"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Header" type="Label" parent="Page/Body/SettingsScroll/SettingsColumn/ReviewGroup/Content"]
+layout_mode = 2
+text = "WORLD SETTINGS SUMMARY"
+horizontal_alignment = 1
+
+[node name="Items" type="VBoxContainer" parent="Page/Body/SettingsScroll/SettingsColumn/ReviewGroup/Content"]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="Note" type="Label" parent="Page/Body/SettingsScroll/SettingsColumn/ReviewGroup/Content"]
+custom_minimum_size = Vector2(180, 0)
+layout_mode = 2
+size_flags_horizontal = 3
+autowrap_mode = 3
+
+[node name="GenerateGroup" type="PanelContainer" parent="Page/Body/SettingsScroll/SettingsColumn"]
+custom_minimum_size = Vector2(430, 0)
+layout_mode = 2
+
+[node name="Content" type="VBoxContainer" parent="Page/Body/SettingsScroll/SettingsColumn/GenerateGroup"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Header" type="Label" parent="Page/Body/SettingsScroll/SettingsColumn/GenerateGroup/Content"]
+layout_mode = 2
+text = "READY TO GENERATE"
+horizontal_alignment = 1
+
+[node name="Items" type="VBoxContainer" parent="Page/Body/SettingsScroll/SettingsColumn/GenerateGroup/Content"]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="Note" type="Label" parent="Page/Body/SettingsScroll/SettingsColumn/GenerateGroup/Content"]
+custom_minimum_size = Vector2(180, 0)
+layout_mode = 2
+size_flags_horizontal = 3
 autowrap_mode = 3
 
 [node name="Problem" type="Label" parent="Page/Body/SettingsScroll/SettingsColumn"]
@@ -772,6 +835,11 @@ text = "RANDOMIZE"
 [node name="FooterSpacer" type="Control" parent="Page/Footer"]
 layout_mode = 2
 size_flags_horizontal = 3
+
+[node name="NextButton" type="Button" parent="Page/Footer"]
+custom_minimum_size = Vector2(320, 50)
+layout_mode = 2
+text = "NEXT"
 
 [node name="GenerateButton" type="Button" parent="Page/Footer"]
 custom_minimum_size = Vector2(320, 50)
