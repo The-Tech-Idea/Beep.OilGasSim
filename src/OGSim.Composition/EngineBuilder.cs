@@ -635,6 +635,62 @@ internal static class Defaults
         Outcomes: SurveyOutcomes);
 
     /// <summary>
+    /// RECONNAISSANCE over a block, and the cheapest thing a company can buy
+    /// (SDD-010 §4b's S1 amendment).
+    ///
+    /// <para>Priced against the two things it sits between. Next to a hole it is
+    /// almost free, which is what makes looking before drilling the obvious move
+    /// rather than a luxury; next to nothing it is real money, which is what
+    /// stops a company shooting the whole licence on the first turn and getting
+    /// the old bright map back for a rounding error. Sixteen blocks is most of a
+    /// year's exploration budget.</para>
+    ///
+    /// <para>NO RIG, like the 3-D survey it feeds: shot from the surface, so it
+    /// runs while the rig turns elsewhere. One month, because a decision a player
+    /// is waiting on should come back inside the season they asked it in.</para>
+    /// </summary>
+    public static ActivityTerms BlockSurveyTerms { get; } = new(
+        Template: new ContentId("seismic-2d"),
+        Cost: Money.FromMillions(0.8),
+        DurationTicks: 1,
+        Rig: null,
+        WeatherLimit: 5.5,   // the same streamers as the 3-D survey
+        RequiresAccess: true,
+
+        Outcomes: SurveyOutcomes);
+
+    /// <summary>
+    /// What a packaged plant costs to put on the ground (plans 22 §4, S2).
+    /// </summary>
+    /// <remarks>
+    /// <para>Priced as the biggest single commitment of the early game, and
+    /// deliberately: against a $50M opening balance it is most of what a company
+    /// has after a survey and a hole, so bringing a field on is a decision that
+    /// can be got wrong rather than a formality that follows a discovery.</para>
+    ///
+    /// <para>Less than the sum of its vessels, because it IS less — a skid
+    /// package is not eleven bespoke units, which is why a small field is
+    /// brought on this way. The individual installs above stay dearer per item
+    /// and buy capacity rather than existence.</para>
+    ///
+    /// <para>Four months: long enough that a company commits before it can be
+    /// sure of the price it will sell into, which is the risk a development
+    /// decision actually carries.</para>
+    /// </remarks>
+    public static ActivityTerms EarlyProductionFacilityTerms { get; } = new(
+        Template: new ContentId("install-early-production-facility"),
+        Cost: Money.FromMillions(22.0),
+        DurationTicks: 4,
+        Rig: null,
+        WeatherLimit: 5.0,   // barges, cranes and a lot of lifts
+        RequiresAccess: true,
+
+        // The table every install shares. A commissioning that fails costs the
+        // money and the months and leaves bare ground, which is the same shape
+        // as a dry hole and the reason this is a decision.
+        Outcomes: SurveyOutcomes);
+
+    /// <summary>
     /// The formation volume factor a shipped completion converts with.
     ///
     /// <para><b>It disagrees with the composed <c>BlackOilModel</c> by about 9%</b>,
@@ -819,6 +875,13 @@ internal static class Defaults
         Script: [],
         Deadline: new Tick(120));
 
+
+    /// <summary>The two starting states, declared once in
+    /// <see cref="StartingStates"/> where a host can reach them.</summary>
+    public static ContentId OpeningPosition => StartingStates.OpeningPosition;
+
+    /// <inheritdoc cref="OpeningPosition"/>
+    public static ContentId BareGround => StartingStates.BareGround;
 
     public static Temperature ReservoirTemperature { get; } = Temperature.FromCelsius(93.3);
 
@@ -2045,7 +2108,48 @@ public sealed record EngineSettings(
     /// <para>Order fixes override precedence — base content is
     /// <c>DeclaredOrder</c> 0 and a mod is higher (§7).</para>
     /// </summary>
-    IReadOnlyList<IContentSource> Content)
+    IReadOnlyList<IContentSource> Content,
+
+    /// <summary>
+    /// What the company opens with (plans 22 §4, S2).
+    ///
+    /// <para><c>opening-position</c> starts it holding a commissioned plant, the
+    /// way every run did before this existed. <c>bare-ground</c> starts it with
+    /// a yard, a licence and a bank balance, and the processing train is a
+    /// construction project — which is the game 22 asks for.</para>
+    ///
+    /// <para><b>Composition-time, like <see cref="RealityProfile"/>, and for the
+    /// same reason:</b> it decides what gets registered before anything is
+    /// built, so it cannot be a decision taken later.</para>
+    ///
+    /// <para><b>The same name as <c>Scenario.StartingState</c> deliberately.</b>
+    /// That field describes exactly this — "a company's cash, its rigs, an
+    /// inherited field" — and is read by nothing today. When scenarios reach
+    /// composition it feeds this, and there is one concept rather than two
+    /// (law L5). Naming it something else now would guarantee two.</para>
+    ///
+    /// <para>Required, with no default: law L2. A default here would quietly
+    /// hand every unconsidered caller a free refinery.</para>
+    /// </summary>
+    ContentId StartingState,
+
+    /// <summary>
+    /// The rules the run is played under (plans 23).
+    ///
+    /// <para><c>realistic</c> is an operator working a field it holds;
+    /// <c>frontier</c> is a company on ground nobody has worked, which is the
+    /// Settlers position and needs different permissions — not different
+    /// physics.</para>
+    ///
+    /// <para><b>A third question, not a restatement of the other two.</b>
+    /// <see cref="RealityProfile"/> decides which model computes a thing;
+    /// <see cref="StartingState"/> decides what the company opens holding; this
+    /// decides what it may do. A bare-ground start under realistic rules is a
+    /// legitimate and very hard scenario.</para>
+    ///
+    /// <para>Required, with no default: law L2.</para>
+    /// </summary>
+    ContentId Rules)
 {
     // Finding 131: the compiler compares a collection member by REFERENCE, so
     // two settings naming the same sources would differ. Element equality is
@@ -2059,12 +2163,14 @@ public sealed record EngineSettings(
         && MinimumLogLevel == other.MinimumLogLevel
         && FaultHandling == other.FaultHandling
         && RealityProfile == other.RealityProfile
+        && StartingState == other.StartingState
+        && Rules == other.Rules
         && Structural.Equal(Content, other.Content);
 
     public override int GetHashCode() =>
         HashCode.Combine(
             Epoch, WorldSeed, Retention, MinimumLogLevel, FaultHandling, RealityProfile,
-            Structural.HashOf(Content));
+            StartingState, HashCode.Combine(Rules, Structural.HashOf(Content)));
 }
 
 /// <summary>
@@ -2319,14 +2425,12 @@ public static class EngineBuilder
         RealityProfile profile, FacilityLadders ladders,
         IReadOnlyList<OGSim.Capabilities.TechnologyNode> registry,
         IReadOnlyList<OGSim.World.TerrainClassDefinition> terrainClasses,
-        OGSim.Company.TakeOrPayTerms takeOrPay,
-        OGSim.Wells.LiftTiers liftTiers,
-        IReadOnlyList<FluidSystemDefinition> fluidSystems) =>
+        OGSim.Company.TakeOrPayTerms takeOrPay) =>
     [
         new SubsurfaceModule(),
         new WellsModule(),
         new FlowModule(),
-        new FacilitiesModule(ladders),
+        new FacilitiesModule(ladders, startingState),
         new OperationsModule(),
         new CompanyModule(),
         new InformationModule(),
@@ -2336,8 +2440,8 @@ public static class EngineBuilder
         new EnvironmentModule(Defaults.Climate),
         new HseModule(),
         new ObjectivesModule(),
-        new MaterialsModule(profile, fluidSystems),
-        new FieldModule(ladders, takeOrPay, liftTiers, fluidSystems),
+        new MaterialsModule(profile),
+        new FieldModule(ladders, takeOrPay),
         new DiagnosticsModule(audit, clock, random),
     ];
 
@@ -2485,7 +2589,7 @@ public static class EngineBuilder
             settings,
             ShippedModules(audit, clock, new RandomSource(settings.WorldSeed),
                            Defaults.ProfileNamed(settings.RealityProfile), ladders, registry,
-                           terrainClasses, takeOrPay, liftTiers, fluidSystems),
+                           terrainClasses, takeOrPay),
             clock, audit);
     }
 
@@ -2520,7 +2624,7 @@ public static class EngineBuilder
             settings,
             ShippedModules(audit, clock, new RandomSource(settings.WorldSeed),
                            Defaults.ProfileNamed(settings.RealityProfile), ladders, registry,
-                           terrainClasses, takeOrPay, liftTiers, fluidSystems),
+                           terrainClasses, takeOrPay),
             clock, audit);
     }
 
