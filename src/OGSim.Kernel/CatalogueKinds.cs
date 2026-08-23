@@ -244,12 +244,29 @@ public sealed class RelationContentKind : IContentKind
         var grey = new List<ContentId>();
         var black = new HashSet<ContentId>();
 
+        // ONE CYCLE PER TANGLE, EVERY TANGLE NAMED (finding 284). The loader's
+        // law is "every problem, never just the first", and this stopped at
+        // the first cycle it met — an author told one of two cycles fixed one
+        // of two. The stated boundary: overlapping cycles through SHARED nodes
+        // still surface one at a time (the found cycle's nodes are retired
+        // before the walk continues, so a second cycle woven through them is
+        // named on the load after its predecessor is fixed) — naming every
+        // elementary cycle at once is a different algorithm this refusal does
+        // not need.
         foreach (ContentId start in roots)
         {
             if (black.Contains(start)) continue;
 
             string? found = Visit(start);
-            if (found is not null) { yield return found; yield break; }
+            if (found is null) continue;
+
+            yield return found;
+
+            // Visit returned early, leaving the stack dirty; retire what it
+            // walked so the next root neither re-reports this cycle nor
+            // inherits a stack it never pushed.
+            foreach (ContentId walked in grey) black.Add(walked);
+            grey.Clear();
         }
 
         string? Visit(ContentId node)

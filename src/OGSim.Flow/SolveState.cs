@@ -282,10 +282,6 @@ internal sealed class SolveState
                 // element reports, not only the ones that bound — the same
                 // walk Deferrals is built from, one line added rather than
                 // a second pass.
-                // SDD-002 §8's finding-283 amendment: every constraint this
-                // element reports, not only the ones that bound — the same
-                // walk Deferrals is built from, one line added rather than
-                // a second pass.
                 Utilisations.Add((element.Id, constraint.Kind,
                     constraint.Capacity, constraint.Load));
 

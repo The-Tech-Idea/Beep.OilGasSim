@@ -47,6 +47,12 @@ public sealed class GasCapture : IFlowElement
         Id = id;
         Tier = fitted;
         _materialCount = materialCount;
+
+        // Material-count wide from the first read, not width zero: stage 8's
+        // gas sale reads this before the plant has ever transformed, and a
+        // width-zero composition reports no ordinals to anything that walks
+        // its length (finding 284).
+        Captured = Composition.Zero(materialCount);
     }
 
     public EntityId<IFlowElement> Id { get; }
@@ -77,7 +83,7 @@ public sealed class GasCapture : IFlowElement
 
     /// <summary>What the plant took this tick, as sales gas. Read by stage 8,
     /// which prices it.</summary>
-    public Composition Captured { get; private set; } = Composition.Zero(0);
+    public Composition Captured { get; private set; }
 
     /// <summary>
     /// NONE, and that is the design rather than an omission.

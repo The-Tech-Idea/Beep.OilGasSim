@@ -228,16 +228,20 @@ public sealed record ScenarioProgress(
     /// </remarks>
     Tick? Deadline)
 {
-    // Finding 131.
+    // Finding 131 — and Deadline is IN it (finding 284): it joined this record
+    // in the same edit as Goals and only Goals made it into the comparison, so
+    // two reports differing only in the tick the run is judged at compared
+    // equal.
     public bool Equals(ScenarioProgress? other) =>
         other is not null && Overall == other.Overall
+        && Deadline.Equals(other.Deadline)
         && Structural.Equal(Objectives, other.Objectives)
         && Structural.Equal(Scores, other.Scores)
         && Structural.Equal(Goals, other.Goals);
 
     public override int GetHashCode() =>
-        HashCode.Combine(Overall, Structural.HashOf(Objectives), Structural.HashOf(Scores),
-                         Structural.HashOf(Goals));
+        HashCode.Combine(Overall, Deadline, Structural.HashOf(Objectives),
+                         Structural.HashOf(Scores), Structural.HashOf(Goals));
 }
 
 /// <summary>

@@ -1,15 +1,18 @@
-// R20c.9 — the six facility-unit content kinds (SDD-004 §6's R20c.9 amendment).
+// R20c.9 — the facility-unit content kinds (SDD-004 §6's R20c.9 amendment).
 //
 // The engine's surface equipment was six ladders of C# records in composition's
 // `Defaults`, which made "rebalancing is a content edit" (design 03, non-
 // negotiable 11) false of the only equipment the game shipped: moving a
-// separator's capacity meant editing an engine assembly and rebuilding.
+// separator's capacity meant editing an engine assembly and rebuilding. Six
+// kinds shipped with that amendment; the compressor (R9.1, finding 257) and
+// the pump station (R11.2, finding 259) joined later, making eight.
 //
-// SIX KINDS AND NOT ONE, because a datasheet is closed. A separator states two
-// independent leg capacities, a vessel volume, a rated efficiency and the rate
-// that efficiency holds at; a manifold states a slot count. One record spanning
-// all six would have every field optional and every reader branching on which
-// arrived — the generic bag SDD-004 §6 forbids, wearing a record's clothes.
+// ONE KIND PER DATASHEET AND NOT ONE FOR ALL, because a datasheet is closed. A
+// separator states two independent leg capacities, a vessel volume, a rated
+// efficiency and the rate that efficiency holds at; a manifold states a slot
+// count. One record spanning all eight would have every field optional and
+// every reader branching on which arrived — the generic bag SDD-004 §6
+// forbids, wearing a record's clothes.
 //
 // THE GATE IS HERE AND `Fits` IS NOT (§6's R20c.9 amendment). For a facility
 // unit the KIND IS THE SLOT, so a `Fits` would be the kind restated — L5's
@@ -131,8 +134,8 @@ public sealed record PumpStationDefinition(
     : FacilityUnitDefinition(Id, RequiresTech, AvailableFromEra, Rung);
 
 /// <summary>
-/// The gate and the rung, read once for all six (SDD-004 §6's R20c.9
-/// amendment). A reader per kind would be six chances to spell
+/// The gate and the rung, read once for all eight kinds (SDD-004 §6's R20c.9
+/// amendment). A reader per kind would be eight chances to spell
 /// <c>availableFromEra</c> differently.
 /// </summary>
 internal readonly record struct FacilityGate(
@@ -163,7 +166,7 @@ internal readonly record struct FacilityGate(
 ///
 /// <para>The tech reference is declared HERE rather than in each reader because
 /// forgetting it is silent — a definition naming a technology nothing checks
-/// would load, and the gate would never be enforced. One place, six kinds.</para>
+/// would load, and the gate would never be enforced. One place, eight kinds.</para>
 /// </summary>
 public abstract class FacilityContentKind<TDefinition> : IContentKind
     where TDefinition : FacilityUnitDefinition
@@ -196,7 +199,7 @@ public abstract class FacilityContentKind<TDefinition> : IContentKind
     public IReadOnlyList<PluginBinding> PluginsOf(ContentDefinition definition) => [];
 }
 
-// --------------------------------------------------------------- the six kinds
+// ------------------------------------------------------------- the eight kinds
 //
 // Each reads its own datasheet in the unit grammar (design 10 §3): a capacity is
 // "8 kg/s" and not a bare number, so a sheet cannot silently mean tonnes.

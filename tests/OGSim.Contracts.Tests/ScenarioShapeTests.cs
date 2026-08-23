@@ -259,4 +259,26 @@ public sealed class ScenarioShapeTests
             Blank("same", objectives: [Goal("a", CashAtLeast(100.0))]),
             Blank("same", objectives: [Goal("a", CashAtLeast(200.0))]));
     }
+
+    /// <summary>
+    /// Finding 284 — <c>Deadline</c> joined <see cref="ScenarioProgress"/> in
+    /// the same edit as <c>Goals</c>, and only <c>Goals</c> made it into the
+    /// hand-written <c>Equals</c>/<c>GetHashCode</c>. Two progress reports
+    /// differing only in the tick the run is judged at compared EQUAL — the
+    /// finding-131 defect class, in the record whose own comment cites it.
+    /// </summary>
+    [Fact]
+    public void Two_progress_reports_differing_only_in_deadline_are_not_equal()
+    {
+        static ScenarioProgress At(Tick? deadline) => new(
+            Objectives: [(new ContentId("a"), ObjectiveState.Pending, 0.5)],
+            Scores: [],
+            Overall: ObjectiveState.Pending,
+            Goals: [],
+            Deadline: deadline);
+
+        Assert.NotEqual(At(new Tick(120)), At(new Tick(60)));
+        Assert.NotEqual(At(new Tick(120)), At(null));
+        Assert.Equal(At(new Tick(120)), At(new Tick(120)));
+    }
 }

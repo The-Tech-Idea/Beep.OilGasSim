@@ -42,6 +42,12 @@ public sealed class Treater : IFlowElement
         Tier = fitted;
         _water = water;
         _materialCount = materialCount;
+
+        // Material-count wide from the first read, not width zero: this is
+        // read before the first transform ever runs, and a width-zero
+        // composition reports no ordinals to anything that walks its length
+        // (finding 284).
+        Removed = Composition.Zero(materialCount);
     }
 
     public EntityId<IFlowElement> Id { get; }
@@ -66,7 +72,7 @@ public sealed class Treater : IFlowElement
     ];
 
     /// <summary>The water it dropped out this tick.</summary>
-    public Composition Removed { get; private set; } = Composition.Zero(0);
+    public Composition Removed { get; private set; }
 
     /// <summary>
     /// NONE. A treater does not limit what a field produces; it changes what
@@ -86,14 +92,19 @@ public sealed class Treater : IFlowElement
     {
         ArgumentNullException.ThrowIfNull(input);
 
-        if (input.Inlets.Count == 0)
-        {
-            Removed = Composition.Zero(_materialCount);
-
-            return Pass(default, Composition.Zero(_materialCount));
-        }
-
-        MaterialStream inlet = input.Inlets[0];
+        // AN EXPLICIT EMPTY STREAM, never `default` (finding 284): a default
+        // MaterialStream carries a provenance whose backing array is
+        // uninitialized — reading it throws — and 0 Pa / 0 K stamped on a
+        // stream that flows downstream. The same shape every sibling already
+        // builds (the custody point, the gas plant), and the main path below
+        // handles it with no special case: zero in, zero kept, zero pulled.
+        MaterialStream inlet = input.Inlets.Count > 0
+            ? input.Inlets[0]
+            : new MaterialStream(
+                Composition.Zero(_materialCount),
+                new Pressure(0.0),
+                input.Segment.Ambient,
+                Allocation.FromSingle(new EntityRef(EntityKind.Compartment, 1)));
 
         double wet = inlet.MassRates[_water].KgPerSecond;
         double dropped = wet * Tier.WaterRemoved;
