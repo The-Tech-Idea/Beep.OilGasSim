@@ -1,0 +1,9 @@
+{
+  "kind": "equipment",
+  "id": "well-testing-skid",
+  "name": "$loc:equipment.well-testing-skid",
+  "group": "wells",
+  "costMillions": 1.6,
+  "buildTurns": 1,
+  "note": "Separates and measures what a new well actually gives."
+}

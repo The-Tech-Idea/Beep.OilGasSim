@@ -1,0 +1,9 @@
+{
+  "kind": "equipment",
+  "id": "gas-scrubber",
+  "name": "$loc:equipment.gas-scrubber",
+  "group": "process",
+  "costMillions": 1.4,
+  "buildTurns": 1,
+  "note": "Knocks liquid out of the gas leg."
+}

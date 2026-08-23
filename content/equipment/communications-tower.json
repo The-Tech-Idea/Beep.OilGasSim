@@ -1,0 +1,9 @@
+{
+  "kind": "equipment",
+  "id": "communications-tower",
+  "name": "$loc:equipment.communications-tower",
+  "group": "utilities",
+  "costMillions": 1.3,
+  "buildTurns": 2,
+  "note": "Nothing is monitored remotely without it."
+}

@@ -20,6 +20,22 @@ public interface IReservoirCompartmentEntity { }
 /// </summary>
 public interface IProspect { }
 
+/// <summary>
+/// A parcel of licensed acreage, and the unit exploration is bought in
+/// (SDD-010 §4b's S1 amendment).
+///
+/// <para>A block is PUBLIC from the first tick — a company knows the shape of
+/// the licence it holds — and what lies under it is not. Shooting one registers
+/// every closure inside it, which is how a structure stops being truth the
+/// engine keeps and starts being something the company knows.</para>
+///
+/// <para>It is an entity rather than a centre and a radius so that an activity
+/// aimed at an area is aimed at one <c>EntityRef</c>, which is all SDD-007
+/// §5 gives an activity to be aimed at. The area IS the
+/// entity, so nothing has to be smuggled through a depth.</para>
+/// </summary>
+public interface IBlock { }
+
 /// <summary>Detectability class of an accumulation (design 06 §2.3).</summary>
 public enum DetectClass { D0, D1, D2, D3 }
 

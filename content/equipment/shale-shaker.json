@@ -1,0 +1,9 @@
+{
+  "kind": "equipment",
+  "id": "shale-shaker",
+  "name": "$loc:equipment.shale-shaker",
+  "group": "drilling",
+  "costMillions": 0.7,
+  "buildTurns": 1,
+  "note": "Takes the cuttings out so the mud can go round again."
+}

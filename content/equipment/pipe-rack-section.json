@@ -1,0 +1,9 @@
+{
+  "kind": "equipment",
+  "id": "pipe-rack-section",
+  "name": "$loc:equipment.pipe-rack-section",
+  "group": "construction",
+  "costMillions": 0.2,
+  "buildTurns": 1,
+  "note": "Where pipe waits."
+}

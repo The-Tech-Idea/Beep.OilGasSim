@@ -1,0 +1,9 @@
+{
+  "kind": "equipment",
+  "id": "site-lighting-tower-b",
+  "name": "$loc:equipment.site-lighting-tower-b",
+  "group": "utilities",
+  "costMillions": 0.3,
+  "buildTurns": 1,
+  "note": "A second mast."
+}

@@ -1,0 +1,9 @@
+{
+  "kind": "equipment",
+  "id": "heat-exchanger-skid",
+  "name": "$loc:equipment.heat-exchanger-skid",
+  "group": "process",
+  "costMillions": 1.7,
+  "buildTurns": 2,
+  "note": "Recovers heat instead of burning for it."
+}

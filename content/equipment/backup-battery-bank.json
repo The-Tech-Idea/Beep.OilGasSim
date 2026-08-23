@@ -1,0 +1,9 @@
+{
+  "kind": "equipment",
+  "id": "backup-battery-bank",
+  "name": "$loc:equipment.backup-battery-bank",
+  "group": "utilities",
+  "costMillions": 1.1,
+  "buildTurns": 1,
+  "note": "Keeps the control room and the ESD alive through a trip."
+}

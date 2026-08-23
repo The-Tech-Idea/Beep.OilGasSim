@@ -1,0 +1,9 @@
+{
+  "kind": "equipment",
+  "id": "office-cabin",
+  "name": "$loc:equipment.office-cabin",
+  "group": "yard",
+  "costMillions": 0.4,
+  "buildTurns": 1,
+  "note": "Desks. Cheap, and the first thing a growing company runs out of."
+}

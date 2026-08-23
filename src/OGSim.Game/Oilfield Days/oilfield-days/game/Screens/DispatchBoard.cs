@@ -155,12 +155,6 @@ public sealed partial class DispatchBoard : Control
 			_ => true,
 			_ => new RemediateInjectorCommand()),
 
-		new("Borrow $20M", "crude-oil-storage-tank",
-			"Take on debt. It is spendable this month and it is owed with interest whatever the field does.",
-			"The bank", "metering-station",
-			"$20M now, a liability after", false,
-			_ => true,
-			_ => new BorrowCommand(Money.FromMillions(20.0))),
 
 		new("Start the water flood", "water-injection-pump",
 			"Replace every reservoir cubic metre the field takes out. It holds pressure up, and the " +

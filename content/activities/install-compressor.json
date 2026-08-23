@@ -1,0 +1,12 @@
+{
+  "kind": "activity",
+  "id": "install-compressor",
+  "name": "$loc:activity.install-compressor",
+  "group": "surface",
+  "costMillions": 15.0,
+  "durationTurns": 4,
+  "weatherLimit": 5.0,
+  "requiresAccess": true,
+  "note": "Boosts the gas leg before the plant. Worthless before there is a plant to boost into.",
+  "develops": true
+}

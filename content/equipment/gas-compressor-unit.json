@@ -1,0 +1,9 @@
+{
+  "kind": "equipment",
+  "id": "gas-compressor-unit",
+  "name": "$loc:equipment.gas-compressor-unit",
+  "group": "process",
+  "costMillions": 15.0,
+  "buildTurns": 4,
+  "note": "Boosts the gas leg before the sales point."
+}

@@ -1,0 +1,9 @@
+{
+  "kind": "equipment",
+  "id": "equipment-warehouse",
+  "name": "$loc:equipment.equipment-warehouse",
+  "group": "yard",
+  "costMillions": 1.6,
+  "buildTurns": 2,
+  "note": "Spares. The difference between a one-month outage and a six-month one."
+}

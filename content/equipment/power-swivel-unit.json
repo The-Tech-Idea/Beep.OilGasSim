@@ -1,0 +1,9 @@
+{
+  "kind": "equipment",
+  "id": "power-swivel-unit",
+  "name": "$loc:equipment.power-swivel-unit",
+  "group": "drilling",
+  "costMillions": 1.3,
+  "buildTurns": 1,
+  "note": "Rotates the string on a workover."
+}

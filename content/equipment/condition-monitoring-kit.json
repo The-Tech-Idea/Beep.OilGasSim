@@ -1,0 +1,9 @@
+{
+  "kind": "equipment",
+  "id": "condition-monitoring-kit",
+  "name": "$loc:equipment.condition-monitoring-kit",
+  "group": "monitoring",
+  "costMillions": 0.2,
+  "buildTurns": 1,
+  "note": "Sensors on the plant. Without them condition is invisible, so planned work is impossible."
+}

@@ -242,9 +242,11 @@ public sealed partial class ChallengeResult : Control
 
 		double dollars = snapshot.Cash.Cents / 100.0;
 
+		// THE TARGET COMES OFF THE READ MODEL. This row used to state a figure
+		// of its own and went on stating it for months after the scenario moved.
 		_scoreContent.AddChild(ScoreRow(
-			"crude-oil-storage-tank", "Field value", dollars / 600_000_000.0,
-			$"${dollars / 1_000_000.0:N1}M of $600M", KitTheme.Green));
+			"crude-oil-storage-tank", "Field value", Goal.Fraction(snapshot),
+			Goal.Line(snapshot), KitTheme.Green));
 
 		_scoreContent.AddChild(ScoreRow(
 			"pumpjack", "Production, final month", Mathf.Min(1.0, snapshot.ProducedThisTick.CubicMetres / 40_000.0),

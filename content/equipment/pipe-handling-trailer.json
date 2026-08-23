@@ -1,0 +1,9 @@
+{
+  "kind": "equipment",
+  "id": "pipe-handling-trailer",
+  "name": "$loc:equipment.pipe-handling-trailer",
+  "group": "construction",
+  "costMillions": 0.7,
+  "buildTurns": 1,
+  "note": "Handles pipe on site."
+}

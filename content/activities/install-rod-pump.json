@@ -1,0 +1,12 @@
+{
+  "kind": "activity",
+  "id": "install-rod-pump",
+  "name": "$loc:activity.install-rod-pump",
+  "group": "lift",
+  "costMillions": 2.5,
+  "durationTurns": 1,
+  "weatherLimit": 6.5,
+  "requiresAccess": false,
+  "note": "The cheapest lift. Shallow, slow, and it will outlive you.",
+  "develops": true
+}

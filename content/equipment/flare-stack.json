@@ -1,0 +1,9 @@
+{
+  "kind": "equipment",
+  "id": "flare-stack",
+  "name": "$loc:equipment.flare-stack",
+  "group": "process",
+  "costMillions": 2.0,
+  "buildTurns": 2,
+  "note": "Where the gas goes until there is somewhere better. Every hour it burns is on the ESG record."
+}

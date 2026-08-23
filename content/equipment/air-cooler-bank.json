@@ -1,0 +1,9 @@
+{
+  "kind": "equipment",
+  "id": "air-cooler-bank",
+  "name": "$loc:equipment.air-cooler-bank",
+  "group": "utilities",
+  "costMillions": 1.5,
+  "buildTurns": 2,
+  "note": "Air cooling where water is scarce."
+}

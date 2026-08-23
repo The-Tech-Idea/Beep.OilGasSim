@@ -1,0 +1,9 @@
+{
+  "kind": "equipment",
+  "id": "fuel-tank",
+  "name": "$loc:equipment.fuel-tank",
+  "group": "utilities",
+  "costMillions": 0.7,
+  "buildTurns": 1,
+  "note": "Diesel for everything that moves."
+}

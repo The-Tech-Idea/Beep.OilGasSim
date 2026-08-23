@@ -75,6 +75,7 @@ public sealed partial class BasinWorld : Node2D
     private DualGridTerrain _road = null!;
     private Node2D _sceneryLayer = null!;
     private Node2D _markerLayer = null!;
+    private BlockOverlay _blocks = null!;
     private Node2D _plantLayer = null!;
     private Node2D _risingLayer = null!;
     private Node2D _yardLayer = null!;
@@ -144,6 +145,12 @@ public sealed partial class BasinWorld : Node2D
         _gravel = AddDualTerrain("Gravel", "res://assets/tilesets/oilfield-days/gravel-pad_15p_64.png", -20);
         _road = AddDualTerrain("Roads", "res://assets/tilesets/oilfield-days/dirt-road_15p_64.png", -10);
         HideTileTerrain();
+
+        // ABOVE THE GROUND AND BELOW EVERYTHING BUILT ON IT. The veil is over
+        // what is under the rock, so dimming the yard and the plant with it
+        // would be shading the one part of the basin the company can see.
+        _blocks = new BlockOverlay { Name = "Licence", ZIndex = -5 };
+        AddChild(_blocks);
 
         _sceneryLayer = new Node2D { Name = "Scenery", YSortEnabled = true };
         _plantLayer = new Node2D { Name = "Plant", YSortEnabled = true };
@@ -221,6 +228,8 @@ public sealed partial class BasinWorld : Node2D
     {
         ArgumentNullException.ThrowIfNull(snapshot);
 
+        _blocks.Show(snapshot.Blocks);
+
         ResolveDrilling(snapshot);
         SyncProspects(snapshot);
         SyncWells(snapshot);
@@ -234,6 +243,12 @@ public sealed partial class BasinWorld : Node2D
 
         _traffic.Drive(PlantSite, NewestWellSite(), snapshot.ActivitiesRunning > 0);
     }
+
+    /// <summary>The block under a point, or null if the licence has none there.</summary>
+    public BlockView? BlockAt(Vector2 point) => _blocks.At(point);
+
+    /// <summary>Light the block the pointer is over.</summary>
+    public void HoverBlock(Vector2? point) => _blocks.Hover(point);
 
     /// <summary>Engine metres to world pixels.</summary>
     public static Vector2 ToWorld(Coordinate at) => new(

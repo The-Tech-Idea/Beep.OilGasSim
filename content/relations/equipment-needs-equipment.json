@@ -1,0 +1,306 @@
+{
+  "kind": "relation",
+  "edge": "equipment-needs-equipment",
+  "edges": [
+    {
+      "from": "air-cooler-bank",
+      "to": "electrical-substation"
+    },
+    {
+      "from": "amine-treatment-skid",
+      "to": "dehydration-unit"
+    },
+    {
+      "from": "backup-battery-bank",
+      "to": "electrical-substation"
+    },
+    {
+      "from": "cementing-unit",
+      "to": "drilling-rig-derrick"
+    },
+    {
+      "from": "chemical-injection-skid",
+      "to": "chemical-storage-tank"
+    },
+    {
+      "from": "choke-manifold",
+      "to": "wellhead-tree"
+    },
+    {
+      "from": "coiled-tubing-truck",
+      "to": "workover-rig"
+    },
+    {
+      "from": "communications-tower",
+      "to": "electrical-substation"
+    },
+    {
+      "from": "condition-monitoring-kit",
+      "to": "communications-tower"
+    },
+    {
+      "from": "control-room-cabin",
+      "to": "electrical-substation"
+    },
+    {
+      "from": "control-room-cabin",
+      "to": "main-operations-building"
+    },
+    {
+      "from": "cooling-tower",
+      "to": "electrical-substation"
+    },
+    {
+      "from": "covered-warehouse",
+      "to": "equipment-warehouse"
+    },
+    {
+      "from": "crude-oil-storage-tank",
+      "to": "oil-storage-tank"
+    },
+    {
+      "from": "dehydration-unit",
+      "to": "gas-scrubber"
+    },
+    {
+      "from": "desalter-vessel",
+      "to": "three-phase-separator"
+    },
+    {
+      "from": "distillation-column",
+      "to": "dehydration-unit"
+    },
+    {
+      "from": "drill-pipe-rack",
+      "to": "equipment-warehouse"
+    },
+    {
+      "from": "drilling-rig-derrick",
+      "to": "blowout-preventer"
+    },
+    {
+      "from": "drilling-rig-derrick",
+      "to": "drill-pipe-rack"
+    },
+    {
+      "from": "drilling-rig-derrick",
+      "to": "maintenance-workshop"
+    },
+    {
+      "from": "drilling-rig-derrick",
+      "to": "mud-pump"
+    },
+    {
+      "from": "drilling-rig-derrick",
+      "to": "shale-shaker"
+    },
+    {
+      "from": "electrical-substation",
+      "to": "diesel-generator-shelter"
+    },
+    {
+      "from": "emergency-shutdown-station",
+      "to": "backup-battery-bank"
+    },
+    {
+      "from": "emergency-shutdown-station",
+      "to": "control-room-cabin"
+    },
+    {
+      "from": "equipment-warehouse",
+      "to": "main-operations-building"
+    },
+    {
+      "from": "firefighting-foam-unit",
+      "to": "fire-water-tank"
+    },
+    {
+      "from": "flare-stack",
+      "to": "separator-vessel"
+    },
+    {
+      "from": "forklift",
+      "to": "equipment-warehouse"
+    },
+    {
+      "from": "gas-compressor-unit",
+      "to": "dehydration-unit"
+    },
+    {
+      "from": "gas-detector-station",
+      "to": "communications-tower"
+    },
+    {
+      "from": "gas-scrubber",
+      "to": "separator-vessel"
+    },
+    {
+      "from": "generator-unit",
+      "to": "diesel-generator-shelter"
+    },
+    {
+      "from": "helipad-platform",
+      "to": "main-operations-building"
+    },
+    {
+      "from": "lng-storage-sphere",
+      "to": "distillation-column"
+    },
+    {
+      "from": "maintenance-cabin",
+      "to": "maintenance-workshop"
+    },
+    {
+      "from": "maintenance-workshop",
+      "to": "main-operations-building"
+    },
+    {
+      "from": "metering-station",
+      "to": "three-phase-separator"
+    },
+    {
+      "from": "mobile-crane-truck",
+      "to": "maintenance-workshop"
+    },
+    {
+      "from": "mud-mixing-hopper",
+      "to": "mud-tank"
+    },
+    {
+      "from": "mud-pump",
+      "to": "mud-tank"
+    },
+    {
+      "from": "office-cabin",
+      "to": "main-operations-building"
+    },
+    {
+      "from": "oil-storage-tank",
+      "to": "metering-station"
+    },
+    {
+      "from": "pipe-handling-trailer",
+      "to": "flatbed-pipe-truck"
+    },
+    {
+      "from": "pipeline-construction-excavator",
+      "to": "maintenance-workshop"
+    },
+    {
+      "from": "pipeline-manifold",
+      "to": "metering-station"
+    },
+    {
+      "from": "pipeline-pig-launcher",
+      "to": "pipeline-manifold"
+    },
+    {
+      "from": "pipeline-pig-receiver",
+      "to": "pipeline-pig-launcher"
+    },
+    {
+      "from": "pumpjack",
+      "to": "wellhead-tree"
+    },
+    {
+      "from": "road-barrier-gate",
+      "to": "security-checkpoint"
+    },
+    {
+      "from": "security-camera-pole",
+      "to": "communications-tower"
+    },
+    {
+      "from": "security-camera-pole",
+      "to": "security-checkpoint"
+    },
+    {
+      "from": "security-checkpoint",
+      "to": "main-operations-building"
+    },
+    {
+      "from": "seismic-vessel",
+      "to": "survey-crew"
+    },
+    {
+      "from": "separator-vessel",
+      "to": "pipeline-construction-excavator"
+    },
+    {
+      "from": "shale-shaker",
+      "to": "mud-tank"
+    },
+    {
+      "from": "site-lighting-pole",
+      "to": "electrical-substation"
+    },
+    {
+      "from": "site-lighting-tower",
+      "to": "diesel-generator-shelter"
+    },
+    {
+      "from": "site-lighting-tower-b",
+      "to": "diesel-generator-shelter"
+    },
+    {
+      "from": "solar-power-array",
+      "to": "electrical-substation"
+    },
+    {
+      "from": "spill-response-trailer",
+      "to": "oil-containment-boom"
+    },
+    {
+      "from": "tanker-rail-loading-station",
+      "to": "oil-storage-tank"
+    },
+    {
+      "from": "tanker-truck",
+      "to": "truck-loading-gantry"
+    },
+    {
+      "from": "three-phase-separator",
+      "to": "separator-vessel"
+    },
+    {
+      "from": "truck-loading-gantry",
+      "to": "oil-storage-tank"
+    },
+    {
+      "from": "wastewater-treatment-tank",
+      "to": "produced-water-pond"
+    },
+    {
+      "from": "water-injection-pump",
+      "to": "produced-water-pond"
+    },
+    {
+      "from": "well-testing-skid",
+      "to": "wellhead-tree"
+    },
+    {
+      "from": "wellhead-tree",
+      "to": "drilling-rig-derrick"
+    },
+    {
+      "from": "wireline-service-truck",
+      "to": "drilling-rig-derrick"
+    },
+    {
+      "from": "worker-accommodation-cabin",
+      "to": "main-operations-building"
+    },
+    {
+      "from": "worker-safety-cabin",
+      "to": "worker-accommodation-cabin"
+    },
+    {
+      "from": "workover-rig",
+      "to": "drilling-rig-derrick"
+    },
+    {
+      "from": "workover-rig",
+      "to": "power-swivel-unit"
+    }
+  ]
+}

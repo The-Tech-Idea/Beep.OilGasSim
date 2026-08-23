@@ -1,0 +1,12 @@
+{
+  "kind": "activity",
+  "id": "service-equipment",
+  "name": "$loc:activity.service-equipment",
+  "group": "maintenance",
+  "costMillions": 0.8,
+  "durationTurns": 1,
+  "weatherLimit": 8.0,
+  "requiresAccess": false,
+  "note": "Planned work on something still running. A third the price of the repair it prevents.",
+  "develops": false
+}

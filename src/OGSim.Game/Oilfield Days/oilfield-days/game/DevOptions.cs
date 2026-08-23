@@ -59,6 +59,18 @@ public static class DevOptions
     /// <summary>A screen to open once the game is up: a board, or a whole scene.</summary>
     public static string? Screen => Value("--screen=");
 
+    /// <summary>
+    /// Which page of a staged screen to open on, counted from 1.
+    /// </summary>
+    /// <remarks>
+    /// The same reason <c>--screen=</c> exists: New Game is five pages, and
+    /// looking at the fourth should not mean clicking through the first three.
+    /// Out of range is clamped by the screen rather than refused here, because
+    /// only the screen knows how many pages it has.
+    /// </remarks>
+    public static int Stage =>
+        Value("--stage=") is string raw && int.TryParse(raw, out int stage) ? stage : 0;
+
     /// <summary>Play the run for this many months with the development policy.</summary>
     public static int Play =>
         Value("--play=") is string raw && int.TryParse(raw, out int months) ? months : 0;
@@ -89,7 +101,15 @@ public static class DevOptions
             : null;
 
     /// <summary>Reality profile override, for comparing composed model sets.</summary>
-    public static string? Profile => Value("--profile=");
+    /// <summary>
+    /// Which game mode to compose at, for looking at the other one.
+    /// </summary>
+    /// <remarks>
+    /// The engine ships two modes and this client is one of them; running it at
+    /// the other is how a change to a shared rule is checked against both
+    /// without building two clients to look at it.
+    /// </remarks>
+    public static string? Mode => Value("--mode=");
 
     private static string? Value(string flag)
     {

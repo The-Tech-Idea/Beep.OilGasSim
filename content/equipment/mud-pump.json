@@ -1,0 +1,9 @@
+{
+  "kind": "equipment",
+  "id": "mud-pump",
+  "name": "$loc:equipment.mud-pump",
+  "group": "drilling",
+  "costMillions": 1.1,
+  "buildTurns": 1,
+  "note": "Circulates. Without it nothing goes downhole."
+}

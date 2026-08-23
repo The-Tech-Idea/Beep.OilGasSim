@@ -1,0 +1,12 @@
+{
+  "kind": "activity",
+  "id": "install-esp",
+  "name": "$loc:activity.install-esp",
+  "group": "lift",
+  "costMillions": 4.5,
+  "durationTurns": 1,
+  "weatherLimit": 6.5,
+  "requiresAccess": false,
+  "note": "The high-rate answer. Expensive, and it fails when the well makes gas.",
+  "develops": true
+}

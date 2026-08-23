@@ -107,6 +107,9 @@ public sealed partial class CommandBar : CanvasLayer
     /// <summary>Where the selected thing stands, for a unit to drive to.</summary>
     public Vector2 SiteAt { get; set; }
 
+    /// <summary>The line break panel text is built from.</summary>
+    private static readonly string NewLine = ((char)10).ToString();
+
     /// <summary>Send a unit if there is a yard, or the command if there is not.</summary>
     private void Dispatch(World.JobKind job, ulong subject, Command command)
     {
@@ -148,6 +151,37 @@ public sealed partial class CommandBar : CanvasLayer
     }
 
     /// <summary>Offer what can be done to a well, and to whatever it produces into.</summary>
+    /// <summary>
+    /// A block of the licence: what is known about it, and the one thing that
+    /// can be done to it.
+    /// </summary>
+    /// <remarks>
+    /// A shot block offers NOTHING, and that absence is the point — the money
+    /// has been spent and the answer is on the map. Offering a second pass would
+    /// be selling the same acreage twice, which the engine refuses anyway; the
+    /// bar refusing to ask is better than the engine refusing to answer.
+    /// </remarks>
+    public void ShowBlock(BlockView block)
+    {
+        ArgumentNullException.ThrowIfNull(block);
+
+        string state = block.Surveyed
+            ? block.Structures > 0
+                ? $"{block.Structures} structure{(block.Structures == 1 ? string.Empty : "s")} found here"
+                : "shot — there is nothing under it"
+            : "never shot; nobody knows what is under it";
+
+        Reset($"Block {block.Block.Value:00}\n{state}\n" +
+              $"{block.Wide.Metres / 1000.0:F0} x {block.Tall.Metres / 1000.0:F0} km of licence");
+
+        if (block.Surveyed)
+            return;
+
+        Add("Shoot 2-D seismic", KitTheme.Amber, () =>
+            Dispatch(World.JobKind.SurveyBlock, block.Block.Value,
+                     new SurveyBlockCommand(new EntityId<IBlock>(block.Block.Value))));
+    }
+
     public void ShowWell(WellStatusView well, IReadOnlyList<EntityId<IReservoirCompartmentEntity>> compartments)
     {
         Reset($"{well.DisplayId}\n{well.Status} · {well.ProducedThisTick.CubicMetres:N0} m³ this month");
@@ -258,6 +292,28 @@ public sealed partial class CommandBar : CanvasLayer
     /// </remarks>
     public void ShowPlant(FieldReadModel snapshot)
     {
+        ArgumentNullException.ThrowIfNull(snapshot);
+
+        // BARE GROUND OFFERS ONE THING (plans 22 4, plans 23). A company that
+        // has built nothing has no vessels to enlarge and no bottleneck to
+        // answer, so a catalogue of upgrades would be a list of buttons that all
+        // refuse. What it can do is commission a facility, and that is the whole
+        // panel until it has.
+        if (snapshot.Chain.Count == 0)
+        {
+            Reset("Bare ground" + NewLine +
+                  "Nothing is built here yet. A field is brought on by commissioning an " +
+                  "early production facility - header, separator, treating, metering and " +
+                  "tanks, as one package." + NewLine +
+                  "Wells can be drilled before it and wait shut in until it is up.");
+
+            Add("Commission a facility", KitTheme.Amber, () =>
+                Dispatch(World.JobKind.Commission, 0UL,
+                         new InstallEarlyProductionFacilityCommand()));
+
+            return;
+        }
+
         var text = new System.Text.StringBuilder("Surface facilities\n");
 
         for (int i = 0; i < snapshot.Chain.Count; i++)

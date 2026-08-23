@@ -1,0 +1,12 @@
+{
+  "kind": "activity",
+  "id": "repair-equipment",
+  "name": "$loc:activity.repair-equipment",
+  "group": "maintenance",
+  "costMillions": 2.4,
+  "durationTurns": 1,
+  "weatherLimit": 7.5,
+  "requiresAccess": false,
+  "note": "Unplanned, and everything downstream is shut in while you do it.",
+  "develops": false
+}

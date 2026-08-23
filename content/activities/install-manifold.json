@@ -1,0 +1,12 @@
+{
+  "kind": "activity",
+  "id": "install-manifold",
+  "name": "$loc:activity.install-manifold",
+  "group": "surface",
+  "costMillions": 9.0,
+  "durationTurns": 4,
+  "weatherLimit": 4.5,
+  "requiresAccess": true,
+  "note": "More tie-in slots. The answer to 'there is nowhere to put this well'.",
+  "develops": true
+}

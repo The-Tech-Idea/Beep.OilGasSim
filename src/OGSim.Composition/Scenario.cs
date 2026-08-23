@@ -129,6 +129,13 @@ internal sealed class ScenarioRunner : IScenarioRunner, IStateOwner
 
     private ObjectiveState _overall = ObjectiveState.Pending;
 
+    // WHAT THE VISIBLE OBJECTIVES ASK FOR. Built once in the constructor rather
+    // than every tick: a scenario's goals cannot change while it runs, and
+    // walking the predicate trees 120 times to rediscover a constant would be
+    // work the tick does not need (rule D-5's spirit, and law L5's letter — the
+    // scenario owns the number and the host reads it rather than keeping one).
+    private readonly List<ObjectiveGoal> _goals = [];
+
     public ScenarioRunner(Scenario scenario, ReadModelSchema schema)
     {
         ArgumentNullException.ThrowIfNull(scenario);
@@ -186,7 +193,7 @@ internal sealed class ScenarioRunner : IScenarioRunner, IStateOwner
         // ledger and registry values this loop does not yet publish, and a
         // scenario with no scoring weights is what that document calls a
         // sandbox. Nothing here invents a number.
-        return new ScenarioProgress(reported, [], _overall);
+        return new ScenarioProgress(reported, [], _overall, _goals, _scenario.Deadline);
     }
 
     /// <summary>
@@ -233,6 +240,13 @@ internal sealed class ScenarioRunner : IScenarioRunner, IStateOwner
     {
         _tracked.Add((objective, new PredicateState(), isFailure));
         _states.Add(ObjectiveState.Pending);
+
+        // ONLY WHAT A PLAYER IS SHOWN, and only when it states a threshold. A
+        // hidden objective is hidden, and a failure condition is not a goal — a
+        // host that printed "stay solvent: target 1" would be reading the shape
+        // of the check rather than the point of it.
+        if (objective.Visible && !isFailure && ObjectiveGoal.Of(objective) is ObjectiveGoal goal)
+            _goals.Add(goal);
     }
 
     // ---------------------------------------------------- IStateOwner (SDD-014
@@ -422,7 +436,13 @@ internal sealed class ObjectiveStage(
     // restructuring finding. Read only: neither the covenant clock nor the
     // sold share is this stage's to change.
     Bank bank,
-    OGSim.Company.WorkingInterest stake) : ITickStage, IStateOwner
+    OGSim.Company.WorkingInterest stake,
+
+    // How long a company may sit in Amortising before its partners take it
+    // over. Passed rather than a constant so a build composed without the
+    // takeover mechanic is given a threshold no run reaches — this stage keeps
+    // one path and never asks which game it is in.
+    int takeoverAfterAmortisingTicks) : ITickStage, IStateOwner
 {
     private ObjectiveState _reported = ObjectiveState.Pending;
 
@@ -457,7 +477,7 @@ internal sealed class ObjectiveStage(
     /// <summary>12 further ticks past the 6-tick cure window — 18 months of
     /// covenant distress in total — grounded the same way finding 274's own
     /// sweep rate was: confirmed with Fahad before landing.</summary>
-    private const int TakeoverThresholdTicks = 12;
+
 
     /// <summary>
     /// The month's facts, taken at stage 12 and published at stage 13.
@@ -471,7 +491,7 @@ internal sealed class ObjectiveStage(
     public FieldPosition? Position { get; private set; }
 
     public ScenarioProgress Progress { get; private set; } =
-        new([], [], ObjectiveState.Pending);
+        new([], [], ObjectiveState.Pending, [], null);
 
     // SDD-014 §3's "kind" — this IS a state transition and shares
     // AuditCategory.StateTransition with every other one this engine records
@@ -503,7 +523,7 @@ internal sealed class ObjectiveStage(
         if (bank.Covenant.State == CovenantState.Amortising) _ticksAmortising++;
         else _ticksAmortising = 0;
 
-        if (!TakenOver && _ticksAmortising >= TakeoverThresholdTicks
+        if (!TakenOver && _ticksAmortising >= takeoverAfterAmortisingTicks
             && stake.PartnerShare >= Defaults.WorkingInterest.MaxSellableFraction)
         {
             TakenOver = true;

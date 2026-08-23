@@ -1,0 +1,9 @@
+{
+  "kind": "equipment",
+  "id": "forklift",
+  "name": "$loc:equipment.forklift",
+  "group": "construction",
+  "costMillions": 0.3,
+  "buildTurns": 1,
+  "note": "Moves what the crane is too big for."
+}

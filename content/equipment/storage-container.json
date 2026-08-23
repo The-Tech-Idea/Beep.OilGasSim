@@ -1,0 +1,9 @@
+{
+  "kind": "equipment",
+  "id": "storage-container",
+  "name": "$loc:equipment.storage-container",
+  "group": "yard",
+  "costMillions": 0.1,
+  "buildTurns": 1,
+  "note": "The cheapest storage there is."
+}

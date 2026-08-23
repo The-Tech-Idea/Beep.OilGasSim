@@ -209,16 +209,35 @@ public sealed record Campaign(
 public sealed record ScenarioProgress(
     IReadOnlyList<(ContentId Objective, ObjectiveState State, double Progress)> Objectives,
     IReadOnlyList<(ScoreDimension Dimension, double Score)> Scores,
-    ObjectiveState Overall)
+    ObjectiveState Overall,
+
+    /// <summary>
+    /// What the visible objectives ask for, so a host can state the goal
+    /// instead of holding its own copy of the number.
+    /// </summary>
+    IReadOnlyList<ObjectiveGoal> Goals,
+
+    /// <summary>
+    /// The tick the run is judged at, when the scenario sets one.
+    /// </summary>
+    /// <remarks>
+    /// Published for the same reason the goals are: a host that wants to show
+    /// "eleven months left" was working it out from a copy of the deadline it
+    /// kept itself, and a scenario that moved would have left it counting down
+    /// to the wrong month.
+    /// </remarks>
+    Tick? Deadline)
 {
     // Finding 131.
     public bool Equals(ScenarioProgress? other) =>
         other is not null && Overall == other.Overall
         && Structural.Equal(Objectives, other.Objectives)
-        && Structural.Equal(Scores, other.Scores);
+        && Structural.Equal(Scores, other.Scores)
+        && Structural.Equal(Goals, other.Goals);
 
     public override int GetHashCode() =>
-        HashCode.Combine(Overall, Structural.HashOf(Objectives), Structural.HashOf(Scores));
+        HashCode.Combine(Overall, Structural.HashOf(Objectives), Structural.HashOf(Scores),
+                         Structural.HashOf(Goals));
 }
 
 /// <summary>

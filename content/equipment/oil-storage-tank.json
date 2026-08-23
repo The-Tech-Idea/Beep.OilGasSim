@@ -1,0 +1,9 @@
+{
+  "kind": "equipment",
+  "id": "oil-storage-tank",
+  "name": "$loc:equipment.oil-storage-tank",
+  "group": "export",
+  "costMillions": 3.5,
+  "buildTurns": 3,
+  "note": "Headroom between cargoes."
+}

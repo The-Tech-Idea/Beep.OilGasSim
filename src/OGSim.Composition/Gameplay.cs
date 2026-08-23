@@ -103,6 +103,33 @@ public sealed record WellStatusView(
 /// seal we doubt" is the difference between drilling and shooting more
 /// seismic.</para>
 /// </summary>
+/// <summary>
+/// One block of the licence, and whether the company has looked under it
+/// (SDD-010 §4b's S1 amendment).
+///
+/// <para>Published from the first tick, unlike the structures inside it: a
+/// company knows the shape of the acreage it holds. What it does not know is
+/// what is under any of it, and that is what <see cref="Surveyed"/> tracks.</para>
+/// </summary>
+public sealed record BlockView(
+    EntityRef Block,
+    Coordinate Centre,
+    Length Wide,
+    Length Tall,
+
+    /// <summary>Whether this block has been shot.</summary>
+    bool Surveyed,
+
+    /// <summary>
+    /// How many structures the company knows of inside it.
+    ///
+    /// <para><b>Zero means two different things and the flag beside it tells
+    /// them apart.</b> Unsurveyed and zero is ignorance; surveyed and zero is a
+    /// result — ground the company has paid to rule out, and the reason a
+    /// barren block should look settled rather than untouched.</para>
+    /// </summary>
+    int Structures);
+
 public sealed record ProspectView(
     EntityRef Prospect,
 
@@ -308,6 +335,16 @@ public sealed record FieldReadModel(
     /// reservoir directly has nothing to explore.</para>
     /// </summary>
     IReadOnlyList<ProspectView> Prospects,
+
+    /// <summary>
+    /// The licence, block by block (SDD-010 §4b's S1 amendment).
+    ///
+    /// <para>What the opening move is aimed with. A player who can see prospects
+    /// and not blocks can only choose between structures already found, which is
+    /// the game that skipped exploration; this is the list that answers "where
+    /// do I look first".</para>
+    /// </summary>
+    IReadOnlyList<BlockView> Blocks,
 
     /// <summary>
     /// What a tonne of oil fetches this month (SDD-009 §6).
@@ -608,7 +645,7 @@ internal sealed class FieldProjection(
     public FieldReadModel Publish(FieldPosition position, ScenarioProgress progress) =>
         new(position.Tick, position.Date, position.Cash, position.Wells,
             position.ActivitiesRunning, position.ProducedThisTick, position.Insolvent,
-            progress, Project(beliefs), loop.Chain(), field.Wells(), Prospects(),
+            progress, Project(beliefs), loop.Chain(), field.Wells(), Prospects(), Blocks(),
             loop.Market.OilPrice, loop.Market.CostIndex,
             // WHAT THE FIELD RAN AT, taken from the loop rather than recomputed
             // here. This asked `TemperatureOn(lastDayOfTheMonth)` while the solve
@@ -706,6 +743,74 @@ internal sealed class FieldProjection(
         }
 
         return seen;
+    }
+
+    /// <summary>
+    /// The licence's blocks, and what the company has found under each.
+    /// </summary>
+    /// <remarks>
+    /// Derived every tick rather than stored (law L5): the grid is a function of
+    /// the ground and the count is a function of what is known, so neither can
+    /// drift from what it describes.
+    /// </remarks>
+    private IReadOnlyList<BlockView> Blocks()
+    {
+        var blocks = new List<BlockView>();
+
+        Length wide = world.BlockWidth;
+        Length tall = world.BlockHeight;
+        int count = world.BlockCount;
+
+        for (int i = 0; i < count; i++)
+        {
+            EntityId<IBlock> block = world.BlockAt(i);
+            Coordinate centre = world.CentreOf(block);
+
+            blocks.Add(new BlockView(
+                new EntityRef(EntityKind.Block, block.Value),
+                centre,
+                wide,
+                tall,
+                world.WasShot(block),
+                Structures(centre, wide, tall)));
+        }
+
+        return blocks;
+    }
+
+    /// <summary>
+    /// How many KNOWN structures sit inside a patch.
+    /// </summary>
+    /// <remarks>
+    /// Counted from belief and not from truth, which is the whole discipline of
+    /// this projection: counting what the world placed would tell a player how
+    /// many structures an unshot block holds, and that is the answer the survey
+    /// is being sold.
+    /// </remarks>
+    private int Structures(Coordinate centre, Length wide, Length tall)
+    {
+        double left = centre.X - (wide.Metres * 0.5);
+        double right = centre.X + (wide.Metres * 0.5);
+        double bottom = centre.Y - (tall.Metres * 0.5);
+        double top = centre.Y + (tall.Metres * 0.5);
+
+        IReadOnlyList<EntityId<IProspect>> prospects = world.Prospects;
+        int found = 0;
+
+        for (int i = 0; i < prospects.Count; i++)
+        {
+            if (!risks.Knows(new EntityRef(EntityKind.Prospect, prospects[i].Value)))
+                continue;
+
+            Coordinate at = world.PositionOf(prospects[i]);
+
+            if (at.X < left || at.X >= right) continue;
+            if (at.Y < bottom || at.Y >= top) continue;
+
+            found++;
+        }
+
+        return found;
     }
 
     /// <summary>

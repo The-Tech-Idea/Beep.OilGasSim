@@ -1,0 +1,8 @@
+{
+  "kind": "export-line",
+  "id": "export-line-e1",
+  "availableFromEra": "E1",
+  "rung": 0,
+  "offtake": "20 kg/s",
+  "parcelSize": "8000 t"
+}

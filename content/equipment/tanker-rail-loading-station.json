@@ -1,0 +1,9 @@
+{
+  "kind": "equipment",
+  "id": "tanker-rail-loading-station",
+  "name": "$loc:equipment.tanker-rail-loading-station",
+  "group": "export",
+  "costMillions": 5.0,
+  "buildTurns": 4,
+  "note": "Export by rail. Cheaper per barrel, slower to build."
+}

@@ -269,6 +269,55 @@ public sealed record WorldParameters(
 > integrity there will be more failure modes to tell apart, and the diagnosis
 > becomes a field on the handoff rather than a single mapping.
 
+### The map starts dark
+
+> **S1 amendment (plans 22 §3).** The paragraph above says regional gravity and
+> magnetics see a structure rather than its fluid, and that is right. What it did
+> not say is **who paid for the regional data**, and the implementation answered
+> "nobody": `WorldSink.AddAccumulation` registered a risk for every charged
+> structure as the world was generated, so a company opened its first month
+> holding a complete structural map of the basin it had just been licensed.
+>
+> **That is the exploration game skipped, not modelled.** POS is computed, shown,
+> and worthless — every structure is already on the board, so the only decision
+> left is which of the known odds to drill. The question worth money is *where do
+> I even look*, and it was answered for free.
+>
+> **Acreage is licensed in blocks, so it is explored in blocks.** The basin is
+> divided at generation into a grid of blocks (§4's handoff gains them). A block
+> is public from the first tick — a company knows the shape of its own licence —
+> and what lies under it is not.
+>
+> ```text
+> seismic-2d   RECONNAISSANCE over a block. Finds closures: every charted
+>              structure inside the block is registered and appears in the
+>              read model with its five factors. Cheap.
+> seismic-3d   DETAIL over a structure already found. Sharpens trap and
+>              reservoir, as it always did. Dear.
+> ```
+>
+> **Find, then firm up.** The two surveys stop being one verb at two prices and
+> become the two questions exploration actually asks. `seismic-3d` keeps naming a
+> prospect, which stops being circular the moment a prospect has to be found
+> first.
+>
+> **A block that returns nothing is a result the company paid for and should
+> keep.** Ground known to be barren is ground it can stop paying to think about,
+> and the read model says so rather than leaving the block looking unvisited.
+>
+> **Registration is what hides it, so nothing new hides it.** `Prospects()`
+> already filters on `risks.Knows`; deferring the `Register` call is the whole
+> mechanism. Generation is untouched — the world still creates every closure,
+> charged or dry — and `WorldState` holds what a survey *would* say until one is
+> shot.
+>
+> **Why the block is an entity rather than a coordinate and a radius.**
+> [SDD-007](SDD-007_OPERATIONS_ENGINE.md) §5 leaves the per-template parameter
+> block open, and an activity is aimed at an `EntityRef` and a depth. A survey
+> ordered as a centre and a radius would have to smuggle the area through one of
+> those, which is the call-site invention F-4 forbids. A block **is** the area, so
+> the existing channel carries it exactly and the open item stays closed.
+
 ### A structure carries its capacity
 
 > **R20d.7.5 amendment.** `GeneratedAccumulation` gains

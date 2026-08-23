@@ -1,0 +1,9 @@
+{
+  "kind": "equipment",
+  "id": "control-room-cabin",
+  "name": "$loc:equipment.control-room-cabin",
+  "group": "yard",
+  "costMillions": 1.8,
+  "buildTurns": 2,
+  "note": "The screens the chain is watched on. Needs power before it needs anything else."
+}

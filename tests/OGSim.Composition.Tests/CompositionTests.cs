@@ -31,6 +31,24 @@ internal sealed class TestModule(
 internal static class Fixture
 {
     /// <summary>
+    /// An element this test needs the plant to have built.
+    /// </summary>
+    /// <remarks>
+    /// A plant's elements became optional with S2 (plans 22 §4). A test about
+    /// what a separator DOES is entitled to one, and should fail saying it is
+    /// missing rather than throw a null reference three lines later — which is
+    /// the difference between a diagnosis and a puzzle.
+    /// </remarks>
+    internal static T Built<T>(T? element, string named)
+        where T : class
+    {
+        Assert.True(element is not null,
+            $"this test needs a {named} and the plant has none built");
+
+        return element!;
+    }
+
+    /// <summary>
     /// Run months the way a company runs them: fixing what breaks.
     ///
     /// <para>Since R20d.22 equipment ages and fails, and the route law shuts in
@@ -77,7 +95,9 @@ internal static class Fixture
     /// </summary>
     public static EngineSettings Settings(
         FaultHandling handling = FaultHandling.Strict, string profile = "simulation",
-        ulong seed = 20260806UL, IReadOnlyList<IContentSource>? content = null) =>
+        ulong seed = 20260806UL, IReadOnlyList<IContentSource>? content = null,
+        ContentId? startingState = null, ContentId? rules = null,
+        ContentId? style = null) =>
         new(new GameDate(1965, 1),
             WorldSeed: seed,
             new AuditRetention(DetailWindowTicks: 12),
@@ -85,7 +105,25 @@ internal static class Fixture
             LogLevel.Info,
             handling,
             new ContentId(profile),
-            content ?? [ShippedContent()]);
+            content ?? [ShippedContent()],
+
+            // A COMMISSIONED PLANT, because these tests are about what a field
+            // DOES (plans 22 §4, S2 step 4). The shipped game opens on bare
+            // ground; a test about water cut is entitled to a separator without
+            // having to build one first, and this is the one place that says so
+            // for all of them.
+            startingState ?? Defaults.OpeningPosition,
+
+            // REALISTIC, because that is what these tests are: an operator
+            // working a field it holds (plans 23). The game runs at `frontier`;
+            // a test that wants those rules asks for them by name.
+            rules ?? RuleSets.Realistic.Id,
+
+            // THE FULL-FIDELITY STYLE (plans 25). These tests are an operator
+            // working a field it holds, and a suite that quietly ran with the
+            // licence neutralised would stop testing the licence without saying
+            // so.
+            style ?? GameStyles.Engineer.Id);
 
     /// <summary>
     /// The repository's own <c>content/</c>, read from disk — which is what a
@@ -155,12 +193,37 @@ internal static class Fixture
             files.Add(new ContentFile("fluid-systems/" + Path.GetFileName(path),
                                       File.ReadAllText(path)));
 
+        // AND THE ACTIVITY CATALOGUE (plans 28) — the same door.
+        string activities = Path.Combine(here.Parent!.Parent!.FullName, "content", "activities");
+
+        foreach (string path in Directory.EnumerateFiles(activities, "*.json")
+                                         .OrderBy(p => p, StringComparer.Ordinal))
+            files.Add(new ContentFile("activities/" + Path.GetFileName(path),
+                                      File.ReadAllText(path)));
+
+        // AND THE STARTING STATES — the same door.
+        string startingStates = Path.Combine(here.Parent!.Parent!.FullName, "content", "starting-states");
+
+        foreach (string path in Directory.EnumerateFiles(startingStates, "*.json")
+                                         .OrderBy(p => p, StringComparer.Ordinal))
+            files.Add(new ContentFile("starting-states/" + Path.GetFileName(path),
+                                      File.ReadAllText(path)));
+
         return new DirectorySource(files);
     }
 
     /// <summary>The shipped ladders, for the two tests that build the module
     /// list themselves rather than going through <c>EngineBuilder.Build</c>.</summary>
     public static FacilityLadders Ladders() => FacilityLadders.From(Loaded());
+
+    /// <summary>The shipped activity catalogue — the one owner of every
+    /// activity's designer facts (plans 28).</summary>
+    public static ICatalog<ActivityDefinition> Activities() => Loaded().Of<ActivityDefinition>();
+
+    /// <summary>The operating company's shipped starting state, from its one
+    /// owner (`content/starting-states/`).</summary>
+    public static StartingStateDefinition OpeningPosition() =>
+        Loaded().Of<StartingStateDefinition>()[Defaults.OpeningPosition];
 
     /// <summary>The shipped content, through the real loader.</summary>
     private static ICatalogSet Loaded()
@@ -179,6 +242,8 @@ internal static class Fixture
                 new EspContentKind(),
                 new GasLiftContentKind(),
                 new FluidSystemContentKind(),
+                new ActivityContentKind(),
+                new StartingStateContentKind(),
             ],
             new PluginRegistry());
 
@@ -337,7 +402,9 @@ public sealed class ShippedSetTests
         IReadOnlyList<IModule> modules = EngineBuilder.ShippedModules(
             audit, new SimulationClock(new GameDate(1965, 1)), new RandomSource(1UL),
             Defaults.Simulation, Fixture.Ladders(), Fixture.Registry(), Fixture.TerrainClasses(),
-            Fixture.TakeOrPay(), Fixture.LiftTiers(), Fixture.FluidSystems());
+            Fixture.TakeOrPay(), Fixture.LiftTiers(), Fixture.FluidSystems(),
+            Fixture.Activities(),
+            Fixture.OpeningPosition(), RuleSets.Realistic, GameStyles.Engineer.Terms);
 
         var provided = new HashSet<Type>();
         foreach (IModule module in modules)
@@ -365,7 +432,9 @@ public sealed class ShippedSetTests
         var reversed = new List<IModule>(EngineBuilder.ShippedModules(
             audit, new SimulationClock(new GameDate(1965, 1)), new RandomSource(1UL),
             Defaults.Simulation, Fixture.Ladders(), Fixture.Registry(), Fixture.TerrainClasses(),
-            Fixture.TakeOrPay(), Fixture.LiftTiers(), Fixture.FluidSystems()));
+            Fixture.TakeOrPay(), Fixture.LiftTiers(), Fixture.FluidSystems(),
+            Fixture.Activities(),
+            Fixture.OpeningPosition(), RuleSets.Realistic, GameStyles.Engineer.Terms));
         reversed.Reverse();
 
         Built forward = Assert.IsType<Built>(EngineBuilder.Build(Fixture.Settings()));
@@ -1031,7 +1100,8 @@ public sealed class AccessWindowTests
         var modules = new List<IModule>(EngineBuilder.ShippedModules(
             audit, clock, new RandomSource(20260806UL), Defaults.Simulation,
             Fixture.Ladders(), Fixture.Registry(), Fixture.TerrainClasses(), Fixture.TakeOrPay(),
-            Fixture.LiftTiers(), Fixture.FluidSystems()));
+            Fixture.LiftTiers(), Fixture.FluidSystems(), Fixture.Activities(),
+            Fixture.OpeningPosition(), RuleSets.Realistic, GameStyles.Engineer.Terms));
 
         for (int i = 0; i < modules.Count; i++)
             if (modules[i] is EnvironmentModule)
@@ -1115,14 +1185,16 @@ public sealed class AccessWindowTests
     [Fact]
     public void Work_needing_no_mobilisation_is_not_gated_by_the_window()
     {
-        Assert.False(Defaults.RepairEquipmentTerms.RequiresAccess);
-        Assert.False(Defaults.ServiceEquipmentTerms.RequiresAccess);
-        Assert.False(Defaults.WellTestTerms.RequiresAccess);
-        Assert.False(Defaults.RemediateInjectorTerms.RequiresAccess);
+        ICatalog<ActivityDefinition> stated = Fixture.Activities();
 
-        Assert.True(Defaults.DrillWellTerms.RequiresAccess);
-        Assert.True(Defaults.SeismicSurveyTerms.RequiresAccess);
-        Assert.True(Defaults.ExpandExportTerms.RequiresAccess);
+        Assert.False(Defaults.RepairEquipmentTerms(stated).RequiresAccess);
+        Assert.False(Defaults.ServiceEquipmentTerms(stated).RequiresAccess);
+        Assert.False(Defaults.WellTestTerms(stated).RequiresAccess);
+        Assert.False(Defaults.RemediateInjectorTerms(stated).RequiresAccess);
+
+        Assert.True(Defaults.DrillWellTerms(stated).RequiresAccess);
+        Assert.True(Defaults.SeismicSurveyTerms(stated).RequiresAccess);
+        Assert.True(Defaults.ExpandExportTerms(stated).RequiresAccess);
     }
 
     /// <summary>

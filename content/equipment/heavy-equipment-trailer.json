@@ -1,0 +1,9 @@
+{
+  "kind": "equipment",
+  "id": "heavy-equipment-trailer",
+  "name": "$loc:equipment.heavy-equipment-trailer",
+  "group": "construction",
+  "costMillions": 1.0,
+  "buildTurns": 1,
+  "note": "Gets the big items to the pad."
+}

@@ -1,0 +1,9 @@
+{
+  "kind": "equipment",
+  "id": "pipeline-construction-excavator",
+  "name": "$loc:equipment.pipeline-construction-excavator",
+  "group": "construction",
+  "costMillions": 2.0,
+  "buildTurns": 2,
+  "note": "Digs the trench everything on the surface sits in or beside."
+}

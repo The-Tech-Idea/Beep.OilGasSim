@@ -1,0 +1,12 @@
+{
+  "kind": "activity",
+  "id": "expand-export",
+  "name": "$loc:activity.expand-export",
+  "group": "surface",
+  "costMillions": 45.0,
+  "durationTurns": 9,
+  "weatherLimit": 5.0,
+  "requiresAccess": true,
+  "note": "The most expensive thing in the game and the longest. Everything upstream is capped by it.",
+  "develops": true
+}

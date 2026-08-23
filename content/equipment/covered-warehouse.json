@@ -1,0 +1,9 @@
+{
+  "kind": "equipment",
+  "id": "covered-warehouse",
+  "name": "$loc:equipment.covered-warehouse",
+  "group": "yard",
+  "costMillions": 2.4,
+  "buildTurns": 2,
+  "note": "For what must stay dry."
+}

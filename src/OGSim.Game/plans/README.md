@@ -37,6 +37,17 @@ the revision, and 20 is where progress lives.
 20. [20_GAME_TRACKER.md](20_GAME_TRACKER.md) — **what is built, next and blocked.**
 21. [21_GAME_CODE_PATTERNS.md](21_GAME_CODE_PATTERNS.md) — how the client is built: resources, hierarchy, state, signals.
 22. [22_SETTLERS_SHAPED_GAME.md](22_SETTLERS_SHAPED_GAME.md) — **the plan that matters.** A yard, a budget and ground nobody has looked at: the map goes dark, the plant starts empty, and the player builds it.
+23. [23_GAME_RULES_MODE.md](23_GAME_RULES_MODE.md) — the rule set as a composition axis rather than a difficulty branch.
+24. [24_MECHANICS_ARE_OPTIONAL.md](24_MECHANICS_ARE_OPTIONAL.md) — which mechanics a style may leave out, and what leaving each one out costs.
+25. [25_GAME_STYLE_ENGINES.md](25_GAME_STYLE_ENGINES.md) — `IGameStyle`: one interface, two products, OGSim full-featured behind both.
+26. [26_GAME_WORKFLOW.md](26_GAME_WORKFLOW.md) — **what a turn and a campaign are.** The Days loop as a cycle, what the player decides at each step against what the engine decides, and the three steps that currently have no decision in them.
+27. [27_DEPENDENCY_MANAGER.md](27_DEPENDENCY_MANAGER.md) — the conditions modules decide for themselves, and the one place that should decide them instead.
+28. [28_CONTENT_TREES.md](28_CONTENT_TREES.md) — 227 edges, 49 of them written twice: relations move out of the nodes into `content/relations/`.
+
+[modules/](modules/00_INDEX.md) — one document per composed module: manifest,
+what `Compose` builds, its stages, and its functions and properties. The
+conditions found across all sixteen are collected in
+[modules/90_CONDITIONS.md](modules/90_CONDITIONS.md).
 
 **Read 22 before 15.** Plans 15 rebuilt the client and did not touch what the
 world hands the player at the start — which turned out to be the real problem.

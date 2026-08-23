@@ -3,5 +3,6 @@
   "id": "export-line-e3",
   "availableFromEra": "E2",
   "rung": 2,
-  "offtake": "80 kg/s"
+  "offtake": "80 kg/s",
+  "parcelSize": "80000 t"
 }

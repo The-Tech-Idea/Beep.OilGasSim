@@ -1,0 +1,9 @@
+{
+  "kind": "equipment",
+  "id": "choke-manifold",
+  "name": "$loc:equipment.choke-manifold",
+  "group": "drilling",
+  "costMillions": 0.8,
+  "buildTurns": 1,
+  "note": "Where the rate is actually set."
+}

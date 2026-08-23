@@ -74,9 +74,6 @@ internal static class Defaults
     /// </summary>
     public const double MaxTickPressureDropFraction = 0.2;
 
-    /// <summary>Opening cash — what a new company starts the game with.</summary>
-    public static Money OpeningCash { get; } = Money.FromMillions(50.0);
-
     /// <summary>
     /// Starting prices and costs. Balance content in a finished game (R20.4);
     /// stated here so the loop is playable and revisable rather than absent.
@@ -569,52 +566,48 @@ internal static class Defaults
     /// and a default rig id. The compiler said so, and `EngineCorpus.Subsurface`
     /// carries a note about the same trap.</para>
     /// </summary>
-    public static ActivityTerms DrillWellTerms { get; } = new(
-        Template: new ContentId("drill-development-well"),
-        Cost: Money.FromMillions(8.0),
-        DurationTicks: 4,
-        Rig: TheRig,
-        WeatherLimit: 6.0,   // a rig on location: heave stops tripping pipe long before it stops the platform
-        // a rig has to be brought to location.
-        RequiresAccess: true,
+    /// <summary>The drill template's id — the join key between the engine's
+    /// drilling activity, the licence's work commitment and the catalogue entry
+    /// that prices it. One owner for the string.</summary>
+    public static ContentId DrillTemplate { get; } = new("drill-development-well");
 
-        Outcomes: DrillingOutcomes);
+    /// <summary>As <see cref="DrillTemplate"/>, for abandonment — the second
+    /// template read outside its own activity (the obligation register).</summary>
+    public static ContentId AbandonTemplate { get; } = new("abandon-well");
 
-    public static ActivityTerms WellTestTerms { get; } = new(
-        Template: new ContentId("well-test-buildup"),
-        Cost: Money.FromMillions(0.4),
-        DurationTicks: 1,
-        Rig: TheRig,
-        WeatherLimit: 7.5,   // the well is shut in and a gauge is reading; little to do on deck
-        // the well is shut in and a gauge on site reads it.
-        RequiresAccess: false,
+    /// <summary>
+    /// The terms an activity runs under (plans 28). The five designer facts —
+    /// cost, duration, weather limit, access, whether it develops — are read
+    /// from the loaded catalogue (`content/activities/`), which is their ONE
+    /// owner; restating them here was the duplication the catalogue kinds were
+    /// built to end. The rig and the outcome odds are the engine's own and are
+    /// supplied by each template's member below.
+    /// </summary>
+    private static ActivityTerms Stated(
+        ICatalog<ActivityDefinition> stated, ContentId template,
+        EntityId<IRig>? rig, OutcomeTable outcomes)
+    {
+        ActivityDefinition entry = stated[template];
 
-        Outcomes: WellTestOutcomes);
+        return new ActivityTerms(
+            entry.Id, Money.FromMillions(entry.CostMillions), entry.DurationTurns,
+            rig, entry.WeatherLimit, entry.RequiresAccess, entry.Develops, outcomes);
+    }
+
+    public static ActivityTerms DrillWellTerms(ICatalog<ActivityDefinition> stated) =>
+        Stated(stated, DrillTemplate, TheRig, DrillingOutcomes);
+
+    public static ActivityTerms WellTestTerms(ICatalog<ActivityDefinition> stated) =>
+        Stated(stated, new ContentId("well-test-buildup"), TheRig, WellTestOutcomes);
 
     /// <summary>Cheap, quick, and run on the rig that is already there.</summary>
-    public static ActivityTerms WirelineLogTerms { get; } = new(
-        Template: new ContentId("wireline-log"),
-        Cost: Money.FromMillions(0.15),
-        DurationTicks: 1,
-        Rig: TheRig,
-        WeatherLimit: 6.5,   // a wireline unit needs a stable deck to run tools on a thin cable
-        // a logging unit and its cable arrive by boat.
-        RequiresAccess: true,
-
-        Outcomes: WellTestOutcomes);
+    public static ActivityTerms WirelineLogTerms(ICatalog<ActivityDefinition> stated) =>
+        Stated(stated, new ContentId("wireline-log"), TheRig, WellTestOutcomes);
 
     /// <summary>Several times the price of a log for the same two properties,
     /// which is the decision.</summary>
-    public static ActivityTerms CoringTerms { get; } = new(
-        Template: new ContentId("cut-core"),
-        Cost: Money.FromMillions(0.9),
-        DurationTicks: 1,
-        Rig: TheRig,
-        WeatherLimit: 6.0,   // coring is drilling, and slower
-        // cut from a rig that is already being mobilised.
-        RequiresAccess: true,
-
-        Outcomes: WellTestOutcomes);
+    public static ActivityTerms CoringTerms(ICatalog<ActivityDefinition> stated) =>
+        Stated(stated, new ContentId("cut-core"), TheRig, WellTestOutcomes);
 
     /// <summary>
     /// NO RIG (SDD-007 §1's null case) and no wellbore: a survey is shot from the
@@ -623,16 +616,47 @@ internal static class Defaults
     /// — and what makes seismic the opening move rather than a queue behind
     /// drilling.
     /// </summary>
-    public static ActivityTerms SeismicSurveyTerms { get; } = new(
-        Template: new ContentId("seismic-3d"),
-        Cost: Money.FromMillions(2.5),
-        DurationTicks: 2,
-        Rig: null,
-        WeatherLimit: 5.5,   // streamers in the water are the most weather-limited thing offshore
-        // a survey vessel and its streamers.
-        RequiresAccess: true,
+    public static ActivityTerms SeismicSurveyTerms(ICatalog<ActivityDefinition> stated) =>
+        Stated(stated, new ContentId("seismic-3d"), null, SurveyOutcomes);
 
-        Outcomes: SurveyOutcomes);
+    /// <summary>
+    /// RECONNAISSANCE over a block, and the cheapest thing a company can buy
+    /// (SDD-010 §4b's S1 amendment).
+    ///
+    /// <para>Priced against the two things it sits between. Next to a hole it is
+    /// almost free, which is what makes looking before drilling the obvious move
+    /// rather than a luxury; next to nothing it is real money, which is what
+    /// stops a company shooting the whole licence on the first turn and getting
+    /// the old bright map back for a rounding error. Sixteen blocks is most of a
+    /// year's exploration budget.</para>
+    ///
+    /// <para>NO RIG, like the 3-D survey it feeds: shot from the surface, so it
+    /// runs while the rig turns elsewhere. One month, because a decision a player
+    /// is waiting on should come back inside the season they asked it in.</para>
+    /// </summary>
+    public static ActivityTerms BlockSurveyTerms(ICatalog<ActivityDefinition> stated) =>
+        Stated(stated, new ContentId("seismic-2d"), null, SurveyOutcomes);
+
+    /// <summary>
+    /// What a packaged plant costs to put on the ground (plans 22 §4, S2).
+    /// </summary>
+    /// <remarks>
+    /// <para>Priced as the biggest single commitment of the early game, and
+    /// deliberately: against a $50M opening balance it is most of what a company
+    /// has after a survey and a hole, so bringing a field on is a decision that
+    /// can be got wrong rather than a formality that follows a discovery.</para>
+    ///
+    /// <para>Less than the sum of its vessels, because it IS less — a skid
+    /// package is not eleven bespoke units, which is why a small field is
+    /// brought on this way. The individual installs above stay dearer per item
+    /// and buy capacity rather than existence.</para>
+    ///
+    /// <para>Four months: long enough that a company commits before it can be
+    /// sure of the price it will sell into, which is the risk a development
+    /// decision actually carries.</para>
+    /// </remarks>
+    public static ActivityTerms EarlyProductionFacilityTerms(ICatalog<ActivityDefinition> stated) =>
+        Stated(stated, new ContentId("install-early-production-facility"), null, SurveyOutcomes);
 
     /// <summary>
     /// The formation volume factor a shipped completion converts with.
@@ -820,6 +844,13 @@ internal static class Defaults
         Deadline: new Tick(120));
 
 
+    /// <summary>The two starting states, declared once in
+    /// <see cref="StartingStates"/> where a host can reach them.</summary>
+    public static ContentId OpeningPosition => StartingStates.OpeningPosition;
+
+    /// <inheritdoc cref="OpeningPosition"/>
+    public static ContentId BareGround => StartingStates.BareGround;
+
     public static Temperature ReservoirTemperature { get; } = Temperature.FromCelsius(93.3);
 
     // ------------------------------------------------------- the surface chain
@@ -890,16 +921,8 @@ internal static class Defaults
     /// route — and the money committed before a barrel moves through it is what
     /// makes overbuilding a small field hurt.
     /// </summary>
-    public static ActivityTerms ExpandExportTerms { get; } = new(
-        Template: new ContentId("expand-export"),
-        Cost: Money.FromMillions(45.0),
-        DurationTicks: 9,
-        Rig: null,
-        WeatherLimit: 5.0,   // pipeline and terminal work is heavy lift
-        // a lay barge, which is the largest mobilisation here.
-        RequiresAccess: true,
-
-        Outcomes: SurveyOutcomes);
+    public static ActivityTerms ExpandExportTerms(ICatalog<ActivityDefinition> stated) =>
+        Stated(stated, new ContentId("expand-export"), null, SurveyOutcomes);
 
     /// <summary>
     /// The gathering line from the header to the vessel (design 04 §5 stage 3,
@@ -995,25 +1018,17 @@ internal static class Defaults
     /// has run their field into the ground may find they cannot afford to leave.
     /// That is the authentic and uncomfortable shape of late life.</para>
     /// </summary>
-    public static ActivityTerms AbandonWellTerms { get; } = new(
-        Template: new ContentId("abandon-well"),
-        Cost: Money.FromMillions(3.0),
-        DurationTicks: 2,
-        Rig: null,
-        WeatherLimit: 6.0,   // rig-based, like the drilling it undoes
-        // the same rig, and a cement unit with it.
-        RequiresAccess: true,
-
-        Outcomes: SurveyOutcomes);
+    public static ActivityTerms AbandonWellTerms(ICatalog<ActivityDefinition> stated) =>
+        Stated(stated, AbandonTemplate, null, SurveyOutcomes);
 
     /// <summary>
     /// What an obligation is estimated at, by template (SDD-007 §6). Content in
     /// a finished game; here the abandonment activity's own price, so the
     /// liability on the books and the bill when it falls due cannot disagree.
     /// </summary>
-    public static Money AbandonmentCostOf(ContentId template) =>
-        template == AbandonWellTerms.Template
-            ? AbandonWellTerms.Cost
+    public static Money AbandonmentCostOf(ActivityTerms abandon, ContentId template) =>
+        template == abandon.Template
+            ? abandon.Cost
             : throw new ContentFault("SDD-007 §6", null,
                 $"no abandonment template '{template.Value}' is priced; an obligation " +
                 "nobody can cost is a liability nobody can plan for");
@@ -1023,16 +1038,8 @@ internal static class Defaults
     /// compression, dehydration and a tie-in to somewhere that will take the
     /// gas, which is most of a small facility.
     /// </summary>
-    public static ActivityTerms InstallGasPlantTerms { get; } = new(
-        Template: new ContentId("install-gas-plant"),
-        Cost: Money.FromMillions(18.0),
-        DurationTicks: 5,
-        Rig: null,
-        WeatherLimit: 5.0,   // heavy lift
-        // a module lifted onto the deck.
-        RequiresAccess: true,
-
-        Outcomes: SurveyOutcomes);
+    public static ActivityTerms InstallGasPlantTerms(ICatalog<ActivityDefinition> stated) =>
+        Stated(stated, new ContentId("install-gas-plant"), null, SurveyOutcomes);
 
 
 
@@ -1041,16 +1048,8 @@ internal static class Defaults
     /// pipeline, and slow — a tank is civil work, and the field goes on
     /// producing around it.
     /// </summary>
-    public static ActivityTerms InstallTankTerms { get; } = new(
-        Template: new ContentId("install-tank"),
-        Cost: Money.FromMillions(7.0),
-        DurationTicks: 6,
-        Rig: null,
-        WeatherLimit: 5.0,   // heavy lift
-        // the same, and heavier.
-        RequiresAccess: true,
-
-        Outcomes: SurveyOutcomes);
+    public static ActivityTerms InstallTankTerms(ICatalog<ActivityDefinition> stated) =>
+        Stated(stated, new ContentId("install-tank"), null, SurveyOutcomes);
 
 
     /// <summary>
@@ -1058,58 +1057,26 @@ internal static class Defaults
     /// tie-ins on a site that is already producing, so the work is done around a
     /// live field — dearer than a vessel for its size, and slower.
     /// </summary>
-    public static ActivityTerms InstallManifoldTerms { get; } = new(
-        Template: new ContentId("install-manifold"),
-        Cost: Money.FromMillions(9.0),
-        DurationTicks: 4,
-        Rig: null,
-        WeatherLimit: 4.5,   // a subsea lift is the least tolerant work in the catalogue
-        // a subsea structure set from a vessel.
-        RequiresAccess: true,
-
-        Outcomes: SurveyOutcomes);
+    public static ActivityTerms InstallManifoldTerms(ICatalog<ActivityDefinition> stated) =>
+        Stated(stated, new ContentId("install-manifold"), null, SurveyOutcomes);
 
     /// <summary>What a treater costs and how long it takes.</summary>
-    public static ActivityTerms InstallTreaterTerms { get; } = new(
-        Template: new ContentId("install-treater"),
-        Cost: Money.FromMillions(5.0),
-        DurationTicks: 3,
-        Rig: null,
-        WeatherLimit: 5.0,   // heavy lift
-        // a skid delivered and tied in.
-        RequiresAccess: true,
-
-        Outcomes: SurveyOutcomes);
+    public static ActivityTerms InstallTreaterTerms(ICatalog<ActivityDefinition> stated) =>
+        Stated(stated, new ContentId("install-treater"), null, SurveyOutcomes);
 
     /// <summary>SDD-006 §3c's own capital item (R9.1's own composition,
     /// finding 257) — a real compression train, priced against a gas plant
     /// module rather than a vessel: it is heavier iron than a separator and
     /// lighter than the plant it feeds.</summary>
-    public static ActivityTerms InstallCompressorTerms { get; } = new(
-        Template: new ContentId("install-compressor"),
-        Cost: Money.FromMillions(15.0),
-        DurationTicks: 4,
-        Rig: null,
-        WeatherLimit: 5.0,   // heavy lift
-        // a skid delivered and tied in.
-        RequiresAccess: true,
-
-        Outcomes: SurveyOutcomes);
+    public static ActivityTerms InstallCompressorTerms(ICatalog<ActivityDefinition> stated) =>
+        Stated(stated, new ContentId("install-compressor"), null, SurveyOutcomes);
 
     /// <summary>SDD-006 §3d's own capital item (R11.2's own composition,
     /// finding 259) — C11's own capex band prices a pump station one tier
     /// below a compressor station ($$$ against $$$$), which is what its
     /// cost is set against here.</summary>
-    public static ActivityTerms InstallLiquidPumpStationTerms { get; } = new(
-        Template: new ContentId("install-pump-station"),
-        Cost: Money.FromMillions(10.0),
-        DurationTicks: 3,
-        Rig: null,
-        WeatherLimit: 5.0,   // heavy lift
-        // a skid delivered and tied in.
-        RequiresAccess: true,
-
-        Outcomes: SurveyOutcomes);
+    public static ActivityTerms InstallLiquidPumpStationTerms(ICatalog<ActivityDefinition> stated) =>
+        Stated(stated, new ContentId("install-pump-station"), null, SurveyOutcomes);
 
     /// <summary>
     /// What an acid job costs and how long it takes (R10-V4). Cheap against a
@@ -1117,16 +1084,8 @@ internal static class Defaults
     /// maintenance a company defers because it always looks affordable later,
     /// and the plugging goes on either way.
     /// </summary>
-    public static ActivityTerms RemediateInjectorTerms { get; } = new(
-        Template: new ContentId("remediate-injector"),
-        Cost: Money.FromMillions(1.2),
-        DurationTicks: 1,
-        Rig: null,
-        WeatherLimit: 6.5,   // a wellsite intervention, lighter than a rig job
-        // chemicals pumped from stock held on the platform.
-        RequiresAccess: false,
-
-        Outcomes: SurveyOutcomes);
+    public static ActivityTerms RemediateInjectorTerms(ICatalog<ActivityDefinition> stated) =>
+        Stated(stated, new ContentId("remediate-injector"), null, SurveyOutcomes);
 
     /// <summary>
     /// What an acid job on a PRODUCER costs (R12b.7, finding 253). Same
@@ -1134,15 +1093,8 @@ internal static class Defaults
     /// wireline and pump crew — priced a little dearer because this one
     /// leaves an asset behind rather than restoring one.
     /// </summary>
-    public static ActivityTerms StimulateWellTerms { get; } = new(
-        Template: new ContentId("stimulate-well"),
-        Cost: Money.FromMillions(1.8),
-        DurationTicks: 1,
-        Rig: null,
-        WeatherLimit: 6.5,
-        RequiresAccess: false,
-
-        Outcomes: SurveyOutcomes);
+    public static ActivityTerms StimulateWellTerms(ICatalog<ActivityDefinition> stated) =>
+        Stated(stated, new ContentId("stimulate-well"), null, SurveyOutcomes);
 
     /// <summary>
     /// What an acid job removes from a producer's skin (SDD-003 §6's R12b.7
@@ -1169,45 +1121,17 @@ internal static class Defaults
     /// needs a surface interface to a compressed supply — first-pass
     /// estimates, not calibrated against a fixture.</para>
     /// </summary>
-    public static ActivityTerms InstallRodPumpTerms { get; } = new(
-        Template: new ContentId("install-rod-pump"),
-        Cost: Money.FromMillions(2.5),
-        DurationTicks: 1,
-        Rig: null,
-        WeatherLimit: 6.5,
-        RequiresAccess: false,
+    public static ActivityTerms InstallRodPumpTerms(ICatalog<ActivityDefinition> stated) =>
+        Stated(stated, new ContentId("install-rod-pump"), null, SurveyOutcomes);
 
-        Outcomes: SurveyOutcomes);
+    public static ActivityTerms InstallPcpTerms(ICatalog<ActivityDefinition> stated) =>
+        Stated(stated, new ContentId("install-pcp"), null, SurveyOutcomes);
 
-    public static ActivityTerms InstallPcpTerms { get; } = new(
-        Template: new ContentId("install-pcp"),
-        Cost: Money.FromMillions(2.7),
-        DurationTicks: 1,
-        Rig: null,
-        WeatherLimit: 6.5,
-        RequiresAccess: false,
+    public static ActivityTerms InstallEspTerms(ICatalog<ActivityDefinition> stated) =>
+        Stated(stated, new ContentId("install-esp"), null, SurveyOutcomes);
 
-        Outcomes: SurveyOutcomes);
-
-    public static ActivityTerms InstallEspTerms { get; } = new(
-        Template: new ContentId("install-esp"),
-        Cost: Money.FromMillions(4.5),
-        DurationTicks: 1,
-        Rig: null,
-        WeatherLimit: 6.5,
-        RequiresAccess: false,
-
-        Outcomes: SurveyOutcomes);
-
-    public static ActivityTerms InstallGasLiftTerms { get; } = new(
-        Template: new ContentId("install-gas-lift"),
-        Cost: Money.FromMillions(3.2),
-        DurationTicks: 1,
-        Rig: null,
-        WeatherLimit: 6.5,
-        RequiresAccess: false,
-
-        Outcomes: SurveyOutcomes);
+    public static ActivityTerms InstallGasLiftTerms(ICatalog<ActivityDefinition> stated) =>
+        Stated(stated, new ContentId("install-gas-lift"), null, SurveyOutcomes);
 
     /// <summary>
     /// A PLANNED OVERHAUL (SDD-012 §3). A month and rather less than a new
@@ -1219,16 +1143,8 @@ internal static class Defaults
     /// equipment cost what replacing it costs, maintenance would never be the
     /// answer to anything and §3's three strategies would collapse to one.</para>
     /// </summary>
-    public static ActivityTerms ServiceEquipmentTerms { get; } = new(
-        Template: new ContentId("service-equipment"),
-        Cost: Money.FromMillions(0.8),
-        DurationTicks: 1,
-        Rig: null,
-        WeatherLimit: 8.0,   // planned maintenance happens inside the module it maintains
-        // planned work by the crew who are already there.
-        RequiresAccess: false,
-
-        Outcomes: SurveyOutcomes);
+    public static ActivityTerms ServiceEquipmentTerms(ICatalog<ActivityDefinition> stated) =>
+        Stated(stated, new ContentId("service-equipment"), null, SurveyOutcomes);
 
     /// <summary>
     /// A CONDITION-MONITORING KIT (catalogue C14, SDD-012 §3). Vibration and
@@ -1241,16 +1157,8 @@ internal static class Defaults
     /// instrumenting a dozen elements is worth it before any of them has told
     /// you anything.</para>
     /// </summary>
-    public static ActivityTerms InstallMonitoringTerms { get; } = new(
-        Template: new ContentId("install-monitoring"),
-        Cost: Money.FromMillions(0.2),
-        DurationTicks: 1,
-        Rig: null,
-        WeatherLimit: 8.0,   // fitting a kit to equipment already in place, under cover
-        // kit that has to be carried out and fitted.
-        RequiresAccess: true,
-
-        Outcomes: SurveyOutcomes);
+    public static ActivityTerms InstallMonitoringTerms(ICatalog<ActivityDefinition> stated) =>
+        Stated(stated, new ContentId("install-monitoring"), null, SurveyOutcomes);
 
     /// <summary>
     /// AN EMERGENCY REPAIR (SDD-012 §3, R20d.26.2 amendment). Three times the
@@ -1265,27 +1173,11 @@ internal static class Defaults
     /// $17M — so the asymmetry ships in money alone, and the measurement decides
     /// whether that is enough to make preventive work a strategy.</para>
     /// </summary>
-    public static ActivityTerms RepairEquipmentTerms { get; } = new(
-        Template: new ContentId("repair-equipment"),
-        Cost: Money.FromMillions(2.4),
-        DurationTicks: 1,
-        Rig: null,
-        WeatherLimit: 7.5,   // emergency work is done in weather planned work would wait out
-        // an emergency fix with the spares already aboard.
-        RequiresAccess: false,
+    public static ActivityTerms RepairEquipmentTerms(ICatalog<ActivityDefinition> stated) =>
+        Stated(stated, new ContentId("repair-equipment"), null, SurveyOutcomes);
 
-        Outcomes: SurveyOutcomes);
-
-    public static ActivityTerms InstallSeparatorTerms { get; } = new(
-        Template: new ContentId("install-separator"),
-        Cost: Money.FromMillions(6.0),
-        DurationTicks: 3,
-        Rig: null,
-        WeatherLimit: 5.0,   // heavy lift
-        // a vessel craned into a socket.
-        RequiresAccess: true,
-
-        Outcomes: SurveyOutcomes);
+    public static ActivityTerms InstallSeparatorTerms(ICatalog<ActivityDefinition> stated) =>
+        Stated(stated, new ContentId("install-separator"), null, SurveyOutcomes);
 
     /// <summary>
     /// What the sales contract requires. EMPTY, and honestly: a specification is
@@ -1452,6 +1344,32 @@ internal static class Defaults
     public static ModelSlot FluidSlot { get; } = new("fluid-properties");
 
     /// <summary>
+    /// The module's own fluid choice, bound when a profile leaves
+    /// <see cref="FluidSlot"/> unnamed (SDD-005 §7b). Named here so the
+    /// manager's resolution and the plugin registration cannot drift apart.
+    /// </summary>
+    public static ContentId BlackOilCorrelations { get; } = new("black-oil-correlations");
+
+    // --------------------------------------------- dependency-managed values
+    //
+    // Plans 27 §3 — S1/S2 of the module review. These were literals inside
+    // module bodies, the one place no style, profile or content could reach;
+    // the DependencyManager constructs from them now. Content in a finished
+    // game (R20.4).
+
+    /// <summary>The concession's royalty share of gross revenue.</summary>
+    public static double RoyaltyRate => 0.125;
+
+    /// <summary>Tax on profit after royalty, recoverable costs and loss carry.</summary>
+    public static double TaxRate => 0.40;
+
+    /// <summary>λ_base — how often brand-new equipment fails, per year (SDD-012 §2).</summary>
+    public static double HazardBaseRatePerYear => 0.05;
+
+    /// <summary>k_h — how sharply failure accelerates as condition falls (SDD-012 §2).</summary>
+    public static double HazardConditionExponent => 4.0;
+
+    /// <summary>
     /// The full model everywhere. The EMPTY bundle, and correctly so: a profile
     /// names departures from the shipped set, and simulation IS the shipped set.
     /// </summary>
@@ -1594,6 +1512,20 @@ internal static class Defaults
         MaxSellableFraction: 0.5,
         DistressDiscount: 0.25);
 
+    /// <summary>
+    /// How many months a company may sit in <c>Amortising</c> before its
+    /// partners take it over (SDD-014 §5a's finding-276 amendment).
+    /// </summary>
+    /// <remarks>
+    /// <para>Lifted out of <c>ScenarioRunner</c> so a build can be composed
+    /// without the mechanic. It could NOT be switched off through the working
+    /// interest terms: the takeover also asks whether the partner share has
+    /// reached the sellable maximum, and a maximum of zero makes that
+    /// <c>0 >= 0</c> — true forever. Zeroing one mechanic to disable another
+    /// would have armed it instead.</para>
+    /// </remarks>
+    public const int TakeoverAfterAmortisingTicks = 12;
+
     /// <summary>An untrained crew's strength on the barrier's own [0, 1]
     /// scale (SDD-007 §4.1's finding-265 amendment) — noticeably below the
     /// flat 0.9 this composition charged every crew before there was a lever
@@ -1620,21 +1552,6 @@ internal static class Defaults
     /// <summary>One-time, like a technology acquisition — comparable to a
     /// facility's first upgrade rung.</summary>
     public static Money CrewTrainingCost { get; } = Money.FromMillions(2.0);
-
-    /// <summary>
-    /// SDD-006 §7a.3's finding-268 amendment — a berth loads ONE standard
-    /// parcel at a time rather than draining continuously. Aframax class
-    /// (~600,000 bbl), a globally recognised mid-size crude parcel: 53% of
-    /// the shipped E1 tank (150,000 t), so a cargo and continuing production
-    /// both fit in it at once, and roughly 6.6 ticks of the shipped field's
-    /// own make to fill alone — meaningfully short of shipping every month
-    /// and meaningfully short of shipping once a year, the range §7a.1 asked
-    /// this decision to land in. A bigger export tier loads it faster
-    /// (<c>Berth.LoadingRate</c> already carries that decision); this stays
-    /// one fixed size regardless, because "ships come in standard parcels"
-    /// (§7a.1) is a statement about the parcel, not about the terminal.
-    /// </summary>
-    public static Mass CargoSize { get; } = new(80_000_000.0);
 
     /// <summary>
     /// SDD-006 §7a.4's finding-269 amendment. NOT the real-world charter-party
@@ -1729,7 +1646,7 @@ internal static class Defaults
             WorkCommitment:
             [
                 new Contracts.CommitmentItem(
-                    DrillWellTerms.Template, Quantity: 1.0, Due: new Tick(60)),
+                    DrillTemplate, Quantity: 1.0, Due: new Tick(60)),
             ],
             Bond: Money.FromMillions(12.0),
             Relinquishment: [],
@@ -2045,7 +1962,59 @@ public sealed record EngineSettings(
     /// <para>Order fixes override precedence — base content is
     /// <c>DeclaredOrder</c> 0 and a mod is higher (§7).</para>
     /// </summary>
-    IReadOnlyList<IContentSource> Content)
+    IReadOnlyList<IContentSource> Content,
+
+    /// <summary>
+    /// What the company opens with (plans 22 §4, S2).
+    ///
+    /// <para><c>opening-position</c> starts it holding a commissioned plant, the
+    /// way every run did before this existed. <c>bare-ground</c> starts it with
+    /// a yard, a licence and a bank balance, and the processing train is a
+    /// construction project — which is the game 22 asks for.</para>
+    ///
+    /// <para><b>Composition-time, like <see cref="RealityProfile"/>, and for the
+    /// same reason:</b> it decides what gets registered before anything is
+    /// built, so it cannot be a decision taken later.</para>
+    ///
+    /// <para><b>The same name as <c>Scenario.StartingState</c> deliberately.</b>
+    /// That field describes exactly this — "a company's cash, its rigs, an
+    /// inherited field" — and is read by nothing today. When scenarios reach
+    /// composition it feeds this, and there is one concept rather than two
+    /// (law L5). Naming it something else now would guarantee two.</para>
+    ///
+    /// <para>Required, with no default: law L2. A default here would quietly
+    /// hand every unconsidered caller a free refinery.</para>
+    /// </summary>
+    ContentId StartingState,
+
+    /// <summary>
+    /// The rules the run is played under (plans 23).
+    ///
+    /// <para><c>realistic</c> is an operator working a field it holds;
+    /// <c>frontier</c> is a company on ground nobody has worked, which is the
+    /// Settlers position and needs different permissions — not different
+    /// physics.</para>
+    ///
+    /// <para><b>A third question, not a restatement of the other two.</b>
+    /// <see cref="RealityProfile"/> decides which model computes a thing;
+    /// <see cref="StartingState"/> decides what the company opens holding; this
+    /// decides what it may do. A bare-ground start under realistic rules is a
+    /// legitimate and very hard scenario.</para>
+    ///
+    /// <para>Required, with no default: law L2.</para>
+    /// </summary>
+    ContentId Rules,
+
+    /// <summary>
+    /// Which game style this build was composed at (plans 25).
+    /// </summary>
+    /// <remarks>
+    /// Recorded rather than derived: the three axes above say WHAT was composed,
+    /// and this says WHO chose it. A save carries it so a reload composes the
+    /// product it was played in — the defect plan 23 §4 found once already, when
+    /// the Godot host spelled the axes out separately on two paths.
+    /// </remarks>
+    ContentId Style)
 {
     // Finding 131: the compiler compares a collection member by REFERENCE, so
     // two settings naming the same sources would differ. Element equality is
@@ -2059,12 +2028,14 @@ public sealed record EngineSettings(
         && MinimumLogLevel == other.MinimumLogLevel
         && FaultHandling == other.FaultHandling
         && RealityProfile == other.RealityProfile
+        && StartingState == other.StartingState
+        && Rules == other.Rules
         && Structural.Equal(Content, other.Content);
 
     public override int GetHashCode() =>
         HashCode.Combine(
             Epoch, WorldSeed, Retention, MinimumLogLevel, FaultHandling, RealityProfile,
-            Structural.HashOf(Content));
+            StartingState, HashCode.Combine(Rules, Structural.HashOf(Content)));
 }
 
 /// <summary>
@@ -2170,7 +2141,9 @@ public static class EngineBuilder
                     IReadOnlyList<OGSim.World.TerrainClassDefinition> TerrainClasses,
                     OGSim.Company.TakeOrPayTerms TakeOrPay,
                     OGSim.Wells.LiftTiers LiftTiers,
-                    IReadOnlyList<FluidSystemDefinition> FluidSystems)? Ladders(
+                    IReadOnlyList<FluidSystemDefinition> FluidSystems,
+                    ICatalog<ActivityDefinition> Activities,
+                    StartingStateDefinition StartingState)? Ladders(
         EngineSettings settings)
     {
         ContentLoadResult result = FacilityContent(settings);
@@ -2180,7 +2153,12 @@ public static class EngineBuilder
                loaded.Catalogues.Of<OGSim.World.TerrainClassDefinition>().All,
                TakeOrPayFrom(loaded.Catalogues),
                LiftTiersFrom(loaded.Catalogues),
-               loaded.Catalogues.Of<FluidSystemDefinition>().All)
+               loaded.Catalogues.Of<FluidSystemDefinition>().All,
+               loaded.Catalogues.Of<ActivityDefinition>(),
+
+               // Resolved BY the load: an unknown starting state is a content
+               // refusal naming the id, where every other unknown id already is.
+               loaded.Catalogues.Of<StartingStateDefinition>()[settings.StartingState])
             : null;
     }
 
@@ -2310,6 +2288,15 @@ public static class EngineBuilder
                 new EspContentKind(),
                 new GasLiftContentKind(),
                 new FluidSystemContentKind(),
+
+                // The game catalogues (plans 28). Validated at every build so a
+                // broken reference or a cycle refuses at startup by name,
+                // rather than shipping as design data nothing checks.
+                new ActivityContentKind(),
+                new EquipmentContentKind(),
+                new RelationContentKind(),
+                new GameStyleContentKind(),
+                new StartingStateContentKind(),
             ],
             new PluginRegistry())
             .LoadAll(settings.Content);
@@ -2321,25 +2308,37 @@ public static class EngineBuilder
         IReadOnlyList<OGSim.World.TerrainClassDefinition> terrainClasses,
         OGSim.Company.TakeOrPayTerms takeOrPay,
         OGSim.Wells.LiftTiers liftTiers,
-        IReadOnlyList<FluidSystemDefinition> fluidSystems) =>
-    [
-        new SubsurfaceModule(),
-        new WellsModule(),
-        new FlowModule(),
-        new FacilitiesModule(ladders),
-        new OperationsModule(),
-        new CompanyModule(),
-        new InformationModule(),
-        new WorldModule(terrainClasses, Defaults.Climate.Id, fluidSystems),
-        new CapabilitiesModule(registry, Defaults.Eras, clock),
-        new IntegrityModule(),
-        new EnvironmentModule(Defaults.Climate),
-        new HseModule(),
-        new ObjectivesModule(),
-        new MaterialsModule(profile, fluidSystems),
-        new FieldModule(ladders, takeOrPay, liftTiers, fluidSystems),
-        new DiagnosticsModule(audit, clock, random),
-    ];
+        IReadOnlyList<FluidSystemDefinition> fluidSystems,
+        ICatalog<ActivityDefinition> stated,
+        StartingStateDefinition startingState, RuleSet rules, StyleTerms terms)
+    {
+        // WHICH MECHANICS THIS BUILD CARRIES AND AT WHAT VALUES (plans 27 §2).
+        // Built once, from the style's terms, the starting state and the
+        // profile, and handed to the modules that previously decided these
+        // questions for themselves. Modules ask; they never decide.
+        DependencyManager dependencies = DependencyManager.For(terms, startingState, profile);
+
+        return
+        [
+            new SubsurfaceModule(),
+            new WellsModule(),
+            new FlowModule(dependencies),
+            new FacilitiesModule(ladders, dependencies),
+            new OperationsModule(),
+            new CompanyModule(dependencies, terms),
+            new InformationModule(),
+            new WorldModule(terrainClasses, Defaults.Climate.Id, fluidSystems),
+            new CapabilitiesModule(registry, Defaults.Eras, clock),
+            new IntegrityModule(dependencies),
+            new EnvironmentModule(Defaults.Climate),
+            new HseModule(dependencies),
+            new ObjectivesModule(),
+            new MaterialsModule(dependencies, fluidSystems),
+            new FieldModule(ladders, takeOrPay, liftTiers, fluidSystems, rules, terms,
+                            stated, dependencies),
+            new DiagnosticsModule(audit, clock, random),
+        ];
+    }
 
     /// <summary>
     /// START A NEW GAME (SDD-010 §4, SDD-017 §1b). Composes the engine, then runs
@@ -2475,7 +2474,7 @@ public static class EngineBuilder
         ArgumentNullException.ThrowIfNull(settings);
 
         if (Ladders(settings) is not var (ladders, registry, terrainClasses, takeOrPay, liftTiers,
-                                           fluidSystems))
+                                           fluidSystems, stated, startingState))
             return new BuildRefusedByContent(Failures(settings));
 
         var clock = new SimulationClock(settings.Epoch);
@@ -2485,7 +2484,9 @@ public static class EngineBuilder
             settings,
             ShippedModules(audit, clock, new RandomSource(settings.WorldSeed),
                            Defaults.ProfileNamed(settings.RealityProfile), ladders, registry,
-                           terrainClasses, takeOrPay, liftTiers, fluidSystems),
+                           terrainClasses, takeOrPay, liftTiers, fluidSystems, stated,
+                           startingState, RuleSets.Named(settings.Rules),
+                           GameStyles.Named(settings.Style).Terms),
             clock, audit);
     }
 
@@ -2508,7 +2509,7 @@ public static class EngineBuilder
         ArgumentNullException.ThrowIfNull(settings);
 
         if (Ladders(settings) is not var (ladders, registry, terrainClasses, takeOrPay, liftTiers,
-                                           fluidSystems))
+                                           fluidSystems, stated, startingState))
             return new BuildRefusedByContent(Failures(settings));
 
         var clock = new SimulationClock(settings.Epoch);
@@ -2520,7 +2521,9 @@ public static class EngineBuilder
             settings,
             ShippedModules(audit, clock, new RandomSource(settings.WorldSeed),
                            Defaults.ProfileNamed(settings.RealityProfile), ladders, registry,
-                           terrainClasses, takeOrPay, liftTiers, fluidSystems),
+                           terrainClasses, takeOrPay, liftTiers, fluidSystems, stated,
+                           startingState, RuleSets.Named(settings.Rules),
+                           GameStyles.Named(settings.Style).Terms),
             clock, audit);
     }
 

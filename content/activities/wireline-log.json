@@ -1,0 +1,12 @@
+{
+  "kind": "activity",
+  "id": "wireline-log",
+  "name": "$loc:activity.wireline-log",
+  "group": "evaluation",
+  "costMillions": 0.15,
+  "durationTurns": 1,
+  "weatherLimit": 6.5,
+  "requiresAccess": true,
+  "note": "The cheapest measurement in the game. Porosity, at a price you will not notice.",
+  "develops": true
+}

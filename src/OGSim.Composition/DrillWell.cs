@@ -51,7 +51,7 @@ internal sealed class DrillWellActivity(
     IBeliefStore beliefs,
     OGSim.Subsurface.SubsurfaceState subsurface,
     ObservationDoor door,
-    OGSim.Company.Licence licence) : Activity<DrillWellCommand>(terms)
+    IDrillingRule rule) : Activity<DrillWellCommand>(terms)
 {
     /// <summary>A well is PP&amp;E: the money buys something the company still
     /// owns next month (SDD-009 §1).</summary>
@@ -91,35 +91,25 @@ internal sealed class DrillWellActivity(
             reasons.Add(new RejectionReason(
                 "$loc:reject.invalid-depth", "a well must have a positive depth"));
 
-        // A well needs somewhere to tie in (SDD-006 §1b). Checked HERE, before
-        // the money moves: the header is full or it is not, and a player told so
-        // after four months of rig time has been charged for a hole that could
-        // never have produced.
-        if (!field.HasFreeSlot)
-            reasons.Add(new RejectionReason(
-                "$loc:reject.no-manifold-slot",
-                "every slot on the manifold is taken; a well with nowhere to tie in " +
-                "cannot flow, and a bigger header has to be installed first"));
+        // WHERE A WELL MAY GO, asked of the rule set the run is played under
+        // (plans 23). An operator drills into a plant that can take the
+        // production; a frontier company drills to find out whether a plant is
+        // worth building, and its well waits shut in until one is. Checked
+        // BEFORE the money moves either way — a player told after four months of
+        // rig time has been charged for a hole that could never have produced.
+        reasons.AddRange(rule.Refusals(field));
 
         // A LOST LICENCE REFUSES FURTHER DRILLING (SDD-011 §1's R20d.9
         // amendment). Nothing already producing stops — this is checked at
-        // ORDER time, not at the wells themselves, because design 02 §3.4's
-        // diagram routes every terminal state through `Abandoned` and a
-        // licence loss is not one of its edges into it.
+        // TENURE IS NOT THIS ACTIVITY'S BUSINESS. The licence check used to sit
+        // here, which made drilling the one verb of thirty-one that knew about
+        // it — so a company that had forfeited its acreage could still order a
+        // separator onto it. It lives in `ActivityOrders` now, with every other
+        // refusal that applies to any activity.
         //
-        // TWO REASONS, NOT ONE (SDD-011 §1's R16 amendment, finding 254). A
-        // company that met every commitment and simply ran out of term broke
-        // no promise, and telling it otherwise would be a fabrication this
-        // project's own standards forbid.
-        if (!licence.IsLive)
-            reasons.Add(licence.LossReason == OGSim.Company.LicenceLossReason.Expired
-                ? new RejectionReason(
-                    "$loc:reject.licence-expired",
-                    "the licence's term has ended; no further development is possible here")
-                : new RejectionReason(
-                    "$loc:reject.licence-lost",
-                    "the licence's work commitment went unmet and the bond was " +
-                    "forfeited; no further development is possible here"));
+        // The licence is still held here, and for the one thing that IS this
+        // activity's business: recording the well that discharges a work
+        // commitment (see Complete).
 
         return reasons;
     }
@@ -177,7 +167,10 @@ internal sealed class DrillWellActivity(
         // above) delivers nothing. Matched by CONTENT ID — `Terms.Template` is
         // the same id `CommitmentItem.Kind` names — the same convention a
         // facility rung's `requiresTech` matches a registry node's id by.
-        licence.RecordDelivery(Terms.Template, 1.0);
+        // THE DELIVERY IS RECORDED BY THE FIELD, where a well comes into
+        // existence — so a well placed by a scenario or by world generation
+        // discharges the commitment too, which it manifestly should and used
+        // not to.
 
         // AND THE HOLE ITSELF TELLS THE COMPANY WHAT IT FOUND. A discovery
         // well penetrates the column, logs it and samples the rock, so a company

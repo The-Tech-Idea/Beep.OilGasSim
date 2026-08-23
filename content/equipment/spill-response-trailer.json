@@ -1,0 +1,9 @@
+{
+  "kind": "equipment",
+  "id": "spill-response-trailer",
+  "name": "$loc:equipment.spill-response-trailer",
+  "group": "safety",
+  "costMillions": 0.9,
+  "buildTurns": 1,
+  "note": "Everything needed in the first hour."
+}

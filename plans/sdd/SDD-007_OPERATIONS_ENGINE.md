@@ -311,10 +311,26 @@ lands in.
 > than faulted at run time (law L3, structurally).
 >
 > *Open:* `Aim` returns a `Length Depth` because drilling is the only template so
-> far that is aimed at more than an entity. A survey is aimed at an area and a
-> workover at a wellbore; the per-template parameter block that generalises this
-> is R12b.16 and is **not** to be invented at a call site (F-4). Until it lands,
-> a template with no depth passes zero and says so.
+> far that is aimed at more than an entity. A workover is aimed at a wellbore;
+> the per-template parameter block that generalises this is **not** to be
+> invented at a call site (F-4). Until it lands, a template with no depth passes
+> zero and says so.
+>
+> **S1 amendment — the survey case is answered, and not by this open item.**
+> This paragraph read "a survey is aimed at an area", and it was the reason an
+> area survey looked blocked: an area is a centre and a radius, neither of which
+> fits an `EntityRef`. The answer was to stop treating the area as a parameter.
+> Acreage is licensed in **blocks**, a block is an entity, and an activity aimed
+> at a block is aimed at exactly one `EntityRef` — so `seismic-2d` needs nothing
+> this item would provide ([SDD-010](SDD-010_WORLD_GENERATION.md) §4b).
+>
+> **The phase id was stale, which is worth recording.** The text attributed the
+> parameter block to R12b.16; R12b.16 shipped, and what it shipped was "one
+> activity, one class" (`IActivity`/`Activity<TCommand>`). The generalisation has
+> no phase and is not scheduled, so anything that claims to be blocked on it is
+> blocked on nothing — the workover case above is the only caller still waiting,
+> and it should be given a phase when a workover is built rather than inheriting
+> a number that already means something else.
 
 ## 5b. Operations that move mass
 

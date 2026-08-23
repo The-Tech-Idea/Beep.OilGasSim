@@ -52,7 +52,10 @@ public enum EntityKind
     Berth = 11, Cargo = 12, CustodyPoint = 13, Licence = 14, Company = 15,
     Operation = 16, Rig = 17, Prospect = 18, Play = 19, Basin = 20,
     Settlement = 21, FlowElement = 22, Objective = 23, Barrier = 24,
-    Threat = 25
+    Threat = 25,
+    // Block is appended rather than slotted next to Basin: the values are
+    // pinned, so position is cosmetic and 8 stays retired.
+    Block = 26
 }
 
 /// <summary>

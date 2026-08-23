@@ -68,7 +68,8 @@ public sealed class GameplayTests
     /// the read model is reporting (SDD-009 §6's ED4).</summary>
     private static Money Quoted(Engine engine) =>
         Money.RoundHalfEven(
-            Defaults.DrillWellTerms.Cost.Cents * engine.ReadModel!.CostIndex);
+            Defaults.DrillWellTerms(Fixture.Activities()).Cost.Cents
+            * engine.ReadModel!.CostIndex);
 
     private static DrillWellCommand Drill(
         Engine engine, EntityId<IReservoirCompartmentEntity> target, double depth = 2000.0) =>

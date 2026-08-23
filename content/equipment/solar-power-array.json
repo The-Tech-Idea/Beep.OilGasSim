@@ -1,0 +1,9 @@
+{
+  "kind": "equipment",
+  "id": "solar-power-array",
+  "name": "$loc:equipment.solar-power-array",
+  "group": "utilities",
+  "costMillions": 2.6,
+  "buildTurns": 2,
+  "note": "Cuts the fuel bill and the flaring score with it."
+}

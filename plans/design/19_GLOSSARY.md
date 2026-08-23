@@ -26,6 +26,7 @@ These six cause the most confusion and are pinned first.
 | **Reservoir** | The rock volume holding an accumulation | "field", "pool", "the whole asset" | `IReservoir` |
 | **Compartment** | A hydraulically connected volume — **the unit pressure is simulated on** | *(rarely distinguished)* | `IReservoirCompartment` |
 | **Facility** | A site and container. **Owns no process behaviour** | "a processing plant" | `IFacility` |
+| **Early production facility** | A packaged, skid-mounted plant that brings a field on before a permanent one is built. The minimum train: header, flowline, separator, treating, metering, storage, gas and water handling | "an EPF" | `PlantBuilder` |
 
 ---
 
@@ -37,9 +38,10 @@ These six cause the most confusion and are pinned first.
 | **API gravity** | Density scale: `141.5/SG − 131.5`. Higher is lighter and usually worth more. **Nonlinear — never average two API values** |
 | **Aquifer** | A water body connected to a reservoir, providing pressure support and eventually water |
 | **Basin** | A sedimentary region; the largest exploration unit |
+| **Block** | A parcel of licensed acreage, and the unit exploration is bought in. A basin is divided into blocks; a company shoots one and learns what closures it holds |
 | **Bubble point (`Pb`)** | The pressure at which gas begins to come out of solution. **The most consequential number in a reservoir** |
 | **Charge** | Whether hydrocarbons actually migrated into a trap |
-| **Compartmentalisation** | A reservoir divided into pressure-isolated blocks. Usually discovered from data, not known in advance |
+| **Compartmentalisation** | A reservoir divided into pressure-isolated compartments. Usually discovered from data, not known in advance |
 | **Condensate** | Light liquid that drops out of gas as pressure falls |
 | **Contact** | The surface between fluids: gas-oil contact, oil-water contact. Moves during production |
 | **Drive mechanism** | How a reservoir maintains pressure as fluid is withdrawn. Determines recovery factor |
@@ -208,6 +210,12 @@ These six cause the most confusion and are pinned first.
 | **Standing indicator** | A value visible without being sought, required for any loop over two years |
 | **Auto-pause** | The host stopping the clock on an event at or above a threshold. Changes what is seen, never what happened |
 | **Reality profile** | The bundle of fidelity selections, Advisor levels, forgiveness levers and alert profile a game runs under. Stamped on every score |
+| **Game mode** | One named point in the three composition-time axes — reality profile, starting state, rule set. It is what a product IS: `days` and `engineer` are the same engine composed at two named points, never one engine with a difficulty branch |
+| **Rule set** | Which implementation fills each contested rule slot — what a company may DO. `realistic` and `frontier`. Not a multiplier and not a difficulty: a rule either refuses or it does not |
+| **Starting state** | What a company opens holding. `opening-position` is a commissioned plant; `bare-ground` is a yard, a licence and a balance |
+| **Mechanic** | A player-facing system a build may or may not have at all — licence, takeover, demurrage. Distinct from a RULE (what you may do with a mechanic you have) and from a REALITY PROFILE (how faithfully it is modelled) |
+| **Mechanic set** | Which optional mechanics a build has ON. Names what is on, never what is off, so a mechanic added later is off in every preset and save that predates it |
+| **Neutral model** | The implementation registered when a mechanic is OFF: it never refuses, never charges, never fires. A switch has two positions, ON and NEUTRAL — an *easier* version is a difficulty slider, not a mode |
 | **Advisor** | The player-side agent providing recommendations and automation. Reads only the read model, acts only through the command bus, never sees truth |
 | **Assist level** | Per-domain: Manual · Advise · Confirm · Auto. Changeable at any time; exploration judgement is capped at Advise |
 | **Forgiveness** | The axis controlling how hard failure bites — hazard intensity, financial safety nets, licence grace, save policy. Model and content selection, never multipliers |

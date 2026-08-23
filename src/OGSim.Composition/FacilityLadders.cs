@@ -143,7 +143,8 @@ public sealed record FacilityLadders(
                 new Facilities.GasPlantTier(d.Id, new MassRate(d.CapacityKgPerSecond))),
 
             Rungs<ExportLineDefinition, Facilities.ExportTier>(catalogues, "export-line", d =>
-                new Facilities.ExportTier(d.Id, new MassRate(d.OfftakeKgPerSecond))),
+                new Facilities.ExportTier(
+                    d.Id, new MassRate(d.OfftakeKgPerSecond), new Mass(d.ParcelSizeKilograms))),
 
             Rungs<ManifoldDefinition, Facilities.ManifoldTier>(catalogues, "manifold", d =>
                 new Facilities.ManifoldTier(d.Id, d.Slots)),

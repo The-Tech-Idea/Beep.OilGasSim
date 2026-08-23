@@ -1,0 +1,9 @@
+{
+  "kind": "equipment",
+  "id": "drilling-rig",
+  "name": "$loc:equipment.drilling-rig",
+  "group": "drilling",
+  "costMillions": 15.0,
+  "buildTurns": 2,
+  "note": "The rig itself. Every hole in the field is this unit standing somewhere."
+}

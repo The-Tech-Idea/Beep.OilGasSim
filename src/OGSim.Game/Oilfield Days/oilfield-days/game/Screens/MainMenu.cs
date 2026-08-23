@@ -183,7 +183,10 @@ public sealed partial class MainMenu : Control
         notes.AddThemeConstantOverride("separation", 6);
 
         Note(notes, "NoteRun", "The run", KitTheme.Green,
-            "One basin. Ten years. $600M, or broke.");
+            // NO FIGURE HERE, and deliberately: the menu runs before any
+            // engine does, so it has no scenario to ask and anything it
+            // stated would be a number it kept rather than read.
+            "One basin. Ten years. Build a company, or go broke.");
 
         Note(notes, "NoteEngine", "The engine", KitTheme.Sky,
             "OGSim decides it all. A tick is a month; a month is thirty days.");

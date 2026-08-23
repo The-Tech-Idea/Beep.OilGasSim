@@ -1,0 +1,9 @@
+{
+  "kind": "equipment",
+  "id": "mud-mixing-hopper",
+  "name": "$loc:equipment.mud-mixing-hopper",
+  "group": "drilling",
+  "costMillions": 0.3,
+  "buildTurns": 1,
+  "note": "Weights the mud up."
+}

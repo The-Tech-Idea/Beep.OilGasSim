@@ -200,8 +200,16 @@ public sealed class Licence : ILicence, IStateOwner
     // that broke a promise.
     public int SchemaVersion => 2;
 
-    /// <summary>Nothing has to be back before this is (SDD-013 §2b).</summary>
-    public IReadOnlyList<StateKey> RestoreAfter => [];
+    /// <summary>
+    /// AFTER THE WELLS (SDD-013 §2b), for the same reason the obligation
+    /// registry is: the load path reopens every well through the path that
+    /// drilled it, and that path records a work-commitment delivery on this
+    /// licence — so the rebuild writes progress first, and this owner's own
+    /// <see cref="Restore"/> then overwrites it with what the save actually
+    /// says. Restored the other way round, every reloaded well would discharge
+    /// its commitment a second time.
+    /// </summary>
+    public IReadOnlyList<StateKey> RestoreAfter => [new StateKey("wells.completions")];
 
     public void Capture(IStateWriter writer)
     {

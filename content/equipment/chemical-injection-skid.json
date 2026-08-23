@@ -1,0 +1,9 @@
+{
+  "kind": "equipment",
+  "id": "chemical-injection-skid",
+  "name": "$loc:equipment.chemical-injection-skid",
+  "group": "process",
+  "costMillions": 0.9,
+  "buildTurns": 1,
+  "note": "Inhibitor at the wellhead, continuously."
+}

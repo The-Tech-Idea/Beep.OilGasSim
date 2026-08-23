@@ -21,7 +21,8 @@ namespace OilfieldDays.Screens;
 /// petroleum-system factors. The player drives to one, decides whether it is
 /// worth seismic or a hole, and finds oil or doesn't. A discovery becomes a well
 /// that produces through the surface chain, month after month, and the money
-/// lands in the company's ledger. The scenario asks for $600M inside ten years
+/// lands in the company's ledger. The scenario states its own target and the
+/// host reads it (Host/Goal.cs); it asks for that inside ten years
 /// and ends the run on insolvency.</para>
 ///
 /// <para><b>What this class does not do.</b> It does not decide where anything
@@ -334,7 +335,7 @@ public sealed partial class Gameplay : Node2D
 
 			EngineHost.NewGameDraft draft = EngineHost.NewGameDraft.Default(seed) with
 			{
-				RealityProfile = DevOptions.Profile ?? "arcade",
+				Mode = DevOptions.Mode ?? GameStyles.Days.Id.Value,
 				Cells = DevOptions.Basin ?? BasinCells,
 			};
 
