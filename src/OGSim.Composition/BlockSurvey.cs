@@ -56,6 +56,14 @@ internal sealed class SurveyBlockActivity(
         return (new EntityRef(EntityKind.Block, command.Block.Value), NoDepth);
     }
 
+    public override string QuantityUnit => "square-kilometre";
+
+    /// <summary>The generated block's own ground (finding 289): a bigger basin
+    /// carves bigger blocks, and shooting one costs what that acreage costs —
+    /// zero on a world with no surface, whose refusals answer first.</summary>
+    public override double Quantity(SurveyBlockCommand command) =>
+        (world.BlockWidth * world.BlockHeight).ToSquareKilometres();
+
     /// <summary>
     /// A block has to be on the licence, and shooting it twice buys nothing.
     /// </summary>

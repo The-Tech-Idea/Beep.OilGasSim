@@ -51,6 +51,17 @@ internal sealed class AbandonWellActivity(
         return (Asset(command.Well), NoDepth);
     }
 
+    public override string QuantityUnit => "metre";
+
+    /// <summary>The hole this job runs in (finding 289): work on a deep well
+    /// costs and takes more than the same job on a shallow one.</summary>
+    public override double Quantity(AbandonWellCommand command)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+
+        return field.WellDepthOf(Aim(command).Target).Metres;
+    }
+
     public override IReadOnlyList<RejectionReason> OwnRefusals(AbandonWellCommand command)
     {
         ArgumentNullException.ThrowIfNull(command);

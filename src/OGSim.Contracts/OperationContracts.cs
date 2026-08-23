@@ -125,7 +125,10 @@ public interface IOperation
 /// </summary>
 public interface IObligationRegistry
 {
-    void Register(EntityRef asset, ContentId abandonmentTemplate);
+    /// <summary>The well's own bore travels with the registration (SDD-007
+    /// §3's finding-289 amendment): plugging a deep hole costs more than a
+    /// shallow one, and the liability on the books says so from day one.</summary>
+    void Register(EntityRef asset, ContentId abandonmentTemplate, Length wellDepth);
     Money EstimatedCost(EntityRef asset);
 
     /// <summary>

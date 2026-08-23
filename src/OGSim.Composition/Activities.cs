@@ -29,8 +29,24 @@ namespace OGSim.Composition;
 /// </summary>
 public sealed record ActivityTerms(
     ContentId Template,
-    Money Cost,
-    int DurationTicks,
+
+    /// <summary>
+    /// The physical dimension <see cref="RatePerUnit"/> and
+    /// <see cref="TurnsPerUnit"/> are per (SDD-007 §3's finding-289
+    /// amendment). The activity class declares the same unit and computes the
+    /// quantity at submit; composition refuses a mismatch by name, so a rate
+    /// in the wrong dimension cannot load.
+    /// </summary>
+    string Unit,
+
+    /// <summary>Money per <see cref="Unit"/> — an activity has no price, only
+    /// a rate; the world supplies the quantity (finding 289).</summary>
+    Money RatePerUnit,
+
+    /// <summary>Ticks per <see cref="Unit"/> — duration scales with the same
+    /// quantity the price does.</summary>
+    double TurnsPerUnit,
+
     EntityId<IRig>? Rig,
 
     /// <summary>
@@ -157,6 +173,16 @@ internal interface IActivity
     /// <summary>What it means that it finished. SDD-007 §5, executed.</summary>
     void Complete(CompletedActivity done, Tick tick);
 
+    /// <summary>
+    /// The physical dimension this activity measures its work in (SDD-007
+    /// §3's finding-289 amendment) — "metre", "kilometre",
+    /// "square-kilometre", a ladder's capacity unit, or "element". The engine
+    /// owns WHICH quantity a verb measures; content owns the rate per unit of
+    /// it, and <see cref="ActivityState"/> refuses a template whose declared
+    /// unit is not this one.
+    /// </summary>
+    string QuantityUnit { get; }
+
     /// <summary>Wires the command that starts it.</summary>
     void Register(IModuleComposition composition, ActivityOrders orders);
 }
@@ -190,6 +216,23 @@ internal abstract class Activity<TCommand> : IActivity
 
     /// <summary>What the order is aimed at, read off the command.</summary>
     public abstract (EntityRef Target, Length Depth) Aim(TCommand command);
+
+    public abstract string QuantityUnit { get; }
+
+    /// <summary>
+    /// How much work this order is, in <see cref="QuantityUnit"/>s — the
+    /// metres of the hole, the generated block's area, the laid route's
+    /// kilometres, the next rung's capacity, the standing plant's element
+    /// count. Computed at submit and contracted with the job: price is
+    /// rate × this, duration is pace × this (SDD-007 §3, finding 289). A flat
+    /// price is not expressible — every activity must state its scale.
+    ///
+    /// <para><b>Total, never throwing</b>: the shared refusals are asked
+    /// before <see cref="OwnRefusals"/>, so an order whose prerequisite is
+    /// missing — no plant, top of the ladder, no such equipment — returns 0
+    /// here and is refused by its own refusals a moment later.</para>
+    /// </summary>
+    public abstract double Quantity(TCommand command);
 
     /// <summary>
     /// The aim of an activity that is not pointed at a depth.
@@ -238,6 +281,11 @@ internal sealed record InFlight(
     IActivity Activity,
     EntityRef Target,
     Length Depth,
+
+    /// <summary>The work's contracted size in the activity's own unit
+    /// (finding 289) — saved with the job, like the quoted price, so a
+    /// reload reproduces exactly what was ordered.</summary>
+    double Quantity,
     int StartDay)
 {
     /// <summary>Cost already posted to the ledger, so each tick posts only the
@@ -285,13 +333,27 @@ internal sealed class ActivityState : IStateOwner
                 throw new InvariantFault("SDD-007 §1", null,
                     $"activity template '{catalogue[i].Template.Value}' is composed twice");
 
+            // A RATE IN THE WRONG DIMENSION MUST NOT LOAD (SDD-007 §3's
+            // finding-289 amendment): the engine owns which quantity a verb
+            // measures, content owns the rate per unit of it, and the two
+            // agreeing is what makes rate × quantity a price rather than a
+            // category error.
+            if (!string.Equals(
+                    catalogue[i].QuantityUnit, catalogue[i].Terms.Unit, StringComparison.Ordinal))
+                throw new InvariantFault("SDD-007 §3 (finding 289)", null,
+                    $"activity '{catalogue[i].Template.Value}' measures its work in " +
+                    $"'{catalogue[i].QuantityUnit}' and its content entry prices per " +
+                    $"'{catalogue[i].Terms.Unit}'; a rate in the wrong dimension is not a price");
+
             _catalogue.Add(catalogue[i]);
         }
     }
 
     public StateKey Key { get; } = new("field.activities");
 
-    public int SchemaVersion => 1;
+    /// <summary>v2 (finding 289): each in-flight job carries its contracted
+    /// quantity beside its depth.</summary>
+    public int SchemaVersion => 2;
 
     /// <summary>Nothing has to be back before this is (SDD-013 §2b).</summary>
     public IReadOnlyList<StateKey> RestoreAfter => [];
@@ -361,13 +423,32 @@ internal sealed class ActivityState : IStateOwner
         return false;
     }
 
-    public OperationSpec SpecFor(ContentId template, EntityRef target, Length depth)
+    /// <summary>How long this much work takes, in ticks — pace × quantity,
+    /// never less than one (SDD-007 §3's finding-289 amendment). Half-even at
+    /// the boundary so a rate authored as a repeating fraction reproduces its
+    /// reference duration exactly.</summary>
+    internal static int TurnsFor(ActivityTerms terms, double quantity) =>
+        Math.Max(1, (int)Math.Round(quantity * terms.TurnsPerUnit, MidpointRounding.ToEven));
+
+    /// <summary>The work's base price — rate × quantity, before the market's
+    /// quote (finding 289). Half-even at the money boundary (SDD-009 §1).</summary>
+    internal static Money PriceFor(ActivityTerms terms, double quantity) =>
+        Money.RoundHalfEven(terms.RatePerUnit.Cents * quantity);
+
+    public OperationSpec SpecFor(ContentId template, EntityRef target, Length depth, double quantity)
     {
         ActivityTerms terms = Of(template).Terms;
-        double days = terms.DurationTicks * Duration.DaysPerTick;
 
-        // QUOTED AT TODAY'S RATES (SDD-009 §6's ED4). A catalogue price is a
-        // price in the opening year's money; what a rig actually costs depends
+        // NO ACTIVITY HAS A PRICE — IT HAS A RATE, AND THE WORLD SUPPLIES THE
+        // QUANTITY (SDD-007 §3's finding-289 amendment). The metres of this
+        // hole, the generated block's area, the laid route's kilometres, the
+        // rung's capacity: price and duration both scale with the same
+        // quantity, so a 1 km spur is no longer priced like a 30 km trunk and
+        // a shallow well no longer bills like a deep one.
+        double days = TurnsFor(terms, quantity) * Duration.DaysPerTick;
+
+        // QUOTED AT TODAY'S RATES (SDD-009 §6's ED4). A catalogue rate is a
+        // rate in the opening year's money; what a rig actually costs depends
         // on how many other companies want one, which is what the oil price has
         // been doing for the last year.
         //
@@ -376,7 +457,7 @@ internal sealed class ActivityState : IStateOwner
         // mid-well is the contractor's problem rather than the operator's. That
         // is also what makes committing early a real advantage rather than an
         // accounting detail.
-        Money cost = _market.Quoted(terms.Cost);
+        Money cost = _market.Quoted(PriceFor(terms, quantity));
 
         return new OperationSpec(
             Template: template,
@@ -464,6 +545,12 @@ internal sealed class ActivityState : IStateOwner
             writer.WriteInt64(at + "target-kind", (long)activity.Target.Kind);
             writer.WriteInt64(at + "target-id", (long)activity.Target.Value);
             writer.WriteDouble(at + "depth", activity.Depth.Metres);
+
+            // The contracted SIZE of the job (finding 289): quantity decides
+            // price and duration the way the quoted costs below decide the
+            // bill, and a reload must reproduce what was ordered, not re-derive
+            // it from a plant that may have changed since.
+            writer.WriteDouble(at + "quantity", activity.Quantity);
             writer.WriteInt64(at + "start-day", activity.StartDay);
             writer.WriteInt64(at + "progress-days", activity.Operation.ProgressDays);
             writer.WriteInt64(at + "accrued", activity.Operation.Accrued.Cents);
@@ -509,6 +596,7 @@ internal sealed class ActivityState : IStateOwner
                 (ulong)reader.ReadInt64(at + "target-id"));
 
             var depth = new Length(reader.ReadDouble(at + "depth"));
+            double quantity = reader.ReadDouble(at + "quantity");
             var startDay = (int)reader.ReadInt64(at + "start-day");
 
             IActivity activity = Of(template);
@@ -516,7 +604,7 @@ internal sealed class ActivityState : IStateOwner
             // Quoted once, when the work was scheduled, and restored as quoted:
             // a company contracts at the rate it was given and a boom that
             // arrives mid-well is the contractor's problem (finding 215).
-            OperationSpec spec = SpecFor(template, target, depth) with
+            OperationSpec spec = SpecFor(template, target, depth, quantity) with
             {
                 Costs = new CostProfile(
                     Mobilisation: new Money(reader.ReadInt64(at + "cost-mobilisation")),
@@ -536,7 +624,7 @@ internal sealed class ActivityState : IStateOwner
                 accrued: new Money(reader.ReadInt64(at + "accrued")),
                 state: (OperationState)reader.ReadInt64(at + "state"));
 
-            _running.Add(new InFlight(operation, activity, target, depth, startDay)
+            _running.Add(new InFlight(operation, activity, target, depth, quantity, startDay)
             {
                 Posted = new Money(reader.ReadInt64(at + "posted")),
             });
@@ -599,7 +687,8 @@ internal sealed class ActivityOrders(
     /// that the well is too deep, who then discovers the rig was busy as well,
     /// has been made to learn the truth in instalments.
     /// </summary>
-    public List<RejectionReason> Refusals(ContentId template, EntityRef target, Length depth)
+    public List<RejectionReason> Refusals(
+        ContentId template, EntityRef target, Length depth, double quantity)
     {
         IActivity activity = activities.Of(template);
         var reasons = new List<RejectionReason>();
@@ -629,10 +718,14 @@ internal sealed class ActivityOrders(
                     "the licence's work commitment went unmet and the bond was " +
                     "forfeited; no further development is possible here"));
 
-        if (company.Ledger.Cash < market.Quoted(activity.Terms.Cost))
+        // The price of THIS order — rate × the work's own quantity, quoted at
+        // today's rates (finding 289) — not a catalogue flat.
+        Money quoted = market.Quoted(ActivityState.PriceFor(activity.Terms, quantity));
+
+        if (company.Ledger.Cash < quoted)
             reasons.Add(new RejectionReason(
                 "$loc:reject.insufficient-cash",
-                $"{template.Value} costs {activity.Terms.Cost.Cents} cents and the company " +
+                $"{template.Value} costs {quoted.Cents} cents and the company " +
                 $"holds {company.Ledger.Cash.Cents}"));
 
         // IS THERE ANYTHING HERE TO WORK ON (plans 23). Asked of the rule set
@@ -698,7 +791,7 @@ internal sealed class ActivityOrders(
                 "second alongside it would buy the same knowledge twice"));
 
         IReadOnlyList<string> refusals = activities.Scheduler.Refusals(
-            activities.SpecFor(template, target, depth),
+            activities.SpecFor(template, target, depth, quantity),
             startDay: Today,
             // WHAT THE COMPANY ACTUALLY HOLDS (SDD-005 §2's R20d.10 amendment).
             // This was a hardcoded empty list at both call sites, standing in for
@@ -721,10 +814,10 @@ internal sealed class ActivityOrders(
     /// (R1 §2.5) and a scheduler that refuses here is a composition defect rather
     /// than a player error.
     /// </summary>
-    public void Book(ContentId template, EntityRef target, Length depth)
+    public void Book(ContentId template, EntityRef target, Length depth, double quantity)
     {
         ScheduleResult result = activities.Scheduler.Submit(
-            activities.SpecFor(template, target, depth),
+            activities.SpecFor(template, target, depth, quantity),
             startDay: Today,
             // WHAT THE COMPANY ACTUALLY HOLDS (SDD-005 §2's R20d.10 amendment).
             // This was a hardcoded empty list at both call sites, standing in for
@@ -742,7 +835,7 @@ internal sealed class ActivityOrders(
                 "refused it; an applier cannot fail");
 
         activities.Begin(new InFlight(
-            scheduled.Operation, activities.Of(template), target, depth, Today));
+            scheduled.Operation, activities.Of(template), target, depth, quantity, Today));
     }
 
     /// <summary>Day index on the 30/360 grid — the scheduler's calendars are
@@ -765,7 +858,8 @@ internal sealed class ActivityValidator<TCommand>(
 
         (EntityRef target, Length depth) = activity.Aim(command);
 
-        List<RejectionReason> reasons = orders.Refusals(activity.Template, target, depth);
+        List<RejectionReason> reasons = orders.Refusals(
+            activity.Template, target, depth, activity.Quantity(command));
         reasons.AddRange(activity.OwnRefusals(command));
 
         return reasons;
@@ -783,7 +877,7 @@ internal sealed class ActivityApplier<TCommand>(
         ArgumentNullException.ThrowIfNull(command);
 
         (EntityRef target, Length depth) = activity.Aim(command);
-        orders.Book(activity.Template, target, depth);
+        orders.Book(activity.Template, target, depth, activity.Quantity(command));
 
         return new Applied(submission, []);
     }

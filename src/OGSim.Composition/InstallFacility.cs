@@ -24,7 +24,12 @@ internal sealed class InstallEarlyProductionFacilityActivity(
     ActivityTerms terms,
     SurfaceChain plant,
     PlantBuilder works,
-    FieldControl field) : Activity<InstallEarlyProductionFacilityCommand>(terms)
+    FieldControl field,
+
+    /// <summary>Where the spur's route is read from (finding 289): a plant on
+    /// a coastal find is a short, cheap tie-in and one across the basin is
+    /// not, which generation decided when it placed the field.</summary>
+    WorldState world) : Activity<InstallEarlyProductionFacilityCommand>(terms)
 {
     /// <summary>Steel the company still owns next month (SDD-009 §1).</summary>
     public override bool LeavesAnAsset => true;
@@ -49,6 +54,32 @@ internal sealed class InstallEarlyProductionFacilityActivity(
     public override (EntityRef Target, Length Depth) Aim(
         InstallEarlyProductionFacilityCommand command) =>
         (new EntityRef(EntityKind.Field, 1), NoDepth);
+
+    public override string QuantityUnit => "kilometre";
+
+    /// <summary>
+    /// The route the spur will run (finding 289): the nearest discovered
+    /// field's generated distance to market — the same distance the flowline
+    /// is laid over at commissioning. A hand-built field no world placed has
+    /// no distance and answers zero, which is the composed route it keeps.
+    /// </summary>
+    public override double Quantity(InstallEarlyProductionFacilityCommand command)
+    {
+        var nearest = 0.0;
+
+        IReadOnlyList<EntityId<IProspect>> prospects = world.Prospects;
+
+        for (int i = 0; i < prospects.Count; i++)
+        {
+            if (world.Beneath(prospects[i]) is null) continue;
+            if (world.DistanceToMarket(prospects[i]) is not Length away) continue;
+
+            if (nearest == 0.0 || away.ToKilometres() < nearest)
+                nearest = away.ToKilometres();
+        }
+
+        return nearest;
+    }
 
     public override IReadOnlyList<RejectionReason> OwnRefusals(
         InstallEarlyProductionFacilityCommand command)

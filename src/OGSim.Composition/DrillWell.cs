@@ -75,6 +75,17 @@ internal sealed class DrillWellActivity(
         return (new EntityRef(EntityKind.Prospect, command.Target.Value), command.TotalDepth);
     }
 
+    public override string QuantityUnit => "metre";
+
+    /// <summary>The hole the player chose to make (finding 289): a shallow
+    /// well is a cheaper, quicker bet than a deep one, on every map.</summary>
+    public override double Quantity(DrillWellCommand command)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+
+        return command.TotalDepth.Metres;
+    }
+
     public override IReadOnlyList<RejectionReason> OwnRefusals(DrillWellCommand command)
     {
         ArgumentNullException.ThrowIfNull(command);

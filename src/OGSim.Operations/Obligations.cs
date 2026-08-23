@@ -22,14 +22,14 @@ namespace OGSim.Operations;
 /// </summary>
 public sealed class ObligationRegistry : IObligationRegistry, IStateOwner
 {
-    private readonly Func<ContentId, Money> _costOf;
+    private readonly Func<ContentId, Length, Money> _costOf;
 
     // Insertion-ordered, because a save walks it and two runs of one game must
     // write the obligations in the same order (rule D-5).
     private readonly List<EntityRef> _order = [];
     private readonly Dictionary<EntityRef, Obligation> _outstanding = [];
 
-    public ObligationRegistry(Func<ContentId, Money> costOf)
+    public ObligationRegistry(Func<ContentId, Length, Money> costOf)
     {
         ArgumentNullException.ThrowIfNull(costOf);
         _costOf = costOf;
@@ -37,7 +37,9 @@ public sealed class ObligationRegistry : IObligationRegistry, IStateOwner
 
     public StateKey Key { get; } = new("company.obligations");
 
-    public int SchemaVersion => 1;
+    /// <summary>v2 (finding 289): each obligation carries the bore its
+    /// estimate is priced over.</summary>
+    public int SchemaVersion => 2;
 
     /// <summary>
     /// AFTER THE WELLS, and this is the dependency that proved the mechanism
@@ -64,7 +66,7 @@ public sealed class ObligationRegistry : IObligationRegistry, IStateOwner
     /// <summary>Everything still owed, in the order it was incurred.</summary>
     public IReadOnlyList<EntityRef> Assets => _order;
 
-    public void Register(EntityRef asset, ContentId abandonmentTemplate)
+    public void Register(EntityRef asset, ContentId abandonmentTemplate, Length wellDepth)
     {
         // A second registration of one asset would let a caller double the
         // liability by opening the same well twice — and would leave the second
@@ -73,7 +75,8 @@ public sealed class ObligationRegistry : IObligationRegistry, IStateOwner
             throw new InvariantFault("SDD-007 §6", asset,
                 $"asset {asset.Kind}:{asset.Value} already carries an abandonment obligation");
 
-        _outstanding.Add(asset, new Obligation(abandonmentTemplate, _costOf(abandonmentTemplate)));
+        _outstanding.Add(asset, new Obligation(
+            abandonmentTemplate, _costOf(abandonmentTemplate, wellDepth), wellDepth));
         _order.Add(asset);
     }
 
@@ -132,6 +135,11 @@ public sealed class ObligationRegistry : IObligationRegistry, IStateOwner
             writer.WriteInt64(at + "kind", (long)asset.Kind);
             writer.WriteInt64(at + "id", (long)asset.Value);
             writer.WriteString(at + "template", _outstanding[asset].Template.Value);
+
+            // THE DECISION HALF of the estimate (finding 289): the RATE is
+            // re-read from content on restore, and the BORE it multiplies is
+            // this well's own, which only the save can say.
+            writer.WriteDouble(at + "well-depth", _outstanding[asset].WellDepth.Metres);
         }
     }
 
@@ -155,12 +163,13 @@ public sealed class ObligationRegistry : IObligationRegistry, IStateOwner
             // The COST is re-read from content rather than saved: an estimate is
             // what today's content says a plug costs, and a save that pinned it
             // would carry a price the game no longer charges (SDD-013 §4).
-            Register(asset, new ContentId(reader.ReadString(at + "template")));
+            Register(asset, new ContentId(reader.ReadString(at + "template")),
+                new Length(reader.ReadDouble(at + "well-depth")));
         }
     }
 
     private static string Prefix(long index) =>
         "obligation." + index.ToString("D6", System.Globalization.CultureInfo.InvariantCulture) + ".";
 
-    private readonly record struct Obligation(ContentId Template, Money Cost);
+    private readonly record struct Obligation(ContentId Template, Money Cost, Length WellDepth);
 }

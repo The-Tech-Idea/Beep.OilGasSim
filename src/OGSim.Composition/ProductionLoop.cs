@@ -2295,6 +2295,47 @@ public sealed class FieldControl : IStateOwner
     /// </remarks>
     public int Slots => _chain.Slots;
 
+    /// <summary>
+    /// The hole a well-targeted job runs in, in metres of bore (SDD-007 §3's
+    /// finding-289 amendment): a WELL target answers with its own completion's
+    /// depth, a COMPARTMENT target with the deepest hole into it — the
+    /// wellbore the job actually uses — and a target with no hole answers
+    /// zero, because the job's own refusals are about to say there is nothing
+    /// to run in.
+    /// </summary>
+    public Length WellDepthOf(EntityRef target)
+    {
+        var deepest = 0.0;
+
+        for (int i = 0; i < _wells.Completions.Count; i++)
+        {
+            OGSim.Wells.Completion completion = _wells.Completions[i];
+
+            // How deep the player drilled, read back off the perforation it
+            // produced — the same place the save reads it (S013-5).
+            if (completion.Perforations.Count == 0) continue;
+
+            double bore = completion.Perforations[0].TopMd.Metres;
+
+            if (target.Kind is EntityKind.Well or EntityKind.Completion)
+            {
+                if (completion.CompletionId.Value == target.Value) return new Length(bore);
+
+                continue;
+            }
+
+            // A compartment answers with its own deepest hole; any other
+            // target — an injector, a disposal well, plant-side kit whose bore
+            // rides the field's drilling — answers with the field's.
+            if ((target.Kind != EntityKind.Compartment
+                    || _wells.CompartmentOf(completion.CompletionId).Value == target.Value)
+                && bore > deepest)
+                deepest = bore;
+        }
+
+        return new Length(deepest);
+    }
+
     public EntityId<IReservoirCompartmentEntity> AddCompartment(
         GeneratedCompartment generated,
         Permeability permeability,
@@ -2430,7 +2471,13 @@ public sealed class FieldControl : IStateOwner
         // company able to create one without the liability could walk away from
         // the cost by never recording it.
         _obligations.Register(
-            new EntityRef(EntityKind.Completion, opened.Value), _abandonmentTemplate);
+            new EntityRef(EntityKind.Completion, opened.Value), _abandonmentTemplate,
+
+            // The bore the plug estimate is priced over (finding 289), read
+            // off the perforation the way the save reads depth (S013-5).
+            new Length(completion.Perforations.Count > 0
+                ? completion.Perforations[0].TopMd.Metres
+                : 0.0));
 
         // AND IT DISCHARGES A WORK COMMITMENT, for the same reason and in the
         // same place: this is where a well comes into existence, so this is

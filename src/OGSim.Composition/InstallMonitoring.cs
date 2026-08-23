@@ -59,6 +59,18 @@ internal sealed class InstallMonitoringActivity(
         return (command.Equipment, NoDepth);
     }
 
+    public override string QuantityUnit => "element";
+
+    /// <summary>The standing plant the crew mobilises to (finding 289): a
+    /// bigger built chain costs more to keep than a wellhead and a spur, on
+    /// every map and at every stage of the game.</summary>
+    public override double Quantity(InstallMonitoringCommand command)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+
+        return network.Registered.Count;
+    }
+
     public override IReadOnlyList<RejectionReason> OwnRefusals(InstallMonitoringCommand command)
     {
         ArgumentNullException.ThrowIfNull(command);

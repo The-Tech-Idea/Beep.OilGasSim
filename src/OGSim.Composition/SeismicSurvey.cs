@@ -54,6 +54,16 @@ internal sealed class SeismicSurveyActivity(
         return (new EntityRef(EntityKind.Prospect, command.Target.Value), NoDepth);
     }
 
+    public override string QuantityUnit => "square-kilometre";
+
+    /// <summary>The patch of ground a detail shoot covers — the structure's own
+    /// block, since blocks are the generated survey grid (finding 289). A
+    /// hand-built field has no surface and answers zero; its price is then the
+    /// market's quote of nothing, and the shoot still runs, which is exactly
+    /// what a scenario that placed its reservoir directly asked for.</summary>
+    public override double Quantity(SeismicSurveyCommand command) =>
+        (world.BlockWidth * world.BlockHeight).ToSquareKilometres();
+
     /// <summary>
     /// Nothing beyond the shared refusals, and that absence is the point: a
     /// survey needs no wellbore, which is what makes it the first move rather

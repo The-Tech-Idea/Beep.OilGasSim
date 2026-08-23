@@ -33,7 +33,12 @@ public sealed record ExpandExportCommand() : Command(Subject: null);
 internal sealed class ExpandExportActivity(
     ActivityTerms terms,
     OGSim.Facilities.ExportTerminal terminal,
-    IReadOnlyList<OGSim.Facilities.ExportTier> ladder) : Activity<ExpandExportCommand>(terms)
+    IReadOnlyList<OGSim.Facilities.ExportTier> ladder,
+
+    /// <summary>Where the laid route is read from (finding 289): the trunk was
+    /// laid to the generated harbour distance, and widening it is priced over
+    /// the kilometres it actually runs.</summary>
+    SurfaceChain chain) : Activity<ExpandExportCommand>(terms)
 {
     /// <summary>A pipeline is PP&amp;E (SDD-009 §1).</summary>
     public override bool LeavesAnAsset => true;
@@ -45,6 +50,17 @@ internal sealed class ExpandExportActivity(
 
     public override (EntityRef Target, Length Depth) Aim(ExpandExportCommand command) =>
         (terminal.Id, NoDepth);
+
+    public override string QuantityUnit => "kilometre";
+
+    /// <summary>The kilometres the widened line runs (finding 289) — the
+    /// trunk's own laid length, which generation decided when the field was
+    /// developed. A 1 km spur is no longer priced like a 30 km trunk; a field
+    /// with no line yet answers zero and is refused for that instead.</summary>
+    public override double Quantity(ExpandExportCommand command) =>
+        chain.Flowline is OGSim.Facilities.Pipeline laid
+            ? laid.PipeLength.ToKilometres()
+            : 0.0;
 
     public override IReadOnlyList<RejectionReason> OwnRefusals(ExpandExportCommand command)
     {

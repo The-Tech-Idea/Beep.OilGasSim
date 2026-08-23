@@ -65,6 +65,15 @@ internal sealed class InstallSeparatorActivity(
             ? (new EntityRef(EntityKind.FlowElement, separator.Id.Value), NoDepth)
             : (SurfaceChain.TheField, NoDepth);
 
+    public override string QuantityUnit => "kilogram-per-second-capacity";
+
+    /// <summary>The capacity being bought — the next vessel's liquid throughput
+    /// (finding 289): a bigger rung costs and takes proportionally more, and
+    /// ground with nothing to upgrade answers zero, its refusals first.</summary>
+    public override double Quantity(InstallSeparatorCommand command) =>
+        Unit is OGSim.Facilities.Separator held && NextRung(held) is { } next
+            ? next.LiquidCapacity.KgPerSecond : 0.0;
+
     public override IReadOnlyList<RejectionReason> OwnRefusals(InstallSeparatorCommand command)
     {
         if (Unit is not OGSim.Facilities.Separator separator)
@@ -156,6 +165,15 @@ internal sealed class InstallGasPlantActivity(
             ? (new EntityRef(EntityKind.FlowElement, plant.Id.Value), NoDepth)
             : (SurfaceChain.TheField, NoDepth);
 
+    public override string QuantityUnit => "kilogram-per-second-capacity";
+
+    /// <summary>The capacity being bought — the next train's gas throughput
+    /// (finding 289): a bigger rung costs and takes proportionally more, and
+    /// ground with nothing to upgrade answers zero, its refusals first.</summary>
+    public override double Quantity(InstallGasPlantCommand command) =>
+        Unit is OGSim.Facilities.GasCapture held && NextRung(held) is { } next
+            ? next.Capacity.KgPerSecond : 0.0;
+
     public override IReadOnlyList<RejectionReason> OwnRefusals(InstallGasPlantCommand command)
     {
         if (Unit is not OGSim.Facilities.GasCapture plant)
@@ -233,6 +251,15 @@ internal sealed class InstallManifoldActivity(
         Unit is OGSim.Facilities.Manifold header
             ? (new EntityRef(EntityKind.FlowElement, header.Id.Value), NoDepth)
             : (SurfaceChain.TheField, NoDepth);
+
+    public override string QuantityUnit => "slot";
+
+    /// <summary>The capacity being bought — the next header's tie-in slots
+    /// (finding 289): a bigger rung costs and takes proportionally more, and
+    /// ground with nothing to upgrade answers zero, its refusals first.</summary>
+    public override double Quantity(InstallManifoldCommand command) =>
+        Unit is OGSim.Facilities.Manifold held && NextRung(held) is { } next
+            ? next.Slots : 0.0;
 
     public override IReadOnlyList<RejectionReason> OwnRefusals(InstallManifoldCommand command)
     {
@@ -316,6 +343,15 @@ internal sealed class InstallTankActivity(
             ? (new EntityRef(EntityKind.FlowElement, tank.Id.Value), NoDepth)
             : (SurfaceChain.TheField, NoDepth);
 
+    public override string QuantityUnit => "tonne-capacity";
+
+    /// <summary>The capacity being bought — the next farm's storage
+    /// (finding 289): a bigger rung costs and takes proportionally more, and
+    /// ground with nothing to upgrade answers zero, its refusals first.</summary>
+    public override double Quantity(InstallTankCommand command) =>
+        Unit is OGSim.Facilities.Tank held && NextRung(held) is { } next
+            ? next.Capacity.ToTonnes() : 0.0;
+
     public override IReadOnlyList<RejectionReason> OwnRefusals(InstallTankCommand command)
     {
         if (Unit is not OGSim.Facilities.Tank tank)
@@ -391,6 +427,15 @@ internal sealed class InstallTreaterActivity(
         Unit is OGSim.Facilities.Treater treater
             ? (new EntityRef(EntityKind.FlowElement, treater.Id.Value), NoDepth)
             : (SurfaceChain.TheField, NoDepth);
+
+    public override string QuantityUnit => "water-fraction-removed";
+
+    /// <summary>The capacity being bought — the water fraction the next vessel removes
+    /// (finding 289): a bigger rung costs and takes proportionally more, and
+    /// ground with nothing to upgrade answers zero, its refusals first.</summary>
+    public override double Quantity(InstallTreaterCommand command) =>
+        Unit is OGSim.Facilities.Treater held && NextRung(held) is { } next
+            ? next.WaterRemoved : 0.0;
 
     public override IReadOnlyList<RejectionReason> OwnRefusals(InstallTreaterCommand command)
     {
@@ -468,6 +513,15 @@ internal sealed class InstallCompressorActivity(
             ? (new EntityRef(EntityKind.FlowElement, compressor.Id.Value), NoDepth)
             : (SurfaceChain.TheField, NoDepth);
 
+    public override string QuantityUnit => "kilogram-per-second-capacity";
+
+    /// <summary>The capacity being bought — the next machine's rated throughput
+    /// (finding 289): a bigger rung costs and takes proportionally more, and
+    /// ground with nothing to upgrade answers zero, its refusals first.</summary>
+    public override double Quantity(InstallCompressorCommand command) =>
+        Unit is OGSim.Facilities.Compressor held && NextRung(held) is { } next
+            ? next.RatedCapacity.KgPerSecond : 0.0;
+
     public override IReadOnlyList<RejectionReason> OwnRefusals(InstallCompressorCommand command)
     {
         if (Unit is not OGSim.Facilities.Compressor compressor)
@@ -541,6 +595,15 @@ internal sealed class InstallLiquidPumpStationActivity(
         Unit is OGSim.Facilities.LiquidPumpStation pumpStation
             ? (new EntityRef(EntityKind.FlowElement, pumpStation.Id.Value), NoDepth)
             : (SurfaceChain.TheField, NoDepth);
+
+    public override string QuantityUnit => "kilogram-per-second-capacity";
+
+    /// <summary>The capacity being bought — the next station's rated throughput
+    /// (finding 289): a bigger rung costs and takes proportionally more, and
+    /// ground with nothing to upgrade answers zero, its refusals first.</summary>
+    public override double Quantity(InstallLiquidPumpStationCommand command) =>
+        Unit is OGSim.Facilities.LiquidPumpStation held && NextRung(held) is { } next
+            ? next.RatedCapacity.KgPerSecond : 0.0;
 
     public override IReadOnlyList<RejectionReason> OwnRefusals(InstallLiquidPumpStationCommand command)
     {

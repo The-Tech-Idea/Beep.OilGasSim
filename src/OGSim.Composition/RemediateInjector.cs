@@ -25,7 +25,11 @@ public sealed record RemediateInjectorCommand() : Command(Subject: null);
 
 internal sealed class RemediateInjectorActivity(
     ActivityTerms terms,
-    SurfaceChain chain) : Activity<RemediateInjectorCommand>(terms)
+    SurfaceChain chain,
+
+    /// <summary>Where the disposal well's bore is read from (finding 289) —
+    /// it rides the field's own drilling depth.</summary>
+    FieldControl field) : Activity<RemediateInjectorCommand>(terms)
 {
     /// <summary>The well this unplugs, or null on ground with no plant.</summary>
     private OGSim.Wells.Injector? Unit => chain.Disposal;
@@ -47,6 +51,14 @@ internal sealed class RemediateInjectorActivity(
         Unit is OGSim.Wells.Injector injector
             ? (new EntityRef(EntityKind.FlowElement, injector.Id.Value), NoDepth)
             : (SurfaceChain.TheField, NoDepth);
+
+    public override string QuantityUnit => "metre";
+
+    /// <summary>The bore the acid goes down (finding 289) — the field's own
+    /// drilling depth, since the disposal well is drilled to the same horizon.
+    /// Ground with no plant answers zero, its refusals first.</summary>
+    public override double Quantity(RemediateInjectorCommand command) =>
+        Unit is null ? 0.0 : field.WellDepthOf(SurfaceChain.TheField).Metres;
 
     public override IReadOnlyList<RejectionReason> OwnRefusals(RemediateInjectorCommand command)
     {

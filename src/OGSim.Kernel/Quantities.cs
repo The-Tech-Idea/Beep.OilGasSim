@@ -63,6 +63,8 @@ public readonly record struct Length(double Metres) : IComparable<Length>
 {
     public static Length FromFeet(double ft) => new(ft * 0.3048);
     public double ToFeet() => Metres / 0.3048;
+    public static Length FromKilometres(double km) => new(km * 1e3);
+    public double ToKilometres() => Metres / 1e3;
     public static Length operator +(Length a, Length b) => new(a.Metres + b.Metres);
     public static Length operator -(Length a, Length b) => new(a.Metres - b.Metres);
     public static double operator /(Length a, Length b) => a.Metres / b.Metres;
@@ -99,6 +101,8 @@ public readonly record struct Area(double SquareMetres) : IComparable<Area>
 /// <summary>Mass, canonical kilograms. What the engine conserves (04 §2.1).</summary>
 public readonly record struct Mass(double Kilograms) : IComparable<Mass>
 {
+    public static Mass FromTonnes(double t) => new(t * 1e3);
+    public double ToTonnes() => Kilograms / 1e3;
     public static Mass operator +(Mass a, Mass b) => new(a.Kilograms + b.Kilograms);
     public static Mass operator -(Mass a, Mass b) => new(a.Kilograms - b.Kilograms);
     public static double operator /(Mass a, Mass b) => a.Kilograms / b.Kilograms;

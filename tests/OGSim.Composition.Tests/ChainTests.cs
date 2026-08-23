@@ -708,8 +708,10 @@ public sealed class ChainTests
 
         Produce(engine, target);
 
+        // Rate x the fixture well's own 2,000 m bore (finding 289).
         Assert.Equal(
-            Defaults.AbandonWellTerms(Fixture.Activities()).Cost,
+            ActivityState.PriceFor(
+                Defaults.AbandonWellTerms(Fixture.Activities()), 2000.0),
             obligations.EstimatedCost(well));
     }
 
@@ -729,7 +731,8 @@ public sealed class ChainTests
         engine.Pipeline.AdvanceTick();
 
         Assert.Equal(
-            Defaults.AbandonWellTerms(Fixture.Activities()).Cost,
+            ActivityState.PriceFor(
+                Defaults.AbandonWellTerms(Fixture.Activities()), 2000.0),
             engine.Provided.Resolve<IObligationRegistry>()
                   .EstimatedCost(new EntityRef(EntityKind.Completion, 1)));
     }

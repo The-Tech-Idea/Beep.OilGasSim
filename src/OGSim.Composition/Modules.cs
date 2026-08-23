@@ -1200,7 +1200,7 @@ internal sealed class FieldModule(
         ActivityTerms drillTerms = Defaults.DrillWellTerms(stated);
 
         var obligations = new OGSim.Operations.ObligationRegistry(
-            template => Defaults.AbandonmentCostOf(abandonTerms, template));
+            (template, wellDepth) => Defaults.AbandonmentCostOf(abandonTerms, template, wellDepth));
         composition.Own(obligations);
         composition.Provide<IObligationRegistry>(obligations);
 
@@ -1462,7 +1462,8 @@ internal sealed class FieldModule(
                 Defaults.EarlyProductionFacilityTerms(stated),
                 chain,
                 composition.Require<PlantBuilder>(),
-                field),
+                field,
+                composition.Require<WorldState>()),
 
             // The verb that answers a bottleneck (R12b.8). It could not exist
             // until the chain was wired: an installed vessel would have been
@@ -1474,7 +1475,7 @@ internal sealed class FieldModule(
             // and a field still sells only what the export line takes — which is
             // why, until this, ten times the oil earned the same money.
             new ExpandExportActivity(
-                Defaults.ExpandExportTerms(stated), terminal, ladders.Export),
+                Defaults.ExpandExportTerms(stated), terminal, ladders.Export, chain),
 
             // THE ANSWER TO THE FLARING PENALTY (finding 172). Without it a
             // company charged for flaring could only respond by producing less
@@ -1513,7 +1514,7 @@ internal sealed class FieldModule(
             // plugging real and left no way to clear it, which is a decline the
             // player watches rather than a decision they take.
             new RemediateInjectorActivity(
-                Defaults.RemediateInjectorTerms(stated), chain),
+                Defaults.RemediateInjectorTerms(stated), chain, field),
 
             // A WELL DRILLED CLEAN CAN STILL BE MADE BETTER (R12b.7, finding
             // 253). Every completion opens at zero skin, so this is a genuine

@@ -590,7 +590,8 @@ internal static class Defaults
         ActivityDefinition entry = stated[template];
 
         return new ActivityTerms(
-            entry.Id, Money.FromMillions(entry.CostMillions), entry.DurationTurns,
+            entry.Id, entry.Unit, Money.FromMillions(entry.CostMillionsPerUnit),
+            entry.TurnsPerUnit,
             rig, entry.WeatherLimit, entry.RequiresAccess, entry.Develops, outcomes);
     }
 
@@ -1026,9 +1027,9 @@ internal static class Defaults
     /// a finished game; here the abandonment activity's own price, so the
     /// liability on the books and the bill when it falls due cannot disagree.
     /// </summary>
-    public static Money AbandonmentCostOf(ActivityTerms abandon, ContentId template) =>
+    public static Money AbandonmentCostOf(ActivityTerms abandon, ContentId template, Length wellDepth) =>
         template == abandon.Template
-            ? abandon.Cost
+            ? ActivityState.PriceFor(abandon, wellDepth.Metres)
             : throw new ContentFault("SDD-007 §6", null,
                 $"no abandonment template '{template.Value}' is priced; an obligation " +
                 "nobody can cost is a liability nobody can plan for");

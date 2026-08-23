@@ -94,7 +94,49 @@ Cancellation: resources released at once; accrued stays spent (sunk, R12-V8);
 day rate but burns no mud and runs no bits. The distinction is visible in the
 cost report and is the honest price of a missed weather window.
 
-## 4. Outcomes — drawn at start, applied across execution (pinned)
+> **Amendment (finding 289): no activity has a price — it has a RATE, and the
+> world supplies the quantity.** Every `content/activities/` entry carried
+> `costMillions` and `durationTurns` as flat totals, so the same order cost
+> the same money on every map: a 1 km spur priced like a 30 km trunk, a
+> 3,000 m well like a 1,500 m one, a first gas train like the expansion twice
+> its size. The owner's standing rule — the game generates its own
+> environment; no fixed numbers — makes that a defect, and it is repaired at
+> the schema:
+>
+> ```json
+> "unit": "metre",                  // the physical dimension the rate is per
+> "costMillionsPerUnit": 0.004,     // replaces costMillions
+> "turnsPerUnit": 0.002             // replaces durationTurns
+> ```
+>
+> - **The engine owns WHICH quantity an activity measures**; content owns the
+>   rate. Each activity declares its `QuantityUnit` and computes its quantity
+>   at submit from the world, the plant or the order itself: drilling and
+>   every per-well job measure the hole's METRES; the block survey and 3-D
+>   measure the generated block's SQUARE KILOMETRES; the export expansion and
+>   the early production facility measure the generated route's KILOMETRES
+>   (the laid flowline's length, or the field's distance to market); each
+>   install measures the NEXT RUNG'S OWN CAPACITY in that ladder's physical
+>   unit (kg/s, tonnes, slots, percentage points of water removed); upkeep
+>   verbs measure the standing plant's ELEMENT count. Composition refuses an
+>   entry whose declared unit is not the activity's, naming both — a rate in
+>   the wrong dimension must not load.
+> - **`price = rate × quantity`, quoted once** through the existing cost
+>   index at scheduling (§3's escalation and finding 215's
+>   contract-at-quote are unchanged); **`turns = max(1, round-half-even
+>   (quantity × turnsPerUnit))`** — duration scales with the same quantity.
+>   The contracted QUANTITY is saved beside the depth, so a reload
+>   reproduces the job exactly.
+> - **Rates derive from the measured economy at its reference points**
+>   (F-2): each rate = the old flat total ÷ the reference quantity it was
+>   authored against — 2,000 m for well work, the measured configuration's
+>   64 km² block for surveys, its ~1 km market routes for lines, the ladder
+>   rung each install price bought, the fixture chain's fifteen elements for
+>   upkeep. At the references the economy is unchanged; away from them the
+>   world finally prices the work.
+> - The equipment catalogue's `costMillions` (plans 28, load-validated and
+>   consumed by nothing yet) converts when its consumer lands, with that
+>   consumer — not speculatively here.
 
 ```csharp
 public enum OutcomeGrade { OnTime, Delayed, OverBudget, Partial, Failure, Disaster }

@@ -450,3 +450,67 @@ One stated consequence: a pre-288 Days save made on a sub-floor board
 refuses to load by name after this (regeneration now resamples, and the
 restore's boundary check correctly rejects the mismatch) — the standard
 consequence of any content change, and no released saves exist.
+
+### No activity has a price (2026-08-23, finding 289) — rates, and the world supplies the quantity
+
+Fahad's objection, verbatim: *"why game set numbers like so … the game
+be generating its own environment. i told engine should not have static
+number or fixed one."* He was right, and the flat totals went: every
+`content/activities/` entry carried `costMillions`/`durationTurns`, so a
+1 km spur priced like a 30 km trunk, a 3,000 m well billed like a
+1,500 m one, and the days overlay had to hand-author an $18M
+expand-export because the base $45M was sized for a different route.
+
+The schema is now `unit` + `costMillionsPerUnit` + `turnsPerUnit`
+(SDD-007 §3's finding-289 amendment). The ENGINE owns which physical
+quantity each verb measures and computes it at submit; content owns only
+the rate. Price = rate × quantity, quoted through the existing cost
+index; duration = pace × quantity; the contracted quantity saves with
+the job. A rate in the wrong dimension refuses to compose, naming both
+sides — a flat price is no longer expressible.
+
+What each verb measures: drilling and every per-well job, the hole's
+METRES (the player's own choice, or the well's actual bore); both
+surveys, the generated block's SQUARE KILOMETRES (a bigger basin carves
+bigger blocks and its seismic costs more); the export expansion, the
+laid trunk's KILOMETRES; the early production facility, the nearest
+discovered field's generated route; each install, the NEXT RUNG'S OWN
+capacity (kg/s, tonnes, slots, water fraction); upkeep, the standing
+plant's ELEMENT count (a six-well field costs more to keep than a
+wellhead and a spur).
+
+Rates derive from the measured economy at the references each price was
+actually authored against — 2,000 m wells, the 32 km basin's 64 km²
+block, **the composed 2 km trunk for expand-export** (first derived
+against the generated 1 km route, which re-priced the fixture's own
+trunk ×2 and expired the winning-play scenario; the fixture's 2 km is
+what $45M was always for), and **the DEVELOPED 23-element chain for
+upkeep** (first derived at the undeveloped 13, which made late-game
+repairs — where $2.4M was actually measured — 77% dearer and cost the
+winning play ~$120M over the decade; both corrections found by replaying
+the scenario, not by inspection). At the references the measured economy
+reproduces exactly; away from them the world prices the work: a
+generated 1 km spur now expands for $22.5M/4t — almost exactly the $18M/4t
+the days overlay used to hand-author, so **the overlay entry is deleted
+and the route prices it**.
+
+Pinned by `PricingTests` (proportionality with no rate value pinned; a
+deeper hole runs longer end-to-end; the wrong-dimension refusal),
+proven failing with the derivation pinned flat.
+
+Re-measured, shipped configuration, same policy:
+
+| Seed | 1 | 2 | 3 | 4 | 5 | 11 |
+|---|---|---|---|---|---|---|
+| post-288 (flat) | dead 48 | +$37.6M | dead 92 | +$271.3M | dead 54 | dead 56 |
+| post-289 (derived) | **+$281.5M, 8 wells** | +$21.7M | dead 92 ($-0.9M) | +$266.9M | **+$11.3M — solvent for the first time ever** | dead 93 ($-0.2M, 1.1M m³) |
+
+**Four of six seeds now close the decade solvent.** The frontier opening
+works because Days routes are short and short routes are now cheap: the
+re-drawn boards (1 and 5) both live, and seed 5 — barren at any purse
+until finding 288, dead at 54 under flat prices — retires with three
+producing wells. Seeds 3 and 11 die at $-0.9M and $-0.2M as producing
+multi-well fields: the auto-player's late-game overspend, the one
+remaining named problem, and an instrument bound rather than a map or a
+price. The purse and every rate remain content; the quantities are the
+world's.

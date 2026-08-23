@@ -153,6 +153,17 @@ internal sealed class InstallRodPumpActivity(
     public override (EntityRef Target, Length Depth) Aim(InstallRodPumpCommand command) =>
         (new EntityRef(EntityKind.Completion, command.Well.Value), NoDepth);
 
+    public override string QuantityUnit => "metre";
+
+    /// <summary>The hole the lift is run into (finding 289): rods, cable or
+    /// mandrels to depth, so a deep completion costs and takes more.</summary>
+    public override double Quantity(InstallRodPumpCommand command)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+
+        return field.WellDepthOf(Aim(command).Target).Metres;
+    }
+
     public override IReadOnlyList<RejectionReason> OwnRefusals(InstallRodPumpCommand command) =>
         LiftGate.Buyable(field, command.Well);
 
@@ -190,6 +201,17 @@ internal sealed class InstallPcpActivity(
 
     public override (EntityRef Target, Length Depth) Aim(InstallPcpCommand command) =>
         (new EntityRef(EntityKind.Completion, command.Well.Value), NoDepth);
+
+    public override string QuantityUnit => "metre";
+
+    /// <summary>The hole the lift is run into (finding 289): rods, cable or
+    /// mandrels to depth, so a deep completion costs and takes more.</summary>
+    public override double Quantity(InstallPcpCommand command)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+
+        return field.WellDepthOf(Aim(command).Target).Metres;
+    }
 
     public override IReadOnlyList<RejectionReason> OwnRefusals(InstallPcpCommand command) =>
         LiftGate.Buyable(field, command.Well);
@@ -229,6 +251,17 @@ internal sealed class InstallEspActivity(
     public override (EntityRef Target, Length Depth) Aim(InstallEspCommand command) =>
         (new EntityRef(EntityKind.Completion, command.Well.Value), NoDepth);
 
+    public override string QuantityUnit => "metre";
+
+    /// <summary>The hole the lift is run into (finding 289): rods, cable or
+    /// mandrels to depth, so a deep completion costs and takes more.</summary>
+    public override double Quantity(InstallEspCommand command)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+
+        return field.WellDepthOf(Aim(command).Target).Metres;
+    }
+
     public override IReadOnlyList<RejectionReason> OwnRefusals(InstallEspCommand command) =>
         LiftGate.Buyable(field, command.Well);
 
@@ -266,6 +299,17 @@ internal sealed class InstallGasLiftActivity(
 
     public override (EntityRef Target, Length Depth) Aim(InstallGasLiftCommand command) =>
         (new EntityRef(EntityKind.Completion, command.Well.Value), NoDepth);
+
+    public override string QuantityUnit => "metre";
+
+    /// <summary>The hole the lift is run into (finding 289): rods, cable or
+    /// mandrels to depth, so a deep completion costs and takes more.</summary>
+    public override double Quantity(InstallGasLiftCommand command)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+
+        return field.WellDepthOf(Aim(command).Target).Metres;
+    }
 
     public override IReadOnlyList<RejectionReason> OwnRefusals(InstallGasLiftCommand command) =>
         LiftGate.Buyable(field, command.Well);

@@ -43,6 +43,17 @@ internal sealed class CoringActivity(
         return (new EntityRef(EntityKind.Compartment, command.Target.Value), NoDepth);
     }
 
+    public override string QuantityUnit => "metre";
+
+    /// <summary>The hole this job runs in (finding 289): work on a deep well
+    /// costs and takes more than the same job on a shallow one.</summary>
+    public override double Quantity(CutCoreCommand command)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+
+        return field.WellDepthOf(Aim(command).Target).Metres;
+    }
+
     public override IReadOnlyList<RejectionReason> OwnRefusals(CutCoreCommand command)
     {
         if (field.WellCount > 0) return [];

@@ -17,10 +17,19 @@ namespace OGSim.Kernel;
 
 // ------------------------------------------------------------------ activity
 
-/// <summary>One template of player-ordered work, as the catalogue states it.</summary>
+/// <summary>
+/// One template of player-ordered work, as the catalogue states it.
+///
+/// <para><b>No activity has a price — it has a RATE, and the world supplies
+/// the quantity</b> (SDD-007 §3's finding-289 amendment). `Unit` names the
+/// physical dimension the rate and pace are per; the activity that runs under
+/// this entry declares the same unit and computes the quantity at submit from
+/// the generated world, the standing plant or the order itself. A flat total
+/// is no longer expressible in this schema.</para>
+/// </summary>
 public sealed record ActivityDefinition(
     ContentId Id, string NameKey, ContentId Group,
-    double CostMillions, int DurationTurns,
+    string Unit, double CostMillionsPerUnit, double TurnsPerUnit,
     double WeatherLimit, bool RequiresAccess, bool Develops, string Note)
     : ContentDefinition(Id);
 
@@ -32,8 +41,9 @@ public sealed class ActivityContentKind : IContentKind
         new ContentId(PropertyKindContentKind.Required(element, "id").GetString()!),
         PropertyKindContentKind.Required(element, "name").GetString()!,
         new ContentId(PropertyKindContentKind.Required(element, "group").GetString()!),
-        PropertyKindContentKind.Required(element, "costMillions").GetDouble(),
-        PropertyKindContentKind.Required(element, "durationTurns").GetInt32(),
+        PropertyKindContentKind.Required(element, "unit").GetString()!,
+        PropertyKindContentKind.Required(element, "costMillionsPerUnit").GetDouble(),
+        PropertyKindContentKind.Required(element, "turnsPerUnit").GetDouble(),
         PropertyKindContentKind.Required(element, "weatherLimit").GetDouble(),
         PropertyKindContentKind.Required(element, "requiresAccess").GetBoolean(),
         PropertyKindContentKind.Required(element, "develops").GetBoolean(),
@@ -48,11 +58,14 @@ public sealed class ActivityContentKind : IContentKind
         var problems = new List<string>();
         if (definition is not ActivityDefinition activity) return problems;
 
-        if (activity.CostMillions <= 0.0)
-            problems.Add($"cost {activity.CostMillions} must be positive; free work is not a decision");
+        if (string.IsNullOrWhiteSpace(activity.Unit))
+            problems.Add("unit must name the dimension the rate is per; a rate per nothing is a flat price");
 
-        if (activity.DurationTurns < 1)
-            problems.Add($"duration {activity.DurationTurns} turns must be at least one; nothing finishes before it starts");
+        if (activity.CostMillionsPerUnit <= 0.0)
+            problems.Add($"rate {activity.CostMillionsPerUnit} must be positive; free work is not a decision");
+
+        if (activity.TurnsPerUnit <= 0.0)
+            problems.Add($"pace {activity.TurnsPerUnit} turns per unit must be positive; nothing finishes before it starts");
 
         if (activity.WeatherLimit <= 0.0)
             problems.Add($"weather limit {activity.WeatherLimit} must be positive, or no day is calm enough to work");
