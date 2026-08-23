@@ -12,6 +12,11 @@ int months = Argument("--months=", 120);
 ulong seed = (ulong)Argument("--seed=", 20260806);
 string modeId = Text("--mode=", GameStyles.Engineer.Id.Value);
 
+// The one probe this instrument carries (plans 26 §6's own named next step):
+// `--probe=ledger` measures a producing year's ledger by category and by line
+// item, twice — under the auto-player, and with the field left alone.
+string probe = Text("--probe=", string.Empty);
+
 IGameStyle mode = GameStyles.Named(new ContentId(modeId));
 
 Console.WriteLine(mode.Title);
@@ -62,6 +67,9 @@ var world = new WorldParameters(
     ClimateSeverity: 0.28,
     RivalCount: 4,
     StartEra: Era.E1);
+
+if (probe == "ledger")
+    return LedgerProbe.Run(mode, settings, world, months);
 
 BuildResult result = EngineBuilder.CreateNew(settings, world);
 

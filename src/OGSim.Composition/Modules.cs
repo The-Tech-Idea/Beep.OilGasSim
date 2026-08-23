@@ -566,8 +566,13 @@ internal sealed class SurfaceChain
     /// </remarks>
     public int Slots => Manifold?.Slots ?? 0;
 
-    public IReadOnlyList<EntityId<IFlowElement>> MeteredPoints =>
-        Custody is null ? [] : [Custody.Id];
+    // `MeteredPoints` is deliberately GONE (finding 285). It existed so the
+    // production loop could be told which element meters without asking one
+    // what it is — and the loop captured it at composition, when a bare-ground
+    // plant has no custody point yet, so the metered set stayed empty for the
+    // whole game. The loop holds the plant now and reads `Custody` live, the
+    // same way it reads the tank and the disposal well; a list that can go
+    // stale is not a second way to say the same thing (law L5).
 
     /// <summary>
     /// What to call an element on screen.
@@ -1276,7 +1281,6 @@ internal sealed class FieldModule(
             composition.Require<IAuditTrail>(),
             composition.Require<IFlowSolver>(),
             network,
-            chain.MeteredPoints,
             chain.NameOf,
             composition.Require<OGSim.Integrity.AssetIntegrity>(),
             chain,

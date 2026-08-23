@@ -217,3 +217,49 @@ Chasing the insolvencies to their causes produced, in order:
 The opening balance stays derived at $72M until then: no figure up to $150M
 was measured to survive while the per-well economics are under water, so
 raising it would only buy a slower death and call it balance.
+
+### The ledger probe (2026-08-23, finding 285) — the $2M was revenue that never posted
+
+The probe this log asked for exists now
+(`dotnet run --project src/OGSim.Engineer -- --mode=days --probe=ledger`):
+it measures a span's signed cash by category off the read model's own
+`CashByCause` row and the movements joined to their audit causes, run twice —
+once under the auto-player, once with a declared field left alone but
+repaired — and prints the chain's own throughput/breach/status snapshot on
+every exit, because a ledger that says lifting was paid and nothing was
+delivered is exactly half an answer.
+
+**The first run of it answered the question, and the answer was not a cost.**
+The field-alone variant lifted ~34,500 t/month across three wells, the
+custody element passed ~31,100 t of it in the solve — and `ProducedThisTick`
+read zero for seventeen straight months while `field-operating` charged
+lifting on every tonne. The unnamed ~$2M was **revenue that never posted plus
+lifting charged on barrels the engine then discarded**: `ProductionLoop`
+captured `chain.MeteredPoints` ONCE at composition, when a bare-ground
+company's custody point does not exist yet, so the metered set stayed empty
+for the whole game — every barrel crossed the meter unrecorded, unsold and
+(since the same block feeds the tank's commit) un-stored. Opening-position
+builds could never show it: their custody point exists at composition, so
+the captured list was right by luck. Fixed the same day — the loop reads
+`Custody` off the plant it already holds, live, the way it reads the tank
+and the disposal well — pinned by `GS8_a_plant_built_mid_game_meters_what_it_delivers`,
+which was confirmed failing first.
+
+**Measured after the fix, same instrument, seed 2:** a Days field's producing
+year EARNS — $11.76M/month revenue against $3.75M/month operating and
+$4.09M/month fiscal, **+$3.92M/month net**, cash $48M → $95M over the twelve
+months. §4's "a Days well loses money" is withdrawn: the well was never
+losing money; the engine was discarding its revenue.
+
+**What the six seeds now die of is RUNWAY, not economics** (re-measured,
+`--mode=days --months=120`): seeds 1/3/4/5 find nothing and hold the plant
+reserve until the running costs end them (months 37-50); seed 11 finds oil
+with no plant money left (month 35); seed 2 finds oil at month 24, builds
+the whole chain, delivers 7,211 m³ — and goes under at month 29, roughly two
+months of runway short of a field that would have carried it from there.
+**The open question is now purely the balance pass plans 22 M5 reserved**:
+the opening balance / survey and hole prices against the ~30 months a
+discovery actually takes, with the destination now measured to be worth
+reaching. The $72M derivation above assumed a loss-making well; that
+assumption is gone, and re-striking the figure is a design decision, not an
+engineering one.

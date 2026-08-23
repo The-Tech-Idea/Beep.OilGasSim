@@ -194,6 +194,33 @@ public sealed class WorkflowCycle
         _drillAbove = drillAbove;
     }
 
+    /// <summary>
+    /// One month: decide, act, tick, report.
+    /// </summary>
+    /// <remarks>
+    /// Public so an instrument can interleave its own measurement with the
+    /// cycle's months (plans 26 §6's ledger probe) — <see cref="Run"/> is this
+    /// in a loop, and the two cannot drift because the loop calls it.
+    /// </remarks>
+    public CycleMonth Step()
+    {
+        // THE FIRST MONTH IS A LOOK, NOT A MOVE. A read model is produced
+        // BY a tick (design 03 §6's Close), so before the first one there
+        // is nothing to decide from — which is also true of a human player
+        // opening a new game.
+        (Phase phase, string note) = _engine.ReadModel is FieldReadModel now
+            ? Decide(now)
+            : (Phase.Produce, "opened the books");
+
+        _engine.Pipeline.AdvanceTick();
+
+        FieldReadModel after = Read();
+
+        return new CycleMonth(
+            after.Tick, after.Date, phase, after.Cash, after.Wells,
+            after.ProducedThisTick, note);
+    }
+
     /// <summary>Run the cycle for this many months, or until it goes insolvent.</summary>
     public CycleRun Run(int months)
     {
@@ -202,25 +229,13 @@ public sealed class WorkflowCycle
 
         for (var month = 0; month < months; month++)
         {
-            // THE FIRST MONTH IS A LOOK, NOT A MOVE. A read model is produced
-            // BY a tick (design 03 §6's Close), so before the first one there
-            // is nothing to decide from — which is also true of a human player
-            // opening a new game.
-            (Phase phase, string note) = _engine.ReadModel is FieldReadModel now
-                ? Decide(now)
-                : (Phase.Produce, "opened the books");
+            CycleMonth said = Step();
 
-            _engine.Pipeline.AdvanceTick();
+            lifetime += said.Produced.CubicMetres;
 
-            FieldReadModel after = Read();
+            log.Add(said);
 
-            lifetime += after.ProducedThisTick.CubicMetres;
-
-            log.Add(new CycleMonth(
-                after.Tick, after.Date, phase, after.Cash, after.Wells,
-                after.ProducedThisTick, note));
-
-            if (after.Insolvent)
+            if (Read().Insolvent)
                 break;
         }
 

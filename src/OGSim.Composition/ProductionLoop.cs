@@ -273,11 +273,6 @@ internal sealed class ProductionLoop : IStateOwner
     private readonly Density _surfaceDensity;
     private readonly int _materialCount;
 
-    // Which elements meter. A set, because stage 5 asks it once per element per
-    // segment — and because the loop must not ask an element what it IS, only
-    // whether composition told it this one is a meter.
-    private readonly HashSet<EntityId<IFlowElement>> _meters = [];
-
     // Stage 5's answer, held for stage 6. Cleared at the start of every solve so
     // a tick that produced nothing cannot commit last month's volumes.
     private readonly Dictionary<EntityId<IReservoirCompartmentEntity>, double> _byCompartment = [];
@@ -403,7 +398,6 @@ internal sealed class ProductionLoop : IStateOwner
         IAuditTrail audit,
         IFlowSolver solver,
         IFlowElementRegistry network,
-        IReadOnlyList<EntityId<IFlowElement>> meteredPoints,
         Func<EntityId<IFlowElement>, string> names,
 
         // READ, never written: the chain view reports condition and stage 4 is
@@ -455,7 +449,6 @@ internal sealed class ProductionLoop : IStateOwner
         ArgumentNullException.ThrowIfNull(audit);
         ArgumentNullException.ThrowIfNull(solver);
         ArgumentNullException.ThrowIfNull(network);
-        ArgumentNullException.ThrowIfNull(meteredPoints);
         ArgumentNullException.ThrowIfNull(names);
         ArgumentNullException.ThrowIfNull(plant);
         ArgumentNullException.ThrowIfNull(terminal);
@@ -499,8 +492,6 @@ internal sealed class ProductionLoop : IStateOwner
         for (int i = 0; i < fluidSystems.Count; i++)
             apiGravityByFluidSystem.Add(fluidSystems[i].Id, fluidSystems[i].ApiGravityDegrees);
         _apiGravityByFluidSystem = apiGravityByFluidSystem;
-
-        for (int i = 0; i < meteredPoints.Count; i++) _meters.Add(meteredPoints[i]);
 
         Delivered = OGSim.Kernel.Composition.Zero(materialCount);
         _stored = OGSim.Kernel.Composition.Zero(materialCount);
@@ -1048,10 +1039,25 @@ internal sealed class ProductionLoop : IStateOwner
         // What reached the meter. The custody point's ON-SPEC outlet only: its
         // Reject leg is deliberately not counted, which is the entire reason the
         // gate is a network element rather than a predicate at the ledger.
+        //
+        // WHICH ELEMENT METERS, read off the PLANT every segment rather than
+        // captured at composition (finding 285). A bare-ground company's
+        // custody point does not exist until it commissions one, so a list
+        // taken at compose time stayed empty forever — every barrel then
+        // lifted crossed the meter unrecorded, unsold and un-stored (this
+        // block is ALSO where `_stored` feeds the tank's commit), while
+        // lifting was charged on all of it. The ledger probe measured it as
+        // the whole of the Days insolvency plans 26 §6 recorded on every
+        // seed: the chain flowing, `ProducedThisTick` zero, cash gone. The
+        // opening-position builds could never see it — their custody point
+        // exists at composition, so the captured list was right by luck.
         for (int i = 0; i < report.Solutions.Count; i++)
         {
             ElementSolution solution = report.Solutions[i];
-            if (!_meters.Contains(solution.Element)) continue;
+
+            if (Custody is not OGSim.Facilities.CustodyTransferPoint meter
+                || solution.Element != meter.Id)
+                continue;
 
             MaterialStream passed = solution.Converged.Outlets[OnSpecLeg];
             OGSim.Kernel.Composition onSpec = passed.MassRates;

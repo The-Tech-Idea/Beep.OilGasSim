@@ -188,6 +188,81 @@ public sealed class GameStyleTests
         Assert.Equal(Defaults.Hedge, GameStyles.Engineer.Terms.Hedge);
     }
 
+    /// <summary>
+    /// A PLANT BUILT MID-GAME METERS WHAT IT DELIVERS (finding 285).
+    /// </summary>
+    /// <remarks>
+    /// <para>The ledger probe found every Days run insolvent with the chain
+    /// FLOWING: wells lifting, the custody element passing mass in the solve,
+    /// and <c>ProducedThisTick</c> zero for seventeen straight months — so
+    /// lifting was paid on every barrel and revenue never posted. The loop had
+    /// captured <c>chain.MeteredPoints</c> ONCE at composition, when a
+    /// bare-ground company's custody point does not exist yet, so the metered
+    /// set stayed empty forever: every barrel crossed the meter unrecorded,
+    /// unsold and un-stored.</para>
+    ///
+    /// <para>The opening-position builds could never see it — their custody
+    /// point exists at composition, so the captured list was right by luck.
+    /// This is the S2 case: build the plant DURING the game, then deliver.</para>
+    /// </remarks>
+    [Fact]
+    public void GS8_a_plant_built_mid_game_meters_what_it_delivers()
+    {
+        Built built = Assert.IsType<Built>(
+            EngineBuilder.Build(GameStyles.Days.Compose(Fixture.Settings())));
+
+        Engine engine = built.Engine;
+        FieldControl field = engine.Provided.Resolve<FieldControl>();
+
+        // A reservoir the company already knows is there (SDD-010 §4b), the
+        // shared fixtures' own shape — this test is about DELIVERY, not luck.
+        EntityId<IReservoirCompartmentEntity> reservoir = field.AddCompartment(
+            new GeneratedCompartment(
+                PoreVolume: new ReservoirVolume(100.0e6),
+                Porosity: 0.22,
+                OilSaturation: 0.7,
+                InitialPressure: new Pressure(30.0e6),
+                Temperature: Temperature.FromCelsius(93.3),
+                Depth: new Length(2000.0),
+                FluidSystem: new ContentId("medium-crude")),
+            permeability: new Permeability(2.0e-13),
+            netThickness: new Length(30.0),
+            drainageArea: new Area(2.0e5),
+            rockCompressibility: 4.5e-10,
+            gasOilContact: new Length(1900.0),
+            oilWaterContact: new Length(2100.0),
+            Defaults.Wettability, Defaults.Drive,
+            Defaults.AquiferStrength, Defaults.AquiferResponseTime);
+
+        engine.Provided.Resolve<WorldState>()
+            .DeclareKnownField(reservoir, new ReservoirVolume(100.0e6));
+
+        // The well waits shut in (plans 23's suspended well) until the plant
+        // it needs is commissioned through the real command.
+        field.Drill(reservoir, new Length(2000.0));
+
+        Assert.IsType<Accepted>(
+            engine.Commands.Submit(new InstallEarlyProductionFacilityCommand()));
+
+        var month = 0;
+        while (month < 12
+               && (engine.ReadModel is not FieldReadModel now
+                   || now.ProducedThisTick.CubicMetres <= 0.0))
+        {
+            engine.Pipeline.AdvanceTick();
+            month++;
+        }
+
+        Assert.True(engine.ReadModel!.ProducedThisTick.CubicMetres > 0.0,
+            "a company that built its plant and lifted oil across the meter delivered nothing");
+
+        // AND THE BARRELS WERE SOLD — delivery without revenue would be the
+        // same defect one seam later.
+        Assert.Contains(
+            engine.Audit.Query(new AuditQuery(null, AuditCategory.CustodyTransfer, null, null)),
+            entry => entry.Data.ContainsKey("volume-m3"));
+    }
+
     /// <summary>The one licence a build composes.</summary>
     private static OGSim.Company.Licence Licence(IGameStyle mode)
     {
