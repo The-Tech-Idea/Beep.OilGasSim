@@ -27,6 +27,7 @@ public sealed class ObligationRegistry : IObligationRegistry, IStateOwner
     // Insertion-ordered, because a save walks it and two runs of one game must
     // write the obligations in the same order (rule D-5).
     private readonly List<EntityRef> _order = [];
+    private int _discharged;
     private readonly Dictionary<EntityRef, Obligation> _outstanding = [];
 
     public ObligationRegistry(Func<ContentId, Length, Money> costOf)
@@ -37,9 +38,12 @@ public sealed class ObligationRegistry : IObligationRegistry, IStateOwner
 
     public StateKey Key { get; } = new("company.obligations");
 
-    /// <summary>v2 (finding 289): each obligation carries the bore its
-    /// estimate is priced over.</summary>
-    public int SchemaVersion => 2;
+    /// <summary>v3 (finding 290): the discharged count travels with the
+    /// register — Legacy scores discharged/incurred, and a reload that forgot
+    /// what was already made good would score the run on half its history.
+    /// v2 (finding 289): each obligation carries the bore its estimate is
+    /// priced over.</summary>
+    public int SchemaVersion => 3;
 
     /// <summary>
     /// AFTER THE WELLS, and this is the dependency that proved the mechanism
@@ -62,6 +66,11 @@ public sealed class ObligationRegistry : IObligationRegistry, IStateOwner
     /// <summary>How many assets still carry one. What a company owes the future,
     /// and what the read model reports.</summary>
     public int Outstanding => _outstanding.Count;
+
+    /// <summary>How many obligations completed abandonments have made good
+    /// (finding 290) — the numerator of SDD-014 §4's Legacy dimension;
+    /// incurred-ever is this plus <see cref="Outstanding"/>.</summary>
+    public int Discharged => _discharged;
 
     /// <summary>Everything still owed, in the order it was incurred.</summary>
     public IReadOnlyList<EntityRef> Assets => _order;
@@ -118,6 +127,8 @@ public sealed class ObligationRegistry : IObligationRegistry, IStateOwner
                 $"abandonment {completedAbandonment.Value} discharged asset " +
                 $"{asset.Kind}:{asset.Value}, which carries no obligation");
 
+        _discharged++;
+
         _order.Remove(asset);
     }
 
@@ -125,6 +136,7 @@ public sealed class ObligationRegistry : IObligationRegistry, IStateOwner
     {
         ArgumentNullException.ThrowIfNull(writer);
 
+        writer.WriteInt64("discharged", _discharged);
         writer.WriteInt64("count", _order.Count);
 
         for (int i = 0; i < _order.Count; i++)
@@ -149,6 +161,7 @@ public sealed class ObligationRegistry : IObligationRegistry, IStateOwner
 
         _order.Clear();
         _outstanding.Clear();
+        _discharged = (int)reader.ReadInt64("discharged");
 
         long count = reader.ReadInt64("count");
 

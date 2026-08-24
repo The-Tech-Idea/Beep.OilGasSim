@@ -564,6 +564,11 @@ internal sealed class SurfaceChain
     /// is nowhere to tie a well in until a header is built, and the refusal a
     /// player reads comes from this being honestly zero.
     /// </remarks>
+    /// <summary>The custody point's one display name (finding 290): the
+    /// projection prints it and the score ledger finds the produced side of
+    /// uptime by it, so the string has one owner.</summary>
+    public const string CustodyName = "custody-meter";
+
     public int Slots => Manifold?.Slots ?? 0;
 
     // `MeteredPoints` is deliberately GONE (finding 285). It existed so the
@@ -589,7 +594,7 @@ internal sealed class SurfaceChain
         if (Manifold is not null && element == Manifold.Id) return "manifold";
         if (Flowline is not null && element == Flowline.Id) return "flowline";
         if (Separator is not null && element == Separator.Id) return "separator";
-        if (Custody is not null && element == Custody.Id) return "custody-meter";
+        if (Custody is not null && element == Custody.Id) return CustodyName;
         if (Treater is not null && element == Treater.Id) return "treater";
         if (GasPlant is not null && element == GasPlant.Id) return "gas-plant";
         if (Flare is not null && element == Flare.Id) return "flare";
@@ -1104,7 +1109,11 @@ internal sealed class FieldModule(
         // SDD-014 §5a's finding-266 amendment — a run's verdict and what has
         // already been told to the trail about it are both history across
         // ticks, not a value today's state alone reproduces.
-        "objectives.evaluation", "objectives.reporting"],
+        "objectives.evaluation", "objectives.reporting",
+
+        // R24.6 (finding 290) — the span the eight score dimensions integrate
+        // over is run history for the same reason the two above are.
+        "scenario.scores"],
     stages:
     [
         new StageParticipation(StageId.Operations, Order: 0),
@@ -1606,9 +1615,19 @@ internal sealed class FieldModule(
         var runner = new ScenarioRunner(Defaults.FirstField, paths.Schema);
         composition.Own(runner);
 
+        // R24.6 (finding 290): the span the eight dimensions integrate over
+        // is run state — a reload that forgot five years of production would
+        // score the decade on its second half.
+        var scoreLedger = new ScoreLedger();
+        composition.Own(scoreLedger);
+
         var objectives = new ObjectiveStage(
             company, runner, paths, projection, audit, bank, stake,
-            terms.TakeoverAfterAmortisingTicks);
+            terms.TakeoverAfterAmortisingTicks,
+            scoreLedger, composition.Require<IObligationRegistry>(),
+            composition.Require<ReservesBook>(),
+            loop,
+            composition.Require<EsgAssessment>());
         composition.Contribute(order: 0, objectives);
         composition.Own(objectives);
 

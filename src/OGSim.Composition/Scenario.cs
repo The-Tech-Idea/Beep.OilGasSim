@@ -189,10 +189,12 @@ internal sealed class ScenarioRunner : IScenarioRunner, IStateOwner
 
         _overall = Overall(anyFailed, allMet, tick);
 
-        // Scores are EMPTY, and honestly so: SDD-014 §4's eight formulas read
-        // ledger and registry values this loop does not yet publish, and a
-        // scenario with no scoring weights is what that document calls a
-        // sandbox. Nothing here invents a number.
+        // Scores are attached by the CONSUMER, not computed here (R24.6,
+        // finding 290): the eight dimensions read span accumulators and
+        // registry counts the snapshot does not carry, and this runner is
+        // deliberately blind to both — `ObjectiveStage` holds the `ScoreLedger`
+        // and the obligation register, and builds `Scores` onto this record the
+        // same way it caches R24.5's objective events.
         return new ScenarioProgress(reported, [], _overall, _goals, _scenario.Deadline);
     }
 
@@ -442,7 +444,22 @@ internal sealed class ObjectiveStage(
     // over. Passed rather than a constant so a build composed without the
     // takeover mechanic is given a threshold no run reaches — this stage keeps
     // one path and never asks which game it is in.
-    int takeoverAfterAmortisingTicks) : ITickStage, IStateOwner
+    int takeoverAfterAmortisingTicks,
+
+    // R24.6 (finding 290): the span accumulator the eight score dimensions
+    // read, fed here because this stage is where the sealed position and the
+    // trail already meet (the same reasoning that put R24.5's event cache on
+    // this consumer), and the obligation register the Legacy dimension counts.
+    ScoreLedger scores,
+    IObligationRegistry obligations,
+
+    // The sources §4 names, read rather than recomputed: the reserves book
+    // and the loop give the same 2P call the projection publishes, the
+    // assessment gives the one standing, and both uptime masses are the
+    // solver's own (finding 290).
+    ReservesBook reserves,
+    ProductionLoop loop,
+    EsgAssessment esg) : ITickStage, IStateOwner
 {
     private ObjectiveState _reported = ObjectiveState.Pending;
 
@@ -539,7 +556,29 @@ internal sealed class ObjectiveStage(
         }
 
         Position = projection.Take(context.Tick, context.Date, Insolvent, TakenOver);
-        Progress = runner.Evaluate(paths.SnapshotOf(Position), context.Tick);
+
+        // THE SPAN SEES WHAT THE OBJECTIVES SEE (finding 290): the same sealed
+        // position, integrated before evaluation so this tick's production and
+        // spend are in this tick's scores. 2P is the same call the projection
+        // publishes — the book's remaining reserves after cumulative
+        // production — so the score and the screen cannot disagree (law L5).
+        OGSim.Contracts.ReservesEstimate remaining =
+            reserves.Remaining(loop.CumulativeProduced);
+        double twoP = remaining.Proved.CubicMetres + remaining.Probable.CubicMetres;
+
+        scores.Observe(
+            context.Tick, Position, company.Ledger.CashByCause(context.Tick), twoP,
+            loop.CustodyThroughputThisTick, loop.DeferredThisTick);
+
+        Progress = runner.Evaluate(paths.SnapshotOf(Position), context.Tick) with
+        {
+            // The runner evaluates objectives over the snapshot; the DIMENSIONS
+            // read span and registry values the snapshot does not carry, so the
+            // consumer that holds both attaches them (SDD-014 §4, R24.6).
+            Scores = scores.Scores(
+                Position, twoP, esg.Of(), obligations.Discharged,
+                obligations.Discharged + obligations.Outstanding),
+        };
 
         // SDD-014 §3: "emit objective.* events on state change" — PER
         // objective, ahead of the combined verdict below: a scenario with

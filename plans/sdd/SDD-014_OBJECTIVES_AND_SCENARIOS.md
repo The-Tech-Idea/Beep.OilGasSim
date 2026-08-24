@@ -198,6 +198,44 @@ Composite = content-weighted sum of normalised dimensions; **dimensions always
 reported individually** (18 §4). Every input is an existing ledger/registry
 value — scoring reads, never computes new simulation facts.
 
+> **Amendment (finding 290, R24.6 built).** The eight dimensions are computed
+> by `ScoreLedger` (`OGSim.Composition`), a saved span accumulator fed each
+> tick by `ObjectiveStage` with the same sealed position the objectives
+> evaluate against plus the sources this section names — the cash ledger's
+> period effect by cause, the reserves book's 2P (the same
+> `Remaining(CumulativeProduced)` call the projection publishes, law L5), and
+> the solver's own custody and deferral masses (SDD-002 §8). The stage
+> attaches `Scores` to the runner's `ScenarioProgress`; the runner itself
+> stays blind to ledgers and registries, the same division that put R24.5's
+> event cache on the consumer. Decisions recorded:
+>
+> - **A dimension whose denominator has not happened is OMITTED**, never
+>   reported as zero — "the finding cost of nothing found" has no answer, and
+>   zero would flatter it (the same refusal §1 makes for `Max` over an empty
+>   collection). Reserves reports RRR; the 2P addition is recoverable from the
+>   same two terms.
+> - **HSE reads `EsgStanding`** — the engine already composes this row's exact
+>   terms (tier-weighted incident points via `ConsequencePoints`, decayed, and
+>   `EsgRecord`-normalised flaring intensity) into one published standing, and
+>   a second composite of the same events would be a second owner of one fact
+>   (law L5). Spill volume joins when incidents distinguish one.
+> - **Distributions are zero by construction**: no distribution mechanic
+>   exists; when one lands it gets its own `MovementCategory` and the term
+>   reads it.
+> - **Uptime is measured in the solver's own mass basis** — custody throughput
+>   over custody throughput plus attributed deferrals, both from
+>   `ProductionLoop`'s per-tick accessors — so made and lost are the same kind
+>   of number.
+> - **Legacy's discharged/incurred is also the restoration fraction** in an
+>   engine where discharging an obligation is the restoration (SDD-007 §6);
+>   `IObligationRegistry` gained the `Discharged` count, persisted (v3).
+> - **The span survives a reload** (`scenario.scores` state block), and the
+>   post-restore evaluation `SaveGame.Load` runs (finding 266) does not
+>   double-integrate its tick — the ledger latches the last observed tick.
+> - Pinned by GM9 (formulas over a played period, omit rule) and R24-V16
+>   (the span identical across a reload; capital efficiency's load-instant
+>   `CompanyValue` variance is the S013-9 family, asserted finite there).
+
 ## 5. Scenarios and campaigns
 
 ```text

@@ -131,6 +131,14 @@ public interface IObligationRegistry
     void Register(EntityRef asset, ContentId abandonmentTemplate, Length wellDepth);
     Money EstimatedCost(EntityRef asset);
 
+    /// <summary>Obligations still owed (SDD-007 §6).</summary>
+    int Outstanding { get; }
+
+    /// <summary>Obligations completed abandonments have made good (finding
+    /// 290) — SDD-014 §4's Legacy dimension is this over incurred-ever, which
+    /// is this plus <see cref="Outstanding"/>.</summary>
+    int Discharged { get; }
+
     /// <summary>
     /// Everything still owed, at today's estimate — what a company owes the
     /// future (SDD-007 §6).

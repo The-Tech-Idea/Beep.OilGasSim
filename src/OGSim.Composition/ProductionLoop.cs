@@ -815,6 +815,8 @@ internal sealed class ProductionLoop : IStateOwner
         _chain.Clear();
         _importedThisTick = 0.0;
         FlaredThisTick = new Mass(0.0);
+        DeferredThisTick = new Mass(0.0);
+        CustodyThroughputThisTick = new Mass(0.0);
         _stored = OGSim.Kernel.Composition.Zero(_materialCount);
         Tank?.ForgetPromises();
         Array.Clear(_handled);
@@ -942,12 +944,26 @@ internal sealed class ProductionLoop : IStateOwner
                 throughput += outlets[o].MassRates.Total.KgPerSecond;
 
             Flowing(solution.Element).Throughput += throughput * seconds;
+
+            // The tick's custody-metered mass, for the uptime score (finding
+            // 290) — the same live plant read finding 285 established, so a
+            // meter commissioned mid-game counts from its first tick.
+            if (Custody is OGSim.Facilities.CustodyTransferPoint scored
+                && solution.Element == scored.Id)
+                CustodyThroughputThisTick =
+                    new Mass(CustodyThroughputThisTick.Kilograms + throughput * seconds);
         }
 
         for (int i = 0; i < report.Deferrals.Count; i++)
         {
             Flowing(report.Deferrals[i].Element)
                 .Refuse(report.Deferrals[i].Kind, report.Deferrals[i].Deferred);
+
+            // The tick's attributed total, for the uptime score (finding 290)
+            // — the same masses the chain view publishes per element, summed
+            // once at the source rather than re-walked by a consumer.
+            DeferredThisTick = new Mass(
+                DeferredThisTick.Kilograms + report.Deferrals[i].Deferred.Kilograms);
 
             // AND IT GOES IN THE TRAIL, which is the fairness record for the one
             // question a player will actually argue with: why did my field make
@@ -1648,6 +1664,15 @@ internal sealed class ProductionLoop : IStateOwner
     /// <summary>What left for market this tick. What the tank could not hold
     /// stays in it, and what it could not take never left the field.</summary>
     public Mass Exported { get; private set; }
+
+    /// <summary>Σ of this tick's attributed deferrals across the chain
+    /// (SDD-002 §8) — the lost side of SDD-014 §4's uptime dimension, in the
+    /// solver's own mass basis (finding 290).</summary>
+    public Mass DeferredThisTick { get; private set; }
+
+    /// <summary>What crossed the custody point this tick, in the same mass
+    /// basis — the made side of the uptime dimension (finding 290).</summary>
+    public Mass CustodyThroughputThisTick { get; private set; }
 
     public void RecordCustody()
     {

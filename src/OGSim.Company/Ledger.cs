@@ -150,7 +150,7 @@ public sealed class CostLedger
     /// <summary>The cause's slot in <see cref="Causes"/>. Walked rather than
     /// cast from the enum's value: an ordinal would re-key silently the day a
     /// category is inserted, and the nine are walked once per movement.</summary>
-    private static int At(MovementCategory cause)
+    public static int At(MovementCategory cause)
     {
         for (int i = 0; i < Causes.Count; i++)
             if (Causes[i] == cause) return i;
