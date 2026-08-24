@@ -9,5 +9,25 @@
   "weatherLimit": 6.5,
   "requiresAccess": false,
   "develops": true,
-  "note": "The cheapest lift. Shallow, slow, and it will outlive you. RATE, not price (finding 289): $0.00125M and 0.0005 turns per metre, derived from the measured $2.5M/1t at the 2,000 m standard hole - the world supplies the quantity."
+  "note": "The cheapest lift. Shallow, slow, and it will outlive you. RATE, not price (finding 289): $0.00125M and 0.0005 turns per metre, derived from the measured $2.5M/1t at the 2,000 m standard hole - the world supplies the quantity.",
+  "outcomes": [
+    {
+      "grade": "on-time",
+      "probability": 0.8,
+      "durationFactor": 1.0,
+      "costFactor": 1.0
+    },
+    {
+      "grade": "delayed",
+      "probability": 0.12,
+      "durationFactor": 1.5,
+      "costFactor": 1.1
+    },
+    {
+      "grade": "failure",
+      "probability": 0.08,
+      "durationFactor": 1.0,
+      "costFactor": 1.0
+    }
+  ]
 }

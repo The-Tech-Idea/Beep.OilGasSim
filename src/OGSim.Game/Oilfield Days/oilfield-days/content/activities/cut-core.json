@@ -9,5 +9,25 @@
   "weatherLimit": 6.0,
   "requiresAccess": true,
   "develops": true,
-  "note": "Rock in your hand. The sharpest reading available and the slowest to take. RATE, not price (finding 289): $0.00045M and 0.0005 turns per metre, derived from the measured $0.9M/1t at the 2,000 m standard hole - the world supplies the quantity."
+  "note": "Rock in your hand. The sharpest reading available and the slowest to take. RATE, not price (finding 289): $0.00045M and 0.0005 turns per metre, derived from the measured $0.9M/1t at the 2,000 m standard hole - the world supplies the quantity.",
+  "outcomes": [
+    {
+      "grade": "on-time",
+      "probability": 0.85,
+      "durationFactor": 1.0,
+      "costFactor": 1.0
+    },
+    {
+      "grade": "delayed",
+      "probability": 0.1,
+      "durationFactor": 2.0,
+      "costFactor": 1.2
+    },
+    {
+      "grade": "failure",
+      "probability": 0.05,
+      "durationFactor": 1.0,
+      "costFactor": 1.0
+    }
+  ]
 }

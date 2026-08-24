@@ -334,45 +334,7 @@ internal static class Defaults
     /// </summary>
     public static EntityId<IRig> TheRig { get; } = new(1);
 
-    /// <summary>
-    /// SDD-007 §4's outcome table for a development well, as content would carry
-    /// it. Probabilities sum to 1.0 (load-checked).
-    ///
-    /// <para>Success is the 0.60 the bespoke path drew directly — but it is now
-    /// the sum of three grades rather than a single number, so a well can come
-    /// in late or over budget instead of only being dry. `DisasterDay` on the
-    /// disaster row is the day a blowout would occur; R18 consumes it, and until
-    /// then a disaster is simply the worst kind of dry hole.</para>
-    /// </summary>
-    public static OutcomeTable DrillingOutcomes { get; } = new(
-    [
-        new OutcomeRow(OutcomeGrade.OnTime, Probability: 0.40,
-                       DurationFactor: 1.00, CostFactor: 1.00, DisasterDay: null),
-        new OutcomeRow(OutcomeGrade.Delayed, Probability: 0.14,
-                       DurationFactor: 1.50, CostFactor: 1.15, DisasterDay: null),
-        new OutcomeRow(OutcomeGrade.OverBudget, Probability: 0.06,
-                       DurationFactor: 1.10, CostFactor: 1.60, DisasterDay: null),
-        new OutcomeRow(OutcomeGrade.Failure, Probability: 0.38,
-                       DurationFactor: 0.80, CostFactor: 0.90, DisasterDay: null),
-        new OutcomeRow(OutcomeGrade.Disaster, Probability: 0.02,
-                       DurationFactor: 1.80, CostFactor: 2.50, DisasterDay: 45),
-    ]);
 
-    /// <summary>
-    /// A build-up's outcome table. A test is short, cheap and usually works —
-    /// but it can fail, and a failed test is the honest bad outcome: the money
-    /// is gone and the company knows nothing new, which is what makes buying
-    /// information a decision rather than a formality.
-    /// </summary>
-    public static OutcomeTable WellTestOutcomes { get; } = new(
-    [
-        new OutcomeRow(OutcomeGrade.OnTime, Probability: 0.85,
-                       DurationFactor: 1.00, CostFactor: 1.00, DisasterDay: null),
-        new OutcomeRow(OutcomeGrade.Delayed, Probability: 0.10,
-                       DurationFactor: 2.00, CostFactor: 1.20, DisasterDay: null),
-        new OutcomeRow(OutcomeGrade.Failure, Probability: 0.05,
-                       DurationFactor: 1.00, CostFactor: 1.00, DisasterDay: null),
-    ]);
 
     /// <summary>
     /// How deep the company can drill before it earns the technology to go
@@ -381,20 +343,6 @@ internal static class Defaults
     /// </summary>
     public static Length MaximumDrillingDepth { get; } = new(4000.0);
 
-    /// <summary>
-    /// A survey's outcome table. Nothing about shooting seismic is difficult in
-    /// the way drilling is; what can go wrong is that the data comes back too
-    /// noisy to process, and then the money is simply gone.
-    /// </summary>
-    public static OutcomeTable SurveyOutcomes { get; } = new(
-    [
-        new OutcomeRow(OutcomeGrade.OnTime, Probability: 0.80,
-                       DurationFactor: 1.00, CostFactor: 1.00, DisasterDay: null),
-        new OutcomeRow(OutcomeGrade.Delayed, Probability: 0.12,
-                       DurationFactor: 1.50, CostFactor: 1.10, DisasterDay: null),
-        new OutcomeRow(OutcomeGrade.Failure, Probability: 0.08,
-                       DurationFactor: 1.00, CostFactor: 1.00, DisasterDay: null),
-    ]);
 
     // ------------------------------------------------------- property kinds
     //
@@ -585,30 +533,66 @@ internal static class Defaults
     /// </summary>
     private static ActivityTerms Stated(
         ICatalog<ActivityDefinition> stated, ContentId template,
-        EntityId<IRig>? rig, OutcomeTable outcomes)
+        EntityId<IRig>? rig)
     {
         ActivityDefinition entry = stated[template];
 
         return new ActivityTerms(
             entry.Id, entry.Unit, Money.FromMillions(entry.CostMillionsPerUnit),
             entry.TurnsPerUnit,
-            rig, entry.WeatherLimit, entry.RequiresAccess, entry.Develops, outcomes);
+            rig, entry.WeatherLimit, entry.RequiresAccess, entry.Develops,
+            TableOf(entry));
+    }
+
+    /// <summary>
+    /// The entry's own outcome rows as the typed table (R12b.12, finding 292)
+    /// — the grade NAME crosses from content here, where the enum lives, and
+    /// an unknown one refuses by name rather than drawing an outcome nobody
+    /// declared.
+    /// </summary>
+    private static OutcomeTable TableOf(ActivityDefinition entry)
+    {
+        var rows = new List<OutcomeRow>(entry.Outcomes.Count);
+
+        for (int i = 0; i < entry.Outcomes.Count; i++)
+        {
+            OutcomeRowDefinition row = entry.Outcomes[i];
+
+            OutcomeGrade grade = row.Grade switch
+            {
+                "on-time" => OutcomeGrade.OnTime,
+                "delayed" => OutcomeGrade.Delayed,
+                "over-budget" => OutcomeGrade.OverBudget,
+                "partial" => OutcomeGrade.Partial,
+                "failure" => OutcomeGrade.Failure,
+                "disaster" => OutcomeGrade.Disaster,
+                _ => throw new ContentFault("SDD-007 §4", null,
+                    $"activity '{entry.Id.Value}' declares outcome grade '{row.Grade}', " +
+                    "which is not one this engine's outcome vocabulary carries"),
+            };
+
+            rows.Add(new OutcomeRow(
+                grade, row.Probability, row.DurationFactor, row.CostFactor,
+                row.DisasterDay is long day ? (int)day : null));
+        }
+
+        return new OutcomeTable(rows);
     }
 
     public static ActivityTerms DrillWellTerms(ICatalog<ActivityDefinition> stated) =>
-        Stated(stated, DrillTemplate, TheRig, DrillingOutcomes);
+        Stated(stated, DrillTemplate, TheRig);
 
     public static ActivityTerms WellTestTerms(ICatalog<ActivityDefinition> stated) =>
-        Stated(stated, new ContentId("well-test-buildup"), TheRig, WellTestOutcomes);
+        Stated(stated, new ContentId("well-test-buildup"), TheRig);
 
     /// <summary>Cheap, quick, and run on the rig that is already there.</summary>
     public static ActivityTerms WirelineLogTerms(ICatalog<ActivityDefinition> stated) =>
-        Stated(stated, new ContentId("wireline-log"), TheRig, WellTestOutcomes);
+        Stated(stated, new ContentId("wireline-log"), TheRig);
 
     /// <summary>Several times the price of a log for the same two properties,
     /// which is the decision.</summary>
     public static ActivityTerms CoringTerms(ICatalog<ActivityDefinition> stated) =>
-        Stated(stated, new ContentId("cut-core"), TheRig, WellTestOutcomes);
+        Stated(stated, new ContentId("cut-core"), TheRig);
 
     /// <summary>
     /// NO RIG (SDD-007 §1's null case) and no wellbore: a survey is shot from the
@@ -618,7 +602,7 @@ internal static class Defaults
     /// drilling.
     /// </summary>
     public static ActivityTerms SeismicSurveyTerms(ICatalog<ActivityDefinition> stated) =>
-        Stated(stated, new ContentId("seismic-3d"), null, SurveyOutcomes);
+        Stated(stated, new ContentId("seismic-3d"), null);
 
     /// <summary>
     /// RECONNAISSANCE over a block, and the cheapest thing a company can buy
@@ -636,7 +620,7 @@ internal static class Defaults
     /// is waiting on should come back inside the season they asked it in.</para>
     /// </summary>
     public static ActivityTerms BlockSurveyTerms(ICatalog<ActivityDefinition> stated) =>
-        Stated(stated, new ContentId("seismic-2d"), null, SurveyOutcomes);
+        Stated(stated, new ContentId("seismic-2d"), null);
 
     /// <summary>
     /// What a packaged plant costs to put on the ground (plans 22 §4, S2).
@@ -657,7 +641,7 @@ internal static class Defaults
     /// decision actually carries.</para>
     /// </remarks>
     public static ActivityTerms EarlyProductionFacilityTerms(ICatalog<ActivityDefinition> stated) =>
-        Stated(stated, new ContentId("install-early-production-facility"), null, SurveyOutcomes);
+        Stated(stated, new ContentId("install-early-production-facility"), null);
 
     /// <summary>
     /// The formation volume factor a shipped completion converts with.
@@ -926,7 +910,7 @@ internal static class Defaults
     /// makes overbuilding a small field hurt.
     /// </summary>
     public static ActivityTerms ExpandExportTerms(ICatalog<ActivityDefinition> stated) =>
-        Stated(stated, new ContentId("expand-export"), null, SurveyOutcomes);
+        Stated(stated, new ContentId("expand-export"), null);
 
     /// <summary>
     /// The gathering line from the header to the vessel (design 04 §5 stage 3,
@@ -1023,7 +1007,7 @@ internal static class Defaults
     /// That is the authentic and uncomfortable shape of late life.</para>
     /// </summary>
     public static ActivityTerms AbandonWellTerms(ICatalog<ActivityDefinition> stated) =>
-        Stated(stated, AbandonTemplate, null, SurveyOutcomes);
+        Stated(stated, AbandonTemplate, null);
 
     /// <summary>
     /// What an obligation is estimated at, by template (SDD-007 §6). Content in
@@ -1043,7 +1027,7 @@ internal static class Defaults
     /// gas, which is most of a small facility.
     /// </summary>
     public static ActivityTerms InstallGasPlantTerms(ICatalog<ActivityDefinition> stated) =>
-        Stated(stated, new ContentId("install-gas-plant"), null, SurveyOutcomes);
+        Stated(stated, new ContentId("install-gas-plant"), null);
 
 
 
@@ -1053,7 +1037,7 @@ internal static class Defaults
     /// producing around it.
     /// </summary>
     public static ActivityTerms InstallTankTerms(ICatalog<ActivityDefinition> stated) =>
-        Stated(stated, new ContentId("install-tank"), null, SurveyOutcomes);
+        Stated(stated, new ContentId("install-tank"), null);
 
 
     /// <summary>
@@ -1062,25 +1046,25 @@ internal static class Defaults
     /// live field — dearer than a vessel for its size, and slower.
     /// </summary>
     public static ActivityTerms InstallManifoldTerms(ICatalog<ActivityDefinition> stated) =>
-        Stated(stated, new ContentId("install-manifold"), null, SurveyOutcomes);
+        Stated(stated, new ContentId("install-manifold"), null);
 
     /// <summary>What a treater costs and how long it takes.</summary>
     public static ActivityTerms InstallTreaterTerms(ICatalog<ActivityDefinition> stated) =>
-        Stated(stated, new ContentId("install-treater"), null, SurveyOutcomes);
+        Stated(stated, new ContentId("install-treater"), null);
 
     /// <summary>SDD-006 §3c's own capital item (R9.1's own composition,
     /// finding 257) — a real compression train, priced against a gas plant
     /// module rather than a vessel: it is heavier iron than a separator and
     /// lighter than the plant it feeds.</summary>
     public static ActivityTerms InstallCompressorTerms(ICatalog<ActivityDefinition> stated) =>
-        Stated(stated, new ContentId("install-compressor"), null, SurveyOutcomes);
+        Stated(stated, new ContentId("install-compressor"), null);
 
     /// <summary>SDD-006 §3d's own capital item (R11.2's own composition,
     /// finding 259) — C11's own capex band prices a pump station one tier
     /// below a compressor station ($$$ against $$$$), which is what its
     /// cost is set against here.</summary>
     public static ActivityTerms InstallLiquidPumpStationTerms(ICatalog<ActivityDefinition> stated) =>
-        Stated(stated, new ContentId("install-pump-station"), null, SurveyOutcomes);
+        Stated(stated, new ContentId("install-pump-station"), null);
 
     /// <summary>
     /// What an acid job costs and how long it takes (R10-V4). Cheap against a
@@ -1089,7 +1073,7 @@ internal static class Defaults
     /// and the plugging goes on either way.
     /// </summary>
     public static ActivityTerms RemediateInjectorTerms(ICatalog<ActivityDefinition> stated) =>
-        Stated(stated, new ContentId("remediate-injector"), null, SurveyOutcomes);
+        Stated(stated, new ContentId("remediate-injector"), null);
 
     /// <summary>
     /// What an acid job on a PRODUCER costs (R12b.7, finding 253). Same
@@ -1098,7 +1082,7 @@ internal static class Defaults
     /// leaves an asset behind rather than restoring one.
     /// </summary>
     public static ActivityTerms StimulateWellTerms(ICatalog<ActivityDefinition> stated) =>
-        Stated(stated, new ContentId("stimulate-well"), null, SurveyOutcomes);
+        Stated(stated, new ContentId("stimulate-well"), null);
 
     /// <summary>
     /// What an acid job removes from a producer's skin (SDD-003 §6's R12b.7
@@ -1126,16 +1110,16 @@ internal static class Defaults
     /// estimates, not calibrated against a fixture.</para>
     /// </summary>
     public static ActivityTerms InstallRodPumpTerms(ICatalog<ActivityDefinition> stated) =>
-        Stated(stated, new ContentId("install-rod-pump"), null, SurveyOutcomes);
+        Stated(stated, new ContentId("install-rod-pump"), null);
 
     public static ActivityTerms InstallPcpTerms(ICatalog<ActivityDefinition> stated) =>
-        Stated(stated, new ContentId("install-pcp"), null, SurveyOutcomes);
+        Stated(stated, new ContentId("install-pcp"), null);
 
     public static ActivityTerms InstallEspTerms(ICatalog<ActivityDefinition> stated) =>
-        Stated(stated, new ContentId("install-esp"), null, SurveyOutcomes);
+        Stated(stated, new ContentId("install-esp"), null);
 
     public static ActivityTerms InstallGasLiftTerms(ICatalog<ActivityDefinition> stated) =>
-        Stated(stated, new ContentId("install-gas-lift"), null, SurveyOutcomes);
+        Stated(stated, new ContentId("install-gas-lift"), null);
 
     /// <summary>
     /// A PLANNED OVERHAUL (SDD-012 §3). A month and rather less than a new
@@ -1148,7 +1132,7 @@ internal static class Defaults
     /// answer to anything and §3's three strategies would collapse to one.</para>
     /// </summary>
     public static ActivityTerms ServiceEquipmentTerms(ICatalog<ActivityDefinition> stated) =>
-        Stated(stated, new ContentId("service-equipment"), null, SurveyOutcomes);
+        Stated(stated, new ContentId("service-equipment"), null);
 
     /// <summary>
     /// A CONDITION-MONITORING KIT (catalogue C14, SDD-012 §3). Vibration and
@@ -1162,7 +1146,7 @@ internal static class Defaults
     /// you anything.</para>
     /// </summary>
     public static ActivityTerms InstallMonitoringTerms(ICatalog<ActivityDefinition> stated) =>
-        Stated(stated, new ContentId("install-monitoring"), null, SurveyOutcomes);
+        Stated(stated, new ContentId("install-monitoring"), null);
 
     /// <summary>
     /// AN EMERGENCY REPAIR (SDD-012 §3, R20d.26.2 amendment). Three times the
@@ -1178,10 +1162,10 @@ internal static class Defaults
     /// whether that is enough to make preventive work a strategy.</para>
     /// </summary>
     public static ActivityTerms RepairEquipmentTerms(ICatalog<ActivityDefinition> stated) =>
-        Stated(stated, new ContentId("repair-equipment"), null, SurveyOutcomes);
+        Stated(stated, new ContentId("repair-equipment"), null);
 
     public static ActivityTerms InstallSeparatorTerms(ICatalog<ActivityDefinition> stated) =>
-        Stated(stated, new ContentId("install-separator"), null, SurveyOutcomes);
+        Stated(stated, new ContentId("install-separator"), null);
 
     /// <summary>
     /// What the sales contract requires. EMPTY, and honestly: a specification is

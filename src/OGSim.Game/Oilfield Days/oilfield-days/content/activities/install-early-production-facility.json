@@ -9,5 +9,25 @@
   "weatherLimit": 5.0,
   "requiresAccess": true,
   "develops": true,
-  "note": "The whole train as one purchase. Nine separate buys with no oil until the ninth is a shopping list, not a decision. RATE, not price (finding 289): $22M and 4 turns per kilometre, derived from the measured $22M/4t at the measured configuration's ~1 km market route - the world supplies the quantity."
+  "note": "The whole train as one purchase. Nine separate buys with no oil until the ninth is a shopping list, not a decision. RATE, not price (finding 289): $22M and 4 turns per kilometre, derived from the measured $22M/4t at the measured configuration's ~1 km market route - the world supplies the quantity.",
+  "outcomes": [
+    {
+      "grade": "on-time",
+      "probability": 0.8,
+      "durationFactor": 1.0,
+      "costFactor": 1.0
+    },
+    {
+      "grade": "delayed",
+      "probability": 0.12,
+      "durationFactor": 1.5,
+      "costFactor": 1.1
+    },
+    {
+      "grade": "failure",
+      "probability": 0.08,
+      "durationFactor": 1.0,
+      "costFactor": 1.0
+    }
+  ]
 }

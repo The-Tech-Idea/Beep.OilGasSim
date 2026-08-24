@@ -9,5 +9,25 @@
   "weatherLimit": 5.0,
   "requiresAccess": true,
   "develops": true,
-  "note": "The answer to wet oil the meter turns away. RATE, not price (finding 289): $5.55556M and 3.33333 turns per water-fraction-removed, derived from the measured $5M/3t at the heater-treater's 0.90 removed - the world supplies the quantity."
+  "note": "The answer to wet oil the meter turns away. RATE, not price (finding 289): $5.55556M and 3.33333 turns per water-fraction-removed, derived from the measured $5M/3t at the heater-treater's 0.90 removed - the world supplies the quantity.",
+  "outcomes": [
+    {
+      "grade": "on-time",
+      "probability": 0.8,
+      "durationFactor": 1.0,
+      "costFactor": 1.0
+    },
+    {
+      "grade": "delayed",
+      "probability": 0.12,
+      "durationFactor": 1.5,
+      "costFactor": 1.1
+    },
+    {
+      "grade": "failure",
+      "probability": 0.08,
+      "durationFactor": 1.0,
+      "costFactor": 1.0
+    }
+  ]
 }

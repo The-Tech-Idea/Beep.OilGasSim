@@ -9,5 +9,25 @@
   "weatherLimit": 8.0,
   "requiresAccess": true,
   "develops": true,
-  "note": "The cheapest purchase in the game. Without it you cannot see condition, so you cannot service. RATE, not price (finding 289): $0.00869565M and 0.0434783 turns per element, derived from the measured $0.2M/1t on the DEVELOPED fixture chain - six wells, their gathering lines and the full train, twenty-three elements - because that is the plant repairs were measured on; a young field's small chain is cheaper to keep."
+  "note": "The cheapest purchase in the game. Without it you cannot see condition, so you cannot service. RATE, not price (finding 289): $0.00869565M and 0.0434783 turns per element, derived from the measured $0.2M/1t on the DEVELOPED fixture chain - six wells, their gathering lines and the full train, twenty-three elements - because that is the plant repairs were measured on; a young field's small chain is cheaper to keep.",
+  "outcomes": [
+    {
+      "grade": "on-time",
+      "probability": 0.8,
+      "durationFactor": 1.0,
+      "costFactor": 1.0
+    },
+    {
+      "grade": "delayed",
+      "probability": 0.12,
+      "durationFactor": 1.5,
+      "costFactor": 1.1
+    },
+    {
+      "grade": "failure",
+      "probability": 0.08,
+      "durationFactor": 1.0,
+      "costFactor": 1.0
+    }
+  ]
 }

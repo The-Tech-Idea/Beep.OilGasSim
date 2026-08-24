@@ -9,5 +9,25 @@
   "weatherLimit": 5.5,
   "requiresAccess": true,
   "develops": true,
-  "note": "Shoot a dark block. Finds structures; tells you nothing about what is in them. RATE, not price (finding 289): $0.0125M and 0.015625 turns per square-kilometre, derived from the measured $0.8M/1t at the measured 32 km basin's 8 x 8 km block - the world supplies the quantity."
+  "note": "Shoot a dark block. Finds structures; tells you nothing about what is in them. RATE, not price (finding 289): $0.0125M and 0.015625 turns per square-kilometre, derived from the measured $0.8M/1t at the measured 32 km basin's 8 x 8 km block - the world supplies the quantity.",
+  "outcomes": [
+    {
+      "grade": "on-time",
+      "probability": 0.8,
+      "durationFactor": 1.0,
+      "costFactor": 1.0
+    },
+    {
+      "grade": "delayed",
+      "probability": 0.12,
+      "durationFactor": 1.5,
+      "costFactor": 1.1
+    },
+    {
+      "grade": "failure",
+      "probability": 0.08,
+      "durationFactor": 1.0,
+      "costFactor": 1.0
+    }
+  ]
 }

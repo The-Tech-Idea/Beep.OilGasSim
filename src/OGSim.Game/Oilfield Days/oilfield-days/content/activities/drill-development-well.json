@@ -9,5 +9,38 @@
   "weatherLimit": 6.0,
   "requiresAccess": true,
   "develops": true,
-  "note": "The bet. A dry hole re-prices every prospect on the same play. RATE, not price (finding 289): $0.004M and 0.002 turns per metre, derived from the measured $8M/4t at the 2,000 m standard hole - the world supplies the quantity."
+  "note": "The bet. A dry hole re-prices every prospect on the same play. RATE, not price (finding 289): $0.004M and 0.002 turns per metre, derived from the measured $8M/4t at the 2,000 m standard hole - the world supplies the quantity.",
+  "outcomes": [
+    {
+      "grade": "on-time",
+      "probability": 0.4,
+      "durationFactor": 1.0,
+      "costFactor": 1.0
+    },
+    {
+      "grade": "delayed",
+      "probability": 0.14,
+      "durationFactor": 1.5,
+      "costFactor": 1.15
+    },
+    {
+      "grade": "over-budget",
+      "probability": 0.06,
+      "durationFactor": 1.1,
+      "costFactor": 1.6
+    },
+    {
+      "grade": "failure",
+      "probability": 0.38,
+      "durationFactor": 0.8,
+      "costFactor": 0.9
+    },
+    {
+      "grade": "disaster",
+      "probability": 0.02,
+      "durationFactor": 1.8,
+      "costFactor": 2.5,
+      "disasterDay": 45
+    }
+  ]
 }

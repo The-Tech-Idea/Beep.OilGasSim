@@ -9,5 +9,25 @@
   "weatherLimit": 5.0,
   "requiresAccess": true,
   "develops": true,
-  "note": "More throughput through the first vessel every barrel crosses. RATE, not price (finding 289): $0.15M and 0.075 turns per kilogram-per-second-capacity, derived from the measured $6M/3t at the e2 vessel's 40 kg/s liquid leg - the world supplies the quantity."
+  "note": "More throughput through the first vessel every barrel crosses. RATE, not price (finding 289): $0.15M and 0.075 turns per kilogram-per-second-capacity, derived from the measured $6M/3t at the e2 vessel's 40 kg/s liquid leg - the world supplies the quantity.",
+  "outcomes": [
+    {
+      "grade": "on-time",
+      "probability": 0.8,
+      "durationFactor": 1.0,
+      "costFactor": 1.0
+    },
+    {
+      "grade": "delayed",
+      "probability": 0.12,
+      "durationFactor": 1.5,
+      "costFactor": 1.1
+    },
+    {
+      "grade": "failure",
+      "probability": 0.08,
+      "durationFactor": 1.0,
+      "costFactor": 1.0
+    }
+  ]
 }

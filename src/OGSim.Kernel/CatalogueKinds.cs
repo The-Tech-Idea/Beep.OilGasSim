@@ -30,8 +30,39 @@ namespace OGSim.Kernel;
 public sealed record ActivityDefinition(
     ContentId Id, string NameKey, ContentId Group,
     string Unit, double CostMillionsPerUnit, double TurnsPerUnit,
-    double WeatherLimit, bool RequiresAccess, bool Develops, string Note)
-    : ContentDefinition(Id);
+    double WeatherLimit, bool RequiresAccess, bool Develops, string Note,
+
+    /// <summary>SDD-007 §4's outcome table, as this entry's own rows
+    /// (R12b.12, finding 292) — how this work goes right and wrong is a
+    /// designer fact like its rate, and lived in engine statics until now.
+    /// Probabilities are load-checked to sum to 1.0; the grade names are
+    /// checked at composition, where the enum lives.</summary>
+    IReadOnlyList<OutcomeRowDefinition> Outcomes)
+    : ContentDefinition(Id)
+{
+    // Finding 131.
+    public bool Equals(ActivityDefinition? other) =>
+        other is not null && Id == other.Id && NameKey == other.NameKey
+        && Group == other.Group && Unit == other.Unit
+        && CostMillionsPerUnit.Equals(other.CostMillionsPerUnit)
+        && TurnsPerUnit.Equals(other.TurnsPerUnit)
+        && WeatherLimit.Equals(other.WeatherLimit)
+        && RequiresAccess == other.RequiresAccess && Develops == other.Develops
+        && Note == other.Note
+        && Structural.Equal(Outcomes, other.Outcomes);
+
+    public override int GetHashCode() =>
+        HashCode.Combine(Id, NameKey, Group, Unit,
+            HashCode.Combine(CostMillionsPerUnit, TurnsPerUnit, WeatherLimit,
+                RequiresAccess, Develops, Note, Structural.HashOf(Outcomes)));
+}
+
+/// <summary>One row of an activity's outcome table, kernel-shaped: the grade
+/// is a NAME here because <c>OutcomeGrade</c> is a contracts-layer enum this
+/// assembly must not see; composition maps and refuses unknowns.</summary>
+public sealed record OutcomeRowDefinition(
+    string Grade, double Probability, double DurationFactor, double CostFactor,
+    long? DisasterDay);
 
 public sealed class ActivityContentKind : IContentKind
 {
@@ -47,7 +78,30 @@ public sealed class ActivityContentKind : IContentKind
         PropertyKindContentKind.Required(element, "weatherLimit").GetDouble(),
         PropertyKindContentKind.Required(element, "requiresAccess").GetBoolean(),
         PropertyKindContentKind.Required(element, "develops").GetBoolean(),
-        PropertyKindContentKind.Required(element, "note").GetString()!);
+        PropertyKindContentKind.Required(element, "note").GetString()!,
+        Outcomes(PropertyKindContentKind.Required(element, "outcomes")));
+
+    private static IReadOnlyList<OutcomeRowDefinition> Outcomes(JsonElement rows)
+    {
+        var read = new List<OutcomeRowDefinition>();
+
+        foreach (JsonElement row in rows.EnumerateArray())
+            read.Add(new OutcomeRowDefinition(
+                PropertyKindContentKind.Required(row, "grade").GetString()!,
+                PropertyKindContentKind.Required(row, "probability").GetDouble(),
+                PropertyKindContentKind.Required(row, "durationFactor").GetDouble(),
+                PropertyKindContentKind.Required(row, "costFactor").GetDouble(),
+                row.TryGetProperty("disasterDay", out JsonElement day)
+                    ? day.GetInt64()
+                    : null));
+
+        return read;
+    }
+
+    /// <summary>How far a probability sum may sit from one and still be one —
+    /// the width of accumulated binary representation error over a handful of
+    /// two-decimal rows, and far below any real authoring mistake.</summary>
+    private const double SumTolerance = 1e-9;
 
     /// <summary>The activity's own edges live in <c>content/relations/</c>;
     /// the node references nothing (plans 28 §3).</summary>
@@ -69,6 +123,33 @@ public sealed class ActivityContentKind : IContentKind
 
         if (activity.WeatherLimit <= 0.0)
             problems.Add($"weather limit {activity.WeatherLimit} must be positive, or no day is calm enough to work");
+
+        if (activity.Outcomes.Count == 0)
+            problems.Add("outcomes must hold at least one row; work with no way to end is not an activity");
+
+        var sum = 0.0;
+
+        for (int i = 0; i < activity.Outcomes.Count; i++)
+        {
+            OutcomeRowDefinition row = activity.Outcomes[i];
+
+            if (row.Probability is < 0.0 or > 1.0)
+                problems.Add($"outcome '{row.Grade}' probability {row.Probability} must be in [0, 1]");
+            if (row.DurationFactor <= 0.0)
+                problems.Add($"outcome '{row.Grade}' durationFactor must be positive");
+            if (row.CostFactor <= 0.0)
+                problems.Add($"outcome '{row.Grade}' costFactor must be positive");
+            if (row.DisasterDay is < 0)
+                problems.Add($"outcome '{row.Grade}' disasterDay cannot be negative");
+
+            sum += row.Probability;
+        }
+
+        // SDD-007 §4: probabilities sum to 1.0, LOAD-CHECKED — a table that
+        // sums short draws an outcome nobody declared, and one that sums long
+        // silently re-normalises the designer's odds.
+        if (System.Math.Abs(sum - 1.0) > SumTolerance)
+            problems.Add($"outcome probabilities sum to {sum.ToString("R", System.Globalization.CultureInfo.InvariantCulture)}, not 1.0");
 
         return problems;
     }

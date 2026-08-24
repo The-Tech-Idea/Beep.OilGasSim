@@ -9,5 +9,25 @@
   "weatherLimit": 5.0,
   "requiresAccess": true,
   "develops": true,
-  "note": "Boosts the gas leg before the plant. Worthless before there is a plant to boost into. RATE, not price (finding 289): $0.75M and 0.2 turns per kilogram-per-second-capacity, derived from the measured $15M/4t at the e1 machine's 20 kg/s - the world supplies the quantity."
+  "note": "Boosts the gas leg before the plant. Worthless before there is a plant to boost into. RATE, not price (finding 289): $0.75M and 0.2 turns per kilogram-per-second-capacity, derived from the measured $15M/4t at the e1 machine's 20 kg/s - the world supplies the quantity.",
+  "outcomes": [
+    {
+      "grade": "on-time",
+      "probability": 0.8,
+      "durationFactor": 1.0,
+      "costFactor": 1.0
+    },
+    {
+      "grade": "delayed",
+      "probability": 0.12,
+      "durationFactor": 1.5,
+      "costFactor": 1.1
+    },
+    {
+      "grade": "failure",
+      "probability": 0.08,
+      "durationFactor": 1.0,
+      "costFactor": 1.0
+    }
+  ]
 }

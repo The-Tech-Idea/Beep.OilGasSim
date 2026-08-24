@@ -9,5 +9,25 @@
   "weatherLimit": 5.0,
   "requiresAccess": true,
   "develops": true,
-  "note": "The most expensive thing in the game and the longest. Everything upstream is capped by it. RATE, not price (finding 289): $22.5M and 4.5 turns per kilometre, derived from the measured $45M/9t over the composed 2 km trunk the price was authored against - so a hand-built field reproduces its economy exactly, and a generated route prices its own kilometres."
+  "note": "The most expensive thing in the game and the longest. Everything upstream is capped by it. RATE, not price (finding 289): $22.5M and 4.5 turns per kilometre, derived from the measured $45M/9t over the composed 2 km trunk the price was authored against - so a hand-built field reproduces its economy exactly, and a generated route prices its own kilometres.",
+  "outcomes": [
+    {
+      "grade": "on-time",
+      "probability": 0.8,
+      "durationFactor": 1.0,
+      "costFactor": 1.0
+    },
+    {
+      "grade": "delayed",
+      "probability": 0.12,
+      "durationFactor": 1.5,
+      "costFactor": 1.1
+    },
+    {
+      "grade": "failure",
+      "probability": 0.08,
+      "durationFactor": 1.0,
+      "costFactor": 1.0
+    }
+  ]
 }

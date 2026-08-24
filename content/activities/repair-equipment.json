@@ -9,5 +9,25 @@
   "weatherLimit": 7.5,
   "requiresAccess": false,
   "develops": false,
-  "note": "Unplanned, and everything downstream is shut in while you do it. RATE, not price (finding 289): $0.104348M and 0.0434783 turns per element, derived from the measured $2.4M/1t on the DEVELOPED fixture chain - six wells, their gathering lines and the full train, twenty-three elements - because that is the plant repairs were measured on; a young field's small chain is cheaper to keep."
+  "note": "Unplanned, and everything downstream is shut in while you do it. RATE, not price (finding 289): $0.104348M and 0.0434783 turns per element, derived from the measured $2.4M/1t on the DEVELOPED fixture chain - six wells, their gathering lines and the full train, twenty-three elements - because that is the plant repairs were measured on; a young field's small chain is cheaper to keep.",
+  "outcomes": [
+    {
+      "grade": "on-time",
+      "probability": 0.8,
+      "durationFactor": 1.0,
+      "costFactor": 1.0
+    },
+    {
+      "grade": "delayed",
+      "probability": 0.12,
+      "durationFactor": 1.5,
+      "costFactor": 1.1
+    },
+    {
+      "grade": "failure",
+      "probability": 0.08,
+      "durationFactor": 1.0,
+      "costFactor": 1.0
+    }
+  ]
 }

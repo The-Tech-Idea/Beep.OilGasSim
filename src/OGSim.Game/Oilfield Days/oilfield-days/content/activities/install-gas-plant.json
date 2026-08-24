@@ -9,5 +9,25 @@
   "weatherLimit": 5.0,
   "requiresAccess": true,
   "develops": true,
-  "note": "Stop burning the gas and start selling it. Also the ESG answer. RATE, not price (finding 289): $6M and 1.66667 turns per kilogram-per-second-capacity, derived from the measured $18M/5t at the e1 train's 3 kg/s - the world supplies the quantity."
+  "note": "Stop burning the gas and start selling it. Also the ESG answer. RATE, not price (finding 289): $6M and 1.66667 turns per kilogram-per-second-capacity, derived from the measured $18M/5t at the e1 train's 3 kg/s - the world supplies the quantity.",
+  "outcomes": [
+    {
+      "grade": "on-time",
+      "probability": 0.8,
+      "durationFactor": 1.0,
+      "costFactor": 1.0
+    },
+    {
+      "grade": "delayed",
+      "probability": 0.12,
+      "durationFactor": 1.5,
+      "costFactor": 1.1
+    },
+    {
+      "grade": "failure",
+      "probability": 0.08,
+      "durationFactor": 1.0,
+      "costFactor": 1.0
+    }
+  ]
 }

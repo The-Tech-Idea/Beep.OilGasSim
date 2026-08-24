@@ -138,6 +138,21 @@ cost report and is the honest price of a missed weather window.
 >   consumed by nothing yet) converts when its consumer lands, with that
 >   consumer — not speculatively here.
 
+## 4. Outcomes - drawn at start, applied across execution (pinned)
+
+> **Amendment (finding 292, R12b.12): the outcome table is the entry's own
+> content.** The three tables lived as engine statics whose own doc comments
+> said "as content would carry it"; each `content/activities/` entry now
+> carries its `outcomes` rows - grade (named; composition maps to the enum
+> and refuses unknowns naming the activity and the grade), probability,
+> durationFactor, costFactor, optional disasterDay. Probabilities are
+> LOAD-CHECKED to sum to 1.0 (within 1e-9, the width of binary representation
+> over two-decimal rows) exactly as the block below always specified. How work
+> goes right and wrong is a designer fact like its rate (finding 289), and
+> rebalancing either is a content edit. Pinned by two F292 refusal guards,
+> revert-proven. (This heading was eaten by finding 289's own amendment edit
+> and restored here - the section never moved.)
+
 ```csharp
 public enum OutcomeGrade { OnTime, Delayed, OverBudget, Partial, Failure, Disaster }
 

@@ -9,5 +9,25 @@
   "weatherLimit": 4.5,
   "requiresAccess": true,
   "develops": true,
-  "note": "More tie-in slots. The answer to 'there is nowhere to put this well'. RATE, not price (finding 289): $0.5625M and 0.25 turns per slot, derived from the measured $9M/4t at the 16-slot header - the world supplies the quantity."
+  "note": "More tie-in slots. The answer to 'there is nowhere to put this well'. RATE, not price (finding 289): $0.5625M and 0.25 turns per slot, derived from the measured $9M/4t at the 16-slot header - the world supplies the quantity.",
+  "outcomes": [
+    {
+      "grade": "on-time",
+      "probability": 0.8,
+      "durationFactor": 1.0,
+      "costFactor": 1.0
+    },
+    {
+      "grade": "delayed",
+      "probability": 0.12,
+      "durationFactor": 1.5,
+      "costFactor": 1.1
+    },
+    {
+      "grade": "failure",
+      "probability": 0.08,
+      "durationFactor": 1.0,
+      "costFactor": 1.0
+    }
+  ]
 }

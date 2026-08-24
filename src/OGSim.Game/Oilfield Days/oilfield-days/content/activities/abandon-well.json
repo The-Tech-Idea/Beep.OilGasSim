@@ -9,5 +9,25 @@
   "weatherLimit": 6.0,
   "requiresAccess": true,
   "develops": false,
-  "note": "The bill that was registered the day you drilled it. Plugging the last well closes the field. RATE, not price (finding 289): $0.0015M and 0.001 turns per metre, derived from the measured $3M/2t at the 2,000 m standard hole - the world supplies the quantity."
+  "note": "The bill that was registered the day you drilled it. Plugging the last well closes the field. RATE, not price (finding 289): $0.0015M and 0.001 turns per metre, derived from the measured $3M/2t at the 2,000 m standard hole - the world supplies the quantity.",
+  "outcomes": [
+    {
+      "grade": "on-time",
+      "probability": 0.8,
+      "durationFactor": 1.0,
+      "costFactor": 1.0
+    },
+    {
+      "grade": "delayed",
+      "probability": 0.12,
+      "durationFactor": 1.5,
+      "costFactor": 1.1
+    },
+    {
+      "grade": "failure",
+      "probability": 0.08,
+      "durationFactor": 1.0,
+      "costFactor": 1.0
+    }
+  ]
 }

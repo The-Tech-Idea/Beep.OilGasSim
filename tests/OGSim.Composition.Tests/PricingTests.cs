@@ -98,6 +98,44 @@ public sealed class PricingTests
         Assert.Contains("fortnight", fault.Fault.Detail, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// AN OUTCOME TABLE THAT DOES NOT SUM TO ONE REFUSES TO LOAD (SDD-007 §4,
+    /// R12b.12, finding 292): a table summing short draws an outcome nobody
+    /// declared, and one summing long silently re-normalises the designer's
+    /// odds. The rows are the entry's own content now, and the loader is the
+    /// gate.
+    /// </summary>
+    [Fact]
+    public void F292_an_outcome_table_that_does_not_sum_to_one_refuses_to_load()
+    {
+        BuildResult result = EngineBuilder.Build(
+            Fixture.Settings(content:
+                [Edited("drill-development-well",
+                        "\"probability\": 0.4,", "\"probability\": 0.3,")]));
+
+        BuildRefusedByContent refused = Assert.IsType<BuildRefusedByContent>(result);
+
+        Assert.Contains(refused.Failures,
+            failure => failure.Message.Contains("sum to", StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// AN UNKNOWN OUTCOME GRADE REFUSES AT COMPOSITION, by name — the grade
+    /// vocabulary lives in the contracts layer, so the name crosses from
+    /// content exactly once, where the enum can answer for it.
+    /// </summary>
+    [Fact]
+    public void F292_an_unknown_outcome_grade_refuses_to_compose()
+    {
+        ContentFault fault = Assert.Throws<ContentFault>(() => EngineBuilder.Build(
+            Fixture.Settings(content:
+                [Edited("drill-development-well",
+                        "\"grade\": \"delayed\"", "\"grade\": \"sideways\"")])));
+
+        Assert.Contains("sideways", fault.Fault.Detail, StringComparison.Ordinal);
+        Assert.Contains("drill-development-well", fault.Fault.Detail, StringComparison.Ordinal);
+    }
+
     /// <summary>The suite's own one-entry content edit, per-class like its two
     /// siblings (rebalance-shaped tests each carry their own).</summary>
     private static IContentSource Edited(string id, string find, string replace)

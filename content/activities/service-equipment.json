@@ -9,5 +9,25 @@
   "weatherLimit": 8.0,
   "requiresAccess": false,
   "develops": false,
-  "note": "Planned work on something still running. A third the price of the repair it prevents. RATE, not price (finding 289): $0.0347826M and 0.0434783 turns per element, derived from the measured $0.8M/1t on the DEVELOPED fixture chain - six wells, their gathering lines and the full train, twenty-three elements - because that is the plant repairs were measured on; a young field's small chain is cheaper to keep."
+  "note": "Planned work on something still running. A third the price of the repair it prevents. RATE, not price (finding 289): $0.0347826M and 0.0434783 turns per element, derived from the measured $0.8M/1t on the DEVELOPED fixture chain - six wells, their gathering lines and the full train, twenty-three elements - because that is the plant repairs were measured on; a young field's small chain is cheaper to keep.",
+  "outcomes": [
+    {
+      "grade": "on-time",
+      "probability": 0.8,
+      "durationFactor": 1.0,
+      "costFactor": 1.0
+    },
+    {
+      "grade": "delayed",
+      "probability": 0.12,
+      "durationFactor": 1.5,
+      "costFactor": 1.1
+    },
+    {
+      "grade": "failure",
+      "probability": 0.08,
+      "durationFactor": 1.0,
+      "costFactor": 1.0
+    }
+  ]
 }
