@@ -840,7 +840,10 @@ internal static class Defaults
                 Visible: true),
         ],
         Scoring: [],
-        RealityProfile: new ContentId("standard"),
+        // NULL: this scenario is both products' default and genuinely runs at
+        // either fidelity. It used to name "standard" — a profile this build
+        // has never shipped, read by nothing (finding 291).
+        RealityProfile: null,
         Script: [],
         Deadline: new Tick(120));
 
@@ -2346,7 +2349,7 @@ public static class EngineBuilder
             new ObjectivesModule(),
             new MaterialsModule(dependencies, fluidSystems),
             new FieldModule(ladders, takeOrPay, liftTiers, fluidSystems, rules, terms,
-                            stated, dependencies),
+                            stated, dependencies, profile.Id),
             new DiagnosticsModule(audit, clock, random),
         ];
     }
@@ -2593,6 +2596,24 @@ public static class EngineBuilder
         var commands = new CommandBus(audit, events);
 
         for (int i = 0; i < composed.Commands.Count; i++) composed.Commands[i].BindTo(commands);
+
+        // The scenario's script acts through this same bus (SDD-014 §5,
+        // finding 291) — attached here for the reason the handlers are: the
+        // bus could not exist until everything had composed. Gated on the
+        // manifest rather than resolved blind, because the declared-set door
+        // legitimately composes module sets with no scenario in them.
+        for (int i = 0; i < composed.OrderedModules.Count; i++)
+        {
+            IReadOnlyList<Type> provides = composed.OrderedModules[i].Manifest.Provides;
+
+            for (int j = 0; j < provides.Count; j++)
+                if (provides[j] == typeof(ScenarioScriptStage))
+                {
+                    composed.Provided.Resolve<ScenarioScriptStage>().BindTo(commands);
+                    i = composed.OrderedModules.Count;
+                    break;
+                }
+        }
 
         return new Built(new Engine(
             composed.OrderedModules, pipeline, audit, events, composed.State,

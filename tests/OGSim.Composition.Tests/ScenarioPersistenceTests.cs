@@ -37,7 +37,7 @@ public sealed class ScenarioPersistenceTests
                 Deadline: null, Weight: 1.0, Visible: true),
         ],
         Scoring: [],
-        RealityProfile: new ContentId("standard"),
+        RealityProfile: null,
         Script: [],
         Deadline: new Tick(1000));
 
@@ -53,14 +53,14 @@ public sealed class ScenarioPersistenceTests
     [Fact] // A SustainedFor mid-count resumes rather than restarting at zero
     public void A_sustained_objective_resumes_its_count_after_a_restore()
     {
-        var runner = new ScenarioRunner(Custom(), Schema());
+        var runner = new ScenarioRunner(Custom(), Schema(), new ContentId("simulation"));
 
         runner.Evaluate(Snap(temp: 1.0, bad: 0.0), new Tick(1));
         runner.Evaluate(Snap(temp: 1.0, bad: 0.0), new Tick(2));
 
         var state = OGSim.Persistence.StateBlock.Capture(runner).Written();
 
-        var restored = new ScenarioRunner(Custom(), Schema());
+        var restored = new ScenarioRunner(Custom(), Schema(), new ContentId("simulation"));
         OGSim.Persistence.StateBlock.Restore(restored, state);
 
         // The THIRD consecutive tick, against the RESTORED runner. A counter
@@ -73,7 +73,7 @@ public sealed class ScenarioPersistenceTests
     [Fact] // A latched Met survives even once the condition it was met BY lapses
     public void A_met_objective_stays_met_after_a_restore_even_if_the_reading_later_lapses()
     {
-        var runner = new ScenarioRunner(Custom(), Schema());
+        var runner = new ScenarioRunner(Custom(), Schema(), new ContentId("simulation"));
 
         runner.Evaluate(Snap(temp: 1.0, bad: 0.0), new Tick(1));
         runner.Evaluate(Snap(temp: 1.0, bad: 0.0), new Tick(2));
@@ -82,7 +82,7 @@ public sealed class ScenarioPersistenceTests
 
         var state = OGSim.Persistence.StateBlock.Capture(runner).Written();
 
-        var restored = new ScenarioRunner(Custom(), Schema());
+        var restored = new ScenarioRunner(Custom(), Schema(), new ContentId("simulation"));
         OGSim.Persistence.StateBlock.Restore(restored, state);
 
         // temp has fallen back below target. The SUSTAINED COUNTER alone would
@@ -97,7 +97,7 @@ public sealed class ScenarioPersistenceTests
     [Fact] // A failure already latched Failed stays Failed, whatever the next reading says
     public void A_failed_objective_stays_failed_after_a_restore()
     {
-        var runner = new ScenarioRunner(Custom(), Schema());
+        var runner = new ScenarioRunner(Custom(), Schema(), new ContentId("simulation"));
 
         // The one breach.
         runner.Evaluate(Snap(temp: 0.0, bad: 1.0), new Tick(1));
@@ -107,7 +107,7 @@ public sealed class ScenarioPersistenceTests
 
         var state = OGSim.Persistence.StateBlock.Capture(runner).Written();
 
-        var restored = new ScenarioRunner(Custom(), Schema());
+        var restored = new ScenarioRunner(Custom(), Schema(), new ContentId("simulation"));
         OGSim.Persistence.StateBlock.Restore(restored, state);
 
         // An innocuous reading, against the RESTORED runner. A latch that came
@@ -122,7 +122,7 @@ public sealed class ScenarioPersistenceTests
     [Fact] // The tracked set is content, not something a save reshapes
     public void A_save_naming_a_different_objective_at_the_same_position_is_refused()
     {
-        var runner = new ScenarioRunner(Custom(), Schema());
+        var runner = new ScenarioRunner(Custom(), Schema(), new ContentId("simulation"));
         runner.Evaluate(Snap(temp: 1.0, bad: 0.0), new Tick(1));
 
         var state = OGSim.Persistence.StateBlock.Capture(runner).Written();
@@ -134,7 +134,7 @@ public sealed class ScenarioPersistenceTests
                 Custom().Objectives[0] with { Id = new ContentId("renamed") },
             ],
         };
-        var restored = new ScenarioRunner(renamed, Schema());
+        var restored = new ScenarioRunner(renamed, Schema(), new ContentId("simulation"));
 
         SaveDataFault fault = Assert.Throws<SaveDataFault>(
             () => OGSim.Persistence.StateBlock.Restore(restored, state));

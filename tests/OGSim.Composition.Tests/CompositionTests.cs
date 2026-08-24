@@ -573,7 +573,12 @@ public sealed class ShippedSetTests
         Built built = Assert.IsType<Built>(EngineBuilder.Build(Fixture.Settings()));
 
         Assert.Equal(
-            [StageId.Environment, StageId.Operations,
+
+            // Commands (stage 2) gained its FIRST contributor at R24.8
+            // (finding 291): the scenario's scripted beats, executed through
+            // the player's own bus.
+            [StageId.Commands,
+             StageId.Environment, StageId.Operations,
              StageId.Availability, StageId.Availability,
              StageId.SolveFlow, StageId.MaterialBalance, StageId.Custody,
              StageId.Economics, StageId.HseRegulation, StageId.Information,

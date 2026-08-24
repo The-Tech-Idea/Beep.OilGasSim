@@ -136,14 +136,14 @@ internal sealed class ScenarioRunner : IScenarioRunner, IStateOwner
     // scenario owns the number and the host reads it rather than keeping one).
     private readonly List<ObjectiveGoal> _goals = [];
 
-    public ScenarioRunner(Scenario scenario, ReadModelSchema schema)
+    public ScenarioRunner(Scenario scenario, ReadModelSchema schema, ContentId composedProfile)
     {
         ArgumentNullException.ThrowIfNull(scenario);
         ArgumentNullException.ThrowIfNull(schema);
 
         _scenario = scenario;
 
-        Refuse(Problems(scenario, schema));
+        Refuse(Problems(scenario, schema, composedProfile));
 
         for (int i = 0; i < scenario.Objectives.Count; i++) Track(scenario.Objectives[i], false);
         for (int i = 0; i < scenario.Failures.Count; i++) Track(scenario.Failures[i], true);
@@ -322,9 +322,21 @@ internal sealed class ScenarioRunner : IScenarioRunner, IStateOwner
     /// Every reason this scenario cannot be run, not the first — the same rule
     /// as a command rejection and a composition refusal.
     /// </summary>
-    private static List<string> Problems(Scenario scenario, ReadModelSchema schema)
+    private static List<string> Problems(
+        Scenario scenario, ReadModelSchema schema, ContentId composedProfile)
     {
         var problems = new List<string>();
+
+        // THE MODIFIER, APPLIED AS A REQUIREMENT (R24.8, finding 291): a
+        // scenario that names a fidelity was calibrated against those physics,
+        // and a build composed at any other must refuse rather than award the
+        // challenge's scores for a different game. Null names none and runs
+        // anywhere — what a sandbox and the shared default scenario are.
+        if (scenario.RealityProfile is ContentId required && required != composedProfile)
+            problems.Add(
+                $"'{scenario.Id.Value}' is calibrated for reality profile " +
+                $"'{required.Value}' and this build composed at " +
+                $"'{composedProfile.Value}'; running it would score a different game");
 
         for (int i = 0; i < scenario.Objectives.Count; i++)
             Check(scenario.Objectives[i], schema, problems);
@@ -427,6 +439,132 @@ internal sealed class ScenarioRunner : IScenarioRunner, IStateOwner
 /// <para>Before stage 13, so the read model the host publishes carries the
 /// verdict on the month it describes rather than on the one before it.</para>
 /// </summary>
+/// <summary>
+/// R24.8 (finding 291) — the scenario's script, executed (SDD-014 §5).
+///
+/// <para>`IScenarioRunner.EntriesFor` was declared, implemented, tested — and
+/// consumed by nothing: a scenario could script a price shock or a scripted
+/// order and the engine would run as if the script were blank. This stage is
+/// the consumer, at stage 1–2 exactly as §5 places it: a
+/// <see cref="ScriptedCommand"/> goes through the SAME command path a player
+/// uses (the runner never acts; the engine does), and a
+/// <see cref="ScriptedParameter"/> goes through the SAME effect door
+/// technology and climate already apply through — you script the parameter,
+/// and the model publishes its consequences honestly (design 16 §1).</para>
+/// </summary>
+internal sealed class ScenarioScriptStage(
+    IScenarioRunner runner,
+    OGSim.Capabilities.EffectState effects,
+    IAuditTrail audit) : ITickStage
+{
+    private ICommandBus? _commands;
+
+    public StageId Id => StageId.Commands;
+
+    /// <summary>
+    /// The bus exists only after every module has composed, so it is attached
+    /// here in the builder's last step — the same late binding the command
+    /// handlers themselves get, write-once.
+    /// </summary>
+    public void BindTo(ICommandBus commands)
+    {
+        ArgumentNullException.ThrowIfNull(commands);
+
+        if (_commands is not null)
+            throw new InvariantFault("SDD-014 §5", null,
+                "the scenario script stage is already bound to a command bus");
+
+        _commands = commands;
+    }
+
+    public void Execute(TickContext context)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+
+        IReadOnlyList<ScriptedEntry> entries = runner.EntriesFor(context.Tick);
+
+        for (int i = 0; i < entries.Count; i++)
+        {
+            switch (entries[i])
+            {
+                case ScriptedCommand scripted:
+                    Submit(scripted, context.Tick);
+                    break;
+
+                // UNREACHABLE TODAY, KEPT DELIBERATELY: the runner refuses
+                // any scenario that scripts a parameter, because no composed
+                // model reads `IEffectState.Parameter` yet — an override would
+                // land in a dictionary nothing consumes and the mission would
+                // LOOK scripted while changing nothing (rule 7's exact shape).
+                // The refusal lifts with R20d.10; the execution arm is already
+                // the right one, and the sealed-vocabulary default below keeps
+                // a third entry kind from arriving unhandled.
+                case ScriptedParameter overridden:
+                    effects.Apply(
+                        [new SetModelParameter(overridden.Slot, overridden.Key, overridden.Value)]);
+
+                    // On the trail, because the fairness record for "why did
+                    // the market turn in month 40" is that the scenario said
+                    // so — the parameter is scripted, the consequences are the
+                    // model's own (design 16 §1).
+                    audit.Record(
+                        AuditCategory.StateTransition, subject: null, cause: null,
+                        new Dictionary<string, AuditValue>(StringComparer.Ordinal)
+                        {
+                            ["kind"] = new("scenario.parameter-override"),
+                            ["slot"] = new(overridden.Slot.Name),
+                            ["key"] = new(overridden.Key.Name),
+                            ["value"] = new(overridden.Value.ToString(
+                                "R", System.Globalization.CultureInfo.InvariantCulture)),
+                        });
+                    break;
+
+                default:
+                    // The entry vocabulary is sealed (SDD-014 §5); a member
+                    // this stage cannot execute is a fault, never a skip.
+                    throw new ModelFault("SDD-014 §5", null,
+                        $"unknown scripted entry {entries[i].GetType().Name}; the script " +
+                        "vocabulary is sealed and every member must be executable");
+            }
+        }
+    }
+
+    private void Submit(ScriptedCommand scripted, Tick tick)
+    {
+        if (_commands is null)
+            throw new InvariantFault("SDD-014 §5", null,
+                "the scenario script stage was composed and never bound to the command " +
+                "bus; a script that cannot act is a builder defect");
+
+        // A REFUSED scripted command is recorded, never swallowed (law L4):
+        // the scenario's author scripted an order the engine's own rules
+        // refuse, which is a content error the trail must show — and never a
+        // crash, because a mission that breaks mid-campaign with no record
+        // would be worse than one that visibly skipped a beat.
+        if (_commands.Submit(scripted.Command) is Rejected rejected)
+        {
+            var detail = new System.Text.StringBuilder();
+
+            for (int i = 0; i < rejected.Reasons.Count; i++)
+            {
+                if (i > 0) detail.Append("; ");
+                detail.Append(rejected.Reasons[i].Detail);
+            }
+
+            audit.Record(
+                AuditCategory.Rejection, subject: null, cause: null,
+                new Dictionary<string, AuditValue>(StringComparer.Ordinal)
+                {
+                    ["kind"] = new("scenario.script-refused"),
+                    ["command"] = new(scripted.Command.GetType().Name),
+                    ["tick"] = new(tick.Value.ToString(
+                        System.Globalization.CultureInfo.InvariantCulture)),
+                    ["reasons"] = new(detail.ToString()),
+                });
+        }
+    }
+}
+
 internal sealed class ObjectiveStage(
     CompanyState company,
     IScenarioRunner runner,

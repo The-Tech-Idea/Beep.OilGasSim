@@ -32,7 +32,7 @@ public sealed class ScenarioTests
             Objectives: [Objective("goal", condition)],
             Failures: failure is null ? [] : [Objective("limit", failure)],
             Scoring: [],
-            RealityProfile: new ContentId("standard"),
+            RealityProfile: null,
             Script: script ?? [],
             Deadline: new Tick(120));
 
@@ -60,7 +60,7 @@ public sealed class ScenarioTests
     [Fact]
     public void A_goal_is_a_predicate_over_the_read_model()
     {
-        var runner = new ScenarioRunner(Asking(CashAtLeast(1_000)), Paths.Schema);
+        var runner = new ScenarioRunner(Asking(CashAtLeast(1_000)), Paths.Schema, new ContentId("simulation"));
 
         Assert.Equal(ObjectiveState.Pending, Ask(runner, Position(cents: 999), tick: 1));
         Assert.Equal(ObjectiveState.Met, Ask(runner, Position(cents: 1_000), tick: 2));
@@ -73,7 +73,7 @@ public sealed class ScenarioTests
     [Fact]
     public void A_terminal_verdict_is_final()
     {
-        var runner = new ScenarioRunner(Asking(CashAtLeast(1_000)), Paths.Schema);
+        var runner = new ScenarioRunner(Asking(CashAtLeast(1_000)), Paths.Schema, new ContentId("simulation"));
 
         Assert.Equal(ObjectiveState.Met, Ask(runner, Position(cents: 1_000), tick: 1));
         Assert.Equal(ObjectiveState.Met, Ask(runner, Position(cents: 0), tick: 2));
@@ -84,7 +84,7 @@ public sealed class ScenarioTests
     [Fact]
     public void An_unmet_run_expires_at_the_deadline()
     {
-        var runner = new ScenarioRunner(Asking(CashAtLeast(1_000)), Paths.Schema);
+        var runner = new ScenarioRunner(Asking(CashAtLeast(1_000)), Paths.Schema, new ContentId("simulation"));
 
         Assert.Equal(ObjectiveState.Pending, Ask(runner, Position(cents: 0), tick: 119));
         Assert.Equal(ObjectiveState.Expired, Ask(runner, Position(cents: 0), tick: 120));
@@ -101,7 +101,7 @@ public sealed class ScenarioTests
     {
         var runner = new ScenarioRunner(
             Asking(CashAtLeast(1_000), failure: new Never(CashAtLeast(5_000))),
-            Paths.Schema);
+            Paths.Schema, new ContentId("simulation"));
 
         Assert.Equal(ObjectiveState.Failed, Ask(runner, Position(cents: 9_000), tick: 1));
     }
@@ -112,7 +112,7 @@ public sealed class ScenarioTests
     {
         var runner = new ScenarioRunner(
             Asking(CashAtLeast(1_000), failure: new Never(CashAtLeast(5_000))),
-            Paths.Schema);
+            Paths.Schema, new ContentId("simulation"));
 
         Assert.Equal(ObjectiveState.Met, Ask(runner, Position(cents: 1_000), tick: 1));
     }
@@ -134,7 +134,7 @@ public sealed class ScenarioTests
         var fault = Assert.Throws<ContentFault>(() => new ScenarioRunner(
             Asking(new Compare(
                 new Metric(new ReadModelPath("company.rrr")), CompareOp.Gt, new Const(1.0))),
-            Paths.Schema));
+            Paths.Schema, new ContentId("simulation")));
 
         Assert.Contains("company.rrr", fault.Fault.Detail);
         Assert.Equal(FaultClass.Content, fault.Fault.Class);
@@ -153,7 +153,7 @@ public sealed class ScenarioTests
                 new Compare(new Metric(new ReadModelPath("hse.spills")),
                             CompareOp.Lt, new Const(1.0)),
             ])),
-            Paths.Schema));
+            Paths.Schema, new ContentId("simulation")));
 
         Assert.Contains("company.rrr", fault.Fault.Detail);
         Assert.Contains("hse.spills", fault.Fault.Detail);
@@ -174,7 +174,7 @@ public sealed class ScenarioTests
         var fault = Assert.Throws<ContentFault>(() => new ScenarioRunner(
             Asking(new SustainedFor(
                 new OnEvent(EventCategory.Reservoir, new EventFilter(null, null)), 3)),
-            Paths.Schema));
+            Paths.Schema, new ContentId("simulation")));
 
         Assert.Contains("S014-3", fault.Fault.Detail);
     }
@@ -193,7 +193,7 @@ public sealed class ScenarioTests
                     new ScriptedParameter(
                         new Tick(12), new ModelSlot("price"), new ParameterKey("brent"), 0.5),
                 ]),
-            Paths.Schema));
+            Paths.Schema, new ContentId("simulation")));
 
         Assert.Contains("parameter override", fault.Fault.Detail);
     }
@@ -211,7 +211,7 @@ public sealed class ScenarioTests
             new EntityId<IProspect>(1)));
 
         var runner = new ScenarioRunner(
-            Asking(CashAtLeast(1_000), script: [atTwelve]), Paths.Schema);
+            Asking(CashAtLeast(1_000), script: [atTwelve]), Paths.Schema, new ContentId("simulation"));
 
         Assert.Empty(runner.EntriesFor(new Tick(11)));
         Assert.Same(atTwelve, Assert.Single(runner.EntriesFor(new Tick(12))));
@@ -250,7 +250,7 @@ public sealed class ScenarioTests
     {
         var paths = new ReadModelPaths(Defaults.ProjectedPaths);
 
-        var runner = new ScenarioRunner(Defaults.FirstField, paths.Schema);
+        var runner = new ScenarioRunner(Defaults.FirstField, paths.Schema, new ContentId("simulation"));
 
         Assert.Equal(new ContentId("first-field"), runner.Id);
     }
@@ -287,7 +287,7 @@ public sealed class ScenarioTests
         var runner = new ScenarioRunner(
             Asking(new Compare(
                 new Metric(new ReadModelPath("company.value")), CompareOp.Ge, new Const(0.0))),
-            paths.Schema);
+            paths.Schema, new ContentId("simulation"));
 
         ObjectiveState outcome = runner.Evaluate(paths.SnapshotOf(position), new Tick(1)).Overall;
 

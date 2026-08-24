@@ -130,8 +130,15 @@ public sealed record Scenario(
     IReadOnlyList<ScoreWeight> Scoring,
 
     /// <summary>Modifiers — fidelity, assist levels, forgiveness (SDD-005,
-    /// 18 §5b). A hostile-setting challenge is largely this plus a world.</summary>
-    ContentId RealityProfile,
+    /// 18 §5b). A hostile-setting challenge is largely this plus a world.
+    ///
+    /// <para>NULLABLE (R24.8, finding 291): a scenario that NAMES a profile is
+    /// a calibrated challenge and composition refuses a build at any other
+    /// fidelity — its balance was authored against those physics, and running
+    /// it laxer would award its scores for a different game. Null is a
+    /// scenario that genuinely runs at whatever fidelity composed, which is
+    /// what the shared default scenario is.</para></summary>
+    ContentId? RealityProfile,
 
     IReadOnlyList<ScriptedEntry> Script,
 

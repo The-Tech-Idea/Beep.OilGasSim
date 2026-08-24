@@ -236,6 +236,31 @@ value — scoring reads, never computes new simulation facts.
 >   (the span identical across a reload; capital efficiency's load-instant
 >   `CompanyValue` variance is the S013-9 family, asserted finite there).
 
+> **Amendment (finding 291, R24.8 built): the script executes, and the
+> modifier is a requirement.** `IScenarioRunner.EntriesFor` was consumed by
+> nothing — a scenario could script a beat and the engine ran as if the script
+> were blank. `ScenarioScriptStage` (stage 2, the Commands slot's first
+> contributor) now executes each tick's entries: a `ScriptedCommand` through
+> the player's own bus (bound in the builder's last step, the same late
+> binding the handlers get), a refused scripted order recorded on the trail as
+> `scenario.script-refused` — a mission visibly skips a beat, never crashes
+> and never swallows (L4). A `ScriptedParameter` has its executable arm (the
+> same effect door technology applies through) but the runner's
+> composition-time refusal STANDS: `IEffectState.Parameter` has no reader in
+> any composed model yet, so an override would land in a dictionary nothing
+> consumes and the mission would look scripted while changing nothing; the
+> refusal lifts with R20d.10. `Scenario.RealityProfile` — the §5 modifier —
+> was accepted and read by nothing, and the shipped scenario named a profile
+> this build never shipped ("standard"): the field is now NULLABLE, null
+> meaning the scenario genuinely runs at whatever fidelity composed (the
+> shared default's truth), and a scenario that NAMES a profile refuses a
+> build composed at any other — its balance was calibrated against those
+> physics, and running it laxer would award its scores for a different game.
+> Pinned by GM12 ×4 (a beat fires at its tick and no other, through the real
+> bus; a refused beat lands on the trail; a scripted parameter is refused
+> until a model consumes one; the composed engine's stage is bound
+> write-once) and the fidelity-mismatch refusal test.
+
 ## 5. Scenarios and campaigns
 
 ```text

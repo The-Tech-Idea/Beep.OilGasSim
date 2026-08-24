@@ -1006,11 +1006,16 @@ internal sealed class FieldModule(
     // values a style always supplies; the manager answers PRESENCE — and the
     // manifest below asks it the same questions `Compose` does, which is what
     // keeps a claim and its contribution from ever disagreeing (C2/C3).
-    DependencyManager dependencies) : EngineModule(Declare(
+    DependencyManager dependencies,
+
+    // WHICH FIDELITY THIS BUILD COMPOSED AT (R24.8, finding 291) — handed to
+    // the scenario runner so a challenge naming a profile refuses any other.
+    ContentId composedProfile) : EngineModule(Declare(
     "field",
     provides:
     [
         typeof(FieldControl), typeof(CloseStage), typeof(IObligationRegistry),
+        typeof(ScenarioScriptStage),
         typeof(Bank), typeof(ReserveHistory),
 
         // SDD-011 §4's finding-275 amendment — R13.10's second restructuring
@@ -1040,6 +1045,10 @@ internal sealed class FieldModule(
         typeof(OGSim.Subsurface.SubsurfaceState),
         typeof(OGSim.Wells.WellsState),
         typeof(OGSim.Company.CompanyState),
+
+        // R24.8 (finding 291): the script stage applies scripted parameter
+        // overrides through the same effect door technology composes.
+        typeof(OGSim.Capabilities.EffectState),
 
         // WHAT ERECTS A PLANT (plans 22 §4, S2). Declared because the manifest
         // is the composer's ordering graph: resolving it in code alone leaves
@@ -1116,6 +1125,10 @@ internal sealed class FieldModule(
         "scenario.scores"],
     stages:
     [
+        // R24.8 (finding 291): the scenario's scripted beats execute at
+        // stage 2, exactly where SDD-014 §5 places them.
+        new StageParticipation(StageId.Commands, Order: 0),
+
         new StageParticipation(StageId.Operations, Order: 0),
         new StageParticipation(StageId.Availability, Order: 0),
         new StageParticipation(StageId.SolveFlow, Order: 0),
@@ -1612,7 +1625,7 @@ internal sealed class FieldModule(
         // R21f without a line here changing — and the runner refuses at
         // composition time if it names a path this read model cannot fill.
         var paths = new ReadModelPaths(Defaults.ProjectedPaths);
-        var runner = new ScenarioRunner(Defaults.FirstField, paths.Schema);
+        var runner = new ScenarioRunner(Defaults.FirstField, paths.Schema, composedProfile);
         composition.Own(runner);
 
         // R24.6 (finding 290): the span the eight dimensions integrate over
@@ -1620,6 +1633,14 @@ internal sealed class FieldModule(
         // score the decade on its second half.
         var scoreLedger = new ScoreLedger();
         composition.Own(scoreLedger);
+
+        // R24.8 (finding 291): the scenario's script becomes real — commands
+        // through the player's own bus (bound in the builder's last step),
+        // overrides through the same effect door technology applies through.
+        var script = new ScenarioScriptStage(
+            runner, composition.Require<OGSim.Capabilities.EffectState>(), audit);
+        composition.Contribute(order: 0, script);
+        composition.Provide(script);
 
         var objectives = new ObjectiveStage(
             company, runner, paths, projection, audit, bank, stake,
