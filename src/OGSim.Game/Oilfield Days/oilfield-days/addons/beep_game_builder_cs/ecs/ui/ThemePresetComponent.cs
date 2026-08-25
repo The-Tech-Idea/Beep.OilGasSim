@@ -20,7 +20,7 @@ namespace Beep.ECS.UI
 			// PaletteName dropdown re-cascades.
 			// Bail when unchanged: GameInfoBinder pushes four of these in a row, and each
 			// setter rebuilds the entire theme.
-			set { if (_presetName == value) return; _presetName = value; if (Engine.IsEditorHint()) NotifyPropertyListChanged(); if (IsInsideTree()) ApplyTheme(); }
+			set { if (_presetName == value) return; _presetName = value; if (Engine.IsEditorHint()) NotifyPropertyListChanged(); if (!_suspendAutoApply && IsInsideTree()) ApplyTheme(); }
 		}
 		private string _presetName = "modern";
 
@@ -32,7 +32,7 @@ namespace Beep.ECS.UI
 			get => _genreName;
 			// Theme/palette/geometry options all hang off the genre — refresh the list
 			// so those dropdowns re-cascade.
-			set { if (_genreName == value) return; _genreName = value; if (Engine.IsEditorHint()) NotifyPropertyListChanged(); if (IsInsideTree()) ApplyTheme(); }
+			set { if (_genreName == value) return; _genreName = value; if (Engine.IsEditorHint()) NotifyPropertyListChanged(); if (!_suspendAutoApply && IsInsideTree()) ApplyTheme(); }
 		}
 		/// <summary>Genre a component starts on. A scene still holding this is treated as
 		/// "not chosen", so GameInfoBinder may replace it with the project's genre; anything
@@ -40,8 +40,21 @@ namespace Beep.ECS.UI
 		public const string DefaultGenre = "platformer";
 		private string _genreName = DefaultGenre;
 
-		[Export] public bool EnableAnimations { get; set; } = true;
-		[Export] public bool EnableRippleOnClick { get; set; } = true;
+		[Export]
+		public bool EnableAnimations
+		{
+			get => _enableAnimations;
+			set { if (_enableAnimations == value) return; _enableAnimations = value; RequestThemeReapply(); }
+		}
+		private bool _enableAnimations = true;
+
+		[Export]
+		public bool EnableRippleOnClick
+		{
+			get => _enableRippleOnClick;
+			set { if (_enableRippleOnClick == value) return; _enableRippleOnClick = value; RequestThemeReapply(); }
+		}
+		private bool _enableRippleOnClick = true;
 
 		/// <summary>Paint the screen's page canvas from the theme's <c>bg_canvas</c>.
 		///
@@ -55,23 +68,69 @@ namespace Beep.ECS.UI
 		/// ColorRect is a dim over live gameplay — game_over/level_summary name theirs
 		/// "Dim", topdown/pause_subscreen names its 0.92-alpha dim "Background" — and
 		/// repainting those would turn an overlay into a wall.</summary>
-		[Export] public bool ThemePageBackground { get; set; } = true;
+		[Export]
+		public bool ThemePageBackground
+		{
+			get => _themePageBackground;
+			set { if (_themePageBackground == value) return; _themePageBackground = value; RequestThemeReapply(); }
+		}
+		private bool _themePageBackground = true;
 
 		/// <summary>Give Labels a type hierarchy (title / subtitle / value / caption)
 		/// derived from the theme's own font size. Without it every Label, Button and
 		/// input renders at the single <c>Fs</c>, so a screen title is exactly as big as
 		/// a body label — the reason every screen read as one flat wall of text.
 		/// See <see cref="ApplyTypography"/> for how a Label's role is decided.</summary>
-		[Export] public bool AutoTypography { get; set; } = true;
+		[Export]
+		public bool AutoTypography
+		{
+			get => _autoTypography;
+			set { if (_autoTypography == value) return; _autoTypography = value; RequestThemeReapply(); }
+		}
+		private bool _autoTypography = true;
 
 		[ExportGroup("Button Sounds")]
 		/// <summary>Play a hover/press sound on every themed button. Falls back to the addon's
 		/// shipped UI clicks if the streams below are left unset (so a menu gets sound with no
 		/// per-scene wiring); assign HoverSound/PressSound to override, or turn this off.</summary>
-		[Export] public bool EnableButtonSounds { get; set; } = true;
-		[Export] public AudioStream? HoverSound { get; set; }
-		[Export] public AudioStream? PressSound { get; set; }
-		[Export(PropertyHint.Range, "-40,6,0.5")] public float ButtonSoundVolumeDb { get; set; } = -6f;
+		[Export]
+		public bool EnableButtonSounds
+		{
+			get => _enableButtonSounds;
+			set { if (_enableButtonSounds == value) return; _enableButtonSounds = value; RequestThemeReapply(); }
+		}
+		private bool _enableButtonSounds = true;
+
+		[Export]
+		public AudioStream? HoverSound
+		{
+			get => _hoverSound;
+			set { if (_hoverSound == value) return; _hoverSound = value; RequestThemeReapply(); }
+		}
+		private AudioStream? _hoverSound;
+
+		[Export]
+		public AudioStream? PressSound
+		{
+			get => _pressSound;
+			set { if (_pressSound == value) return; _pressSound = value; RequestThemeReapply(); }
+		}
+		private AudioStream? _pressSound;
+
+		[Export(PropertyHint.Range, "-40,6,0.5")]
+		public float ButtonSoundVolumeDb
+		{
+			get => _buttonSoundVolumeDb;
+			set
+			{
+				if (Mathf.Abs(_buttonSoundVolumeDb - value) < 0.001f) return;
+				_buttonSoundVolumeDb = value;
+				if (_uiAudio != null && GodotObject.IsInstanceValid(_uiAudio))
+					_uiAudio.VolumeDb = value;
+				RequestThemeReapply();
+			}
+		}
+		private float _buttonSoundVolumeDb = -6f;
 
 		/// <summary>OPTIONAL color-palette variant. Resolved from the file-based skin
 		/// catalog (palettes live in skins/&lt;genre&gt;/themes/&lt;theme&gt;/&lt;palette&gt;.json).
@@ -80,7 +139,7 @@ namespace Beep.ECS.UI
 		public string PaletteName
 		{
 			get => _paletteName;
-			set { if (_paletteName == value) return; _paletteName = value; if (IsInsideTree()) ApplyTheme(); }
+			set { if (_paletteName == value) return; _paletteName = value; if (!_suspendAutoApply && IsInsideTree()) ApplyTheme(); }
 		}
 		private string _paletteName = "Default";
 
@@ -92,7 +151,7 @@ namespace Beep.ECS.UI
 		public string GeometryProfileName
 		{
 			get => _geometryProfileName;
-			set { if (_geometryProfileName == value) return; _geometryProfileName = value; if (IsInsideTree()) ApplyTheme(); }
+			set { if (_geometryProfileName == value) return; _geometryProfileName = value; if (!_suspendAutoApply && IsInsideTree()) ApplyTheme(); }
 		}
 		private string _geometryProfileName = "As-Authored";
 
@@ -134,7 +193,7 @@ namespace Beep.ECS.UI
 		public bool UseTextures
 		{
 			get => _useTextures;
-			set { _useTextures = value; if (IsInsideTree()) ApplyTheme(); }
+			set { if (_useTextures == value) return; _useTextures = value; RequestThemeReapply(); }
 		}
 		private bool _useTextures = true;
 
@@ -143,14 +202,69 @@ namespace Beep.ECS.UI
 		/// THIS scene's panels use procedural boxes while buttons stay textured.
 		/// Only effective when UseTextures = true AND a Skin is set.</summary>
 		[ExportGroup("Per-Node Texture Toggles")]
-		[Export] public bool UseButtonTextures { get; set; } = true;
-		[Export] public bool UsePanelTextures { get; set; } = true;
-		[Export] public bool UseInputTextures { get; set; } = true;
-		[Export] public bool UseProgressBarTextures { get; set; } = true;
-		[Export] public bool UseDialogTextures { get; set; } = true;
-		[Export] public bool UseSliderTextures { get; set; } = true;
-		[Export] public bool UseScrollBarTextures { get; set; } = true;
-		[Export] public bool UseSeparatorTextures { get; set; } = true;
+		[Export]
+		public bool UseButtonTextures
+		{
+			get => _useButtonTextures;
+			set { if (_useButtonTextures == value) return; _useButtonTextures = value; RequestThemeReapply(); }
+		}
+		private bool _useButtonTextures = true;
+
+		[Export]
+		public bool UsePanelTextures
+		{
+			get => _usePanelTextures;
+			set { if (_usePanelTextures == value) return; _usePanelTextures = value; RequestThemeReapply(); }
+		}
+		private bool _usePanelTextures = true;
+
+		[Export]
+		public bool UseInputTextures
+		{
+			get => _useInputTextures;
+			set { if (_useInputTextures == value) return; _useInputTextures = value; RequestThemeReapply(); }
+		}
+		private bool _useInputTextures = true;
+
+		[Export]
+		public bool UseProgressBarTextures
+		{
+			get => _useProgressBarTextures;
+			set { if (_useProgressBarTextures == value) return; _useProgressBarTextures = value; RequestThemeReapply(); }
+		}
+		private bool _useProgressBarTextures = true;
+
+		[Export]
+		public bool UseDialogTextures
+		{
+			get => _useDialogTextures;
+			set { if (_useDialogTextures == value) return; _useDialogTextures = value; RequestThemeReapply(); }
+		}
+		private bool _useDialogTextures = true;
+
+		[Export]
+		public bool UseSliderTextures
+		{
+			get => _useSliderTextures;
+			set { if (_useSliderTextures == value) return; _useSliderTextures = value; RequestThemeReapply(); }
+		}
+		private bool _useSliderTextures = true;
+
+		[Export]
+		public bool UseScrollBarTextures
+		{
+			get => _useScrollBarTextures;
+			set { if (_useScrollBarTextures == value) return; _useScrollBarTextures = value; RequestThemeReapply(); }
+		}
+		private bool _useScrollBarTextures = true;
+
+		[Export]
+		public bool UseSeparatorTextures
+		{
+			get => _useSeparatorTextures;
+			set { if (_useSeparatorTextures == value) return; _useSeparatorTextures = value; RequestThemeReapply(); }
+		}
+		private bool _useSeparatorTextures = true;
 
 		/// <summary>Generate HUD chrome instead of menu chrome for this subtree.
 		///
@@ -177,7 +291,13 @@ namespace Beep.ECS.UI
 		/// preference but a structural fact about the scene — a HUD CanvasLayer over the world
 		/// versus a menu — and it differs between scenes of the same game by definition.</summary>
 		[ExportGroup("HUD")]
-		[Export] public bool HudMode { get; set; } = false;
+		[Export]
+		public bool HudMode
+		{
+			get => _hudMode;
+			set { if (_hudMode == value) return; _hudMode = value; RequestThemeReapply(); }
+		}
+		private bool _hudMode;
 
 		[Signal] public delegate void ThemeAppliedEventHandler();
 
@@ -193,10 +313,42 @@ namespace Beep.ECS.UI
 		// removed while the themed buttons persist, a later hover/press would fire them on a
 		// freed component. Run on _ExitTree to disconnect.
 		private readonly System.Collections.Generic.List<System.Action> _buttonDisconnectors = new();
+		private bool _suspendAutoApply;
+		private bool _applyingTheme;
+		private string _lastThemeBuildKey = "";
+		private Font? _themeFont;
+
+		private void RequestThemeReapply()
+		{
+			if (!_suspendAutoApply && IsInsideTree())
+				ApplyTheme();
+		}
+
+		public void SetThemeSelection(string genreName, string presetName, string paletteName = "Default",
+			string geometryProfileName = "As-Authored")
+		{
+			_suspendAutoApply = true;
+			try
+			{
+				_genreName = genreName ?? "";
+				_presetName = presetName ?? "";
+				_paletteName = paletteName ?? "Default";
+				_geometryProfileName = geometryProfileName ?? "As-Authored";
+				if (Engine.IsEditorHint()) NotifyPropertyListChanged();
+			}
+			finally
+			{
+				_suspendAutoApply = false;
+			}
+
+			SkinCatalog.SetActiveSkin(_genreName, _presetName, _paletteName, _geometryProfileName);
+			if (IsInsideTree()) ApplyTheme();
+		}
 
 		public override void _Ready()
 		{
 			base._Ready();
+			PublishOwnSkinWhenStandalone();
 			// Fall back to the addon's shipped UI clicks when no sounds are assigned, so themed
 			// buttons make sound with zero per-scene wiring. Missing files just leave these null.
 			if (EnableButtonSounds && !Engine.IsEditorHint())
@@ -216,6 +368,17 @@ namespace Beep.ECS.UI
 				GD.PushWarning($"[{Name}] ThemePresetComponent's parent is {GetParent()?.GetType().Name ?? "null"}, not a Control — nothing will be themed. Reparent it under the Control whose subtree should be themed.");
 		}
 
+		private void PublishOwnSkinWhenStandalone()
+		{
+			if (SkinCatalog.HasActiveSkin)
+				return;
+
+			string theme = string.IsNullOrWhiteSpace(_presetName)
+				? SkinCatalog.GetGenre(_genreName)?.DefaultTheme ?? ""
+				: _presetName;
+			SkinCatalog.SetActiveSkin(_genreName, theme, _paletteName, _geometryProfileName);
+		}
+
 		public override void _ExitTree()
 		{
 			foreach (var kvp in _activeTweens) kvp.Value?.Kill();
@@ -231,7 +394,10 @@ namespace Beep.ECS.UI
 		public void ApplyTheme()
 		{
 			if (_targetControl == null || !IsActive) return;
-
+			if (_applyingTheme) return;
+			_applyingTheme = true;
+			try
+			{
 			// Load the theme from the file-based skin catalog. This replaces the old
 			// enum → CreatePresetInstance switch. Falls back to the genre's default
 			// theme if PresetName isn't found.
@@ -251,14 +417,22 @@ namespace Beep.ECS.UI
 				themeDef = genre != null && genre.Themes.TryGetValue(genre.DefaultTheme, out var dt) ? dt : null;
 			}
 			if (themeDef == null) return;
+			string buildKey = BuildThemeKey(gGenre, themeDef.Id, gPalette, gGeometry);
+			if (buildKey == _lastThemeBuildKey
+				&& _generatedTheme != null
+				&& _targetControl.Theme == _generatedTheme)
+			{
+				return;
+			}
 			_presetInstance = new FileThemePreset(themeDef);
 			_loadedThemeGeometry = themeDef.Geometry;
+			_themeFont = Kit.KitFonts.Resolve(Kit.KitGeometry.ForGenre(gGenre).Font);
 
 			// Apply the optional color palette. Looked up from this theme's palette
 			// files in the skins tree (loaded by SkinCatalog). If not found there,
 			// ColorPalette.ByName searches all genres/themes as a cross-fallback.
 			if (!string.IsNullOrEmpty(gPalette)
-				&& !_paletteName.Equals("Default", StringComparison.OrdinalIgnoreCase))
+				&& !gPalette.Equals("Default", StringComparison.OrdinalIgnoreCase))
 			{
 				ColorPalette? palette = null;
 				if (themeDef.Palettes.TryGetValue(gPalette.ToLowerInvariant(), out var filePal))
@@ -273,13 +447,13 @@ namespace Beep.ECS.UI
 			// (loaded by SkinCatalog). GeometryProfile.ByName searches all genres.
 			_geometry = null;
 			if (!string.IsNullOrEmpty(gGeometry)
-				&& !_geometryProfileName.Equals("As-Authored", StringComparison.OrdinalIgnoreCase))
+				&& !gGeometry.Equals("As-Authored", StringComparison.OrdinalIgnoreCase))
 			{
 				GeometryProfile? geo = null;
-				var genre = SkinCatalog.GetGenre(_genreName);
-				if (genre?.Geometry != null && genre.Geometry.DisplayName.Equals(_geometryProfileName, StringComparison.OrdinalIgnoreCase))
+				var genre = SkinCatalog.GetGenre(gGenre);
+				if (genre?.Geometry != null && genre.Geometry.DisplayName.Equals(gGeometry, StringComparison.OrdinalIgnoreCase))
 					geo = genre.Geometry.ToProfile();
-				else if (GeometryProfile.ByName(_geometryProfileName) is { } catalogGeo)
+				else if (GeometryProfile.ByName(gGeometry) is { } catalogGeo)
 					geo = catalogGeo;
 				if (geo != null && geo.HasOverrides)
 					_geometry = geo;
@@ -287,7 +461,51 @@ namespace Beep.ECS.UI
 			_isSingleButton = _targetControl is Button;
 			if (_isSingleButton) ApplyToSingleButton((Button)_targetControl);
 			else ApplyToSubtree(_targetControl);
+			_lastThemeBuildKey = buildKey;
 			EmitSignal(SignalName.ThemeApplied);
+			}
+			finally
+			{
+				_applyingTheme = false;
+			}
+		}
+
+		private string BuildThemeKey(string genre, string theme, string palette, string geometry)
+		{
+			ulong skinId = _skin != null ? _skin.GetInstanceId() : 0UL;
+			return string.Join("|", new[]
+			{
+				genre ?? "",
+				theme ?? "",
+				palette ?? "",
+				geometry ?? "",
+				skinId.ToString(),
+				UseTextures.ToString(),
+				UseButtonTextures.ToString(),
+				UsePanelTextures.ToString(),
+				UseInputTextures.ToString(),
+				UseProgressBarTextures.ToString(),
+				UseDialogTextures.ToString(),
+				UseSliderTextures.ToString(),
+				UseScrollBarTextures.ToString(),
+				UseSeparatorTextures.ToString(),
+				HudMode.ToString(),
+				ThemePageBackground.ToString(),
+				AutoTypography.ToString(),
+				EnableAnimations.ToString(),
+				EnableRippleOnClick.ToString(),
+				EnableButtonSounds.ToString(),
+				ButtonSoundVolumeDb.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture),
+				HoverSound?.GetInstanceId().ToString() ?? "",
+				PressSound?.GetInstanceId().ToString() ?? "",
+				SkinCatalog.GameArtChrome.ToString(),
+				SkinCatalog.GameArtOutline.ToString(),
+				SkinCatalog.GameArtShadow.ToString(),
+				SkinCatalog.HudTextures.ToString(),
+				SkinCatalog.HudPlateOpacity.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture),
+				TextureSlotDef.Source.ToString(),
+				TextureSlotDef.CustomRoot,
+			});
 		}
 
 		// ═══════════════════════════════════════════════
@@ -297,6 +515,7 @@ namespace Beep.ECS.UI
 		private void ApplyToSubtree(Godot.Control root)
 		{
 			var preset = _presetInstance!;
+			ResetInjectedButtons(root);
 			_generatedTheme = new Theme();
 			ExtractGeometry(preset.GetButtonNormal());
 			ApplyBackground();
@@ -897,6 +1116,7 @@ namespace Beep.ECS.UI
 		private void ApplyToSingleButton(Button btn)
 		{
 			var preset = _presetInstance!;
+			ResetInjectedButtons(btn);
 			btn.AddThemeStyleboxOverride("normal", StampGeometry(Duplicate(preset.GetButtonNormal())));
 			btn.AddThemeStyleboxOverride("hover", StampGeometry(Duplicate(preset.GetButtonHover())));
 			btn.AddThemeStyleboxOverride("pressed", StampGeometry(Duplicate(preset.GetButtonPressed())));
@@ -1004,6 +1224,31 @@ namespace Beep.ECS.UI
 
 		/// <summary>Marks a button that already owns a RippleComponent child.</summary>
 		private const string RippledMeta = "_beep_theme_rippled";
+		private const string RippleOwnedMeta = "_beep_theme_owned_ripple";
+		private const string RippleNodeName = "BeepThemeRipple";
+
+		private void ResetInjectedButtons(Godot.Control root)
+		{
+			foreach (var kvp in _activeTweens) kvp.Value?.Kill();
+			_activeTweens.Clear();
+			foreach (var disconnect in _buttonDisconnectors) disconnect();
+			_buttonDisconnectors.Clear();
+
+			foreach (var btn in FindAllButtons(root))
+			{
+				if (btn.HasMeta(AnimatedMeta)) btn.RemoveMeta(AnimatedMeta);
+				if (!btn.HasMeta(RippledMeta)) continue;
+				btn.RemoveMeta(RippledMeta);
+				foreach (var child in btn.GetChildren())
+				{
+					if (child is RippleComponent ripple
+						&& (ripple.Name == RippleNodeName || ripple.HasMeta(RippleOwnedMeta)))
+					{
+						ripple.QueueFree();
+					}
+				}
+			}
+		}
 
 		/// <summary>Attach per-button chrome. MUST be idempotent: ApplyTheme is public and
 		/// every one of this component's setters calls it, so a single scene load runs it
@@ -1134,11 +1379,14 @@ namespace Beep.ECS.UI
 
 			// Ripple uses the theme's primary accent so it matches the chosen theme/palette.
 			var c = _presetInstance!.Colors;
-			btn.AddChild(new RippleComponent
+			var ripple = new RippleComponent
 			{
+				Name = RippleNodeName,
 				RippleColor = new Color(c.AccentPrimary.R, c.AccentPrimary.G, c.AccentPrimary.B, 0.35f),
 				Duration = 0.5f, MaxRadius = 120f, IsActive = true
-			});
+			};
+			ripple.SetMeta(RippleOwnedMeta, true);
+			btn.AddChild(ripple);
 		}
 
 		// ═══════════════════════════════════════════════

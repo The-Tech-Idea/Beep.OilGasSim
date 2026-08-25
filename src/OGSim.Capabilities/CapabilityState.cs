@@ -71,7 +71,10 @@ public sealed class CapabilityState : IStateOwner
 
     public StateKey Key { get; } = new("capabilities.technology");
 
-    public int SchemaVersion => 2;
+    /// <summary>v3 (finding 293): each acquisition carries its route — the
+    /// licence fee bills only what was licensed — and in-flight research
+    /// programmes travel with their months remaining.</summary>
+    public int SchemaVersion => 3;
 
     /// <summary>Nothing has to be back before this is (SDD-013 §2b).</summary>
     public IReadOnlyList<StateKey> RestoreAfter => [];
@@ -85,6 +88,18 @@ public sealed class CapabilityState : IStateOwner
         // second answer in the container that could disagree with the first.
         IReadOnlyList<TechnologyId> acquired = Technology.Acquired;
         writer.WriteInt64("acquired-count", acquired.Count);
+
+        for (int i = 0; i < acquired.Count; i++)
+            writer.WriteString(Prefix(i) + ".route", Technology.RouteOf(acquired[i]).ToString());
+
+        IReadOnlyList<(TechnologyId Tech, int Remaining)> researching = Technology.Researching;
+        writer.WriteInt64("research-count", researching.Count);
+
+        for (int i = 0; i < researching.Count; i++)
+        {
+            writer.WriteString(ResearchPrefix(i) + ".tech", researching[i].Tech.Value.Value);
+            writer.WriteInt64(ResearchPrefix(i) + ".remaining", researching[i].Remaining);
+        }
 
         // ACQUISITION order, not sorted order: prerequisites were satisfied in
         // this sequence and the replay needs the same one. Sorting by id here
@@ -109,7 +124,16 @@ public sealed class CapabilityState : IStateOwner
                 $"The technology state declares {count} acquisitions.");
 
         for (long i = 0; i < count; i++)
-            rebuilt.Acquire(new TechnologyId(new ContentId(reader.ReadString(Prefix(i)))), era);
+            rebuilt.Acquire(
+                new TechnologyId(new ContentId(reader.ReadString(Prefix(i)))), era,
+                System.Enum.Parse<AcquisitionRoute>(reader.ReadString(Prefix(i) + ".route")));
+
+        long researchCount = reader.ReadInt64("research-count");
+
+        for (long i = 0; i < researchCount; i++)
+            rebuilt.RestoreResearch(
+                new TechnologyId(new ContentId(reader.ReadString(ResearchPrefix(i) + ".tech"))),
+                (int)reader.ReadInt64(ResearchPrefix(i) + ".remaining"));
 
         Technology = rebuilt;
     }
@@ -118,4 +142,7 @@ public sealed class CapabilityState : IStateOwner
     /// (SDD-013 §3); otherwise the tenth grant sorts before the second.</summary>
     private static string Prefix(long index) =>
         "acquired." + index.ToString("D6", System.Globalization.CultureInfo.InvariantCulture);
+
+    private static string ResearchPrefix(long index) =>
+        "research." + index.ToString("D6", System.Globalization.CultureInfo.InvariantCulture);
 }

@@ -75,6 +75,7 @@ namespace Beep.ECS
         [Export(PropertyHint.Range, "1,32,0.5")] public float MaterialTextureTilesPerRepeat { get; set; } = 7.0f;
         [Export] public int RenderZIndex { get; set; } = -90;
         [Export] public bool Centered { get; set; } = false;
+        [Export] public CanvasItem.TextureFilterEnum TerrainTextureFilter { get; set; } = CanvasItem.TextureFilterEnum.Linear;
 
         [ExportGroup("Water Effects")]
         [Export(PropertyHint.Range, "0,1,0.01")] public float WaterAlpha { get; set; } = 0.78f;
@@ -291,7 +292,7 @@ namespace Beep.ECS
         {
             _sprite ??= EnsureSprite();
             _sprite.Texture = texture;
-            _sprite.TextureFilter = CanvasItem.TextureFilterEnum.Linear;
+            _sprite.TextureFilter = TerrainTextureFilter;
             _sprite.Centered = Centered;
             _sprite.ZIndex = RenderZIndex;
             _sprite.Scale = new Vector2((float)tileSize / pixelsPerTile, (float)tileSize / pixelsPerTile);

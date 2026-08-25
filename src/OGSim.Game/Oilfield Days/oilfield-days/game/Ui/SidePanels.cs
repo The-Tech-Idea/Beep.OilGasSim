@@ -96,9 +96,9 @@ public sealed partial class SidePanels : PanelContainer
         column.AddThemeConstantOverride("separation", 6);
 
         _objectives = SlateChrome.Collapsible(
-            "OBJECTIVES", column, 340, UiSurface.Role.Success, bodyName: "ObjectivesBody");
+            "GOALS", column, 340, UiSurface.Role.Success, bodyName: "ObjectivesBody");
         _alerts = SlateChrome.Collapsible(
-            "ALERTS", column, 340, UiSurface.Role.Danger, bodyName: "AlertsBody");
+            "TROUBLE", column, 340, UiSurface.Role.Danger, bodyName: "AlertsBody");
 
         _objectiveRowTemplate = RequireNamed<PanelContainer>(_objectives, "ObjectiveRowTemplate");
         StyleInfoRow(_objectiveRowTemplate, UiSurface.Role.Success);
@@ -117,7 +117,7 @@ public sealed partial class SidePanels : PanelContainer
         _alertCaptionTemplate.Visible = Godot.Engine.IsEditorHint();
 
         VBoxContainer trend = SlateChrome.Collapsible(
-            "PRODUCTION", column, 340, UiSurface.Role.Warning, bodyName: "ProductionBody");
+            "CAMP OUTPUT", column, 340, UiSurface.Role.Warning, bodyName: "ProductionBody");
 
         _trend = RequireNamed<Trend>(trend, "ProductionTrend");
         _trend.CustomMinimumSize = new Vector2(300, 56);
@@ -133,25 +133,25 @@ public sealed partial class SidePanels : PanelContainer
         _bottleneck.CustomMinimumSize = new Vector2(290, 0);
 
         VBoxContainer orders = SlateChrome.Collapsible(
-            "STANDING ORDERS", column, 340, UiSurface.Role.Success, startFolded: true,
+            "CREW ROUTINES", column, 340, UiSurface.Role.Success, startFolded: true,
             bodyName: "OrdersBody");
 
         bool runtime = !Godot.Engine.IsEditorHint();
 
-        Order(orders, "KeepPlantOrder", "Keep the plant running", "KeepPlantOrderCaption",
+        Order(orders, "KeepPlantOrder", "Keep camp running", "KeepPlantOrderCaption",
             "send a crew the moment something stops",
             on => Orders?.Invoke(0, on), runtime);
 
-        Order(orders, "AnswerBottlenecksOrder", "Answer bottlenecks", "AnswerBottlenecksOrderCaption",
-            "build what a lasting jam needs",
+        Order(orders, "AnswerBottlenecksOrder", "Fix traffic jams", "AnswerBottlenecksOrderCaption",
+            "build what a long jam needs",
             on => Orders?.Invoke(1, on), runtime);
 
-        Order(orders, "KeepRigBusyOrder", "Keep the rig busy", "KeepRigBusyOrderCaption",
-            "drill the best undrilled structure",
+        Order(orders, "KeepRigBusyOrder", "Keep drill crew busy", "KeepRigBusyOrderCaption",
+            "drill the best untouched site",
             on => Orders?.Invoke(2, on), runtime);
 
         _reserves = SlateChrome.Collapsible(
-            "RESERVES", column, 340, UiSurface.Role.Info, startFolded: true,
+            "OIL FOUND", column, 340, UiSurface.Role.Info, startFolded: true,
             bodyName: "ReservesBody");
 
         _reserveRowTemplate = RequireNamed<PanelContainer>(_reserves, "ReserveRowTemplate");
@@ -159,7 +159,7 @@ public sealed partial class SidePanels : PanelContainer
         _reserveRowTemplate.Visible = Godot.Engine.IsEditorHint();
 
         VBoxContainer basin = SlateChrome.Collapsible(
-            "THE BASIN", column, 340, UiSurface.Role.Neutral, bodyName: "BasinBody");
+            "BASIN MAP", column, 340, UiSurface.Role.Neutral, bodyName: "BasinBody");
 
         _minimap = RequireNamed<Minimap>(basin, "Minimap");
         _minimap.CustomMinimumSize = new Vector2(300, 190);
@@ -184,15 +184,15 @@ public sealed partial class SidePanels : PanelContainer
         ShowReserves(snapshot);
 
         _trendNote.Text = _trend.Peak <= 0.0
-            ? "no production yet"
-            : $"peak {_trend.Peak:N0} m3/month over {_trend.Count} month{(_trend.Count == 1 ? "" : "s")}";
+            ? "nothing flowing yet"
+            : $"best month {_trend.Peak:N0} oil over {_trend.Count} month{(_trend.Count == 1 ? "" : "s")}";
 
         _bottleneck.Text = snapshot.Insolvent
             ? "Out of money."
             : snapshot.Bottlenecks.Count > 0
-                ? $"{snapshot.Bottlenecks[0].DisplayId} is holding production back."
+                ? $"{snapshot.Bottlenecks[0].DisplayId} is blocking the camp."
                 : snapshot.Wells == 0
-                    ? "Nothing drilled. Survey a structure, or put a hole in one."
+                    ? "Nothing drilled. Scout a site, then send the drill crew."
                     : string.Empty;
     }
 
@@ -314,7 +314,7 @@ public sealed partial class SidePanels : PanelContainer
             _alerts.AddChild(Caption(_alertCaptionTemplate, _log[i]));
 
         if (stopped == 0 && _log.Count == 0)
-            _alerts.AddChild(Caption(_alertCaptionTemplate, "nothing the engine called a warning"));
+            _alerts.AddChild(Caption(_alertCaptionTemplate, "camp is calm"));
     }
 
     /// <summary>
@@ -334,25 +334,25 @@ public sealed partial class SidePanels : PanelContainer
 
         _reserves.AddChild(InfoRow(
             _reserveRowTemplate,
-            "Proved", $"{book.Proved.CubicMetres:N0} m3", UiSurface.Role.Success));
+            "Known", $"{book.Proved.CubicMetres:N0}", UiSurface.Role.Success));
 
         _reserves.AddChild(InfoRow(
             _reserveRowTemplate,
-            "Probable", $"{book.Probable.CubicMetres:N0} m3", UiSurface.Role.Warning));
+            "Likely", $"{book.Probable.CubicMetres:N0}", UiSurface.Role.Warning));
 
         _reserves.AddChild(InfoRow(
             _reserveRowTemplate,
-            "Possible", $"{book.Possible.CubicMetres:N0} m3", UiSurface.Role.Neutral));
+            "Possible", $"{book.Possible.CubicMetres:N0}", UiSurface.Role.Neutral));
 
         // Null is not zero here, and saying so matters: under twelve months of
         // history there is no window to measure over, and printing 0.00 would
         // state a replacement failure that has not happened.
         _reserves.AddChild(InfoRow(
             _reserveRowTemplate,
-            "Replacement",
+            "New oil",
             snapshot.ReserveReplacementRatio is double ratio
                 ? ratio.ToString("F2", CultureInfo.InvariantCulture)
-                : "not yet measurable",
+                : "not enough history",
             snapshot.ReserveReplacementRatio is double r && r < 1.0
                 ? UiSurface.Role.Danger
                 : UiSurface.Role.Info));

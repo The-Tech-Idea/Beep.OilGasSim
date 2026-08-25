@@ -326,7 +326,8 @@ internal static class Fixture
 
             graph.Add(new OGSim.Capabilities.TechnologyNode(
                 new TechnologyId(node.Id), node.AvailableFrom, node.DiffusionLagTicks,
-                prerequisites, node.Effects, node.GrantsDetectClass, node.Routes));
+                prerequisites, node.Effects, node.GrantsDetectClass, node.Routes,
+                node.Licence, node.Research));
         }
 
         return graph;
@@ -1897,7 +1898,8 @@ public sealed class DiffusionStageTests
             Prerequisites: [],
             Effects: [new MoveEnvelope(EnvelopeKind.ArcticOperability, EnvelopeContributionKind.Extension, 8.0)],
             GrantsDetectClass: null,
-            Routes: [OGSim.Capabilities.AcquisitionRoute.Diffusion]);
+            Routes: [OGSim.Capabilities.AcquisitionRoute.Diffusion],
+            Licence: null, Research: null);
 
         (_, OGSim.Capabilities.EffectState effects, DiffusionStage stage) = Build(node);
 
@@ -1923,7 +1925,8 @@ public sealed class DiffusionStageTests
             Prerequisites: [],
             Effects: [new MoveEnvelope(EnvelopeKind.ArcticOperability, EnvelopeContributionKind.Extension, 8.0)],
             GrantsDetectClass: null,
-            Routes: [OGSim.Capabilities.AcquisitionRoute.Diffusion]);
+            Routes: [OGSim.Capabilities.AcquisitionRoute.Diffusion],
+            Licence: null, Research: null);
 
         (_, OGSim.Capabilities.EffectState effects, DiffusionStage stage) = Build(node);
 
@@ -1947,7 +1950,8 @@ public sealed class DiffusionStageTests
             Prerequisites: [],
             Effects: [new MoveEnvelope(EnvelopeKind.ArcticOperability, EnvelopeContributionKind.Extension, 8.0)],
             GrantsDetectClass: null,
-            Routes: [OGSim.Capabilities.AcquisitionRoute.Diffusion]);
+            Routes: [OGSim.Capabilities.AcquisitionRoute.Diffusion],
+            Licence: null, Research: null);
 
         (_, OGSim.Capabilities.EffectState effects, DiffusionStage stage) = Build(node);
 

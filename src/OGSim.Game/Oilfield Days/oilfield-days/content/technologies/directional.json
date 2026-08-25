@@ -4,6 +4,20 @@
   "name": "$loc:tech.directional",
   "availableFrom": "E2",
   "diffusionLagTicks": 120,
-  "prerequisites": ["rotary-drilling"],
-  "routes": ["Research", "Licence", "ServiceRental", "Diffusion"]
+  "prerequisites": [
+    "rotary-drilling"
+  ],
+  "routes": [
+    "Research",
+    "Licence",
+    "ServiceRental",
+    "Diffusion"
+  ],
+  "licence": {
+    "feeMillionsPerTick": 0.1
+  },
+  "research": {
+    "months": 12,
+    "costMillionsPerMonth": 0.5
+  }
 }

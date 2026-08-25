@@ -4,6 +4,19 @@
   "name": "$loc:tech.multi-stage-fracturing",
   "availableFrom": "E4",
   "diffusionLagTicks": 0,
-  "prerequisites": ["hydraulic-fracturing"],
-  "routes": ["Research", "Licence", "ServiceRental"]
+  "prerequisites": [
+    "hydraulic-fracturing"
+  ],
+  "routes": [
+    "Research",
+    "Licence",
+    "ServiceRental"
+  ],
+  "licence": {
+    "feeMillionsPerTick": 0.4
+  },
+  "research": {
+    "months": 12,
+    "costMillionsPerMonth": 2.0
+  }
 }

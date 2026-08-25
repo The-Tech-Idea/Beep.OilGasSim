@@ -9,16 +9,19 @@ namespace OilfieldDays.World;
 public enum UnitState
 {
     /// <summary>Standing in the yard with nothing to do.</summary>
-    Idle,
+    Idle = 0,
 
     /// <summary>On its way out, with a job it has not started.</summary>
-    Travelling,
+    Travelling = 1,
 
     /// <summary>At the site. The command has been submitted and is the engine's.</summary>
-    Working,
+    Working = 2,
 
     /// <summary>Job finished or refused; on its way home.</summary>
-    Returning,
+    Returning = 3,
+
+    /// <summary>At the site, clearing and preparing the ground before work starts.</summary>
+    Preparing = 4,
 }
 
 /// <summary>
@@ -46,6 +49,9 @@ public abstract partial class Unit : Node2D
     public delegate void ArrivedEventHandler(Unit unit);
 
     [Signal]
+    public delegate void PreparedEventHandler(Unit unit);
+
+    [Signal]
     public delegate void HomeEventHandler(Unit unit);
 
     public UnitKind Kind { get; private set; } = null!;
@@ -60,6 +66,8 @@ public abstract partial class Unit : Node2D
 
     /// <summary>The month the engine accepted the work, once it is working.</summary>
     public int StartedOn { get; private set; }
+
+    private float _prepareLeft;
 
     public bool IsIdle => State == UnitState.Idle;
 
@@ -95,6 +103,17 @@ public abstract partial class Unit : Node2D
         Show(moving: false);
     }
 
+    /// <summary>Start the visible site-prep phase before the command is submitted.</summary>
+    public void Prepare(float seconds)
+    {
+        _prepareLeft = Mathf.Max(0.0f, seconds);
+        State = UnitState.Preparing;
+        Show(moving: false);
+
+        if (_prepareLeft <= 0.0f)
+            EmitSignal(SignalName.Prepared, this);
+    }
+
     /// <summary>Send it home — job done, refused, or recalled before it arrived.</summary>
     public void GoHome()
     {
@@ -118,7 +137,7 @@ public abstract partial class Unit : Node2D
     /// </remarks>
     public void Restore(UnitState state, JobKind job, ulong subject, int startedOn, Vector2 at)
     {
-        if (state == UnitState.Travelling)
+        if (state is UnitState.Travelling or UnitState.Preparing)
         {
             State = UnitState.Idle;
             Position = _home;
@@ -149,12 +168,26 @@ public abstract partial class Unit : Node2D
 
     public override void _Process(double delta)
     {
+        // Paused means paused, for preparation and travel both: a yard that
+        // keeps moving while the clock is stopped would let a player queue
+        // arrivals — or finish site preparation — for free.
+        float pace = Host.SimulationController.Instance.Multiplier;
+
+        if (State == UnitState.Preparing)
+        {
+            if (pace <= 0.0f)
+                return;
+
+            _prepareLeft -= pace * (float)delta;
+
+            if (_prepareLeft <= 0.0f)
+                EmitSignal(SignalName.Prepared, this);
+
+            return;
+        }
+
         if (State is UnitState.Idle or UnitState.Working)
             return;
-
-        // Paused means paused: a yard that keeps moving while the clock is
-        // stopped would let a player queue arrivals for free.
-        float pace = Host.SimulationController.Instance.Multiplier;
 
         if (pace <= 0.0f)
             return;

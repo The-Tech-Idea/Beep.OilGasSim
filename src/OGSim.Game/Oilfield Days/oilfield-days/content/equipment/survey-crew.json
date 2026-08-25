@@ -1,0 +1,9 @@
+{
+  "kind": "equipment",
+  "id": "survey-crew",
+  "name": "$loc:equipment.survey-crew",
+  "group": "exploration",
+  "costMillions": 1.5,
+  "buildTurns": 1,
+  "note": "Vibrator trucks and geophones. The cheapest thing that turns money into knowledge."
+}

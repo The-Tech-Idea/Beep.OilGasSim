@@ -1,0 +1,7 @@
+{
+  "kind": "starting-state",
+  "id": "opening-position",
+  "openingCashMillions": 50.0,
+  "holdsPlant": true,
+  "note": "An operating company: the train already stands, so the balance is working capital, not a construction budget."
+}

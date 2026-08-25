@@ -5,5 +5,16 @@
   "availableFrom": "E2",
   "diffusionLagTicks": 0,
   "prerequisites": [],
-  "routes": ["Research", "Licence", "ServiceRental"]
+  "routes": [
+    "Research",
+    "Licence",
+    "ServiceRental"
+  ],
+  "licence": {
+    "feeMillionsPerTick": 0.1
+  },
+  "research": {
+    "months": 12,
+    "costMillionsPerMonth": 0.5
+  }
 }

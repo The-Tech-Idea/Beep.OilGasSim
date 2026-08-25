@@ -1,0 +1,106 @@
+{
+  "kind": "relation",
+  "edge": "activity-needs-equipment",
+  "edges": [
+    {
+      "from": "abandon-well",
+      "to": "workover-unit"
+    },
+    {
+      "from": "cut-core",
+      "to": "drilling-rig"
+    },
+    {
+      "from": "drill-development-well",
+      "to": "drilling-rig"
+    },
+    {
+      "from": "expand-export",
+      "to": "construction-crew"
+    },
+    {
+      "from": "install-compressor",
+      "to": "construction-crew"
+    },
+    {
+      "from": "install-early-production-facility",
+      "to": "construction-crew"
+    },
+    {
+      "from": "install-esp",
+      "to": "workover-unit"
+    },
+    {
+      "from": "install-gas-lift",
+      "to": "workover-unit"
+    },
+    {
+      "from": "install-gas-plant",
+      "to": "construction-crew"
+    },
+    {
+      "from": "install-manifold",
+      "to": "construction-crew"
+    },
+    {
+      "from": "install-monitoring",
+      "to": "service-crew"
+    },
+    {
+      "from": "install-pcp",
+      "to": "workover-unit"
+    },
+    {
+      "from": "install-pump-station",
+      "to": "construction-crew"
+    },
+    {
+      "from": "install-rod-pump",
+      "to": "workover-unit"
+    },
+    {
+      "from": "install-separator",
+      "to": "construction-crew"
+    },
+    {
+      "from": "install-tank",
+      "to": "construction-crew"
+    },
+    {
+      "from": "install-treater",
+      "to": "construction-crew"
+    },
+    {
+      "from": "remediate-injector",
+      "to": "workover-unit"
+    },
+    {
+      "from": "repair-equipment",
+      "to": "service-crew"
+    },
+    {
+      "from": "seismic-2d",
+      "to": "survey-crew"
+    },
+    {
+      "from": "seismic-3d",
+      "to": "seismic-vessel"
+    },
+    {
+      "from": "service-equipment",
+      "to": "service-crew"
+    },
+    {
+      "from": "stimulate-well",
+      "to": "workover-unit"
+    },
+    {
+      "from": "well-test-buildup",
+      "to": "drilling-rig"
+    },
+    {
+      "from": "wireline-log",
+      "to": "drilling-rig"
+    }
+  ]
+}

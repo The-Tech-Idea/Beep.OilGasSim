@@ -4,6 +4,14 @@
   "name": "$loc:tech.heavy-lift",
   "availableFrom": "E3",
   "diffusionLagTicks": 0,
-  "prerequisites": ["offshore-operations"],
-  "routes": ["ServiceRental", "Licence"]
+  "prerequisites": [
+    "offshore-operations"
+  ],
+  "routes": [
+    "ServiceRental",
+    "Licence"
+  ],
+  "licence": {
+    "feeMillionsPerTick": 0.2
+  }
 }

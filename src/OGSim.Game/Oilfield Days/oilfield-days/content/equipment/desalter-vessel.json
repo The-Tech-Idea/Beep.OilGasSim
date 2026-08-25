@@ -1,0 +1,9 @@
+{
+  "kind": "equipment",
+  "id": "desalter-vessel",
+  "name": "$loc:equipment.desalter-vessel",
+  "group": "process",
+  "costMillions": 3.8,
+  "buildTurns": 3,
+  "note": "Washes the salt out of the crude."
+}

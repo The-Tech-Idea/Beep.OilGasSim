@@ -1,0 +1,9 @@
+{
+  "kind": "equipment",
+  "id": "emergency-shutdown-station",
+  "name": "$loc:equipment.emergency-shutdown-station",
+  "group": "safety",
+  "costMillions": 1.9,
+  "buildTurns": 2,
+  "note": "The button that closes everything. A barrier in its own right."
+}

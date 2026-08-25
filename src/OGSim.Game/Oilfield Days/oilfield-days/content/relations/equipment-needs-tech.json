@@ -1,0 +1,130 @@
+{
+  "kind": "relation",
+  "edge": "equipment-needs-tech",
+  "edges": [
+    {
+      "from": "amine-treatment-skid",
+      "to": "amine-sweetening"
+    },
+    {
+      "from": "chemical-injection-skid",
+      "to": "low-dosage-hydrate-inhibitors"
+    },
+    {
+      "from": "communications-tower",
+      "to": "telemetry-scada"
+    },
+    {
+      "from": "condition-monitoring-kit",
+      "to": "condition-monitoring"
+    },
+    {
+      "from": "control-room-cabin",
+      "to": "telemetry-scada"
+    },
+    {
+      "from": "cooling-tower",
+      "to": "waste-heat-recovery"
+    },
+    {
+      "from": "crude-oil-storage-tank",
+      "to": "vapour-recovery"
+    },
+    {
+      "from": "dehydration-unit",
+      "to": "glycol-dehydration"
+    },
+    {
+      "from": "desalter-vessel",
+      "to": "produced-water-treating"
+    },
+    {
+      "from": "distillation-column",
+      "to": "ngl-extraction"
+    },
+    {
+      "from": "drilling-rig-derrick",
+      "to": "rotary-drilling"
+    },
+    {
+      "from": "electrical-substation",
+      "to": "electrification"
+    },
+    {
+      "from": "gas-compressor-unit",
+      "to": "reciprocating-compression"
+    },
+    {
+      "from": "gas-detector-station",
+      "to": "leak-detection-ldar"
+    },
+    {
+      "from": "heat-exchanger-skid",
+      "to": "waste-heat-recovery"
+    },
+    {
+      "from": "helipad-platform",
+      "to": "offshore-operations"
+    },
+    {
+      "from": "lng-storage-sphere",
+      "to": "lng-liquefaction"
+    },
+    {
+      "from": "metering-station",
+      "to": "precision-metering"
+    },
+    {
+      "from": "mobile-crane-truck",
+      "to": "heavy-lift"
+    },
+    {
+      "from": "pipeline-manifold",
+      "to": "high-strength-linepipe"
+    },
+    {
+      "from": "pipeline-pig-launcher",
+      "to": "inline-inspection"
+    },
+    {
+      "from": "pipeline-pig-receiver",
+      "to": "inline-inspection"
+    },
+    {
+      "from": "pumpjack",
+      "to": "rod-pump"
+    },
+    {
+      "from": "seismic-vessel",
+      "to": "3-d-seismic"
+    },
+    {
+      "from": "separator-vessel",
+      "to": "2-phase-separation"
+    },
+    {
+      "from": "solar-power-array",
+      "to": "electrification"
+    },
+    {
+      "from": "survey-crew",
+      "to": "2-d-seismic"
+    },
+    {
+      "from": "three-phase-separator",
+      "to": "3-phase-separation"
+    },
+    {
+      "from": "wastewater-treatment-tank",
+      "to": "produced-water-treating"
+    },
+    {
+      "from": "water-injection-pump",
+      "to": "waterflood"
+    },
+    {
+      "from": "well-testing-skid",
+      "to": "downhole-gauges"
+    }
+  ]
+}

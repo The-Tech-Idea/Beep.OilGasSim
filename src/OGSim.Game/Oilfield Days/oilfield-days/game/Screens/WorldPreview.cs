@@ -59,6 +59,7 @@ public sealed partial class WorldPreview : Control
         _screen.Texture = _viewport.GetTexture();
         _screen.ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize;
         _screen.StretchMode = TextureRect.StretchModeEnum.Scale;
+        _screen.TextureFilter = TextureFilterEnum.Nearest;
         _screen.MouseFilter = MouseFilterEnum.Ignore;
         _screen.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
 
@@ -124,7 +125,10 @@ public sealed partial class WorldPreview : Control
             _basin.QueueFree();
         }
 
-        _basin = new BasinWorld();
+        _basin = new BasinWorld
+        {
+            TerrainPixelsPerTile = 16,
+        };
         _viewport.AddChild(_basin);
         _basin.Build(_cells, _seed, _land, _climate);
         _basin.PaintBareGround();

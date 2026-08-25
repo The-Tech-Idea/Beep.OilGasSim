@@ -1,0 +1,9 @@
+{
+  "kind": "equipment",
+  "id": "mobile-crane-truck",
+  "name": "$loc:equipment.mobile-crane-truck",
+  "group": "construction",
+  "costMillions": 2.7,
+  "buildTurns": 2,
+  "note": "Nothing heavy is set without it."
+}

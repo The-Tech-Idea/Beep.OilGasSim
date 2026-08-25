@@ -1,6 +1,7 @@
 #nullable enable
 
 using System;
+using System.Collections.Generic;
 using Beep.ECS.UI;
 using Godot;
 using OilfieldDays.App;
@@ -25,19 +26,15 @@ namespace OilfieldDays.Ui;
 [Tool]
 public sealed partial class IconRail : PanelContainer
 {
-    private sealed record Stop(string Label, string Icon, string? Scene, string Note);
+    private sealed record Stop(string ButtonName, string Label, string Icon, string? Scene, string Note);
 
     private static readonly Stop[] Stops =
     {
-        new("Map", "helipad-platform", null, "you are here: the field itself"),
-        new("Jobs", "control-room-cabin", SceneRouter.DispatchBoard, "the dispatch board"),
-        new("Leases", "security-checkpoint", SceneRouter.LeaseBoard, "the acreage and its structures"),
-        new("Fleet", "mobile-crane-truck", SceneRouter.FleetBoard, "the yard's equipment"),
-        new("Build", "pipeline-construction-excavator", null,
-            "gap G-02: the engine has no command that places a facility at a coordinate"),
-        new("Production", "pumpjack", null, "the chain is on the dispatch board until this has a screen"),
-        new("Finance", "crude-oil-storage-tank", null, "borrowing and the ledger are not drawn yet"),
-        new("Research", "well-testing-skid", null, "technology is gated by era; there is no research screen"),
+        new("Map", "Map", "helipad-platform", null, "you are here: the field itself"),
+        new("Jobs", "Jobs", "control-room-cabin", SceneRouter.DispatchBoard, "send crews and handle camp work"),
+        new("Fleet", "Crew", "mobile-crane-truck", SceneRouter.FleetBoard, "the yard's crews and vehicles"),
+        new("Build", "Build", "pipeline-construction-excavator", null,
+            "building happens from the camp and selected sites"),
     };
 
     public override void _Ready()
@@ -53,13 +50,24 @@ public sealed partial class IconRail : PanelContainer
         VBoxContainer column = RequireNamed<VBoxContainer>(inset, "RailColumn");
         column.AddThemeConstantOverride("separation", 6);
 
+        var used = new HashSet<string>();
+
         for (int i = 0; i < Stops.Length; i++)
+        {
+            used.Add(Stops[i].ButtonName + "Button");
             ConfigureButton(column, Stops[i], here: i == 0);
+        }
+
+        foreach (Node child in column.GetChildren())
+        {
+            if (child is Button button && !used.Contains(button.Name.ToString()))
+                button.Visible = false;
+        }
     }
 
     private static void ConfigureButton(Container parent, Stop stop, bool here)
     {
-        Button plate = RequireNamed<Button>(parent, stop.Label + "Button");
+        Button plate = RequireNamed<Button>(parent, stop.ButtonName + "Button");
         plate.CustomMinimumSize = new Vector2(78, 66);
         plate.TooltipText = stop.Note;
         plate.Disabled = !here && stop.Scene is null;

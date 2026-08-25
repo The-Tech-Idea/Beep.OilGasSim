@@ -4,6 +4,19 @@
   "name": "$loc:tech.offshore-operations",
   "availableFrom": "E2",
   "diffusionLagTicks": 120,
-  "prerequisites": ["rotary-drilling"],
-  "routes": ["Research", "Licence", "Diffusion"]
+  "prerequisites": [
+    "rotary-drilling"
+  ],
+  "routes": [
+    "Research",
+    "Licence",
+    "Diffusion"
+  ],
+  "licence": {
+    "feeMillionsPerTick": 0.1
+  },
+  "research": {
+    "months": 12,
+    "costMillionsPerMonth": 0.5
+  }
 }

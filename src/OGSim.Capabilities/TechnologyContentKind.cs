@@ -32,7 +32,16 @@ public sealed record TechnologyDefinition(
     IReadOnlyList<ContentId> Prerequisites,
     IReadOnlyList<AcquisitionRoute> Routes,
     DetectClass? GrantsDetectClass,
-    IReadOnlyList<Effect> Effects) : ContentDefinition(Id)
+    IReadOnlyList<Effect> Effects,
+
+    /// <summary>The Licence route's terms where offered (design 07 §3:
+    /// immediate, no ownership, expensive forever) — R17.3/R17.4, finding
+    /// 293.</summary>
+    TechnologyLicenceTerms? Licence,
+
+    /// <summary>The R&amp;D route's terms where offered (design 07 §3: a
+    /// sustained budget over months; cheapest per unit and you own it).</summary>
+    TechnologyResearchTerms? Research) : ContentDefinition(Id)
 {
     // Finding 131 — the fixture test compares shipped content against the
     // registry, and a mod override replaces an entry whole (SDD-004 §7).
@@ -142,7 +151,21 @@ public sealed class TechnologyContentKind : IContentKind
         // consumer exists would be the same defect this hardcode already is,
         // moved one layer down (CLAUDE.md rule 6). Build it when a phase adds
         // the first technology that genuinely needs one.
-        return new TechnologyDefinition(id, era, lag, prerequisites, routes, grants, []);
+        TechnologyLicenceTerms? licence =
+            element.TryGetProperty("licence", out JsonElement licenceTerms)
+                ? new TechnologyLicenceTerms(
+                    Required(licenceTerms, "feeMillionsPerTick").GetDouble())
+                : null;
+
+        TechnologyResearchTerms? research =
+            element.TryGetProperty("research", out JsonElement researchTerms)
+                ? new TechnologyResearchTerms(
+                    Required(researchTerms, "months").GetInt32(),
+                    Required(researchTerms, "costMillionsPerMonth").GetDouble())
+                : null;
+
+        return new TechnologyDefinition(
+            id, era, lag, prerequisites, routes, grants, [], licence, research);
     }
 
     /// <summary>

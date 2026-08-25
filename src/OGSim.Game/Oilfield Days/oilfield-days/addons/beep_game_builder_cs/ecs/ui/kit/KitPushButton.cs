@@ -29,7 +29,13 @@ namespace Beep.ECS.UI.Kit
         /// <summary>Which palette role this button's plate takes. Accent is the default because
         /// that is what every reference sheet does; set Success/Danger for a confirm or a
         /// destructive action, or Neutral to fall back to the panel surface for a quiet button.</summary>
-        [Export] public UiSurface.Role Accent { get; set; } = UiSurface.Role.Accent;
+        [Export]
+        public UiSurface.Role Accent
+        {
+            get => _accent;
+            set { if (_accent == value) return; _accent = value; QueueRedraw(); }
+        }
+        private UiSurface.Role _accent = UiSurface.Role.Accent;
 
         private string _genre = "";
         private KitGeometry Geo => KitGeometry.ForGenre(_genre);
@@ -39,6 +45,7 @@ namespace Beep.ECS.UI.Kit
 
         public override void _Ready()
         {
+            base._Ready();
             _genre = SkinCatalog.HasActiveSkin ? SkinCatalog.ActiveGenre : "";
             SuppressBaseChrome();
         }
@@ -58,9 +65,8 @@ namespace Beep.ECS.UI.Kit
         /// Blank every state's StyleBox so the base class paints nothing and _Draw owns the look.
         ///
         /// The content margins are kept, because Button sizes its own text from them — zeroing
-        /// them collapses the button onto its label. The re-entry guard is required for the same
-        /// reason KitPanelContainer needs one: AddThemeStyleboxOverride emits
-        /// NotificationThemeChanged, which lands straight back here.
+        /// them collapses the button onto its label. Suppression goes through KitChrome so
+        /// unchanged theme overrides are not recreated during Godot's theme-change notifications.
         /// </summary>
         private void SuppressBaseChrome()
         {
@@ -71,14 +77,13 @@ namespace Beep.ECS.UI.Kit
             float pad = Mathf.Max(6f, fs * 0.7f);
             float frame = Geo.FramePx(Mathf.Max(Size.Y, fs * 2.4f));
             foreach (string state in new[] { "normal", "hover", "pressed", "disabled", "focus" })
-            {
-                var sb = new StyleBoxEmpty();
-                sb.ContentMarginLeft = frame + pad;
-                sb.ContentMarginRight = frame + pad;
-                sb.ContentMarginTop = frame * 0.5f + pad * 0.4f;
-                sb.ContentMarginBottom = frame * 0.5f + pad * 0.4f;
-                AddThemeStyleboxOverride(state, sb);
-            }
+                KitChrome.SetEmptyStyleboxOverride(
+                    this,
+                    state,
+                    frame + pad,
+                    frame + pad,
+                    frame * 0.5f + pad * 0.4f,
+                    frame * 0.5f + pad * 0.4f);
 
             _suppressing = false;
         }
@@ -135,7 +140,7 @@ namespace Beep.ECS.UI.Kit
         private void DrawLabel(KitState state)
         {
             if (string.IsNullOrEmpty(Text)) return;
-            var font = KitFonts.Resolve(Geo.Font) ?? GetThemeDefaultFont();
+            var font = KitChrome.Font(this, _genre);
             if (font == null) return;
 
             string[] lines = Text.Split('\n');

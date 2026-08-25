@@ -1,0 +1,9 @@
+{
+  "kind": "equipment",
+  "id": "truck-loading-gantry",
+  "name": "$loc:equipment.truck-loading-gantry",
+  "group": "export",
+  "costMillions": 2.1,
+  "buildTurns": 2,
+  "note": "Export by road when there is no line."
+}

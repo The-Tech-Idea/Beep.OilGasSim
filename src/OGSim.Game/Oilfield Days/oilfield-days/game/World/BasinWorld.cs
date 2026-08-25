@@ -62,6 +62,7 @@ public sealed partial class BasinWorld : Node2D
     private readonly Dictionary<ulong, Coordinate> _wellSites = new();
     private readonly List<Coordinate> _holesBeingDrilled = new();
     private readonly List<Coordinate> _dryHoles = new();
+    private readonly HashSet<Vector2I> _preparedSites = new();
 
     private WorldMap _ground = null!;
     private TerrainMap _terrain = null!;
@@ -106,6 +107,9 @@ public sealed partial class BasinWorld : Node2D
     /// <summary>The basin's extent in pixels.</summary>
     public Vector2 Extent => new(_tiles * TileSize, _tiles * TileSize);
 
+    /// <summary>Resolution used by the painterly base terrain bake.</summary>
+    public int TerrainPixelsPerTile { get; set; } = 32;
+
     /// <summary>Where the surface facilities stand. The engine's chain has no
     /// coordinates, so the host picks one place to build it and keeps it.</summary>
     public Vector2 PlantSite { get; private set; }
@@ -128,9 +132,10 @@ public sealed partial class BasinWorld : Node2D
             Name = "PainterlyTerrain",
             RenderZIndex = -90,
             GenerateOnReady = false,
-            PixelsPerTile = 10,
+            PixelsPerTile = Mathf.Clamp(TerrainPixelsPerTile, 8, TileSize),
             SmoothingPasses = 0,
             GrainStrength = 0.035f,
+            TerrainTextureFilter = CanvasItem.TextureFilterEnum.Linear,
         };
         AddChild(_backdrop);
 
@@ -146,10 +151,10 @@ public sealed partial class BasinWorld : Node2D
         _road = AddDualTerrain("Roads", "res://assets/tilesets/oilfield-days/dirt-road_15p_64.png", -10);
         HideTileTerrain();
 
-        // ABOVE THE GROUND AND BELOW EVERYTHING BUILT ON IT. The veil is over
-        // what is under the rock, so dimming the yard and the plant with it
-        // would be shading the one part of the basin the company can see.
-        _blocks = new BlockOverlay { Name = "Licence", ZIndex = -5 };
+        // The block overlay is kept as data for boards and tools, but hidden in
+        // the live playfield. The main map should read as a place to build and
+        // explore, not a lease drafting sheet covered in rectangular lines.
+        _blocks = new BlockOverlay { Name = "Licence", ZIndex = -5, Visible = false };
         AddChild(_blocks);
 
         _sceneryLayer = new Node2D { Name = "Scenery", YSortEnabled = true };
@@ -194,7 +199,7 @@ public sealed partial class BasinWorld : Node2D
             ("fuel-tank", "Fuel", -7.4f, 2.8f, 1.6f, ""),
             ("frac-tank", "Water", 7.6f, 2.8f, 1.6f, ""),
             ("site-lighting-pole", string.Empty, 0.0f, -3.8f, 2.2f, ""),
-            ("security-checkpoint", "Gate", -1.8f, 4.4f, 1.8f, SceneRouter.LeaseBoard),
+            ("security-checkpoint", "Gate", -1.8f, 4.4f, 1.8f, SceneRouter.DispatchBoard),
         };
 
         _yardDoors.Clear();
@@ -342,7 +347,23 @@ public sealed partial class BasinWorld : Node2D
 
     /// <summary>Remember that a hole has been ordered here, so whatever it finds
     /// — a well or nothing — is drawn where it actually went.</summary>
-    public void RecordDrill(ProspectView prospect) => _holesBeingDrilled.Add(prospect.At);
+    public void RecordDrill(ProspectView prospect)
+    {
+        _holesBeingDrilled.Add(prospect.At);
+        PrepareSite(JobKind.Drill, prospect.Prospect.Value, ToWorld(prospect.At));
+    }
+
+    /// <summary>Mark a site as worked ground once a base unit reaches it.</summary>
+    public void PrepareSite(JobKind job, ulong subject, Vector2 site)
+    {
+        Vector2I tile = ToTile(site);
+
+        if (!_preparedSites.Add(tile))
+            return;
+
+        _terrain.Level(Around(tile, PadWide(job) + 2, PadTall(job) + 2));
+        _groundDirty = true;
+    }
 
     // ------------------------------------------------------------- the ground
 
@@ -378,12 +399,13 @@ public sealed partial class BasinWorld : Node2D
 
         Vector2I plant = PlantTile();
 
-        // Everything that gets built on is levelled first: a pad is cleared
-        // ground, and the noise does not get a vote on where the rig goes.
+        // The base starts prepared. The rest of the basin does not get free
+        // roads and pads at generation time; dispatched trucks expand worked
+        // ground as they arrive.
         _terrain.Level(Around(plant, PlantPadWide + 2, PlantPadTall + 2));
 
-        for (int i = 0; i < prospects.Count; i++)
-            _terrain.Level(Around(ToTile(prospects[i].At), ProspectPadTiles + 2, ProspectPadTiles + 2));
+        foreach (Vector2I site in _preparedSites)
+            _terrain.Level(Around(site, ProspectPadTiles + 2, ProspectPadTiles + 2));
 
         foreach (KeyValuePair<ulong, Coordinate> pair in _wellSites)
             _terrain.Level(Around(ToTile(pair.Value), WellPadTiles + 2, WellPadTiles + 2));
@@ -394,8 +416,8 @@ public sealed partial class BasinWorld : Node2D
         foreach (KeyValuePair<ulong, Coordinate> pair in _wellSites)
             _ground.Road(ToTile(pair.Value), plant, RoadWidth);
 
-        for (int i = 0; i < prospects.Count; i++)
-            _ground.Road(ToTile(prospects[i].At), plant, RoadWidth);
+        foreach (Vector2I site in _preparedSites)
+            _ground.Road(site, plant, RoadWidth);
 
         // Gravel under each structure's own plot rather than one slab under the
         // lot: the clearance a kind asks for is drawn as ground, which is what
@@ -425,8 +447,8 @@ public sealed partial class BasinWorld : Node2D
             }
         }
 
-        for (int i = 0; i < prospects.Count; i++)
-            _ground.Fill(Around(ToTile(prospects[i].At), ProspectPadTiles, ProspectPadTiles), TerrainKind.GravelPad);
+        foreach (Vector2I site in _preparedSites)
+            _ground.Fill(Around(site, ProspectPadTiles, ProspectPadTiles), TerrainKind.GravelPad);
 
         for (int i = 0; i < _dryHoles.Count; i++)
             _ground.Fill(Around(ToTile(_dryHoles[i]), ProspectPadTiles, ProspectPadTiles), TerrainKind.GravelPad);
@@ -521,6 +543,24 @@ public sealed partial class BasinWorld : Node2D
     private static Vector2I ToTile(Coordinate at) => new(
         Mathf.FloorToInt((float)(at.X / MetresPerCell * TilesPerKilometre)),
         Mathf.FloorToInt((float)(at.Y / MetresPerCell * TilesPerKilometre)));
+
+    private static Vector2I ToTile(Vector2 world) => new(
+        Mathf.FloorToInt(world.X / TileSize),
+        Mathf.FloorToInt(world.Y / TileSize));
+
+    private static int PadWide(JobKind job) => job switch
+    {
+        JobKind.Drill => WellPadTiles,
+        JobKind.Build or JobKind.Commission => PlantPadWide,
+        _ => ProspectPadTiles,
+    };
+
+    private static int PadTall(JobKind job) => job switch
+    {
+        JobKind.Drill => WellPadTiles,
+        JobKind.Build or JobKind.Commission => PlantPadTall,
+        _ => ProspectPadTiles,
+    };
 
     private static Vector2 TileCentre(Vector2I tile) =>
         new((tile.X + 0.5f) * TileSize, (tile.Y + 0.5f) * TileSize);
@@ -919,7 +959,7 @@ public sealed partial class BasinWorld : Node2D
     }
 
     private static string ProspectCaption(ProspectView prospect) =>
-        $"{prospect.Play}\nPOS {prospect.ProbabilityOfSuccess * 100.0:F0}%";
+        $"{prospect.Play}\nChance {prospect.ProbabilityOfSuccess * 100.0:F0}%";
 
     /// <summary>
     /// What a well looks like, by what the engine says it is doing.

@@ -18,9 +18,9 @@ public sealed class CapabilityStateTests
     /// replay's ordering has something real to get wrong.</summary>
     private static IReadOnlyList<TechnologyNode> Graph() =>
     [
-        new(Tech("cable-tool"), Era.E1, 0, [], [], null, Researched),
-        new(Tech("rotary"), Era.E1, 0, [Tech("cable-tool")], [], null, Researched),
-        new(Tech("deviated"), Era.E2, 0, [Tech("rotary")], [], null, Researched),
+        new(Tech("cable-tool"), Era.E1, 0, [], [], null, Researched, null, null),
+        new(Tech("rotary"), Era.E1, 0, [Tech("cable-tool")], [], null, Researched, null, null),
+        new(Tech("deviated"), Era.E2, 0, [Tech("rotary")], [], null, Researched, null, null),
     ];
 
     /// <summary>Acquired deliberately, never by diffusion — these tests are
@@ -56,8 +56,8 @@ public sealed class CapabilityStateTests
     public void Acquired_technology_restores_to_the_same_holdings()
     {
         CapabilityState captured = Fresh();
-        captured.Technology.Acquire(Tech("cable-tool"), Era.E2);
-        captured.Technology.Acquire(Tech("rotary"), Era.E2);
+        captured.Technology.Acquire(Tech("cable-tool"), Era.E2, AcquisitionRoute.Diffusion);
+        captured.Technology.Acquire(Tech("rotary"), Era.E2, AcquisitionRoute.Diffusion);
 
         JsonValue written = StateBlock.Capture(captured).Written();
 
@@ -89,9 +89,9 @@ public sealed class CapabilityStateTests
 
         // "cable-tool" sorts before "deviated" and "rotary", but "rotary" must
         // be granted before "deviated" regardless of spelling.
-        captured.Technology.Acquire(Tech("cable-tool"), Era.E2);
-        captured.Technology.Acquire(Tech("rotary"), Era.E2);
-        captured.Technology.Acquire(Tech("deviated"), Era.E2);
+        captured.Technology.Acquire(Tech("cable-tool"), Era.E2, AcquisitionRoute.Diffusion);
+        captured.Technology.Acquire(Tech("rotary"), Era.E2, AcquisitionRoute.Diffusion);
+        captured.Technology.Acquire(Tech("deviated"), Era.E2, AcquisitionRoute.Diffusion);
 
         // Restored at the same date, since that is where a save is taken from
         // and the era is now the calendar's answer rather than the block's.
@@ -163,7 +163,7 @@ public sealed class CapabilityStateTests
     public void The_era_follows_the_date_rather_than_the_save()
     {
         CapabilityState captured = Fresh();
-        captured.Technology.Acquire(Tech("cable-tool"), Era.E2);
+        captured.Technology.Acquire(Tech("cable-tool"), Era.E2, AcquisitionRoute.Diffusion);
 
         JsonValue written = StateBlock.Capture(captured).Written();
 

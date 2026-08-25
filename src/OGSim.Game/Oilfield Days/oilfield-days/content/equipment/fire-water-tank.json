@@ -1,0 +1,9 @@
+{
+  "kind": "equipment",
+  "id": "fire-water-tank",
+  "name": "$loc:equipment.fire-water-tank",
+  "group": "safety",
+  "costMillions": 1.3,
+  "buildTurns": 2,
+  "note": "The one tank that must never be empty."
+}

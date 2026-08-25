@@ -170,7 +170,7 @@ public sealed class TechTreeFixtureTests
             [.. t.Prerequisites.Select(p => new TechnologyId(p))],
             t.Effects,
             t.GrantsDetectClass,
-            t.Routes))]);
+            t.Routes, t.Licence, t.Research))]);
 
         // Nothing is held before anything is acquired, and the E4 tip of the
         // longest chain is genuinely out of reach at the start.
@@ -191,7 +191,7 @@ public sealed class TechTreeFixtureTests
         var state = new TechnologyState([.. shipped.Select(t => new TechnologyNode(
             new TechnologyId(t.Id), t.AvailableFrom, t.DiffusionLagTicks,
             [.. t.Prerequisites.Select(p => new TechnologyId(p))],
-            t.Effects, t.GrantsDetectClass, t.Routes))]);
+            t.Effects, t.GrantsDetectClass, t.Routes, t.Licence, t.Research))]);
 
         // Far past every lag, in the last era, so only the route can withhold.
         state.ApplyDiffusion(Era.E4, new Tick(0), new Tick(12_000));

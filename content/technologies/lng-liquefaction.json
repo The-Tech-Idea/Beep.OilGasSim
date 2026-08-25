@@ -4,6 +4,19 @@
   "name": "$loc:tech.lng-liquefaction",
   "availableFrom": "E3",
   "diffusionLagTicks": 0,
-  "prerequisites": ["molecular-sieve", "cryogenic-recovery"],
-  "routes": ["Research", "Licence"]
+  "prerequisites": [
+    "molecular-sieve",
+    "cryogenic-recovery"
+  ],
+  "routes": [
+    "Research",
+    "Licence"
+  ],
+  "licence": {
+    "feeMillionsPerTick": 0.2
+  },
+  "research": {
+    "months": 12,
+    "costMillionsPerMonth": 1.0
+  }
 }

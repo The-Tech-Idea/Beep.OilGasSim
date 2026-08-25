@@ -1,0 +1,9 @@
+{
+  "kind": "equipment",
+  "id": "pipeline-pig-launcher",
+  "name": "$loc:equipment.pipeline-pig-launcher",
+  "group": "export",
+  "costMillions": 1.2,
+  "buildTurns": 1,
+  "note": "Sends the pig."
+}

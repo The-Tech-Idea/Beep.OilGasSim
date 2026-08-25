@@ -1,0 +1,9 @@
+{
+  "kind": "equipment",
+  "id": "firefighting-foam-unit",
+  "name": "$loc:equipment.firefighting-foam-unit",
+  "group": "safety",
+  "costMillions": 1.6,
+  "buildTurns": 2,
+  "note": "For what water makes worse."
+}

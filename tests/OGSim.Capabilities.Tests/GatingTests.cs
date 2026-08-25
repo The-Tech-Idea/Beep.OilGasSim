@@ -24,16 +24,16 @@ public static class Fx
 
     public static IReadOnlyList<TechnologyNode> Graph =>
     [
-        new(Rotary, Era.E1, DiffusionLagTicks: 0, [], [], null, Diffuses),
+        new(Rotary, Era.E1, DiffusionLagTicks: 0, [], [], null, Diffuses, null, null),
         new(Directional, Era.E2, DiffusionLagTicks: 24, [Rotary],
             [new MoveEnvelope(EnvelopeKind.MaxDrillingDepth,
-                              EnvelopeContributionKind.Extension, 4500.0)], null, Diffuses),
+                              EnvelopeContributionKind.Extension, 4500.0)], null, Diffuses, null, null),
         new(Horizontal, Era.E3, DiffusionLagTicks: 60, [Directional],
             [new MoveEnvelope(EnvelopeKind.MaxDrillingDepth,
                               EnvelopeContributionKind.Extension, 6000.0),
-             new UnlockOption(new ContentId("horizontal-completion"))], null, Diffuses),
+             new UnlockOption(new ContentId("horizontal-completion"))], null, Diffuses, null, null),
         new(Seismic3d, Era.E2, DiffusionLagTicks: 36, [],
-            [], GrantsDetectClass: DetectClass.D2, Routes: Diffuses),
+            [], GrantsDetectClass: DetectClass.D2, Routes: Diffuses, Licence: null, Research: null),
     ];
 
     /// <summary>
@@ -42,11 +42,11 @@ public static class Fx
     /// </summary>
     public static IReadOnlyList<TechnologyNode> GraphWhereHorizontalIsBought =>
     [
-        new(Rotary, Era.E1, DiffusionLagTicks: 0, [], [], null, Diffuses),
-        new(Directional, Era.E2, DiffusionLagTicks: 24, [Rotary], [], null, Diffuses),
+        new(Rotary, Era.E1, DiffusionLagTicks: 0, [], [], null, Diffuses, null, null),
+        new(Directional, Era.E2, DiffusionLagTicks: 24, [Rotary], [], null, Diffuses, null, null),
         new(Horizontal, Era.E3, DiffusionLagTicks: 0, [Directional], [], null,
             [AcquisitionRoute.Research, AcquisitionRoute.Licence,
-             AcquisitionRoute.ServiceRental]),
+             AcquisitionRoute.ServiceRental], null, null),
     ];
 
     public static EffectState Effects(double baseDepth = 3000.0)
@@ -85,7 +85,7 @@ public class TechnologyStateTests
     {
         var state = new TechnologyState(Fx.Graph);
 
-        state.Acquire(Fx.Rotary, Era.E1);
+        state.Acquire(Fx.Rotary, Era.E1, AcquisitionRoute.Diffusion);
 
         Assert.True(state.Has(Fx.Rotary));
         Assert.Equal(Fx.Rotary, Assert.Single(state.Acquired));
@@ -96,7 +96,7 @@ public class TechnologyStateTests
     {
         var state = new TechnologyState(Fx.Graph);
 
-        var fault = Assert.Throws<ModelFault>(() => state.Acquire(Fx.Horizontal, Era.E3));
+        var fault = Assert.Throws<ModelFault>(() => state.Acquire(Fx.Horizontal, Era.E3, AcquisitionRoute.Diffusion));
 
         Assert.Contains("directional-drilling", fault.Fault.Detail);
         Assert.Contains("not held", fault.Fault.Detail);
@@ -106,9 +106,9 @@ public class TechnologyStateTests
     public void R17V6_a_node_before_its_era_is_refused()
     {
         var state = new TechnologyState(Fx.Graph);
-        state.Acquire(Fx.Rotary, Era.E1);
+        state.Acquire(Fx.Rotary, Era.E1, AcquisitionRoute.Diffusion);
 
-        var fault = Assert.Throws<ModelFault>(() => state.Acquire(Fx.Directional, Era.E1));
+        var fault = Assert.Throws<ModelFault>(() => state.Acquire(Fx.Directional, Era.E1, AcquisitionRoute.Diffusion));
 
         Assert.Contains("not available until era E2", fault.Fault.Detail);
     }
@@ -119,7 +119,7 @@ public class TechnologyStateTests
         var state = new TechnologyState(Fx.Graph);
         Assert.Equal(DetectClass.D0, state.MaxDetectClass);
 
-        state.Acquire(Fx.Seismic3d, Era.E2);
+        state.Acquire(Fx.Seismic3d, Era.E2, AcquisitionRoute.Diffusion);
 
         // Derived, not stored — so acquiring a survey technology raises the tier
         // with no second place to update (law L5).
@@ -196,7 +196,7 @@ public class TechnologyStateTests
         var fault = Assert.Throws<ModelFault>(() => new TechnologyState(
         [
             new TechnologyNode(Fx.Horizontal, Era.E1, 0, [Fx.Tech("never-shipped")], [], null,
-                [AcquisitionRoute.Research]),
+                [AcquisitionRoute.Research], null, null),
         ]));
 
         // A node gated behind a technology nobody ships can never be acquired,
@@ -277,7 +277,7 @@ public class GatingTests
     public void R17V7_a_held_technology_passes()
     {
         var state = new TechnologyState(Fx.Graph);
-        state.Acquire(Fx.Rotary, Era.E1);
+        state.Acquire(Fx.Rotary, Era.E1, AcquisitionRoute.Diffusion);
 
         Assert.IsType<GatePass>(Check(Fx.Needs(tech: [Fx.Rotary]), state));
     }
@@ -429,8 +429,8 @@ public class EffectStateTests
     public void R17V2_technology_and_environment_apply_through_the_same_method()
     {
         var state = new TechnologyState(Fx.Graph);
-        state.Acquire(Fx.Rotary, Era.E1);
-        state.Acquire(Fx.Directional, Era.E2);
+        state.Acquire(Fx.Rotary, Era.E1, AcquisitionRoute.Diffusion);
+        state.Acquire(Fx.Directional, Era.E2, AcquisitionRoute.Diffusion);
 
         EffectState effects = Fx.Effects(baseDepth: 3000.0);
 

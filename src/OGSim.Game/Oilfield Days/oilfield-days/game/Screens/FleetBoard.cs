@@ -124,10 +124,10 @@ public sealed partial class FleetBoard : Control
 		StyleSign(authored);
 		authored.GrowVertical = GrowDirection.Begin;
 
-		WireAction(authored, "DispatchButton", "DISPATCH BOARD", UiSurface.Role.Success, new Vector2(280, 50),
+		WireAction(authored, "DispatchButton", "JOBS", UiSurface.Role.Success, new Vector2(280, 50),
 			() => SceneRouter.Instance.OpenOverlay(SceneRouter.DispatchBoard));
-		WireAction(authored, "LeaseButton", "THE LEASE", UiSurface.Role.Neutral, new Vector2(200, 50),
-			() => SceneRouter.Instance.OpenOverlay(SceneRouter.LeaseBoard));
+		WireAction(authored, "LeaseButton", "MAP", UiSurface.Role.Neutral, new Vector2(200, 50),
+			() => SceneRouter.Instance.CloseOverlay());
 		WireAction(authored, "BackButton", "BACK", UiSurface.Role.Danger, new Vector2(150, 50),
 			() => SceneRouter.Instance.CloseOverlay());
 	}
@@ -229,7 +229,7 @@ public sealed partial class FleetBoard : Control
 		if (snapshot.Wellbores.Count == 0)
 		{
 			_rows.AddChild(Empty("Nothing drilled yet."));
-			ShowDetail("drilling-rig-derrick", "No wells", "The company owns a rig and a lease, and that is all.", []);
+			ShowDetail("drilling-rig-derrick", "No wells", "Your first drill crew is waiting at camp.", []);
 			return;
 		}
 
@@ -266,7 +266,7 @@ public sealed partial class FleetBoard : Control
 		ShowDetail(
 			chosen.Status == WellStatus.Producing ? "pumpjack" : "wellhead-tree",
 			chosen.DisplayId,
-			"Open, shut, test, log, core or abandon it from the truck, standing at the wellhead.",
+			"Send crews from the map to open it, check it, sample it, or close it.",
 			[
 				("Output this month", chosen.ProducedThisTick.CubicMetres / most, $"{chosen.ProducedThisTick.CubicMetres:N0} m3", KitTheme.Green),
 				("Flowing", chosen.Status == WellStatus.Producing ? 1.0 : 0.0, chosen.Status.ToString(), KitTheme.Green),

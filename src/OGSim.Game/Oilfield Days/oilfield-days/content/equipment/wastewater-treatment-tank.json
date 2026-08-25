@@ -1,0 +1,9 @@
+{
+  "kind": "equipment",
+  "id": "wastewater-treatment-tank",
+  "name": "$loc:equipment.wastewater-treatment-tank",
+  "group": "process",
+  "costMillions": 2.6,
+  "buildTurns": 2,
+  "note": "Cleans it enough to reinject or discharge."
+}

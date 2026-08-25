@@ -1,0 +1,9 @@
+{
+  "kind": "equipment",
+  "id": "service-crew",
+  "name": "$loc:equipment.service-crew",
+  "group": "monitoring",
+  "costMillions": 1.5,
+  "buildTurns": 1,
+  "note": "The people who keep what stands standing: inspection, service, repair."
+}

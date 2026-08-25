@@ -4,6 +4,19 @@
   "name": "$loc:tech.hydraulic-fracturing",
   "availableFrom": "E3",
   "diffusionLagTicks": 0,
-  "prerequisites": ["horizontal"],
-  "routes": ["Research", "Licence", "ServiceRental"]
+  "prerequisites": [
+    "horizontal"
+  ],
+  "routes": [
+    "Research",
+    "Licence",
+    "ServiceRental"
+  ],
+  "licence": {
+    "feeMillionsPerTick": 0.2
+  },
+  "research": {
+    "months": 12,
+    "costMillionsPerMonth": 1.0
+  }
 }

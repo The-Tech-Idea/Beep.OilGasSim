@@ -1,0 +1,9 @@
+{
+  "kind": "equipment",
+  "id": "maintenance-cabin",
+  "name": "$loc:equipment.maintenance-cabin",
+  "group": "yard",
+  "costMillions": 0.5,
+  "buildTurns": 1,
+  "note": "A satellite workshop out on the pad."
+}

@@ -26,6 +26,7 @@ public sealed partial class Dispatcher : Node2D
 {
     private const string Folder = "res://data/units";
     private const string Builds = "res://data/builds";
+    private const float BasePrepareSeconds = 2.2f;
 
     private readonly List<UnitKind> _kinds = new();
     private readonly List<BuildKind> _catalogue = new();
@@ -39,6 +40,12 @@ public sealed partial class Dispatcher : Node2D
     /// <summary>Something happened a player should be told about.</summary>
     [Signal]
     public delegate void ReportedEventHandler(string message, bool bad);
+
+    /// <summary>A unit has arrived and is preparing the ground before the engine job starts.</summary>
+    public event Action<JobKind, ulong, Vector2>? PreparingSite;
+
+    /// <summary>The engine accepted a job after a unit prepared its site.</summary>
+    public event Action<JobKind, ulong>? JobAccepted;
 
     /// <summary>Raise the yard: load the kinds and stand one of each in it.</summary>
     public void Raise(Vector2 yard)
@@ -59,6 +66,7 @@ public sealed partial class Dispatcher : Node2D
             AddChild(unit);
             unit.Station(kind, yard + (kind.YardStand * BasinWorld.TileSize));
             unit.Arrived += OnArrived;
+            unit.Prepared += OnPrepared;
             unit.Home += _ => { };
             _roster.Add(unit);
         }
@@ -127,6 +135,13 @@ public sealed partial class Dispatcher : Node2D
     /// </remarks>
     private void OnArrived(Unit unit)
     {
+        PreparingSite?.Invoke(unit.Job, unit.Subject, unit.Position);
+        unit.Prepare(PrepareSeconds(unit.Job));
+        EmitSignal(SignalName.Reported, $"{unit.Kind.DisplayName} is preparing the site.", false);
+    }
+
+    private void OnPrepared(Unit unit)
+    {
         FieldReadModel? snapshot = EngineHost.Instance.Snapshot;
         Command? command = Build(unit.Job, unit.Subject, snapshot);
 
@@ -158,6 +173,7 @@ public sealed partial class Dispatcher : Node2D
             return;
         }
 
+        JobAccepted?.Invoke(unit.Job, unit.Subject);
         unit.Settle(snapshot.Tick.Value);
 
         // A build is watched for rather than timed. The count of elements
@@ -173,6 +189,14 @@ public sealed partial class Dispatcher : Node2D
 
         EmitSignal(SignalName.Reported, $"{unit.Kind.DisplayName} has started.", false);
     }
+
+    private static float PrepareSeconds(JobKind job) => job switch
+    {
+        JobKind.Drill => BasePrepareSeconds * 1.8f,
+        JobKind.Build or JobKind.Commission => BasePrepareSeconds * 1.5f,
+        JobKind.Repair or JobKind.Service or JobKind.FitMonitoring => BasePrepareSeconds * 0.8f,
+        _ => BasePrepareSeconds,
+    };
 
     /// <summary>Send home anything whose work the engine has finished.</summary>
     public void Bind(FieldReadModel snapshot)

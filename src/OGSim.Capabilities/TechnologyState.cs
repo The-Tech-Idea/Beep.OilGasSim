@@ -16,6 +16,12 @@ using OGSim.Kernel;
 namespace OGSim.Capabilities;
 
 /// <summary>One node of the technology graph, from content.</summary>
+/// <summary>What holding a licensed node costs, per tick, forever.</summary>
+public sealed record TechnologyLicenceTerms(double FeeMillionsPerTick);
+
+/// <summary>What an in-house programme costs and how long it runs.</summary>
+public sealed record TechnologyResearchTerms(int Months, double CostMillionsPerMonth);
+
 public sealed record TechnologyNode(
     TechnologyId Id,
     Era AvailableFrom,
@@ -23,7 +29,16 @@ public sealed record TechnologyNode(
     IReadOnlyList<TechnologyId> Prerequisites,
     IReadOnlyList<Effect> Effects,
     DetectClass? GrantsDetectClass,           // observation nodes raise the tier
-    IReadOnlyList<AcquisitionRoute> Routes)   // TECH_TREE's R L S D column
+    IReadOnlyList<AcquisitionRoute> Routes,   // TECH_TREE's R L S D column
+
+    /// <summary>Licence route terms where offered (finding 293) — an ongoing
+    /// fee for as long as the node is held: fast, no ownership, expensive
+    /// forever (design 07 §3).</summary>
+    TechnologyLicenceTerms? Licence,
+
+    /// <summary>R&amp;D route terms where offered — a sustained monthly budget
+    /// for a stated number of months, then the node is owned outright.</summary>
+    TechnologyResearchTerms? Research)
 {
     // Finding 131.
     public bool Equals(TechnologyNode? other) =>
@@ -32,7 +47,8 @@ public sealed record TechnologyNode(
         && GrantsDetectClass == other.GrantsDetectClass
         && Structural.Equal(Prerequisites, other.Prerequisites)
         && Structural.Equal(Effects, other.Effects)
-        && Structural.Equal(Routes, other.Routes);
+        && Structural.Equal(Routes, other.Routes)
+        && Equals(Licence, other.Licence) && Equals(Research, other.Research);
 
     public override int GetHashCode() =>
         HashCode.Combine(Id, AvailableFrom, DiffusionLagTicks, GrantsDetectClass,
@@ -115,7 +131,25 @@ public sealed class TechnologyState : ICapabilitySet
     /// Granting anyway would let a route bypass the graph, and the graph is the
     /// only thing that makes the technology tree a sequence rather than a menu.</para>
     /// </summary>
-    public void Acquire(TechnologyId tech, Era currentEra)
+    /// <summary>Which route each held node arrived by (finding 293) — the
+    /// licence fee bills only what was LICENSED; owned and diffused nodes
+    /// carry no ongoing charge.</summary>
+    private readonly Dictionary<TechnologyId, AcquisitionRoute> _routeOf = [];
+
+    /// <summary>Programmes under way: the node and the months left. Insertion
+    /// order, for the save (rule D-5).</summary>
+    private readonly List<(TechnologyId Tech, int Remaining)> _research = [];
+
+    public AcquisitionRoute RouteOf(TechnologyId tech) =>
+        _routeOf.TryGetValue(tech, out AcquisitionRoute route)
+            ? route
+            : throw new ModelFault("SDD-005 §2", null,
+                $"technology {tech.Value.Value} is not held, so it has no acquisition route");
+
+    /// <summary>The programmes running, oldest first.</summary>
+    public IReadOnlyList<(TechnologyId Tech, int Remaining)> Researching => _research;
+
+    public void Acquire(TechnologyId tech, Era currentEra, AcquisitionRoute route)
     {
         if (!_graph.TryGetValue(tech, out TechnologyNode? node))
             throw new ModelFault("SDD-005 §2", null,
@@ -132,7 +166,113 @@ public sealed class TechnologyState : ICapabilitySet
                     $"technology {tech.Value.Value} requires " +
                     $"{node.Prerequisites[i].Value.Value}, which is not held");
 
-        if (_acquired.Add(tech)) _acquiredOrder.Add(tech);
+        if (_acquired.Add(tech))
+        {
+            _acquiredOrder.Add(tech);
+            _routeOf[tech] = route;
+        }
+    }
+
+    /// <summary>
+    /// Start an in-house programme (design 07 §3's R&amp;D route, finding
+    /// 293): a sustained monthly budget for the node's stated months, then
+    /// the node is owned. The same checks a grant makes, plus the route being
+    /// offered — misuse is a fault; the COMMAND's validator asks first and
+    /// refuses politely.
+    /// </summary>
+    public void StartResearch(TechnologyId tech, Era currentEra)
+    {
+        if (!_graph.TryGetValue(tech, out TechnologyNode? node))
+            throw new ModelFault("SDD-005 §2", null,
+                $"technology {tech.Value.Value} is not in the graph");
+
+        if (node.Research is null || !node.Routes.Contains(AcquisitionRoute.Research))
+            throw new ModelFault("SDD-005 §2", null,
+                $"technology {tech.Value.Value} offers no research route");
+
+        if (node.AvailableFrom > currentEra)
+            throw new ModelFault("SDD-005 §2", null,
+                $"technology {tech.Value.Value} is not available until era " +
+                $"{node.AvailableFrom}; it is {currentEra}");
+
+        for (int i = 0; i < node.Prerequisites.Count; i++)
+            if (!_acquired.Contains(node.Prerequisites[i]))
+                throw new ModelFault("SDD-005 §2", null,
+                    $"technology {tech.Value.Value} requires " +
+                    $"{node.Prerequisites[i].Value.Value}, which is not held");
+
+        if (_acquired.Contains(tech))
+            throw new ModelFault("SDD-005 §2", null,
+                $"technology {tech.Value.Value} is already held");
+
+        for (int i = 0; i < _research.Count; i++)
+            if (_research[i].Tech.Equals(tech))
+                throw new ModelFault("SDD-005 §2", null,
+                    $"technology {tech.Value.Value} is already being researched");
+
+        _research.Add((tech, node.Research.Months));
+    }
+
+    /// <summary>A restore's replay of an in-flight programme — the months
+    /// left come from the save, not from the node's full term.</summary>
+    public void RestoreResearch(TechnologyId tech, int remaining) =>
+        _research.Add((tech, remaining));
+
+    /// <summary>
+    /// One month of every running programme (finding 293): bills the month,
+    /// completes what finished — granted by the same door every route uses —
+    /// and answers what this tick's research spend was.
+    /// </summary>
+    public (IReadOnlyList<TechnologyId> Completed, double SpendMillions) AdvanceResearch(
+        Era currentEra)
+    {
+        var completed = new List<TechnologyId>();
+        var spend = 0.0;
+
+        for (int i = _research.Count - 1; i >= 0; i--)
+        {
+            (TechnologyId tech, int remaining) = _research[i];
+
+            // The node arrived by another route mid-programme — diffusion
+            // caught up, most likely. The budget stops: paying to develop
+            // what is already standard practice is not a decision anyone
+            // would defend (finding 293).
+            if (_acquired.Contains(tech))
+            {
+                _research.RemoveAt(i);
+                continue;
+            }
+
+            spend += _graph[tech].Research!.CostMillionsPerMonth;
+            remaining--;
+
+            if (remaining > 0)
+            {
+                _research[i] = (tech, remaining);
+                continue;
+            }
+
+            _research.RemoveAt(i);
+            Acquire(tech, currentEra, AcquisitionRoute.Research);
+            completed.Add(tech);
+        }
+
+        return (completed, spend);
+    }
+
+    /// <summary>What holding the licensed nodes costs this tick (design 07
+    /// §3: expensive forever) — owned, researched and diffused nodes bill
+    /// nothing.</summary>
+    public double LicenceFeeMillionsThisTick()
+    {
+        var fee = 0.0;
+
+        for (int i = 0; i < _acquiredOrder.Count; i++)
+            if (_routeOf.TryGetValue(_acquiredOrder[i], out AcquisitionRoute route)
+                && route == AcquisitionRoute.Licence)
+                fee += _graph[_acquiredOrder[i]].Licence!.FeeMillionsPerTick;
+
+        return fee;
     }
 
     /// <summary>
@@ -174,6 +314,10 @@ public sealed class TechnologyState : ICapabilitySet
 
             _acquired.Add(node.Id);
             _acquiredOrder.Add(node.Id);
+
+            // Standard practice carries no bill (finding 293): the route is
+            // recorded so the licence fee knows this node is not its business.
+            _routeOf[node.Id] = AcquisitionRoute.Diffusion;
         }
     }
 

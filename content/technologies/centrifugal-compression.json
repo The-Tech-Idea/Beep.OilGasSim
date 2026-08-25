@@ -4,6 +4,18 @@
   "name": "$loc:tech.centrifugal-compression",
   "availableFrom": "E2",
   "diffusionLagTicks": 0,
-  "prerequisites": ["reciprocating-compression"],
-  "routes": ["Research", "Licence"]
+  "prerequisites": [
+    "reciprocating-compression"
+  ],
+  "routes": [
+    "Research",
+    "Licence"
+  ],
+  "licence": {
+    "feeMillionsPerTick": 0.1
+  },
+  "research": {
+    "months": 12,
+    "costMillionsPerMonth": 0.5
+  }
 }

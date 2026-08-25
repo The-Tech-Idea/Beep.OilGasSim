@@ -4,6 +4,18 @@
   "name": "$loc:tech.gas-injection",
   "availableFrom": "E2",
   "diffusionLagTicks": 0,
-  "prerequisites": ["waterflood"],
-  "routes": ["Research", "Licence"]
+  "prerequisites": [
+    "waterflood"
+  ],
+  "routes": [
+    "Research",
+    "Licence"
+  ],
+  "licence": {
+    "feeMillionsPerTick": 0.1
+  },
+  "research": {
+    "months": 12,
+    "costMillionsPerMonth": 0.5
+  }
 }

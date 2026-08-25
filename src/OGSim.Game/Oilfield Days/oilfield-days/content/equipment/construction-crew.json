@@ -1,0 +1,9 @@
+{
+  "kind": "equipment",
+  "id": "construction-crew",
+  "name": "$loc:equipment.construction-crew",
+  "group": "construction",
+  "costMillions": 2.0,
+  "buildTurns": 1,
+  "note": "The people who turn a laydown yard full of parts into a plant."
+}

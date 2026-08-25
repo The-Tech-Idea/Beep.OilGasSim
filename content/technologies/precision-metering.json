@@ -4,6 +4,18 @@
   "name": "$loc:tech.precision-metering",
   "availableFrom": "E3",
   "diffusionLagTicks": 0,
-  "prerequisites": ["telemetry-scada"],
-  "routes": ["Research", "Licence"]
+  "prerequisites": [
+    "telemetry-scada"
+  ],
+  "routes": [
+    "Research",
+    "Licence"
+  ],
+  "licence": {
+    "feeMillionsPerTick": 0.2
+  },
+  "research": {
+    "months": 12,
+    "costMillionsPerMonth": 1.0
+  }
 }

@@ -24,6 +24,30 @@ namespace Beep.ECS.UI.Kit
     /// </summary>
     public static class KitChrome
     {
+        private const string AutoMinimumMeta = "_beep_kit_auto_minimum";
+
+        public static void SetAutoMinimumSize(Godot.Control ctl, Vector2 wanted)
+        {
+            wanted = new Vector2(Mathf.Max(0f, wanted.X), Mathf.Max(0f, wanted.Y));
+            bool kitOwnsMinimum = ctl.CustomMinimumSize == Vector2.Zero;
+            if (!kitOwnsMinimum && ctl.HasMeta(AutoMinimumMeta))
+            {
+                Vector2 previous = ctl.GetMeta(AutoMinimumMeta, Vector2.Zero).AsVector2();
+                kitOwnsMinimum = Same(ctl.CustomMinimumSize.X, previous.X)
+                              && Same(ctl.CustomMinimumSize.Y, previous.Y);
+            }
+
+            if (!kitOwnsMinimum) return;
+            ctl.CustomMinimumSize = wanted;
+            ctl.SetMeta(AutoMinimumMeta, wanted);
+        }
+
+        public static void RefreshAutoMinimumSize(Godot.Control ctl, Vector2 wanted)
+        {
+            SetAutoMinimumSize(ctl, wanted);
+            ctl.UpdateMinimumSize();
+        }
+
         /// <summary>Blank a control's StyleBoxes so the base class paints nothing, KEEPING the
         /// content margins — Godot sizes a control's text and children from them, so zeroing them
         /// collapses the widget onto its label.</summary>
@@ -32,17 +56,113 @@ namespace Beep.ECS.UI.Kit
         {
             if (vpad < 0f) vpad = frame * 0.5f + pad * 0.4f;
             foreach (string s in states)
-            {
-                var sb = new StyleBoxEmpty
-                {
-                    ContentMarginLeft = frame + pad,
-                    ContentMarginRight = frame + pad,
-                    ContentMarginTop = vpad,
-                    ContentMarginBottom = vpad,
-                };
-                ctl.AddThemeStyleboxOverride(s, sb);
-            }
+                SetEmptyStyleboxOverride(ctl, s, frame + pad, frame + pad, vpad, vpad);
         }
+
+        public static void SetEmptyStyleboxOverride(Godot.Control ctl, string name)
+            => SetEmptyStyleboxOverride(ctl, name, 0f, 0f, 0f, 0f);
+
+        public static void SetEmptyStyleboxOverride(
+            Godot.Control ctl,
+            string name,
+            float left,
+            float right,
+            float top,
+            float bottom)
+        {
+            if (ctl.HasThemeStyleboxOverride(name)
+                && ctl.GetThemeStylebox(name) is StyleBoxEmpty existing
+                && SameMargins(existing, left, right, top, bottom))
+                return;
+
+            ctl.AddThemeStyleboxOverride(name, new StyleBoxEmpty
+            {
+                ContentMarginLeft = left,
+                ContentMarginRight = right,
+                ContentMarginTop = top,
+                ContentMarginBottom = bottom,
+            });
+        }
+
+        public static void SetStyleboxOverrideIfChanged(Godot.Control ctl, string name, StyleBox value)
+        {
+            if (ctl.HasThemeStyleboxOverride(name) && SameStylebox(ctl.GetThemeStylebox(name), value))
+                return;
+
+            ctl.AddThemeStyleboxOverride(name, value);
+        }
+
+        public static void SetBlankIconOverride(Godot.Control ctl, string name)
+        {
+            if (ctl.HasThemeIconOverride(name) && ctl.GetThemeIcon(name) == Blank)
+                return;
+
+            ctl.AddThemeIconOverride(name, Blank);
+        }
+
+        public static void SetColorOverrideIfChanged(Godot.Control ctl, string name, Color value)
+        {
+            if (SameColor(ctl.GetThemeColor(name), value)) return;
+            ctl.AddThemeColorOverride(name, value);
+        }
+
+        public static void SetFontSizeOverrideIfChanged(Godot.Control ctl, string name, int value)
+        {
+            if (ctl.GetThemeFontSize(name) == value) return;
+            ctl.AddThemeFontSizeOverride(name, value);
+        }
+
+        public static void SetConstantOverrideIfChanged(Godot.Control ctl, string name, int value)
+        {
+            if (ctl.GetThemeConstant(name) == value) return;
+            ctl.AddThemeConstantOverride(name, value);
+        }
+
+        public static void SetFontOverrideIfChanged(Godot.Control ctl, string name, Font value)
+        {
+            if (ctl.GetThemeFont(name) == value) return;
+            ctl.AddThemeFontOverride(name, value);
+        }
+
+        private static bool Same(float a, float b) => Mathf.Abs(a - b) < 0.001f;
+
+        private static bool SameColor(Color a, Color b)
+            => Same(a.R, b.R) && Same(a.G, b.G) && Same(a.B, b.B) && Same(a.A, b.A);
+
+        private static bool SameStylebox(StyleBox? a, StyleBox b)
+        {
+            if (a is StyleBoxEmpty ea && b is StyleBoxEmpty eb)
+                return SameMargins(ea, eb);
+
+            if (a is StyleBoxFlat fa && b is StyleBoxFlat fb)
+            {
+                return SameColor(fa.BgColor, fb.BgColor)
+                    && SameColor(fa.BorderColor, fb.BorderColor)
+                    && SameMargins(fa, fb)
+                    && Same(fa.BorderWidthLeft, fb.BorderWidthLeft)
+                    && Same(fa.BorderWidthRight, fb.BorderWidthRight)
+                    && Same(fa.BorderWidthTop, fb.BorderWidthTop)
+                    && Same(fa.BorderWidthBottom, fb.BorderWidthBottom)
+                    && Same(fa.CornerRadiusTopLeft, fb.CornerRadiusTopLeft)
+                    && Same(fa.CornerRadiusTopRight, fb.CornerRadiusTopRight)
+                    && Same(fa.CornerRadiusBottomLeft, fb.CornerRadiusBottomLeft)
+                    && Same(fa.CornerRadiusBottomRight, fb.CornerRadiusBottomRight);
+            }
+
+            return false;
+        }
+
+        private static bool SameMargins(StyleBox a, StyleBox b)
+            => Same(a.ContentMarginLeft, b.ContentMarginLeft)
+            && Same(a.ContentMarginRight, b.ContentMarginRight)
+            && Same(a.ContentMarginTop, b.ContentMarginTop)
+            && Same(a.ContentMarginBottom, b.ContentMarginBottom);
+
+        private static bool SameMargins(StyleBox a, float left, float right, float top, float bottom)
+            => Same(a.ContentMarginLeft, left)
+            && Same(a.ContentMarginRight, right)
+            && Same(a.ContentMarginTop, top)
+            && Same(a.ContentMarginBottom, bottom);
 
         /// <summary>A 1×1 transparent texture, for icon slots that cannot be blanked with a
         /// StyleBox (Slider's grabber, CheckButton's tick). Cached — one per process, not one
@@ -234,10 +354,8 @@ namespace Beep.ECS.UI.Kit
 
         private static void ClipInto(CanvasItem ci, Vector2[] host, Vector2[] band, Color c)
         {
-            if (c.A < 0.003f || host.Length < 3) return;
-            foreach (var piece in Geometry2D.IntersectPolygons(host, band))
-                if (piece.Length >= 3 && Geometry2D.TriangulatePolygon(piece).Length > 0)
-                    ci.DrawColoredPolygon(piece, c);
+            if (c.A < 0.003f || host.Length < 3 || band.Length < 3) return;
+            ci.DrawColoredPolygon(band, c);
         }
 
         /// <summary>State as a SCULPT, not an alpha change — fading a control is the clearest
@@ -340,7 +458,7 @@ namespace Beep.ECS.UI.Kit
             if (r.Size.X < 1f || r.Size.Y < 1f) return;
             rimWidth = KitRim.Width(rimWidth);
             var poly = Poly(shape, r, g, Unit(ctl));
-            if (poly.Length < 3 || Geometry2D.TriangulatePolygon(poly).Length == 0) return;
+            if (poly.Length < 3) return;
             if (fill.A > 0f) ctl.DrawColoredPolygon(poly, fill);
             if (rimWidth > 0f && rim.A > 0f)
             {
@@ -357,7 +475,7 @@ namespace Beep.ECS.UI.Kit
 
         /// <summary>The genre's type family, falling back to the theme default.</summary>
         public static Font? Font(Godot.Control ctl, string genre)
-            => KitFonts.Resolve(KitGeometry.ForGenre(genre).Font) ?? ctl.GetThemeDefaultFont();
+            => KitFonts.Fallback(ctl, KitGeometry.ForGenre(genre).Font);
 
         public static float PanelHeaderRoom(Godot.Control ctl, string genre, string text,
                                             KitPanelHeaderStyle style, float fontScale = 0.78f,
@@ -498,6 +616,7 @@ namespace Beep.ECS.UI.Kit
                                     string text, int fs, Color ink)
         {
             if (font == null || string.IsNullOrEmpty(text)) return;
+            fs = Mathf.Max(1, fs);
             var treat = KitGeometry.ForGenre(genre).TextTreatment;
             float d = Mathf.Max(1f, Unit(ctl) * 0.075f);
 
@@ -556,10 +675,12 @@ namespace Beep.ECS.UI.Kit
                 var font = Font(ctl, genre);
                 if (font == null) continue;
                 int fs = UiSurface.FontSize(ctl, 0.8f);
-                Vector2 m = font.GetStringSize(a.Text, HorizontalAlignment.Left, -1, fs);
-                ctl.DrawString(font, new Vector2(r.Position.X + (r.Size.X - m.X) * 0.5f,
-                                                 r.Position.Y + (r.Size.Y + m.Y * 0.6f) * 0.5f),
-                               a.Text, HorizontalAlignment.Left, -1, fs, UiSurface.Ink(fill));
+                string text = EllipsizeText(font, Case(a.Text, genre), fs, r.Size.X * 0.84f);
+                if (string.IsNullOrEmpty(text)) continue;
+                Vector2 m = font.GetStringSize(text, HorizontalAlignment.Left, -1, fs);
+                DrawText(ctl, genre, font, new Vector2(r.Position.X + (r.Size.X - m.X) * 0.5f,
+                                                       r.Position.Y + (r.Size.Y + m.Y * 0.6f) * 0.5f),
+                         text, fs, UiSurface.Ink(fill));
             }
         }
 
@@ -568,6 +689,7 @@ namespace Beep.ECS.UI.Kit
         {
             var lines = new System.Collections.Generic.List<string>();
             if (font == null || string.IsNullOrWhiteSpace(text) || width <= 1f) return lines;
+            fs = Mathf.Max(1, fs);
 
             foreach (string paragraph in text.Replace("\r", "").Split('\n'))
             {
@@ -620,6 +742,7 @@ namespace Beep.ECS.UI.Kit
         {
             if (font == null || string.IsNullOrWhiteSpace(text)
                 || box.Size.X <= 1f || box.Size.Y <= 1f) return;
+            fs = Mathf.Max(1, fs);
 
             var lines = WrapLines(font, Case(text, genre), fs, box.Size.X);
             if (lines.Count == 0) return;
@@ -633,7 +756,7 @@ namespace Beep.ECS.UI.Kit
             {
                 string line = lines[i];
                 if (ellipsize && i == count - 1 && count < lines.Count)
-                    line = Ellipsize(font, line, fs, box.Size.X);
+                    line = EllipsizeText(font, line, fs, box.Size.X);
                 Vector2 m = font.GetStringSize(line, HorizontalAlignment.Left, -1, fs);
                 float x = align switch
                 {
@@ -647,15 +770,19 @@ namespace Beep.ECS.UI.Kit
             }
         }
 
-        private static string Ellipsize(Font font, string text, int fs, float width)
+        public static string EllipsizeText(Font font, string text, int fs, float width)
         {
             const string mark = "...";
+            fs = Mathf.Max(1, fs);
+            if (width <= 1f) return "";
             if (font.GetStringSize(text, HorizontalAlignment.Left, -1, fs).X <= width) return text;
             string t = text;
             while (t.Length > 0
                    && font.GetStringSize(t + mark, HorizontalAlignment.Left, -1, fs).X > width)
                 t = t[..^1];
-            return string.IsNullOrEmpty(t) ? mark : t + mark;
+            return string.IsNullOrEmpty(t)
+                ? font.GetStringSize(mark, HorizontalAlignment.Left, -1, fs).X <= width ? mark : ""
+                : t + mark;
         }
 
         /// <summary>Shade may exceed 1.0 — the measured outer rim is 2.05× the plate — so
@@ -703,10 +830,10 @@ namespace Beep.ECS.UI.Kit
             // declared role has no shipped face, because that failure renders identically to
             // having no font system at all.
             var g = KitGeometry.ForGenre(SkinCatalog.HasActiveSkin ? SkinCatalog.ActiveGenre : "");
-            var font = KitFonts.Resolve(g.Font) ?? ctl.GetThemeDefaultFont();
+            var font = KitFonts.Fallback(ctl, g.Font);
             if (font == null) return;
             if (g.UpperCase) text = text.ToUpperInvariant();
-            int fs = UiSurface.FontSize(ctl);
+            int fs = Mathf.Max(1, UiSurface.FontSize(ctl));
             string[] lines = text.Split('\n');
             float lh = fs * 1.15f;
             float top = box.Position.Y + (box.Size.Y - lh * lines.Length) * 0.5f + fs * 0.82f + dy;

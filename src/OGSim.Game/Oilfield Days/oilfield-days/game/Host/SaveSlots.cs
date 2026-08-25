@@ -4,6 +4,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using Godot;
+using OGSim.Composition;
 
 namespace OilfieldDays.Host;
 
@@ -118,7 +119,7 @@ public static class SaveSlots
         var record = new Godot.Collections.Dictionary
         {
             { "seed", draft.Seed.ToString(CultureInfo.InvariantCulture) },
-            { "mode", draft.Mode },
+            { "style", draft.Style },
             { "template", draft.WorldTemplate },
             { "cells", draft.Cells },
             { "land", draft.LandFraction },
@@ -182,7 +183,7 @@ public static class SaveSlots
 
         var draft = new EngineHost.NewGameDraft(
             Seed: seed,
-            Mode: Text(record, "mode"),
+            Style: Text(record, "style", Text(record, "mode", GameStyles.Days.Id.Value)),
             WorldTemplate: Text(record, "template"),
             Cells: (int)Number(record, "cells"),
             LandFraction: Number(record, "land"),
@@ -232,8 +233,8 @@ public static class SaveSlots
             GD.PushError($"[saves] could not remove {path}: {error}");
     }
 
-    private static string Text(Godot.Collections.Dictionary record, string key) =>
-        record.TryGetValue(key, out Variant value) ? value.AsString() : string.Empty;
+    private static string Text(Godot.Collections.Dictionary record, string key, string fallback = "") =>
+        record.TryGetValue(key, out Variant value) ? value.AsString() : fallback;
 
     private static double Number(Godot.Collections.Dictionary record, string key) =>
         record.TryGetValue(key, out Variant value) ? value.AsDouble() : 0.0;

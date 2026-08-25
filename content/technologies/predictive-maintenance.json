@@ -4,6 +4,18 @@
   "name": "$loc:tech.predictive-maintenance",
   "availableFrom": "E4",
   "diffusionLagTicks": 0,
-  "prerequisites": ["condition-monitoring"],
-  "routes": ["Research", "Licence"]
+  "prerequisites": [
+    "condition-monitoring"
+  ],
+  "routes": [
+    "Research",
+    "Licence"
+  ],
+  "licence": {
+    "feeMillionsPerTick": 0.4
+  },
+  "research": {
+    "months": 12,
+    "costMillionsPerMonth": 2.0
+  }
 }

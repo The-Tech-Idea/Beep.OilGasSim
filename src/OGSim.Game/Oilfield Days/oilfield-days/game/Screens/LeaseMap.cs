@@ -35,13 +35,18 @@ public sealed partial class LeaseMap : Control
 			return;
 
 		int tiles = world.Tiles;
-		int step = Mathf.Max(1, tiles / 80);
-		float scale = size.X / tiles;
+		float scaleX = size.X / tiles;
+		float scaleY = size.Y / tiles;
 
-		for (int y = 0; y < tiles; y += step)
+		for (int y = 0; y < tiles; y++)
 		{
-			for (int x = 0; x < tiles; x += step)
+			int top = Mathf.FloorToInt(y * scaleY);
+			int bottom = Mathf.CeilToInt((y + 1) * scaleY);
+
+			for (int x = 0; x < tiles; x++)
 			{
+				int left = Mathf.FloorToInt(x * scaleX);
+				int right = Mathf.CeilToInt((x + 1) * scaleX);
 				Color colour = world.Terrain.At(new Vector2I(x, y)) switch
 				{
 					Ground.Water => new Color(0.30f, 0.55f, 0.75f),
@@ -52,7 +57,7 @@ public sealed partial class LeaseMap : Control
 						: new Color(0.40f, 0.62f, 0.30f),
 				};
 
-				DrawRect(new Rect2(x * scale, y * scale, step * scale + 1.0f, step * scale + 1.0f), colour);
+				DrawRect(new Rect2(left, top, Mathf.Max(1, right - left), Mathf.Max(1, bottom - top)), colour);
 			}
 		}
 

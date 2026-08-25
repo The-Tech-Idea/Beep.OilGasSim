@@ -4,6 +4,18 @@
   "name": "$loc:tech.carbon-capture",
   "availableFrom": "E4",
   "diffusionLagTicks": 0,
-  "prerequisites": ["amine-sweetening"],
-  "routes": ["Research", "Licence"]
+  "prerequisites": [
+    "amine-sweetening"
+  ],
+  "routes": [
+    "Research",
+    "Licence"
+  ],
+  "licence": {
+    "feeMillionsPerTick": 0.4
+  },
+  "research": {
+    "months": 12,
+    "costMillionsPerMonth": 2.0
+  }
 }

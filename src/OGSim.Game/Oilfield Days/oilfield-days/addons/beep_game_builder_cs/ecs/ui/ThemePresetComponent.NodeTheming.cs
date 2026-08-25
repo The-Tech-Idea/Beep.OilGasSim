@@ -799,7 +799,12 @@ namespace Beep.ECS.UI
         private static readonly Color Clear = new(0, 0, 0, 0);
 
         private void Col(string type, string prop, Color val) => _generatedTheme!.SetColor(prop, type, val);
-        private void FontSz(string type) => _generatedTheme!.SetFontSize("font_size", type, Fs);
+        private void FontSz(string type)
+        {
+            _generatedTheme!.SetFontSize("font_size", type, Fs);
+            if (_themeFont != null)
+                _generatedTheme.SetFont("font", type, _themeFont);
+        }
 
         private StyleBoxFlat Box(Color bg, Color border, Color shadow, int shadowSize)
         {

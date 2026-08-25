@@ -66,7 +66,7 @@ public sealed partial class SelectionCard : Control
                 : UiSurface.Role.Danger);
 
         body.AddChild(InfoRow(
-            "Chance of success",
+            "Chance",
             prospect.ProbabilityOfSuccess.ToString("P0", CultureInfo.InvariantCulture),
             UiSurface.Role.Warning));
 
@@ -75,16 +75,16 @@ public sealed partial class SelectionCard : Control
             $"{prospect.At.X / 1000.0:N0} km, {prospect.At.Y / 1000.0:N0} km",
             UiSurface.Role.Neutral));
 
-        body.AddChild(Caption("What the company believes"));
+        body.AddChild(Caption("Why it might be worth the trip"));
 
-        body.AddChild(Factor("Source", prospect.Source));
-        body.AddChild(Factor("Reservoir", prospect.Reservoir));
-        body.AddChild(Factor("Seal", prospect.Seal));
-        body.AddChild(Factor("Trap", prospect.Trap));
-        body.AddChild(Factor("Timing", prospect.Timing));
+        body.AddChild(Factor("Oil signs", prospect.Source));
+        body.AddChild(Factor("Good rock", prospect.Reservoir));
+        body.AddChild(Factor("Cover", prospect.Seal));
+        body.AddChild(Factor("Shape", prospect.Trap));
+        body.AddChild(Factor("Age", prospect.Timing));
 
         body.AddChild(Caption(
-            "Five beliefs, multiplied. Survey, log or core to sharpen the weakest one."));
+            "Scouting helps reveal whether this spot is worth drilling."));
     }
 
     public void ShowWell(WellStatusView well)
@@ -102,12 +102,12 @@ public sealed partial class SelectionCard : Control
 
         body.AddChild(InfoRow(
             "This month",
-            $"{well.ProducedThisTick.CubicMetres:N0} m3",
+            $"{well.ProducedThisTick.CubicMetres:N0} oil",
             UiSurface.Role.Warning));
 
         body.AddChild(InfoRow(
             "A day",
-            $"{well.ProducedThisTick.CubicMetres / 30.0:N0} m3",
+            $"{well.ProducedThisTick.CubicMetres / 30.0:N0} oil",
             UiSurface.Role.Neutral));
     }
 
@@ -127,18 +127,18 @@ public sealed partial class SelectionCard : Control
             element.Failed ? UiSurface.Role.Danger : UiSurface.Role.Success));
 
         body.AddChild(InfoRow(
-            "This month",
-            $"{element.Throughput.Kilograms / 1000.0:N0} t",
+            "Moved",
+            $"{element.Throughput.Kilograms / 1000.0:N0} loads",
             UiSurface.Role.Warning));
 
         // Null is UNMEASURED, never "as new": a company has not bought the kit
         // that would tell it, and printing a number would report truth nobody
         // paid for.
         body.AddChild(InfoRow(
-            "Condition",
+            "Health",
             element.Condition is double condition
                 ? $"{condition * 100.0:F0}%"
-                : "not measured",
+                : "needs inspection",
             element.Condition is double worn && worn < 0.5
                 ? UiSurface.Role.Danger
                 : UiSurface.Role.Neutral));
@@ -151,7 +151,7 @@ public sealed partial class SelectionCard : Control
         if (held > 0.0)
         {
             body.AddChild(InfoRow(
-                "Holding back", $"{held / 1000.0:N0} t", UiSurface.Role.Warning));
+                "Waiting", $"{held / 1000.0:N0} loads", UiSurface.Role.Warning));
         }
     }
 
@@ -166,11 +166,16 @@ public sealed partial class SelectionCard : Control
             unit.IsIdle ? UiSurface.Role.Neutral : UiSurface.Role.Info);
 
         body.AddChild(InfoRow("State", unit.State.ToString(), UiSurface.Role.Info));
-        body.AddChild(InfoRow("Carries", unit.Kind.Carries.ToString(), UiSurface.Role.Neutral));
+        body.AddChild(InfoRow("Crew", unit.Kind.Carries.ToString(), UiSurface.Role.Neutral));
 
         // What, and since when. NOT how far along: the read model publishes a
         // count of running activities and nothing per activity (gap G-15), so a
         // bar here would be a guess dressed as a measurement.
+        if (unit.State == World.UnitState.Preparing)
+        {
+            body.AddChild(Caption("Clearing land and setting up the work site."));
+        }
+
         if (unit.State == World.UnitState.Working)
         {
             body.AddChild(InfoRow(
@@ -188,7 +193,7 @@ public sealed partial class SelectionCard : Control
         bool jammed = snapshot.Bottlenecks.Count > 0;
 
         Container body = Open(
-            "The plant", "three-phase-separator",
+            "The camp", "three-phase-separator",
             jammed ? UiSurface.Role.Warning : UiSurface.Role.Info);
 
         int failed = 0;
@@ -200,7 +205,7 @@ public sealed partial class SelectionCard : Control
         }
 
         body.AddChild(InfoRow(
-            "Chain", $"{snapshot.Chain.Count} elements", UiSurface.Role.Neutral));
+            "Buildings", $"{snapshot.Chain.Count}", UiSurface.Role.Neutral));
 
         body.AddChild(InfoRow(
             "Out of service",
@@ -208,13 +213,13 @@ public sealed partial class SelectionCard : Control
             failed == 0 ? UiSurface.Role.Success : UiSurface.Role.Danger));
 
         body.AddChild(InfoRow(
-            "Holding it back",
+            "Needs attention",
             jammed ? snapshot.Bottlenecks[0].DisplayId : "nothing",
             jammed ? UiSurface.Role.Warning : UiSurface.Role.Success));
 
         body.AddChild(InfoRow(
-            "Out this month",
-            $"{snapshot.ProducedThisTick.CubicMetres:N0} m3",
+            "Oil this month",
+            $"{snapshot.ProducedThisTick.CubicMetres:N0}",
             UiSurface.Role.Warning));
     }
 

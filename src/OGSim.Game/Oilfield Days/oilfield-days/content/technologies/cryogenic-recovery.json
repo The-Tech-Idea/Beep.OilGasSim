@@ -4,6 +4,18 @@
   "name": "$loc:tech.cryogenic-recovery",
   "availableFrom": "E3",
   "diffusionLagTicks": 0,
-  "prerequisites": ["ngl-extraction"],
-  "routes": ["Research", "Licence"]
+  "prerequisites": [
+    "ngl-extraction"
+  ],
+  "routes": [
+    "Research",
+    "Licence"
+  ],
+  "licence": {
+    "feeMillionsPerTick": 0.2
+  },
+  "research": {
+    "months": 12,
+    "costMillionsPerMonth": 1.0
+  }
 }

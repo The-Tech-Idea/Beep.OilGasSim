@@ -2254,7 +2254,9 @@ public static class EngineBuilder
                 prerequisites,
                 node.Effects,
                 node.GrantsDetectClass,
-                node.Routes));
+                node.Routes,
+                node.Licence,
+                node.Research));
         }
 
         return graph;

@@ -4,6 +4,18 @@
   "name": "$loc:tech.pcp",
   "availableFrom": "E2",
   "diffusionLagTicks": 0,
-  "prerequisites": ["rod-pump"],
-  "routes": ["Research", "Licence"]
+  "prerequisites": [
+    "rod-pump"
+  ],
+  "routes": [
+    "Research",
+    "Licence"
+  ],
+  "licence": {
+    "feeMillionsPerTick": 0.1
+  },
+  "research": {
+    "months": 12,
+    "costMillionsPerMonth": 0.5
+  }
 }

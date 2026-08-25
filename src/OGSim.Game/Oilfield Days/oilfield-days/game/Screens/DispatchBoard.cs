@@ -43,52 +43,52 @@ public sealed partial class DispatchBoard : Control
 
     private static readonly Order[] Catalogue =
     {
-        new("Shoot seismic", "well-testing-skid",
-            "Send the survey crew over a structure. It sharpens the trap and structure beliefs without putting a hole down.",
-            "Survey crew", "well-testing-skid",
-            "A sharper probability of success", false,
+        new("Scout a site", "well-testing-skid",
+            "Send scouts to the best-looking spot before risking the drill crew.",
+            "Scout crew", "well-testing-skid",
+            "A clearer idea of whether the spot is worth drilling", false,
             s => s.Prospects.Count > 0,
             s => new SeismicSurveyCommand(new EntityId<IProspect>(Best(s).Prospect.Value))),
 
-        new("Drill a well", "drilling-rig-derrick",
-            "Put a 2,000 m hole into the best structure the company has. Months of rig time, and it may come back dry.",
-            "The rig", "drilling-rig-derrick",
-            "A well, or the knowledge there is nothing there", true,
+        new("Send drill crew", "drilling-rig-derrick",
+            "Send the drill crew to the best site. It takes months, and the spot may still be dry.",
+            "Drill crew", "drilling-rig-derrick",
+            "A working well, or a dry marker on the map", true,
             s => s.Prospects.Count > 0,
             s => new DrillWellCommand(new EntityId<IProspect>(Best(s).Prospect.Value), WellDepth)),
 
-        new("Run a well test", "well-testing-skid",
-            "Shut the well in and watch the pressure build back. The sharpest thing the company can learn about the rock.",
-            "Well testing skid", "well-testing-skid",
-            "Reservoir pressure, much better known", true,
+        new("Check the flow", "well-testing-skid",
+            "Send a crew to learn how strongly the well can flow.",
+            "Flow crew", "well-testing-skid",
+            "A clearer well rating", true,
             s => Compartment(s) is not null,
             s => Compartment(s) is EntityId<IReservoirCompartmentEntity> c ? new WellTestCommand(c) : null),
 
-        new("Run a wireline log", "wireline-service-truck",
-            "Run tools down the hole on a cable. Refines porosity and permeability.",
-            "Wireline truck", "wireline-service-truck",
-            "Porosity and permeability, refined", true,
+        new("Map the rock", "wireline-service-truck",
+            "Send a specialist truck to learn more about the well.",
+            "Map truck", "wireline-service-truck",
+            "Better knowledge of the well", true,
             s => Compartment(s) is not null,
             s => Compartment(s) is EntityId<IReservoirCompartmentEntity> c ? new WirelineLogCommand(c) : null),
 
-        new("Cut a core", "power-swivel-unit",
-            "Bring rock to surface. Slow, expensive, and the least uncertain measurement there is.",
-            "Coring assembly", "power-swivel-unit",
-            "The rock itself, measured", true,
+        new("Take a sample", "power-swivel-unit",
+            "Bring a sample back to camp. Slow, but very useful.",
+            "Sample crew", "power-swivel-unit",
+            "A strong clue about the site", true,
             s => Compartment(s) is not null,
             s => Compartment(s) is EntityId<IReservoirCompartmentEntity> c ? new CutCoreCommand(c) : null),
 
-        new("Install another separator", "three-phase-separator",
-            "Debottleneck separation so the chain stops holding production back.",
+        new("Build processing shed", "three-phase-separator",
+            "Add another shed so camp can handle more oil.",
             "Construction crew", "mobile-crane-truck",
-            "Separation capacity the field is short of", false,
+            "More camp capacity", false,
             _ => true,
             _ => new InstallSeparatorCommand()),
 
-        new("Expand export capacity", "metering-station",
-            "Take the ceiling off what can leave the field.",
+        new("Improve export road", "metering-station",
+            "Make it easier for oil to leave camp.",
             "Construction crew", "mobile-crane-truck",
-            "A higher export ceiling", false,
+            "More oil can leave each month", false,
             _ => true,
             _ => new ExpandExportCommand()),
 
@@ -96,84 +96,80 @@ public sealed partial class DispatchBoard : Control
 		// own words above RepairEquipment. The hazard pass takes an element out
 		// and the route law shuts in everything behind it, so a field with no
 		// repair order on the board stops for good the first unlucky month.
-		new("Repair failed equipment", "mobile-crane-truck",
-			"Emergency work on something that has already stopped. The chain behind it is shut in " +
-			"until it is back, and the crew is mobilised rather than scheduled, so it is dear.",
-			"Maintenance crew", "mobile-crane-truck",
-			"The chain moving again", false,
+		new("Repair broken camp gear", "mobile-crane-truck",
+			"Send a crew to fix something that stopped the camp.",
+			"Repair crew", "mobile-crane-truck",
+			"The camp moving again", false,
 			s => Broken(s) is not null,
 			s => Broken(s) is ChainElementView e ? new RepairEquipmentCommand(e.Element) : null),
 
-		new("Overhaul working equipment", "mobile-crane-truck",
-			"Planned work on the worst thing still running. Cheaper than the emergency job, and it " +
-			"only exists as a choice while the equipment still works.",
-			"Maintenance crew", "mobile-crane-truck",
-			"Condition back to new, at the planned price", false,
+		new("Tune up camp gear", "mobile-crane-truck",
+			"Send a crew before something breaks.",
+			"Repair crew", "mobile-crane-truck",
+			"Health restored before trouble starts", false,
 			s => Worn(s) is not null,
 			s => Worn(s) is ChainElementView e ? new ServiceEquipmentCommand(e.Element) : null),
 
-		new("Fit condition monitoring", "well-testing-skid",
-			"Instrument a vessel so its wear can be read. Without a kit fitted the company does not " +
-			"know what condition anything is in — the engine publishes nothing it has not paid to measure.",
-			"Instrument crew", "wireline-service-truck",
-			"A condition reading where there was none", false,
+		new("Build inspection post", "well-testing-skid",
+			"Add a small post so the camp can spot wear before it becomes trouble.",
+			"Inspection crew", "wireline-service-truck",
+			"Warnings before gear breaks", false,
 			s => Unmonitored(s) is not null,
 			s => Unmonitored(s) is ChainElementView e ? new InstallMonitoringCommand(e.Element) : null),
 
-		new("Install a manifold", "pipeline-manifold",
-			"Another manifold, so the gathering system stops being the thing that decides the rate.",
+		new("Build pipe hub", "pipeline-manifold",
+			"Add a hub so more wells can feed the camp.",
 			"Construction crew", "mobile-crane-truck",
-			"Gathering capacity", false,
+			"More room for wells", false,
 			_ => true,
 			_ => new InstallManifoldCommand()),
 
-		new("Install a gas plant", "gas-compressor-unit",
-			"Somewhere for the gas to go other than the flare.",
+		new("Build gas shed", "gas-compressor-unit",
+			"Give gas a useful place to go.",
 			"Construction crew", "mobile-crane-truck",
-			"Gas processing capacity", false,
+			"More camp output", false,
 			_ => true,
 			_ => new InstallGasPlantCommand()),
 
-		new("Install a treater", "three-phase-separator",
-			"Take the water out to sales specification so the oil can be sold.",
+		new("Build clean-oil shed", "three-phase-separator",
+			"Clean up oil so it can leave camp.",
 			"Construction crew", "mobile-crane-truck",
-			"Treating capacity", false,
+			"Cleaner oil leaving camp", false,
 			_ => true,
 			_ => new InstallTreaterCommand()),
 
-		new("Install a tank", "crude-oil-storage-tank",
-			"Storage, so a stoppage downstream does not immediately stop the wells.",
+		new("Build storage tank", "crude-oil-storage-tank",
+			"Add storage so one blocked road does not stop every well.",
 			"Construction crew", "mobile-crane-truck",
-			"Storage between production and export", false,
+			"More breathing room", false,
 			_ => true,
 			_ => new InstallTankCommand()),
 
-		new("Remediate the injector", "water-injection-pump",
-			"Clean up an injector that has stopped taking water.",
-			"Well services", "wireline-service-truck",
-			"Injection back where it was", false,
+		new("Fix water pump", "water-injection-pump",
+			"Clean up a pump that stopped doing its job.",
+			"Pump crew", "wireline-service-truck",
+			"Water system moving again", false,
 			_ => true,
 			_ => new RemediateInjectorCommand()),
 
 
-		new("Start the water flood", "water-injection-pump",
-			"Replace every reservoir cubic metre the field takes out. It holds pressure up, and the " +
-			"water is charged by the cubic metre in the month it is lifted.",
-			"Injection plant", "water-injection-pump",
-			"Reservoir pressure held, at a cost per cubic metre", false,
+		new("Start water support", "water-injection-pump",
+			"Use water to help tired wells keep going.",
+			"Water pump", "water-injection-pump",
+			"Wells decline more slowly", false,
 			_ => true,
 			_ => new SetVoidageReplacementCommand(1.0)),
 
-		new("Stop the water flood", "water-injection-pump",
-			"Take the injection back to nothing and stop paying for the water.",
-			"Injection plant", "water-injection-pump",
-			"No more water bill, and pressure left to decline", false,
+		new("Stop water support", "water-injection-pump",
+			"Turn off the water support system.",
+			"Water pump", "water-injection-pump",
+			"Lower monthly costs", false,
 			_ => true,
 			_ => new SetVoidageReplacementCommand(0.0)),
 
-		new("Repay $20M", "crude-oil-storage-tank",
-			"Pay debt down while the field is earning, so the interest stops.",
-			"The bank", "metering-station",
+		new("Pay back 20M", "crude-oil-storage-tank",
+			"Use extra stores to reduce what the camp owes.",
+			"Office", "metering-station",
 			"Less owed", false,
 			s => s.Cash >= Money.FromMillions(20.0),
 			_ => new RepayCommand(Money.FromMillions(20.0))),
@@ -741,8 +737,8 @@ public sealed partial class DispatchBoard : Control
         if (!order.Possible(snapshot) || snapshot.Prospects.Count == 0)
             return (null, ScreenChrome.Faded);
 
-        if (!order.Title.Contains("seismic", StringComparison.Ordinal)
-            && !order.Title.Contains("Drill", StringComparison.Ordinal))
+        if (!order.Title.Contains("Scout", StringComparison.Ordinal)
+            && !order.Title.Contains("drill", StringComparison.OrdinalIgnoreCase))
         {
             return (null, ScreenChrome.Faded);
         }
@@ -762,8 +758,8 @@ public sealed partial class DispatchBoard : Control
         if (!order.Possible(snapshot))
             return "nothing to aim it at yet";
 
-        if (order.Title.Contains("seismic", StringComparison.Ordinal)
-            || order.Title.Contains("Drill", StringComparison.Ordinal))
+        if (order.Title.Contains("Scout", StringComparison.Ordinal)
+            || order.Title.Contains("drill", StringComparison.OrdinalIgnoreCase))
         {
             ProspectView best = Best(snapshot);
 
@@ -771,7 +767,7 @@ public sealed partial class DispatchBoard : Control
                    $"{best.ToMarket.Metres / 1000.0:F0} km to market";
         }
 
-        return order.NeedsRig ? "the well the company has drilled" : "the surface facilities";
+        return order.NeedsRig ? "a well on the map" : "camp";
     }
 
     private void Send(Order order)
@@ -847,7 +843,7 @@ public sealed partial class DispatchBoard : Control
 			row.AddThemeConstantOverride("separation", 8);
 
 		Label company = RequireNamed<Label>(topBar, "Company");
-		company.Text = "THE COMPANY";
+		company.Text = "THE CAMP";
 		company.AddThemeFontSizeOverride("font_size", 20);
 		company.AddThemeColorOverride("font_color", Color.FromHtml("2A1C06"));
 		PlateLabel(company, new Vector2(0, 42), SlateChrome.RolePlate(UiSurface.Role.Warning, 16, 8), expand: true);

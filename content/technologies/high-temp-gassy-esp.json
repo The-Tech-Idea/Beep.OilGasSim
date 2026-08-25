@@ -4,6 +4,18 @@
   "name": "$loc:tech.high-temp-gassy-esp",
   "availableFrom": "E3",
   "diffusionLagTicks": 0,
-  "prerequisites": ["esp"],
-  "routes": ["Research", "Licence"]
+  "prerequisites": [
+    "esp"
+  ],
+  "routes": [
+    "Research",
+    "Licence"
+  ],
+  "licence": {
+    "feeMillionsPerTick": 0.2
+  },
+  "research": {
+    "months": 12,
+    "costMillionsPerMonth": 1.0
+  }
 }

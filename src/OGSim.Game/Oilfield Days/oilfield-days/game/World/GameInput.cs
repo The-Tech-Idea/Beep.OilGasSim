@@ -24,7 +24,6 @@ public static class GameInput
     public const string TogglePause = "od_toggle_pause";
     public const string Cancel = "od_cancel";
     public const string OpenDispatch = "od_open_dispatch";
-    public const string OpenLease = "od_open_lease";
     public const string OpenFleet = "od_open_fleet";
 
     public static void Configure()
@@ -38,7 +37,6 @@ public static class GameInput
         Bind(TogglePause, Key.P);
         Bind(Cancel, Key.Escape);
         Bind(OpenDispatch, Key.J);
-        Bind(OpenLease, Key.L);
         Bind(OpenFleet, Key.G);
 
         // The action bar's hotkeys: one per offered command, in the order it

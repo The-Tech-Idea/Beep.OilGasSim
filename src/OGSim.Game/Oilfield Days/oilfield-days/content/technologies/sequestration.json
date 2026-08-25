@@ -4,6 +4,19 @@
   "name": "$loc:tech.sequestration",
   "availableFrom": "E4",
   "diffusionLagTicks": 0,
-  "prerequisites": ["carbon-capture", "co2-flood"],
-  "routes": ["Research", "Licence"]
+  "prerequisites": [
+    "carbon-capture",
+    "co2-flood"
+  ],
+  "routes": [
+    "Research",
+    "Licence"
+  ],
+  "licence": {
+    "feeMillionsPerTick": 0.4
+  },
+  "research": {
+    "months": 12,
+    "costMillionsPerMonth": 2.0
+  }
 }

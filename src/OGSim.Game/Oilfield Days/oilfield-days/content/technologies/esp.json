@@ -4,6 +4,19 @@
   "name": "$loc:tech.esp",
   "availableFrom": "E2",
   "diffusionLagTicks": 0,
-  "prerequisites": ["gas-lift"],
-  "routes": ["Research", "Licence", "ServiceRental"]
+  "prerequisites": [
+    "gas-lift"
+  ],
+  "routes": [
+    "Research",
+    "Licence",
+    "ServiceRental"
+  ],
+  "licence": {
+    "feeMillionsPerTick": 0.1
+  },
+  "research": {
+    "months": 12,
+    "costMillionsPerMonth": 0.5
+  }
 }

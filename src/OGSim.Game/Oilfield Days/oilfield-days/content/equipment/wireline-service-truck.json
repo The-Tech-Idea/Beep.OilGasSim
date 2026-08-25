@@ -1,0 +1,9 @@
+{
+  "kind": "equipment",
+  "id": "wireline-service-truck",
+  "name": "$loc:equipment.wireline-service-truck",
+  "group": "wells",
+  "costMillions": 1.1,
+  "buildTurns": 1,
+  "note": "Logs and cores on a cable. The cheapest look downhole there is."
+}

@@ -1,0 +1,9 @@
+{
+  "kind": "equipment",
+  "id": "emergency-shower",
+  "name": "$loc:equipment.emergency-shower",
+  "group": "safety",
+  "costMillions": 0.2,
+  "buildTurns": 1,
+  "note": "Regulatory, cheap, and you will be glad of it."
+}

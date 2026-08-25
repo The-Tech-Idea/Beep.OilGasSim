@@ -146,6 +146,7 @@ public sealed partial class NewGameSetup : Control
 	private VBoxContainer _generateItems = null!;
 	private Label _reviewNote = null!;
 	private Label _generateNote = null!;
+	private bool _generating;
 	private readonly PanelContainer[] _stepPlates = new PanelContainer[Steps.Length];
 	private readonly Label[] _stepLabels = new Label[Steps.Length];
 	private int _stage;
@@ -1007,20 +1008,27 @@ public sealed partial class NewGameSetup : Control
 		}));
 	}
 
-	private void Generate()
+	private async void Generate()
 	{
+		if (_generating)
+			return;
+
 		if (!ulong.TryParse(_seed.Text.Trim(), out ulong seed))
 		{
 			Refuse("A seed is a whole number. Two players comparing runs need the same one.");
 			return;
 		}
 
+		SetGenerating(true, "Creating the field, composing the engine, and painting the basin...");
+		await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+		await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+
 		int climate = Mathf.Clamp(_climate.Selected, 0, Climates.Length - 1);
 		int era = Mathf.Clamp(_era.Selected, 0, Eras.Length - 1);
 
 		var draft = new EngineHost.NewGameDraft(
 			Seed: seed,
-			Mode: DevOptions.Mode ?? GameStyles.Days.Id.Value,
+			Style: DevOptions.Mode ?? GameStyles.Days.Id.Value,
 			WorldTemplate: "world-template-basin",
 			Cells: Sizes[Mathf.Clamp(_size.Selected, 0, Sizes.Length - 1)].Cells,
 			LandFraction: _land.Value,
@@ -1036,13 +1044,51 @@ public sealed partial class NewGameSetup : Control
 
 		if (!EngineHost.Instance.NewGame(draft))
 		{
+			SetGenerating(false, string.Empty);
 			// Every reason, not the first. §9.1: a rejection shows the whole
 			// sheet, because a player told one of four problems fixes one of four.
 			Refuse("The engine refused to start:\n- " + string.Join("\n- ", EngineHost.Instance.StartupProblems));
 			return;
 		}
 
+		_problem.Text = "Opening the generated field...";
+		_problem.AddThemeColorOverride("font_color", KitTheme.Green);
+		await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+
 		SceneRouter.Instance.Go(SceneRouter.Gameplay);
+	}
+
+	private void SetGenerating(bool generating, string detail)
+	{
+		_generating = generating;
+
+		_back.Disabled = generating;
+		_next.Disabled = generating;
+		_randomize.Disabled = generating;
+		_generate.Disabled = generating;
+		_mode.Disabled = generating;
+		_size.Disabled = generating;
+		_climate.Disabled = generating;
+		_era.Disabled = generating;
+		_rivals.Disabled = generating;
+		_land.Editable = !generating;
+		_maturity.Editable = !generating;
+        _richness.MouseFilter = generating ? MouseFilterEnum.Ignore : MouseFilterEnum.Stop;
+		_company.Editable = !generating;
+		_seed.Editable = !generating;
+
+		if (generating)
+		{
+			_generate.Text = "GENERATING...";
+			_generateNote.Text = detail;
+			_problem.Text = detail;
+			_problem.AddThemeColorOverride("font_color", KitTheme.Amber);
+		}
+		else
+		{
+			_generate.Text = "GENERATE WORLD";
+			_generateNote.Text = "Generating builds the world and starts the run. It takes a moment.";
+		}
 	}
 
 	private void Refuse(string message)

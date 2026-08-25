@@ -1,0 +1,9 @@
+{
+  "kind": "equipment",
+  "id": "worker-safety-cabin",
+  "name": "$loc:equipment.worker-safety-cabin",
+  "group": "yard",
+  "costMillions": 0.6,
+  "buildTurns": 1,
+  "note": "Muster point and first aid."
+}

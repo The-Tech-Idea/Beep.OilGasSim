@@ -76,7 +76,7 @@ grow_vertical = 0
 
 [node name="Prompt" type="Label" parent="Hud/HudRoot/PromptPanel"]
 layout_mode = 2
-text = "\"Select a structure or facility\""
+text = "\"Pick a site, crew, well, or camp building\""
 horizontal_alignment = 1
 
 [node name="ToastHolder" type="Control" parent="Hud/HudRoot"]
@@ -401,6 +401,7 @@ text = "Jobs"
 horizontal_alignment = 1
 
 [node name="LeasesButton" type="Button" parent="Shell/Rail/RailInset/RailColumn"]
+visible = false
 custom_minimum_size = Vector2(78, 66)
 layout_mode = 2
 
@@ -427,7 +428,7 @@ stretch_mode = 5
 
 [node name="Label" type="Label" parent="Shell/Rail/RailInset/RailColumn/LeasesButton/Content"]
 layout_mode = 2
-text = "Leases"
+text = "Sites"
 horizontal_alignment = 1
 
 [node name="FleetButton" type="Button" parent="Shell/Rail/RailInset/RailColumn"]
@@ -492,6 +493,7 @@ text = "Build"
 horizontal_alignment = 1
 
 [node name="ProductionButton" type="Button" parent="Shell/Rail/RailInset/RailColumn"]
+visible = false
 custom_minimum_size = Vector2(78, 66)
 layout_mode = 2
 
@@ -519,10 +521,11 @@ modulate = Color(1, 1, 1, 0.32)
 
 [node name="Label" type="Label" parent="Shell/Rail/RailInset/RailColumn/ProductionButton/Content"]
 layout_mode = 2
-text = "Production"
+text = "Output"
 horizontal_alignment = 1
 
 [node name="FinanceButton" type="Button" parent="Shell/Rail/RailInset/RailColumn"]
+visible = false
 custom_minimum_size = Vector2(78, 66)
 layout_mode = 2
 
@@ -550,10 +553,11 @@ modulate = Color(1, 1, 1, 0.32)
 
 [node name="Label" type="Label" parent="Shell/Rail/RailInset/RailColumn/FinanceButton/Content"]
 layout_mode = 2
-text = "Finance"
+text = "Stores"
 horizontal_alignment = 1
 
 [node name="ResearchButton" type="Button" parent="Shell/Rail/RailInset/RailColumn"]
+visible = false
 custom_minimum_size = Vector2(78, 66)
 layout_mode = 2
 
@@ -581,7 +585,7 @@ modulate = Color(1, 1, 1, 0.32)
 
 [node name="Label" type="Label" parent="Shell/Rail/RailInset/RailColumn/ResearchButton/Content"]
 layout_mode = 2
-text = "Research"
+text = "Craft"
 horizontal_alignment = 1
 
 [node name="Selection" type="Control" parent="Shell"]
@@ -671,7 +675,7 @@ autowrap_mode = 3
 
 [node name="CaptionTemplate" type="Label" parent="Shell/Selection/SelectionCardPanel/Stack/Body/Rows"]
 layout_mode = 2
-text = "What the company believes"
+text = "Why this spot matters"
 autowrap_mode = 3
 
 [node name="FactorTemplate" type="HBoxContainer" parent="Shell/Selection/SelectionCardPanel/Stack/Body/Rows"]
@@ -761,7 +765,7 @@ text = "v"
 [node name="Caption" type="Label" parent="Shell/Side/SideScroll/SideColumn/ObjectivesPanel/Inset/CollapsibleStack/Handle/HeaderRow"]
 layout_mode = 2
 size_flags_horizontal = 3
-text = "OBJECTIVES"
+text = "GOALS"
 
 [node name="Rule" type="ColorRect" parent="Shell/Side/SideScroll/SideColumn/ObjectivesPanel/Inset/CollapsibleStack"]
 custom_minimum_size = Vector2(0, 1)
@@ -834,7 +838,7 @@ text = "v"
 [node name="Caption" type="Label" parent="Shell/Side/SideScroll/SideColumn/AlertsPanel/Inset/CollapsibleStack/Handle/HeaderRow"]
 layout_mode = 2
 size_flags_horizontal = 3
-text = "ALERTS"
+text = "TROUBLE"
 
 [node name="Rule" type="ColorRect" parent="Shell/Side/SideScroll/SideColumn/AlertsPanel/Inset/CollapsibleStack"]
 custom_minimum_size = Vector2(0, 1)
@@ -895,7 +899,7 @@ text = "v"
 [node name="Caption" type="Label" parent="Shell/Side/SideScroll/SideColumn/ProductionPanel/Inset/CollapsibleStack/Handle/HeaderRow"]
 layout_mode = 2
 size_flags_horizontal = 3
-text = "PRODUCTION"
+text = "CAMP OUTPUT"
 
 [node name="Rule" type="ColorRect" parent="Shell/Side/SideScroll/SideColumn/ProductionPanel/Inset/CollapsibleStack"]
 custom_minimum_size = Vector2(0, 1)
@@ -958,7 +962,7 @@ text = ">"
 [node name="Caption" type="Label" parent="Shell/Side/SideScroll/SideColumn/OrdersPanel/Inset/CollapsibleStack/Handle/HeaderRow"]
 layout_mode = 2
 size_flags_horizontal = 3
-text = "STANDING ORDERS"
+text = "CREW ROUTINES"
 
 [node name="Rule" type="ColorRect" parent="Shell/Side/SideScroll/SideColumn/OrdersPanel/Inset/CollapsibleStack"]
 custom_minimum_size = Vector2(0, 1)
@@ -973,7 +977,7 @@ theme_override_constants/separation = 4
 [node name="KeepPlantOrder" type="CheckBox" parent="Shell/Side/SideScroll/SideColumn/OrdersPanel/Inset/CollapsibleStack/OrdersBody"]
 layout_mode = 2
 script = ExtResource("27_checkbox")
-text = "Keep the plant running"
+text = "Keep camp running"
 
 [node name="KeepPlantOrderCaption" type="Label" parent="Shell/Side/SideScroll/SideColumn/OrdersPanel/Inset/CollapsibleStack/OrdersBody"]
 layout_mode = 2
@@ -983,7 +987,7 @@ autowrap_mode = 3
 [node name="AnswerBottlenecksOrder" type="CheckBox" parent="Shell/Side/SideScroll/SideColumn/OrdersPanel/Inset/CollapsibleStack/OrdersBody"]
 layout_mode = 2
 script = ExtResource("27_checkbox")
-text = "Answer bottlenecks"
+text = "Fix traffic jams"
 
 [node name="AnswerBottlenecksOrderCaption" type="Label" parent="Shell/Side/SideScroll/SideColumn/OrdersPanel/Inset/CollapsibleStack/OrdersBody"]
 layout_mode = 2
@@ -993,11 +997,11 @@ autowrap_mode = 3
 [node name="KeepRigBusyOrder" type="CheckBox" parent="Shell/Side/SideScroll/SideColumn/OrdersPanel/Inset/CollapsibleStack/OrdersBody"]
 layout_mode = 2
 script = ExtResource("27_checkbox")
-text = "Keep the rig busy"
+text = "Keep drill crew busy"
 
 [node name="KeepRigBusyOrderCaption" type="Label" parent="Shell/Side/SideScroll/SideColumn/OrdersPanel/Inset/CollapsibleStack/OrdersBody"]
 layout_mode = 2
-text = "   drill the best undrilled structure"
+text = "   drill the best untouched site"
 autowrap_mode = 3
 
 [node name="ReservesPanel" type="PanelContainer" parent="Shell/Side/SideScroll/SideColumn"]
@@ -1038,7 +1042,7 @@ text = ">"
 [node name="Caption" type="Label" parent="Shell/Side/SideScroll/SideColumn/ReservesPanel/Inset/CollapsibleStack/Handle/HeaderRow"]
 layout_mode = 2
 size_flags_horizontal = 3
-text = "RESERVES"
+text = "OIL FOUND"
 
 [node name="Rule" type="ColorRect" parent="Shell/Side/SideScroll/SideColumn/ReservesPanel/Inset/CollapsibleStack"]
 custom_minimum_size = Vector2(0, 1)
@@ -1107,7 +1111,7 @@ text = "v"
 [node name="Caption" type="Label" parent="Shell/Side/SideScroll/SideColumn/BasinPanel/Inset/CollapsibleStack/Handle/HeaderRow"]
 layout_mode = 2
 size_flags_horizontal = 3
-text = "THE BASIN"
+text = "BASIN MAP"
 
 [node name="Rule" type="ColorRect" parent="Shell/Side/SideScroll/SideColumn/BasinPanel/Inset/CollapsibleStack"]
 custom_minimum_size = Vector2(0, 1)

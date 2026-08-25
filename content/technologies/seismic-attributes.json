@@ -4,7 +4,20 @@
   "name": "$loc:tech.seismic-attributes",
   "availableFrom": "E3",
   "diffusionLagTicks": 120,
-  "prerequisites": ["3-d-seismic"],
-  "routes": ["Research", "Licence", "Diffusion"],
-  "grantsDetectClass": "D2"
+  "prerequisites": [
+    "3-d-seismic"
+  ],
+  "routes": [
+    "Research",
+    "Licence",
+    "Diffusion"
+  ],
+  "grantsDetectClass": "D2",
+  "licence": {
+    "feeMillionsPerTick": 0.2
+  },
+  "research": {
+    "months": 12,
+    "costMillionsPerMonth": 1.0
+  }
 }

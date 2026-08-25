@@ -4,6 +4,18 @@
   "name": "$loc:tech.electrification",
   "availableFrom": "E4",
   "diffusionLagTicks": 0,
-  "prerequisites": ["centrifugal-compression"],
-  "routes": ["Research", "Licence"]
+  "prerequisites": [
+    "centrifugal-compression"
+  ],
+  "routes": [
+    "Research",
+    "Licence"
+  ],
+  "licence": {
+    "feeMillionsPerTick": 0.4
+  },
+  "research": {
+    "months": 12,
+    "costMillionsPerMonth": 2.0
+  }
 }

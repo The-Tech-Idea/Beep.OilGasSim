@@ -1,0 +1,9 @@
+{
+  "kind": "equipment",
+  "id": "road-barrier-gate",
+  "name": "$loc:equipment.road-barrier-gate",
+  "group": "security",
+  "costMillions": 0.15,
+  "buildTurns": 1,
+  "note": "Closes the road."
+}

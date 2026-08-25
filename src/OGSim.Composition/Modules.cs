@@ -1967,7 +1967,10 @@ internal sealed class CapabilitiesModule(
         // than a second instance of its own.
         typeof(OGSim.Capabilities.EffectState),
     ],
-    requires: [],
+
+    // R17.3/R17.4 (finding 293): the fee stage posts to the company's ledger,
+    // and the audit trail carries the grants.
+    requires: [typeof(OGSim.Company.CompanyState), typeof(IAuditTrail)],
 
     // The holdings are STATE and always were: `Acquire` replays them in order
     // through the graph that authorised them. Nothing owned this key because
@@ -1980,7 +1983,15 @@ internal sealed class CapabilitiesModule(
     // pass placed this at stage 2 by analogy with weather and was corrected
     // (SDD-005's R20d.10 amendment) after checking it against §4.2, which had
     // already stated the right stage and the reason for it.
-    stages: [new StageParticipation(StageId.Company, Order: 1)]))
+    commands: [typeof(LicenseTechnologyCommand), typeof(ResearchTechnologyCommand)],
+    stages:
+    [
+        new StageParticipation(StageId.Company, Order: 1),
+
+        // R17.3/R17.4 (finding 293): the month's technology bill, after the
+        // month's grants.
+        new StageParticipation(StageId.Company, Order: 6),
+    ]))
 {
     public override void Compose(IModuleComposition composition)
     {
@@ -2012,6 +2023,21 @@ internal sealed class CapabilitiesModule(
         composition.Provide(effects);
 
         composition.Contribute(order: 1, new DiffusionStage(state, effects));
+
+        // R17.3/R17.4 (finding 293): the two procurement doors, and the bill.
+        // A small company rents; a major develops (design 07 §3) — and either
+        // way the month's holdings cost real money on the real ledger.
+        composition.HandleCommand(
+            new LicenseTechnologyValidator(registry, state),
+            new LicenseTechnologyApplier(state, composition.Require<IAuditTrail>()));
+        composition.HandleCommand(
+            new ResearchTechnologyValidator(registry, state),
+            new ResearchTechnologyApplier(state, composition.Require<IAuditTrail>()));
+
+        composition.Contribute(order: 6, new TechnologyFeesStage(
+            state,
+            composition.Require<OGSim.Company.CompanyState>(),
+            composition.Require<IAuditTrail>()));
     }
 }
 

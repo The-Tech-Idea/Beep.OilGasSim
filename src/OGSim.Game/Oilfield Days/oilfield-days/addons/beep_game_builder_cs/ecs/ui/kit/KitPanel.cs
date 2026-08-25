@@ -44,21 +44,62 @@ namespace Beep.ECS.UI.Kit
         }
         private KitArchetype _archetype = KitArchetype.None;
 
-        [Export] public string Title { get => _title; set { _title = value ?? ""; QueueRedraw(); } }
+        [Export] public string Title { get => _title; set { _title = value ?? ""; KitChrome.RefreshAutoMinimumSize(this, _GetMinimumSize()); QueueRedraw(); } }
         private string _title = "";
-        [Export] public KitPanelIntent Intent { get; set; } = KitPanelIntent.Sheet;
+        [Export]
+        public KitPanelIntent Intent
+        {
+            get => _intent;
+            set { if (_intent == value) return; _intent = value; RefreshPanelChrome(); }
+        }
+        private KitPanelIntent _intent = KitPanelIntent.Sheet;
+        [Export] public KitPanelHeaderStyle HeaderStyle { get => _headerStyle; set { _headerStyle = value; KitChrome.RefreshAutoMinimumSize(this, _GetMinimumSize()); QueueRedraw(); } }
+        private KitPanelHeaderStyle _headerStyle = KitPanelHeaderStyle.UtilityStrip;
+        [Export(PropertyHint.Range, "0.45,1.4,0.01")]
+        public float TitleFontScale { get => _titleFontScale; set { _titleFontScale = value; KitChrome.RefreshAutoMinimumSize(this, _GetMinimumSize()); QueueRedraw(); } }
+        private float _titleFontScale = 0.72f;
 
         /// <summary>Banner silhouette. Plaque/Ribbon/Shield/Ellipse are the four the reference
         /// kits use; the genre picks one unless this is overridden.</summary>
-        [Export] public bool OverrideBannerShape { get; set; }
-        [Export] public KitShape BannerShape { get; set; } = KitShape.Rect;
+        [Export]
+        public bool OverrideBannerShape
+        {
+            get => _overrideBannerShape;
+            set { if (_overrideBannerShape == value) return; _overrideBannerShape = value; QueueRedraw(); }
+        }
+        private bool _overrideBannerShape;
+
+        [Export]
+        public KitShape BannerShape
+        {
+            get => _bannerShape;
+            set { if (_bannerShape == value) return; _bannerShape = value; QueueRedraw(); }
+        }
+        private KitShape _bannerShape = KitShape.Rect;
 
         /// <summary>Banner lightness as a multiple of the frame. 0.44 (gameui2) reads recessed;
         /// values above 1 give gameui4's white plate. Polarity is per-family, so it is exposed.</summary>
-        [Export(PropertyHint.Range, "0.1,1.6,0.01")] public float BannerShade { get; set; } = 0.44f;
+        [Export(PropertyHint.Range, "0.1,1.6,0.01")]
+        public float BannerShade
+        {
+            get => _bannerShade;
+            set
+            {
+                if (Mathf.Abs(_bannerShade - value) < 0.001f) return;
+                _bannerShade = value;
+                QueueRedraw();
+            }
+        }
+        private float _bannerShade = 0.44f;
 
         /// <summary>Draw the inner well. Off gives a plain framed plate.</summary>
-        [Export] public bool ShowWell { get; set; } = true;
+        [Export]
+        public bool ShowWell
+        {
+            get => _showWell;
+            set { if (_showWell == value) return; _showWell = value; QueueRedraw(); }
+        }
+        private bool _showWell = true;
 
         /// <summary>
         /// Size the frame from the cluster it wraps, instead of filling its parent.
@@ -68,14 +109,40 @@ namespace Beep.ECS.UI.Kit
         /// full container and its banner drifted to the screen edge — which is exactly what
         /// happened the first time this was swapped in on puzzle/level_map.
         /// </summary>
-        [Export] public NodePath TargetPath { get; set; } = new("");
+        [Export]
+        public NodePath TargetPath
+        {
+            get => _targetPath;
+            set
+            {
+                if (_targetPath == value) return;
+                _targetPath = value ?? new NodePath("");
+                _target = null;
+                if (IsInsideTree() && !Engine.IsEditorHint() && !_targetPath.IsEmpty)
+                    CallDeferred(nameof(ResolveTarget));
+                QueueRedraw();
+            }
+        }
+        private NodePath _targetPath = new("");
 
         /// <summary>Slack around the target. Top is separate because the banner needs the room.</summary>
-        [Export] public Vector2 TargetPadding { get; set; } = new(14, 12);
+        [Export]
+        public Vector2 TargetPadding
+        {
+            get => _targetPadding;
+            set { if (_targetPadding == value) return; _targetPadding = value; QueueRedraw(); }
+        }
+        private Vector2 _targetPadding = new(14, 12);
 
         private Godot.Control? _target;
 
         private void ResolveTarget() => _target = GetNodeOrNull<Godot.Control>(TargetPath);
+
+        private void RefreshPanelChrome()
+        {
+            KitChrome.RefreshAutoMinimumSize(this, _GetMinimumSize());
+            QueueRedraw();
+        }
 
         public override void _Process(double delta)
         {
@@ -88,18 +155,18 @@ namespace Beep.ECS.UI.Kit
             // produced a 1348px frame around a 200px stat list.
             Vector2 need = _target.GetCombinedMinimumSize();
 
-            // The banner sits at the top of the frame, so the WELL is what must be `need` tall,
-            // not the frame — otherwise the last row of a cluster hangs out of the bottom because
-            // the banner ate that much of it.
-            float bannerRoom = BannerOverhang() * 2f;
-            Vector2 size = new(need.X + TargetPadding.X, need.Y + TargetPadding.Y + bannerRoom);
+            // The header occupies space before the content well. Banner headers overhang the
+            // frame; utility headers sit inside it. Both still need to be part of the target-fit
+            // ask, or the last content row ends up under the chrome.
+            float headerRoom = HeaderRoom();
+            Vector2 size = new(need.X + TargetPadding.X, need.Y + TargetPadding.Y + headerRoom);
 
             // Size ONLY. Position stays where the scene put it — deriving it from an anchored
             // target lands at the parent origin rather than at the visible content.
             if (Size != size)
             {
                 Size = size;
-                CustomMinimumSize = size;
+                KitChrome.SetAutoMinimumSize(this, size);
                 QueueRedraw();
             }
         }
@@ -107,12 +174,30 @@ namespace Beep.ECS.UI.Kit
         /// <summary>Section D's `TornPanel` — an irregular torn edge along the bottom, for the
         /// paper/parchment register. A panel VARIANT rather than its own class: the structure is
         /// identical and only the bottom edge changes.</summary>
-        [Export] public bool TornEdge { get; set; }
+        [Export]
+        public bool TornEdge
+        {
+            get => _tornEdge;
+            set { if (_tornEdge == value) return; _tornEdge = value; QueueRedraw(); }
+        }
+        private bool _tornEdge;
 
         /// <summary>Section D's `CornerClose` — an X straddling the frame's top-right corner
         /// (rpgui's title bar has "a close button attached at the right end"). Drawn by the HOST
         /// so it can cross the frame's edge, which is the whole reason it is not a child button.</summary>
-        [Export] public bool ShowClose { get; set; }
+        [Export]
+        public bool ShowClose
+        {
+            get => _showClose;
+            set
+            {
+                if (_showClose == value) return;
+                _showClose = value;
+                MouseFilter = _showClose ? MouseFilterEnum.Stop : MouseFilterEnum.Ignore;
+                QueueRedraw();
+            }
+        }
+        private bool _showClose;
 
         [Signal] public delegate void CloseRequestedEventHandler();
 
@@ -140,7 +225,7 @@ namespace Beep.ECS.UI.Kit
         {
             if (_suppressing) return;
             _suppressing = true;
-            AddThemeStyleboxOverride("panel", new StyleBoxEmpty());
+            KitChrome.SetEmptyStyleboxOverride(this, "panel");
             _suppressing = false;
         }
 
@@ -150,11 +235,13 @@ namespace Beep.ECS.UI.Kit
             if (what != NotificationThemeChanged) return;
             _genre = KitChrome.GenreOf(this);
             Suppress();
+            KitChrome.RefreshAutoMinimumSize(this, _GetMinimumSize());
             QueueRedraw();
         }
 
         public override void _Ready()
         {
+            base._Ready();
             _genre = KitChrome.GenreOf(this);
             Suppress();
             // Placed after the panel has a size -- the ornaments are sized from its short edge,
@@ -176,11 +263,7 @@ namespace Beep.ECS.UI.Kit
             if (!Engine.IsEditorHint() && !TargetPath.IsEmpty)
                 CallDeferred(nameof(ResolveTarget));
 
-            if (CustomMinimumSize == Vector2.Zero)
-            {
-                int fs = UiSurface.FontSize(this);
-                CustomMinimumSize = new Vector2(fs * 16f, fs * 9f);
-            }
+            KitChrome.SetAutoMinimumSize(this, _GetMinimumSize());
         }
 
         /// <summary>Ribbon for the wood/adventure genres, ellipse for the candy ones, plaque
@@ -251,17 +334,23 @@ namespace Beep.ECS.UI.Kit
         {
             Rect2 body = BodyRect();
             float ft = Geo.FramePx(body.Size.Y);
-            return new Rect2(body.Position + new Vector2(ft, ft),
+            float headerRoom = HeaderStyle == KitPanelHeaderStyle.UtilityStrip
+                ? KitChrome.PanelHeaderRoom(this, _genre, _title, HeaderStyle, TitleFontScale, Size.Y)
+                : 0f;
+            return new Rect2(body.Position + new Vector2(ft, ft + headerRoom),
                              new Vector2(Mathf.Max(0f, body.Size.X - ft * 2f),
-                                         Mathf.Max(0f, body.Size.Y - ft * 2f)));
+                                         Mathf.Max(0f, body.Size.Y - ft * 2f - headerRoom)));
         }
 
-        /// <summary>Half the banner's height — the amount it hangs above the frame.</summary>
-        private float BannerOverhang()
+        private float HeaderRoom()
+            => KitChrome.PanelHeaderRoom(this, _genre, _title, HeaderStyle, TitleFontScale, Size.Y);
+
+        /// <summary>Amount the body is pushed down to keep an overhanging banner inside bounds.</summary>
+        private float HeaderOverhang()
             => Intent == KitPanelIntent.Hud
                 ? 0f
-                : KitChrome.PanelHeaderOverhang(this, _genre, _title, KitPanelHeaderStyle.Banner,
-                                                0.78f, Size.Y);
+                : KitChrome.PanelHeaderOverhang(this, _genre, _title, HeaderStyle,
+                                                TitleFontScale, Size.Y);
 
         /// <summary>
         /// The frame, inset from the top by the banner's overhang.
@@ -274,7 +363,7 @@ namespace Beep.ECS.UI.Kit
         /// </summary>
         private Rect2 BodyRect()
         {
-            float o = BannerOverhang();
+            float o = HeaderOverhang();
             return new Rect2(0f, o, Size.X, Mathf.Max(4f, Size.Y - o));
         }
 
@@ -283,7 +372,7 @@ namespace Beep.ECS.UI.Kit
         public override Vector2 _GetMinimumSize()
         {
             var b = base._GetMinimumSize();
-            return new Vector2(b.X, b.Y + BannerOverhang());
+            return new Vector2(b.X, b.Y + HeaderRoom());
         }
 
         public override void _Draw()
@@ -332,9 +421,8 @@ namespace Beep.ECS.UI.Kit
 
             if (TornEdge) DrawTornEdge(body, face, ink);
 
-            // Banner last so it draws OVER the frame it straddles.
-            KitChrome.DrawPanelHeader(this, _genre, body, _title, KitPanelHeaderStyle.Banner,
-                                      ResolvedBannerShape(), BannerShade);
+            KitChrome.DrawPanelHeader(this, _genre, body, _title, HeaderStyle,
+                                      ResolvedBannerShape(), BannerShade, TitleFontScale);
 
             if (ShowClose) DrawClose(ink, rimPx);
 

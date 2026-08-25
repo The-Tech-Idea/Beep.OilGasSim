@@ -1,0 +1,9 @@
+{
+  "kind": "equipment",
+  "id": "wind-sock",
+  "name": "$loc:equipment.wind-sock",
+  "group": "safety",
+  "costMillions": 0.05,
+  "buildTurns": 1,
+  "note": "Which way the gas will go. The cheapest safety item there is."
+}

@@ -4,6 +4,18 @@
   "name": "$loc:tech.polymer-chemical-eor",
   "availableFrom": "E3",
   "diffusionLagTicks": 0,
-  "prerequisites": ["waterflood"],
-  "routes": ["Research", "Licence"]
+  "prerequisites": [
+    "waterflood"
+  ],
+  "routes": [
+    "Research",
+    "Licence"
+  ],
+  "licence": {
+    "feeMillionsPerTick": 0.2
+  },
+  "research": {
+    "months": 12,
+    "costMillionsPerMonth": 1.0
+  }
 }

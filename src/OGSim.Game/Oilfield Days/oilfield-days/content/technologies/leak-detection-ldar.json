@@ -4,6 +4,19 @@
   "name": "$loc:tech.leak-detection-ldar",
   "availableFrom": "E4",
   "diffusionLagTicks": 0,
-  "prerequisites": ["telemetry-scada"],
-  "routes": ["Research", "Licence", "ServiceRental"]
+  "prerequisites": [
+    "telemetry-scada"
+  ],
+  "routes": [
+    "Research",
+    "Licence",
+    "ServiceRental"
+  ],
+  "licence": {
+    "feeMillionsPerTick": 0.4
+  },
+  "research": {
+    "months": 12,
+    "costMillionsPerMonth": 2.0
+  }
 }

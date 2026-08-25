@@ -21,10 +21,10 @@ namespace OilfieldDays.World;
 public sealed partial class CameraRig : Camera2D
 {
     /// <summary>The steps, from the whole lease down to a single pad.</summary>
-    private static readonly float[] Steps = { 0.2f, 0.3f, 0.45f, 0.6f, 0.9f, 1.35f, 2.0f };
+    private static readonly float[] Steps = { 0.25f, 0.5f, 1.0f, 2.0f };
 
     /// <summary>Where a fresh run opens: close enough to read a pad.</summary>
-    private const int OpeningStep = 3;
+    private const int OpeningStep = 2;
 
     /// <summary>Lease pixels a second at zoom 1, before the zoom scaling.</summary>
     private const float PanSpeed = 1400.0f;
@@ -206,6 +206,14 @@ public sealed partial class CameraRig : Camera2D
             ? _extent.Y * 0.5f
             : Mathf.Clamp(GlobalPosition.Y, half.Y, _extent.Y - half.Y);
 
-        GlobalPosition = new Vector2(x, y);
+        GlobalPosition = PixelSnap(new Vector2(x, y));
+    }
+
+    private Vector2 PixelSnap(Vector2 position)
+    {
+        float grid = 1.0f / Mathf.Max(0.0001f, Zoom.X);
+        return new Vector2(
+            Mathf.Round(position.X / grid) * grid,
+            Mathf.Round(position.Y / grid) * grid);
     }
 }

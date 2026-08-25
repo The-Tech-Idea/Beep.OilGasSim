@@ -50,6 +50,7 @@ namespace Beep.ECS.UI.Kit
     public static class KitFonts
     {
         private const string Dir = "res://addons/beep_game_builder_cs/fonts/";
+        private const string BundledFallbackFile = "Kenney_Future.ttf";
 
         /// <summary>Role → shipped file. Absent = no CC0 face available for that role.</summary>
         private static readonly Dictionary<KitFontRole, string> Files = new()
@@ -84,6 +85,7 @@ namespace Beep.ECS.UI.Kit
 
         private static readonly Dictionary<KitFontRole, Font?> _cache = new();
         private static readonly HashSet<KitFontRole> _warned = new();
+        private static Font? _bundledFallback;
 
         /// <summary>True when a role has a shipped face. Lets the gate assert coverage without
         /// triggering the warning.</summary>
@@ -142,5 +144,25 @@ namespace Beep.ECS.UI.Kit
             _cache[role] = font;
             return font;
         }
+
+        private static Font? BundledFallback()
+        {
+            if (_bundledFallback != null) return _bundledFallback;
+            string path = Dir + BundledFallbackFile;
+            _bundledFallback = ResourceLoader.Exists(path) ? GD.Load<Font>(path) : null;
+            return _bundledFallback;
+        }
+
+        /// <summary>
+        /// Resolve the kit role, then the active Godot theme, then Godot's fallback font.
+        /// Text rendering is a hot path and Godot's low-level text API logs loudly when asked to
+        /// measure or draw with a null font, so all drawn kit chrome should enter through here.
+        /// </summary>
+        public static Font? Fallback(Godot.Control? control, KitFontRole role = KitFontRole.Default)
+            => Resolve(role)
+            ?? BundledFallback()
+            ?? control?.GetThemeDefaultFont()
+            ?? ThemeDB.FallbackFont
+            ?? null;
     }
 }

@@ -1,0 +1,9 @@
+{
+  "kind": "equipment",
+  "id": "wellhead-tree",
+  "name": "$loc:equipment.wellhead-tree",
+  "group": "drilling",
+  "costMillions": 0.9,
+  "buildTurns": 1,
+  "note": "What a finished well is capped with. One per well."
+}

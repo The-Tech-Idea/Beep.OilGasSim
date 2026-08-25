@@ -4,7 +4,20 @@
   "name": "$loc:tech.pre-stack-depth-migration",
   "availableFrom": "E3",
   "diffusionLagTicks": 0,
-  "prerequisites": ["3-d-seismic"],
-  "routes": ["Research", "Licence", "ServiceRental"],
-  "grantsDetectClass": "D3"
+  "prerequisites": [
+    "3-d-seismic"
+  ],
+  "routes": [
+    "Research",
+    "Licence",
+    "ServiceRental"
+  ],
+  "grantsDetectClass": "D3",
+  "licence": {
+    "feeMillionsPerTick": 0.2
+  },
+  "research": {
+    "months": 12,
+    "costMillionsPerMonth": 1.0
+  }
 }

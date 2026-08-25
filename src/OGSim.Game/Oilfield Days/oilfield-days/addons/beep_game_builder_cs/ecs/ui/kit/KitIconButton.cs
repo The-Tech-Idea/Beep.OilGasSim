@@ -38,16 +38,38 @@ namespace Beep.ECS.UI.Kit
         [Export] public bool Locked
         {
             get => _locked;
-            set { _locked = value; Disabled = value || Disabled; QueueRedraw(); }
+            set
+            {
+                if (_locked == value) return;
+                if (value)
+                {
+                    _lockedAppliedDisabled = !Disabled;
+                    Disabled = true;
+                }
+                else if (_lockedAppliedDisabled)
+                {
+                    Disabled = false;
+                    _lockedAppliedDisabled = false;
+                }
+                _locked = value;
+                QueueRedraw();
+            }
         }
         private bool _locked;
+        private bool _lockedAppliedDisabled;
 
         /// <summary>Shown under a locked button. The 5x settled rule is that locked states say
         /// WHY in words, not with a padlock alone.</summary>
         [Export] public string Requirement { get => _req; set { _req = value ?? ""; QueueRedraw(); } }
         private string _req = "";
 
-        [Export] public UiSurface.Role Accent { get; set; } = UiSurface.Role.Neutral;
+        [Export]
+        public UiSurface.Role Accent
+        {
+            get => _accent;
+            set { if (_accent == value) return; _accent = value; QueueRedraw(); }
+        }
+        private UiSurface.Role _accent = UiSurface.Role.Neutral;
 
         private readonly System.Collections.Generic.List<KitAttach> _attach = new();
         private string _genre = "";
@@ -74,8 +96,7 @@ namespace Beep.ECS.UI.Kit
             base._Ready();
             _genre = KitChrome.GenreOf(this);
             Suppress();
-            if (CustomMinimumSize == Vector2.Zero)
-                CustomMinimumSize = _GetMinimumSize();
+            KitChrome.SetAutoMinimumSize(this, _GetMinimumSize());
         }
 
         public override Vector2 _GetMinimumSize()
@@ -93,6 +114,7 @@ namespace Beep.ECS.UI.Kit
             if (what != NotificationThemeChanged) return;
             _genre = KitChrome.GenreOf(this);
             Suppress();
+            KitChrome.RefreshAutoMinimumSize(this, _GetMinimumSize());
             QueueRedraw();
         }
 

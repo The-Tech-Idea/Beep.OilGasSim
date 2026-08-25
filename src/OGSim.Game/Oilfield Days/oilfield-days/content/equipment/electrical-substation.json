@@ -1,0 +1,9 @@
+{
+  "kind": "equipment",
+  "id": "electrical-substation",
+  "name": "$loc:equipment.electrical-substation",
+  "group": "utilities",
+  "costMillions": 4.5,
+  "buildTurns": 3,
+  "note": "Grid power. Cheaper per kWh and it stops the diesel bill compounding."
+}

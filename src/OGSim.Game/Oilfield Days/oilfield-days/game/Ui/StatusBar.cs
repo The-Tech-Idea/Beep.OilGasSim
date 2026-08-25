@@ -178,17 +178,17 @@ public sealed partial class StatusBar : PanelContainer
 
         _date.Text = $"{Season(snapshot.Date.Month)} Y{year.ToString(CultureInfo.InvariantCulture)}";
 
-        _cash.Text = $"${snapshot.Cash.Cents / 100.0 / 1e6:N1}M";
+        _cash.Text = $"{snapshot.Cash.Cents / 100.0 / 1e6:N1}M stores";
 
         _debt.Text = snapshot.Debt.Cents == 0
-            ? "no debt"
-            : $"-${snapshot.Debt.Cents / 100.0 / 1e6:N1}M";
+            ? "clear"
+            : $"{snapshot.Debt.Cents / 100.0 / 1e6:N1}M owed";
 
-        _price.Text = $"${snapshot.OilPrice.Cents / 100.0:N0}/t";
+        _price.Text = $"market {snapshot.OilPrice.Cents / 100.0:N0}";
 
         // Thirty, not 30.44: the engine's calendar makes every month exactly
         // thirty days, so this is the rate and not an approximation of it.
-        _rate.Text = $"{snapshot.ProducedThisTick.CubicMetres / 30.0:N0} m3/d";
+        _rate.Text = $"{snapshot.ProducedThisTick.CubicMetres / 30.0:N0} oil/day";
 
         _wells.Text = snapshot.ActivitiesRunning > 0
             ? $"{snapshot.Wells}w  {snapshot.ActivitiesRunning} busy"

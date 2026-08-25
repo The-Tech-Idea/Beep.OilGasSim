@@ -1,0 +1,9 @@
+{
+  "kind": "equipment",
+  "id": "cooling-tower",
+  "name": "$loc:equipment.cooling-tower",
+  "group": "utilities",
+  "costMillions": 2.1,
+  "buildTurns": 2,
+  "note": "Rejects the heat the process makes."
+}

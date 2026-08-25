@@ -37,7 +37,13 @@ namespace Beep.ECS.UI.Kit
     {
         /// <summary>Which palette role the plate takes. Accent by default — every reference sheet
         /// puts a saturated accent button on a neutral panel.</summary>
-        [Export] public UiSurface.Role Accent { get; set; } = UiSurface.Role.Accent;
+        [Export]
+        public UiSurface.Role Accent
+        {
+            get => _accent;
+            set { if (_accent == value) return; _accent = value; QueueRedraw(); }
+        }
+        private UiSurface.Role _accent = UiSurface.Role.Accent;
 
         /// <summary>Badge text, e.g. a cost. Empty = no badge. Drawn straddling the top-right
         /// corner, which containers cannot do — see <see cref="KitAttach"/>.</summary>
@@ -45,11 +51,28 @@ namespace Beep.ECS.UI.Kit
         public string BadgeText
         {
             get => _badge;
-            set { _badge = value ?? ""; QueueRedraw(); }
+            set
+            {
+                string next = value ?? "";
+                if (_badge == next) return;
+                _badge = next;
+                if (IsInsideTree())
+                {
+                    Suppress();
+                    UpdateMinimumSize();
+                }
+                QueueRedraw();
+            }
         }
         private string _badge = "";
 
-        [Export] public UiSurface.Role BadgeRole { get; set; } = UiSurface.Role.Warning;
+        [Export]
+        public UiSurface.Role BadgeRole
+        {
+            get => _badgeRole;
+            set { if (_badgeRole == value) return; _badgeRole = value; QueueRedraw(); }
+        }
+        private UiSurface.Role _badgeRole = UiSurface.Role.Warning;
 
         private string _genre = "";
         private KitGeometry Geo => KitGeometry.ForGenre(_genre);
@@ -57,10 +80,10 @@ namespace Beep.ECS.UI.Kit
 
         public override void _Ready()
         {
+            base._Ready();
             _genre = SkinCatalog.HasActiveSkin ? SkinCatalog.ActiveGenre : "";
             Suppress();
-            if (CustomMinimumSize == Vector2.Zero)
-                CustomMinimumSize = _GetMinimumSize();
+            KitChrome.SetAutoMinimumSize(this, _GetMinimumSize());
         }
 
         public override Vector2 _GetMinimumSize()
@@ -76,12 +99,13 @@ namespace Beep.ECS.UI.Kit
             if (what != NotificationThemeChanged) return;
             _genre = SkinCatalog.HasActiveSkin ? SkinCatalog.ActiveGenre : "";
             Suppress();
+            KitChrome.RefreshAutoMinimumSize(this, _GetMinimumSize());
             QueueRedraw();
         }
 
         /// <summary>Blank every state's StyleBox so the base class paints nothing and _Draw owns
-        /// the look. The re-entry guard matters: AddThemeStyleboxOverride emits
-        /// NotificationThemeChanged, which lands straight back here.</summary>
+        /// the look. Suppression goes through KitChrome so unchanged overrides are not recreated
+        /// during Godot's theme-change notifications.</summary>
         private void Suppress()
         {
             if (_suppressing) return;
@@ -143,7 +167,7 @@ namespace Beep.ECS.UI.Kit
         private void DrawLabel(Rect2 body, KitState state)
         {
             if (string.IsNullOrEmpty(Text)) return;
-            var font = KitFonts.Resolve(Geo.Font) ?? GetThemeDefaultFont();
+            var font = KitChrome.Font(this, _genre);
             if (font == null) return;
 
             string text = Geo.UpperCase ? Text.ToUpperInvariant() : Text;
@@ -181,7 +205,7 @@ namespace Beep.ECS.UI.Kit
             if (fill.A < 0.02f) fill = UiSurface.Of(this);
 
             var poly = KitChrome.Poly(KitShape.Pill, r, Geo);
-            if (poly.Length >= 3 && Geometry2D.TriangulatePolygon(poly).Length > 0)
+            if (poly.Length >= 3)
             {
                 DrawColoredPolygon(poly, fill);
                 var closed = new Vector2[poly.Length + 1];
@@ -190,7 +214,7 @@ namespace Beep.ECS.UI.Kit
                 DrawPolyline(closed, UiSurface.Ink(fill), Mathf.Max(1f, Geo.Rim * 0.5f));
             }
 
-            var font = KitFonts.Resolve(Geo.Font) ?? GetThemeDefaultFont();
+            var font = KitChrome.Font(this, _genre);
             if (font == null) return;
             bfs = UiSurface.FitText(this, r.Size * 0.82f, 0.62f, _badge, font, min: 7, themeMax: 0.85f);
             Vector2 m = font.GetStringSize(_badge, HorizontalAlignment.Left, -1, bfs);

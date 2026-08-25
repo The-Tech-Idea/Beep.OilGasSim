@@ -151,6 +151,8 @@ public sealed partial class Gameplay : Node2D
 		// becomes an engine command (plans 17 §B2).
 		_yard = RequireNamed<World.Dispatcher>(this, "Yard");
 		_yard.Raise(_world.PlantSite);
+		_yard.PreparingSite += _world.PrepareSite;
+		_yard.JobAccepted += OnYardJobAccepted;
 		_yard.Reported += (message, bad) => _hud.Toast(message, bad);
 		_yard.Unpack(EngineHost.Instance.RestoredYard);
 		EngineHost.Instance.PackYard = _yard.Pack;
@@ -189,10 +191,6 @@ public sealed partial class Gameplay : Node2D
 				SceneRouter.Instance.OpenOverlay(SceneRouter.DispatchBoard);
 				break;
 
-			case "lease":
-				SceneRouter.Instance.OpenOverlay(SceneRouter.LeaseBoard);
-				break;
-
 			case "fleet":
 				SceneRouter.Instance.OpenOverlay(SceneRouter.FleetBoard);
 				break;
@@ -221,6 +219,26 @@ public sealed partial class Gameplay : Node2D
 	{
 		_world.RecordDrill(prospect);
 		EngineHost.Instance.Drilled.Record(prospect);
+	}
+
+	private void OnYardJobAccepted(OilfieldDays.World.JobKind job, ulong subject)
+	{
+		if (job != OilfieldDays.World.JobKind.Drill)
+			return;
+
+		FieldReadModel? snapshot = EngineHost.Instance.Snapshot;
+
+		if (snapshot is null)
+			return;
+
+		for (int i = 0; i < snapshot.Prospects.Count; i++)
+		{
+			if (snapshot.Prospects[i].Prospect.Value == subject)
+			{
+				RecordDrill(snapshot.Prospects[i]);
+				return;
+			}
+		}
 	}
 
 	public override void _Process(double delta)
@@ -277,13 +295,6 @@ public sealed partial class Gameplay : Node2D
 			return;
 		}
 
-		if (@event.IsActionPressed(GameInput.OpenLease))
-		{
-			SceneRouter.Instance.OpenOverlay(SceneRouter.LeaseBoard);
-			GetViewport().SetInputAsHandled();
-			return;
-		}
-
 		if (@event.IsActionPressed(GameInput.OpenFleet))
 		{
 			SceneRouter.Instance.OpenOverlay(SceneRouter.FleetBoard);
@@ -335,7 +346,7 @@ public sealed partial class Gameplay : Node2D
 
 			EngineHost.NewGameDraft draft = EngineHost.NewGameDraft.Default(seed) with
 			{
-				Mode = DevOptions.Mode ?? GameStyles.Days.Id.Value,
+				Style = DevOptions.Mode ?? GameStyles.Days.Id.Value,
 				Cells = DevOptions.Basin ?? BasinCells,
 			};
 
@@ -347,7 +358,7 @@ public sealed partial class Gameplay : Node2D
 		}
 
 		OnSnapshot();
-		_hud.Toast("A basin, and nothing drilled. Click a structure and decide: seismic, or a hole.", false);
+		_hud.Toast("A fresh basin. Pick a promising site, scout it, then send a crew.", false);
 
 		FastForward();
 	}
@@ -512,7 +523,7 @@ public sealed partial class Gameplay : Node2D
 		if (stopped > 0)
 		{
 			_hud.Toast(
-				$"{stopped} element{(stopped == 1 ? "" : "s")} out of service — the chain is shut in behind it.",
+				$"{stopped} camp job{(stopped == 1 ? "" : "s")} needs attention - send a crew.",
 				true);
 
 			return;
@@ -522,7 +533,7 @@ public sealed partial class Gameplay : Node2D
 			return;
 
 		_hud.Toast(
-			$"{snapshot.ProducedThisTick.CubicMetres:N0} m3 this month at ${snapshot.OilPrice.Cents / 100.0:N0}/t.",
+			$"{snapshot.ProducedThisTick.CubicMetres:N0} oil came in this month.",
 			false);
 	}
 
@@ -702,7 +713,7 @@ public sealed partial class Gameplay : Node2D
 		}
 		else if (prospect is not null)
 		{
-			_bar.ShowProspect(prospect, () => _world.RecordDrill(prospect));
+			_bar.ShowProspect(prospect, () => RecordDrill(prospect));
 			_selection.ShowProspect(prospect);
 		}
 		else if (well is not null)

@@ -125,16 +125,14 @@ public sealed partial class CommandBar : CanvasLayer
 
     public void ShowProspect(ProspectView prospect, Action afterDrill)
     {
-        Reset($"{prospect.Play} prospect\nPOS {prospect.ProbabilityOfSuccess * 100:F0}% · " +
-              $"source {prospect.Source:F2} reservoir {prospect.Reservoir:F2} seal {prospect.Seal:F2} " +
-              $"trap {prospect.Trap:F2} timing {prospect.Timing:F2}\n" +
-              $"{prospect.ToMarket.Metres / 1000.0:F0} km to market");
+        Reset($"{prospect.Play} site\nChance {prospect.ProbabilityOfSuccess * 100:F0}%\n" +
+              $"{prospect.ToMarket.Metres / 1000.0:F0} km from the export road");
 
         var target = new EntityId<IProspect>(prospect.Prospect.Value);
 
-        Add("Shoot seismic", KitTheme.Muted, () =>
+        Add("Scout the ground", KitTheme.Muted, () =>
             Dispatch(World.JobKind.Survey, prospect.Prospect.Value, new SeismicSurveyCommand(target)));
-        Add("Drill a well (2,000 m)", KitTheme.Amber, () =>
+        Add("Send the drill crew", KitTheme.Amber, () =>
         {
             if (Yard is not null)
             {
@@ -167,24 +165,23 @@ public sealed partial class CommandBar : CanvasLayer
 
         string state = block.Surveyed
             ? block.Structures > 0
-                ? $"{block.Structures} structure{(block.Structures == 1 ? string.Empty : "s")} found here"
-                : "shot — there is nothing under it"
-            : "never shot; nobody knows what is under it";
+                ? $"{block.Structures} promising spot{(block.Structures == 1 ? string.Empty : "s")} found here"
+                : "scouted - nothing useful found"
+            : "unscouted ground";
 
-        Reset($"Block {block.Block.Value:00}\n{state}\n" +
-              $"{block.Wide.Metres / 1000.0:F0} x {block.Tall.Metres / 1000.0:F0} km of licence");
+        Reset($"Wild ground {block.Block.Value:00}\n{state}");
 
         if (block.Surveyed)
             return;
 
-        Add("Shoot 2-D seismic", KitTheme.Amber, () =>
+        Add("Send scouts", KitTheme.Amber, () =>
             Dispatch(World.JobKind.SurveyBlock, block.Block.Value,
                      new SurveyBlockCommand(new EntityId<IBlock>(block.Block.Value))));
     }
 
     public void ShowWell(WellStatusView well, IReadOnlyList<EntityId<IReservoirCompartmentEntity>> compartments)
     {
-        Reset($"{well.DisplayId}\n{well.Status} · {well.ProducedThisTick.CubicMetres:N0} m³ this month");
+        Reset($"{well.DisplayId}\n{well.Status} · {well.ProducedThisTick.CubicMetres:N0} oil this month");
 
         var completion = new EntityId<ICompletion>(well.Well.Value);
         bool shut = well.Status == WellStatus.ShutIn;
@@ -196,17 +193,17 @@ public sealed partial class CommandBar : CanvasLayer
         {
             EntityId<IReservoirCompartmentEntity> compartment = compartments[i];
 
-            Add("Run a well test", KitTheme.Muted, () =>
+            Add("Check the flow", KitTheme.Muted, () =>
                 Dispatch(World.JobKind.WellTest, well.Well.Value, new WellTestCommand(compartment)));
 
-            Add("Run a wireline log", KitTheme.Muted, () =>
+            Add("Map the rock", KitTheme.Muted, () =>
                 Dispatch(World.JobKind.WirelineLog, well.Well.Value, new WirelineLogCommand(compartment)));
 
-            Add("Cut a core", KitTheme.Muted, () =>
+            Add("Take a sample", KitTheme.Muted, () =>
                 Dispatch(World.JobKind.CutCore, well.Well.Value, new CutCoreCommand(compartment)));
         }
 
-        Add("Abandon the well", KitTheme.Red, () => Send(new AbandonWellCommand(completion)));
+        Add("Close this well", KitTheme.Red, () => Send(new AbandonWellCommand(completion)));
     }
 
     /// <summary>Offer what can be done to the surface plant.</summary>
@@ -222,13 +219,13 @@ public sealed partial class CommandBar : CanvasLayer
     public void ShowElement(ChainElementView element)
     {
         string wear = element.Condition is double condition
-            ? $"condition {condition * 100.0:F0}%"
-            : "condition unknown — no monitoring fitted";
+            ? $"health {condition * 100.0:F0}%"
+            : "needs an inspection post";
 
         Reset(
-            $"{element.DisplayId}\n{element.Throughput.Kilograms / 1000.0:N0} t this month · {wear}"
+            $"{element.DisplayId}\nMoved {element.Throughput.Kilograms / 1000.0:N0} loads this month · {wear}"
             + (element.Failed
-                ? "\nOUT OF SERVICE — the chain behind it is shut in"
+                ? "\nSTOPPED - send a crew to get the camp moving again"
                 : string.Empty));
 
         ulong id = element.Element.Value;
@@ -247,11 +244,11 @@ public sealed partial class CommandBar : CanvasLayer
 		if (element.Condition is not null)
 		{
 			Add("Overhaul it", KitTheme.Green, () =>
-				Dispatch(World.JobKind.Service, id, new ServiceEquipmentCommand(element.Element)));
+                Dispatch(World.JobKind.Service, id, new ServiceEquipmentCommand(element.Element)));
 		}
 		else
 		{
-			Add("Fit condition monitoring", KitTheme.Sky, () =>
+			Add("Build an inspection post", KitTheme.Sky, () =>
 				Dispatch(World.JobKind.FitMonitoring, id, new InstallMonitoringCommand(element.Element)));
 		}
 	}
@@ -263,6 +260,7 @@ public sealed partial class CommandBar : CanvasLayer
 		{
 			World.UnitState.Idle => "in the yard",
 			World.UnitState.Travelling => "on its way out",
+			World.UnitState.Preparing => "clearing and preparing the site",
 			World.UnitState.Working => $"working since month {unit.StartedOn}",
 			_ => "on its way home",
 		};
@@ -301,27 +299,24 @@ public sealed partial class CommandBar : CanvasLayer
         // panel until it has.
         if (snapshot.Chain.Count == 0)
         {
-            Reset("Bare ground" + NewLine +
-                  "Nothing is built here yet. A field is brought on by commissioning an " +
-                  "early production facility - header, separator, treating, metering and " +
-                  "tanks, as one package." + NewLine +
-                  "Wells can be drilled before it and wait shut in until it is up.");
+            Reset("Empty camp" + NewLine +
+                  "Nothing is built here yet. Start the camp so wells have a place to send oil.");
 
-            Add("Commission a facility", KitTheme.Amber, () =>
+            Add("Build the first camp", KitTheme.Amber, () =>
                 Dispatch(World.JobKind.Commission, 0UL,
                          new InstallEarlyProductionFacilityCommand()));
 
             return;
         }
 
-        var text = new System.Text.StringBuilder("Surface facilities\n");
+        var text = new System.Text.StringBuilder("Camp works\n");
 
         for (int i = 0; i < snapshot.Chain.Count; i++)
             text.Append(snapshot.Chain[i].DisplayId).Append(i == snapshot.Chain.Count - 1 ? "" : " → ");
 
         if (Yard is not null && Yard.Rising.Count > 0)
         {
-            text.Append("\nUnder construction: ");
+            text.Append("\nBeing built: ");
 
             for (int i = 0; i < Yard.Rising.Count; i++)
                 text.Append(i == 0 ? "" : ", ").Append(Yard.Rising[i]);
@@ -331,8 +326,8 @@ public sealed partial class CommandBar : CanvasLayer
 
         if (Yard is null)
         {
-            Add("Install another separator", KitTheme.Green, () => Send(new InstallSeparatorCommand()));
-            Add("Expand export capacity", KitTheme.Green, () => Send(new ExpandExportCommand()));
+            Add("Add a processing shed", KitTheme.Green, () => Send(new InstallSeparatorCommand()));
+            Add("Improve the export road", KitTheme.Green, () => Send(new ExpandExportCommand()));
 
             return;
         }
@@ -342,7 +337,7 @@ public sealed partial class CommandBar : CanvasLayer
             World.BuildKind kind = Yard.Catalogue[i];
             ulong at = (ulong)i;
 
-            Add($"Build: {kind.DisplayName}", KitTheme.Green, () =>
+            Add($"Build {kind.DisplayName}", KitTheme.Green, () =>
                 Yard.Send(World.JobKind.Build, SiteAt, at));
         }
     }
@@ -350,7 +345,7 @@ public sealed partial class CommandBar : CanvasLayer
     /// <summary>Nothing is in reach.</summary>
     public void ShowNothing() =>
         Reset(
-            "Click a structure, a well, or the plant to see what can be done to it.\n\n"
+            "Click a site, well, camp building, or crew to choose what happens next.\n\n"
             + "W A S D or the screen edge moves the view · wheel zooms · "
             + "Space advances a month · P pauses");
 
@@ -407,14 +402,14 @@ public sealed partial class CommandBar : CanvasLayer
     private static string Describe(Command command) => command switch
     {
         DrillWellCommand => "A well",
-        SeismicSurveyCommand => "A seismic survey",
-        WellTestCommand => "A well test",
-        WirelineLogCommand => "A wireline log",
-        CutCoreCommand => "A core",
+        SeismicSurveyCommand => "Scouts",
+        WellTestCommand => "A flow check",
+        WirelineLogCommand => "Rock mapping",
+        CutCoreCommand => "A sample",
         SetWellChokeCommand choke => choke.Open ? "Opening the well" : "Shutting the well in",
         AbandonWellCommand => "Abandonment",
-        InstallSeparatorCommand => "A separator",
-        ExpandExportCommand => "An export expansion",
+        InstallSeparatorCommand => "A processing shed",
+        ExpandExportCommand => "A road upgrade",
         _ => command.GetType().Name,
     };
 

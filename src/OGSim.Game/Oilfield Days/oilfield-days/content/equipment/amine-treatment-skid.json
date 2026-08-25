@@ -1,0 +1,9 @@
+{
+  "kind": "equipment",
+  "id": "amine-treatment-skid",
+  "name": "$loc:equipment.amine-treatment-skid",
+  "group": "process",
+  "costMillions": 5.5,
+  "buildTurns": 3,
+  "note": "Takes the H2S out. A soured field needs it or it sells nothing."
+}
